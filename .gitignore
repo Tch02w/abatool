@@ -6,7 +6,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .pytest-tmp/
+.test-tmp-*/
+.test-visual/
 .ruff_cache/
+.uv-cache-local/
 *.egg-info/
 
 # IDE and local assistant state

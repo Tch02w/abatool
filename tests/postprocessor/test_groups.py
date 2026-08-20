@@ -6,6 +6,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from modules.postprocessor.app import MainWindow, safe_folder_name
@@ -291,6 +292,22 @@ def test_cancel_all_queued_groups_keeps_active_group(tmp_path: Path) -> None:
     assert not window.cancel_queued_button.isEnabled()
     assert "已取消全部待运行组：等待A、等待B" in window.log.toPlainText()
     window.active_group_task = None
+    window.close()
+
+
+def test_repeated_close_waits_for_an_inflight_cancellation(tmp_path: Path) -> None:
+    application()
+    window = MainWindow()
+    window.state_path = tmp_path / "project_state.json"
+    window._exit_after_cancel = True
+    window.active_group_task = {"id": "running", "name": "运行组"}
+
+    event = QCloseEvent()
+    window.closeEvent(event)
+
+    assert not event.isAccepted()
+    window.active_group_task = None
+    window._exit_after_cancel = False
     window.close()
 
 

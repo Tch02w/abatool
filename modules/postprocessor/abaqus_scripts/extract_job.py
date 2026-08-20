@@ -104,6 +104,11 @@ pile_display_set_name = config["pile_display_set"]
 concrete_set_name = config["pile_concrete_set"]
 soil_set_name = config["soil_set"]
 rebar_set_name = config["rebar_set"]
+longitudinal_material_name = str(
+    config.get("longitudinal_material", "HRB400")
+).strip()
+if not longitudinal_material_name:
+    raise RuntimeError("longitudinal_material must not be blank")
 bar_diameter_mm = float(config["rebar_diameter_mm"])
 bar_area_mm2 = math.pi * bar_diameter_mm ** 2 / 4.0
 orientation_threshold = float(settings["longitudinal_orientation_threshold"])
@@ -114,7 +119,16 @@ rebar_method = str(config.get("rebar_method", "element_cut")).strip().lower()
 if rebar_method not in ("element_cut", "legacy_interpolation"):
     raise RuntimeError("rebar_method must be element_cut or legacy_interpolation")
 rebar_cut_tolerance_mm = abs(float(settings.get("rebar_cut_tolerance_mm", 1.0e-4)))
-expected_rebar_count = int(config.get("expected_longitudinal_rebar_count", 0))
+configured_expected_rebar_count = int(
+    config.get("expected_longitudinal_rebar_count", 0)
+)
+REBAR_SECTION_RULE = (
+    "reference_geometry_[z_min,z_max)_with_physical_top_inclusive; "
+    "S11*A_projected_to_global_Z_using_current_direction"
+)
+REBAR_INTERPOLATION_METHOD = (
+    "element_centroid_depth_linear_with_end_element_constant"
+)
 image_size_unit = str(settings.get("image_size_unit", "px")).lower()
 image_width = int(settings.get("image_width", 1500))
 image_height = int(settings.get("image_height", 1000))
@@ -419,6 +433,50 @@ rebar_region = assembly.elementSets[rebar_set_name]
 node_maps = {}
 element_geometry = {}
 parent = {}
+element_section_data = {}
+
+
+def collect_element_section_data():
+    """Map instance/label to ODB truss section material and area when exposed."""
+
+    output = {}
+    for instance_name, instance in assembly.instances.items():
+        for assignment in getattr(instance, "sectionAssignments", ()):
+            section_name = str(getattr(assignment, "sectionName", ""))
+            section = None
+            if section_name:
+                try:
+                    section = odb.sections[section_name]
+                except Exception as error:
+                    log(
+                        "ODB section read failed for {0}/{1}: {2}".format(
+                            instance_name, section_name, error
+                        )
+                    )
+            material = str(getattr(section, "material", "")) if section else ""
+            area = getattr(section, "area", None) if section else None
+            try:
+                area = float(area)
+            except (TypeError, ValueError):
+                area = None
+            try:
+                assigned_elements = flatten(assignment.region.elements)
+                for assigned_element in assigned_elements:
+                    output[(instance_name, assigned_element.label)] = {
+                        "section_name": section_name,
+                        "material": material,
+                        "area": area if area is not None and area > 0.0 else None,
+                    }
+            except Exception as error:
+                log(
+                    "Section assignment read failed for {0}/{1}: {2}".format(
+                        instance_name, section_name, error
+                    )
+                )
+    return output
+
+
+element_section_data = collect_element_section_data()
 
 
 def find(node):
@@ -438,6 +496,15 @@ def union(first, second):
 
 for instance_name, element in region_elements(rebar_region):
     if not instance_name or not element.type.upper().startswith("T3D2"):
+        continue
+    key = (instance_name, element.label)
+    section_data = element_section_data.get(key, {})
+    section_category_name = str(
+        getattr(getattr(element, "sectionCategory", None), "name", "")
+    )
+    section_material_name = str(section_data.get("material", ""))
+    material_identity = section_material_name or section_category_name
+    if longitudinal_material_name.upper() not in material_identity.upper():
         continue
     if instance_name not in node_maps:
         node_maps[instance_name] = dict(
@@ -462,7 +529,15 @@ for instance_name, element in region_elements(rebar_region):
         builtins.sum(point[axis] for point in coordinates) / float(len(coordinates))
         for axis in range(3)
     )
-    element_geometry[(instance_name, element.label)] = {
+    section_area = section_data.get("area")
+    if section_area is None:
+        section_area = bar_area_mm2
+        area_source = "configured_uniform_diameter_fallback"
+    else:
+        area_source = "odb_section:{0}".format(
+            section_data.get("section_name", "")
+        )
+    element_geometry[key] = {
         "instance": instance_name,
         "label": element.label,
         "centroid": centroid,
@@ -471,7 +546,36 @@ for instance_name, element in region_elements(rebar_region):
         "nodes": (first_node, last_node),
         "reference_first": first,
         "reference_last": last,
+        "section_name": section_data.get("section_name", ""),
+        "section_material": section_material_name,
+        "area_mm2": float(section_area),
+        "area_source": area_source,
+        "equivalent_diameter_mm": math.sqrt(4.0 * float(section_area) / math.pi),
     }
+
+if not element_geometry:
+    raise RuntimeError(
+        "No longitudinal T3D2 elements with material {0} were found in {1}".format(
+            longitudinal_material_name, rebar_set_name
+        )
+    )
+
+fallback_area_elements = [
+    geometry
+    for geometry in element_geometry.values()
+    if geometry["area_source"] == "configured_uniform_diameter_fallback"
+]
+if fallback_area_elements:
+    log(
+        "REBAR AREA WARNING: {0}/{1} longitudinal T3D2 elements have no "
+        "readable ODB truss-section area; using configured uniform diameter "
+        "{2:g} mm (area {3:g} model-area units).".format(
+            len(fallback_area_elements),
+            len(element_geometry),
+            bar_diameter_mm,
+            bar_area_mm2,
+        )
+    )
 
 components = {}
 for geometry in element_geometry.values():
@@ -495,24 +599,94 @@ for item in element_geometry.values():
         rebar_node_z.append(instance_nodes[node_label][2])
 rebar_z_min = min(rebar_node_z)
 rebar_z_max = max(rebar_node_z)
+detected_rebar_count = len(component_list)
+effective_expected_rebar_count = (
+    configured_expected_rebar_count
+    if configured_expected_rebar_count > 0
+    else detected_rebar_count
+)
+expected_rebar_count_source = (
+    "configured"
+    if configured_expected_rebar_count > 0
+    else "odb_detected_bar_count"
+)
+reference_rebar_nodes = {}
+for geometry in element_geometry.values():
+    for instance_name, node_label in geometry["nodes"]:
+        reference_rebar_nodes[(instance_name, node_label)] = node_maps[
+            instance_name
+        ][node_label]
+
+
+def merge_rebar_node_coordinates(reference, coordinate_values, displacement_values):
+    """Resolve each node as COORD, reference + U, or reference, in that order."""
+
+    resolved = {}
+    counts = {
+        "COORD": 0,
+        "reference_plus_U": 0,
+        "reference_geometry": 0,
+    }
+    for key, point in reference.items():
+        if key in coordinate_values:
+            resolved[key] = coordinate_values[key]
+            counts["COORD"] += 1
+        elif key in displacement_values:
+            displacement = displacement_values[key]
+            resolved[key] = tuple(
+                float(point[axis]) + float(displacement[axis])
+                for axis in range(3)
+            )
+            counts["reference_plus_U"] += 1
+        else:
+            resolved[key] = point
+            counts["reference_geometry"] += 1
+    active_sources = [
+        name
+        for name in ("COORD", "reference_plus_U", "reference_geometry")
+        if counts[name] > 0
+    ]
+    source = (
+        active_sources[0]
+        if len(active_sources) == 1
+        else "mixed:" + "+".join(active_sources)
+    )
+    return resolved, source, counts
+
+
+def nodal_vector_values(frame, variable_name):
+    """Read one nodal vector field for the configured rebar region."""
+
+    if variable_name not in frame.fieldOutputs:
+        return {}
+    try:
+        subset = frame.fieldOutputs[variable_name].getSubset(
+            region=rebar_region, position=NODAL
+        )
+        values = {}
+        for value in subset.values:
+            values[(value.instance.name, value.nodeLabel)] = tuple(
+                float(component) for component in value.data
+            )
+        return values
+    except Exception as error:
+        log("{0} nodal read failed: {1}".format(variable_name, error))
+        return {}
 
 
 def current_rebar_node_coordinates(frame):
-    """Read deformed nodal coordinates, with reference geometry as fallback."""
+    """Read current nodes with an explicit, per-node fallback chain."""
 
-    coordinates = {}
-    if "COORD" not in frame.fieldOutputs:
-        return coordinates, "reference_geometry"
-    try:
-        subset = frame.fieldOutputs["COORD"].getSubset(region=rebar_region, position=NODAL)
-        for value in subset.values:
-            coordinates[(value.instance.name, value.nodeLabel)] = tuple(
-                float(component) for component in value.data
-            )
-        return coordinates, "COORD"
-    except Exception as error:
-        log("COORD fallback to reference geometry: {0}".format(error))
-        return {}, "reference_geometry"
+    coordinate_values = nodal_vector_values(frame, "COORD")
+    needs_fallback = any(
+        key not in coordinate_values for key in reference_rebar_nodes
+    )
+    displacement_values = (
+        nodal_vector_values(frame, "U") if needs_fallback else {}
+    )
+    return merge_rebar_node_coordinates(
+        reference_rebar_nodes, coordinate_values, displacement_values
+    )
 
 
 def owns_cut(first, last, elevation):
@@ -545,23 +719,42 @@ def rebar_section_force(sequence, elevation):
     """Sum the unique longitudinal T3D2 elements intersected by one FBC."""
 
     frame_data = rebar_section_by_sequence[sequence]
-    selected = {}
+    selected_candidates = {}
     duplicate_count = 0
-    for key, tension_force in frame_data["tension_force"].items():
-        geometry = element_geometry[key]
+    for key, geometry in element_geometry.items():
         if not owns_cut(geometry["reference_first"], geometry["reference_last"], elevation):
             continue
         bar_id = geometry["bar_id"]
-        if bar_id in selected:
+        if bar_id in selected_candidates:
             duplicate_count += 1
             continue
+        selected_candidates[bar_id] = key
+
+    selected_forces = {}
+    missing_stress = []
+    for bar_id, key in selected_candidates.items():
+        geometry = element_geometry[key]
+        if key not in frame_data["tension_force"]:
+            missing_stress.append("{0}:{1}".format(key[0], key[1]))
+            continue
+        tension_force = frame_data["tension_force"][key]
         first_node, last_node = geometry["nodes"]
         current = frame_data["current_nodes"]
-        first = current.get(first_node, geometry["reference_first"])
-        last = current.get(last_node, geometry["reference_last"])
-        selected[bar_id] = project_to_pile_axis(tension_force, first, last)
-    tension_force = builtins.sum(selected.values())
-    return tension_force, len(selected), duplicate_count, frame_data["coordinate_source"]
+        first = current[first_node]
+        last = current[last_node]
+        selected_forces[bar_id] = project_to_pile_axis(
+            tension_force, first, last
+        )
+    tension_force = builtins.sum(selected_forces.values())
+    return (
+        tension_force,
+        len(selected_candidates),
+        duplicate_count,
+        frame_data["coordinate_source"],
+        frame_data["coordinate_source_counts"],
+        len(missing_stress),
+        sorted(missing_stress),
+    )
 
 
 rebar_detailed_path = os.path.join(rebar_dir, "rebar_element_stress_force_timehistory.csv")
@@ -578,8 +771,20 @@ rebar_headers = timeline_headers + [
     "S_Mises_MPa",
     "BarDiameter_mm",
     "BarArea_mm2",
+    "BarAreaSource",
+    "SectionName",
+    "SectionMaterial",
     "ElementAxialForce_TensionPositive_N",
     "ElementAxialForce_CompressionPositive_N",
+]
+rebar_level_headers = timeline_headers + [
+    "CentroidZ_mm",
+    "ElementCount",
+    "S11_Min_MPa",
+    "S11_Mean_MPa",
+    "S11_Max_MPa",
+    "SteelForce_TensionPositive_N",
+    "SteelForce_CompressionPositive_N",
 ]
 rebar_level_rows = []
 rebar_force_by_sequence = {}
@@ -590,7 +795,9 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
     for item in timeline:
         frame = item["frame"]
         element_stresses = {}
-        current_nodes, coordinate_source = current_rebar_node_coordinates(frame)
+        current_nodes, coordinate_source, coordinate_source_counts = (
+            current_rebar_node_coordinates(frame)
+        )
         if "S" in frame.fieldOutputs:
             subset = frame.fieldOutputs["S"].getSubset(region=rebar_region, position=INTEGRATION_POINT)
             for value in subset.values:
@@ -598,10 +805,7 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
                 if key in element_geometry:
                     element_stresses.setdefault(key, []).append(scalar(value))
         by_z = {}
-        # Keep zero-force elements as physical crossing candidates as well: the
-        # diagnostic count describes the section geometry, not merely available
-        # stress values.
-        tension_force_by_element = dict((key, 0.0) for key in element_geometry)
+        tension_force_by_element = {}
         for key, stresses in element_stresses.items():
             stress = builtins.sum(stresses) / float(len(stresses))
             geometry = element_geometry[key]
@@ -619,20 +823,29 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
                     "AbsDzOverLength": geometry["ratio"],
                     "S11_MPa": stress,
                     "S_Mises_MPa": abs(stress),
-                    "BarDiameter_mm": bar_diameter_mm,
-                    "BarArea_mm2": bar_area_mm2,
-                    "ElementAxialForce_TensionPositive_N": stress * bar_area_mm2,
-                    "ElementAxialForce_CompressionPositive_N": -stress * bar_area_mm2,
+                    "BarDiameter_mm": geometry["equivalent_diameter_mm"],
+                    "BarArea_mm2": geometry["area_mm2"],
+                    "BarAreaSource": geometry["area_source"],
+                    "SectionName": geometry["section_name"],
+                    "SectionMaterial": geometry["section_material"],
+                    "ElementAxialForce_TensionPositive_N": stress * geometry["area_mm2"],
+                    "ElementAxialForce_CompressionPositive_N": -stress * geometry["area_mm2"],
                 }
             )
             writer.writerow(row)
-            tension_force_by_element[key] = stress * bar_area_mm2
-            by_z.setdefault(round(z, 8), []).append(stress)
+            tension_force_by_element[key] = stress * geometry["area_mm2"]
+            by_z.setdefault(round(z, 8), []).append(
+                (stress, geometry["area_mm2"])
+            )
         sequence_points = []
         for z in sorted(by_z):
-            stresses = by_z[z]
+            stress_areas = by_z[z]
+            stresses = [value[0] for value in stress_areas]
             sum_stress = builtins.sum(stresses)
-            force_compression = -sum_stress * bar_area_mm2
+            force_tension = builtins.sum(
+                stress * area for stress, area in stress_areas
+            )
+            force_compression = -force_tension
             level_row = dict((name, item[name]) for name in timeline_headers)
             level_row.update(
                 {
@@ -641,7 +854,7 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
                     "S11_Min_MPa": min(stresses),
                     "S11_Mean_MPa": sum_stress / len(stresses),
                     "S11_Max_MPa": max(stresses),
-                    "SteelForce_TensionPositive_N": sum_stress * bar_area_mm2,
+                    "SteelForce_TensionPositive_N": force_tension,
                     "SteelForce_CompressionPositive_N": force_compression,
                 }
             )
@@ -652,25 +865,62 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
             "tension_force": tension_force_by_element,
             "current_nodes": current_nodes,
             "coordinate_source": coordinate_source,
+            "coordinate_source_counts": coordinate_source_counts,
         }
 
 write_csv(
     os.path.join(rebar_dir, "rebar_force_by_element_level_timehistory.csv"),
-    list(rebar_level_rows[0].keys()),
+    rebar_level_headers,
     rebar_level_rows,
 )
+area_values = sorted(
+    set(round(float(item["area_mm2"]), 12) for item in element_geometry.values())
+)
+area_source_counts = {}
+for item in element_geometry.values():
+    area_source_counts[item["area_source"]] = (
+        area_source_counts.get(item["area_source"], 0) + 1
+    )
 with open(os.path.join(rebar_dir, "rebar_metadata.json"), "w", encoding="utf-8") as stream:
     json.dump(
         {
             "method": rebar_method,
-            "legacy_method": "element centroid depth interpolation",
-            "element_cut_rule": "reference [z_min, z_max), physical rebar top inclusive",
+            # Compatibility aliases retained for existing cache/result readers.
+            "legacy_method": REBAR_INTERPOLATION_METHOD,
+            "element_cut_rule": REBAR_SECTION_RULE,
+            "RebarSectionRule": REBAR_SECTION_RULE,
+            "RebarInterpolationRule": REBAR_INTERPOLATION_METHOD,
+            "RebarActiveRule": (
+                REBAR_SECTION_RULE
+                if rebar_method == "element_cut"
+                else REBAR_INTERPOLATION_METHOD
+            ),
+            "longitudinal_material": longitudinal_material_name,
             "cut_tolerance_mm": rebar_cut_tolerance_mm,
-            "projection": "S11*A projected to global pile Z using current COORD where available",
-            "odb_detected_bar_count": len(component_list),
+            "projection": (
+                "S11*A projected to global pile Z; nodal direction source "
+                "priority is COORD, reference+U, then reference geometry"
+            ),
+            "odb_detected_bar_count": detected_rebar_count,
+            "configured_expected_longitudinal_rebar_count": configured_expected_rebar_count,
+            "effective_expected_longitudinal_rebar_count": effective_expected_rebar_count,
+            "expected_longitudinal_rebar_count_source": expected_rebar_count_source,
             "longitudinal_element_count": len(element_geometry),
             "bar_diameter_mm": bar_diameter_mm,
             "bar_area_mm2": bar_area_mm2,
+            "configured_fallback_bar_diameter_mm": bar_diameter_mm,
+            "configured_fallback_bar_area_mm2": bar_area_mm2,
+            "configured_area_assumption": (
+                "uniform circular diameter; fallback only when an element's "
+                "ODB truss-section area is unavailable"
+            ),
+            "bar_area_source_priority": (
+                "odb instance.sectionAssignments -> odb.sections[sectionName].area; "
+                "configured uniform diameter only when unavailable"
+            ),
+            "bar_area_source_counts": area_source_counts,
+            "bar_area_values_model_units_squared": area_values,
+            "bar_area_fallback_warning": bool(fallback_area_elements),
             "rebar_z_extent_mm": [rebar_z_min, rebar_z_max],
         },
         stream,
@@ -744,6 +994,8 @@ def interpolate_rebar(sequence, elevation):
     if elevation < rebar_z_min or elevation > rebar_z_max:
         return 0.0, "outside_rebar_extent_zero"
     points = rebar_force_by_sequence[sequence]
+    if not points:
+        return None, "missing_s11_points"
     elevations = [point[0] for point in points]
     if elevation <= elevations[0]:
         return points[0][1], "end_element_constant"
@@ -759,6 +1011,7 @@ def interpolate_rebar(sequence, elevation):
 concrete_rows = []
 combined_rows = []
 section_diagnostic_rows = []
+rebar_force_failures = []
 for label, item in targets:
     viewport.odbDisplay.setFrame(step=item["StepIndex"], frame=item["FrameIndex"])
     raw_path = os.path.join(freebody_dir, "freebody_{0}_raw.csv".format(label))
@@ -793,42 +1046,149 @@ for label, item in targets:
                 }
             )
             concrete_rows.append(base)
-            if rebar_method == "legacy_interpolation":
-                legacy_compression, rule = interpolate_rebar(item["SequenceIndex"], elevation)
-                rebar_tension = -legacy_compression
-                _unused_force, crossing_count, duplicate_count, coordinate_source = rebar_section_force(
-                    item["SequenceIndex"], elevation
-                )
-            else:
-                rebar_tension, crossing_count, duplicate_count, coordinate_source = rebar_section_force(
-                    item["SequenceIndex"], elevation
-                )
-                rule = "section_t3d2_intersection"
-            rebar_compression = -rebar_tension
-            pile_total_tension = concrete_force + rebar_tension
-            balance_denominator = max(abs(concrete_force), abs(rebar_tension), 1.0)
-            balance_relative = abs(pile_total_tension) / balance_denominator
-            if expected_rebar_count > 0 and crossing_count != expected_rebar_count:
+            legacy_compression, legacy_rule = interpolate_rebar(
+                item["SequenceIndex"], elevation
+            )
+            legacy_tension = (
+                -legacy_compression if legacy_compression is not None else None
+            )
+            (
+                section_available_tension,
+                crossing_count,
+                duplicate_count,
+                coordinate_source,
+                coordinate_source_counts,
+                missing_s11_count,
+                missing_s11_keys,
+            ) = rebar_section_force(item["SequenceIndex"], elevation)
+            inside_rebar_extent = (
+                rebar_z_min - rebar_cut_tolerance_mm
+                <= elevation
+                <= rebar_z_max + rebar_cut_tolerance_mm
+            )
+            expected_for_cut = (
+                effective_expected_rebar_count if inside_rebar_extent else ""
+            )
+            crossing_matches_expected = (
+                crossing_count == effective_expected_rebar_count
+                if inside_rebar_extent
+                else ""
+            )
+            if inside_rebar_extent and not crossing_matches_expected:
                 log(
                     "REBAR CUT WARNING {0} z={1:.6f}: {2} crossing elements, expected {3}".format(
-                        label, elevation, crossing_count, expected_rebar_count
+                        label,
+                        elevation,
+                        crossing_count,
+                        effective_expected_rebar_count,
                     )
                 )
+            if duplicate_count:
+                log(
+                    "REBAR CUT WARNING {0} z={1:.6f}: {2} duplicate crossing candidates".format(
+                        label, elevation, duplicate_count
+                    )
+                )
+
+            section_force_valid = (
+                missing_s11_count == 0 and duplicate_count == 0
+            )
+            interpolation_force_valid = legacy_compression is not None
+            force_result_valid = section_force_valid and interpolation_force_valid
+            if missing_s11_count:
+                failure = (
+                    "{0} z={1:.6f}: missing S/S11 for {2}/{3} crossing T3D2 "
+                    "elements ({4})"
+                ).format(
+                    label,
+                    elevation,
+                    missing_s11_count,
+                    crossing_count,
+                    ", ".join(missing_s11_keys),
+                )
+                rebar_force_failures.append(failure)
+                log("REBAR S11 ERROR: " + failure)
+            if duplicate_count:
+                failure = (
+                    "{0} z={1:.6f}: {2} ambiguous duplicate T3D2 crossing "
+                    "candidates share an already selected longitudinal bar"
+                ).format(label, elevation, duplicate_count)
+                rebar_force_failures.append(failure)
+                log("REBAR CUT ERROR: " + failure)
+            elif inside_rebar_extent and not interpolation_force_valid:
+                failure = "{0} z={1:.6f}: no S11 points available for interpolation".format(
+                    label, elevation
+                )
+                rebar_force_failures.append(failure)
+                log("REBAR S11 ERROR: " + failure)
+
+            if force_result_valid:
+                section_tension = section_available_tension
+                active_tension = (
+                    legacy_tension
+                    if rebar_method == "legacy_interpolation"
+                    else section_tension
+                )
+                pile_total_tension = concrete_force + active_tension
+                balance_denominator = max(
+                    abs(concrete_force), abs(active_tension), 1.0
+                )
+                balance_relative = abs(pile_total_tension) / balance_denominator
+            else:
+                section_tension = ""
+                legacy_tension = ""
+                legacy_compression = ""
+                active_tension = ""
+                pile_total_tension = ""
+                balance_relative = ""
+
+            active_rule = (
+                legacy_rule
+                if rebar_method == "legacy_interpolation"
+                else REBAR_SECTION_RULE
+            )
             combined = dict(base)
             combined.update(
                 {
                     "RebarMethod": rebar_method,
-                    "RebarAxial_Section_TensionPositive_N": rebar_tension,
-                    "RebarAxial_Section_CompressionPositive_N": rebar_compression,
-                    "RebarAxial_Interpolated_CompressionPositive_N": rebar_compression if rebar_method == "legacy_interpolation" else "",
+                    "RebarAxial_Section_TensionPositive_N": section_tension,
+                    "RebarAxial_Section_CompressionPositive_N": (
+                        -section_tension if force_result_valid else ""
+                    ),
+                    "RebarAxial_Interpolated_TensionPositive_N": legacy_tension,
+                    "RebarAxial_Interpolated_CompressionPositive_N": legacy_compression,
                     "PileTotalAxial_TensionPositive_N": pile_total_tension,
-                    "PileTotalAxial_CompressionPositive_N": -pile_total_tension,
-                    "RebarInterpolationRule": rule,
+                    "PileTotalAxial_CompressionPositive_N": (
+                        -pile_total_tension if force_result_valid else ""
+                    ),
+                    "RebarSectionRule": REBAR_SECTION_RULE,
+                    "RebarInterpolationRule": legacy_rule,
+                    "RebarActiveRule": active_rule,
                     "CrossingT3D2ElementCount": crossing_count,
-                    "ExpectedLongitudinalRebarCount": expected_rebar_count if expected_rebar_count > 0 else "",
-                    "CrossingCountMatchesExpected": "" if expected_rebar_count <= 0 else (crossing_count == expected_rebar_count),
+                    "CrossingT3D2WithS11Count": crossing_count - missing_s11_count,
+                    "MissingS11CrossingCount": missing_s11_count,
+                    "MissingS11ElementKeys": ";".join(missing_s11_keys),
+                    "RebarSectionForceValid": section_force_valid,
+                    "RebarInterpolationForceValid": interpolation_force_valid,
+                    "RebarForceResultValid": force_result_valid,
+                    "RebarAxial_Section_AvailablePart_TensionPositive_N": section_available_tension,
+                    "ExpectedLongitudinalRebarCount": expected_for_cut,
+                    "ExpectedLongitudinalRebarCountSource": (
+                        expected_rebar_count_source if inside_rebar_extent else ""
+                    ),
+                    "CrossingCountValidationApplicable": inside_rebar_extent,
+                    "CrossingCountMatchesExpected": crossing_matches_expected,
                     "DuplicateCrossingCandidateCount": duplicate_count,
                     "RebarDirectionCoordinateSource": coordinate_source,
+                    "RebarDirectionCOORDNodeCount": coordinate_source_counts.get(
+                        "COORD", 0
+                    ),
+                    "RebarDirectionReferencePlusUNodeCount": coordinate_source_counts.get(
+                        "reference_plus_U", 0
+                    ),
+                    "RebarDirectionReferenceNodeCount": coordinate_source_counts.get(
+                        "reference_geometry", 0
+                    ),
                     "AxialBalanceResidual_TensionPositive_N": pile_total_tension,
                     "AxialBalanceRelative": balance_relative,
                 }
@@ -840,20 +1200,41 @@ for label, item in targets:
         raise RuntimeError("{0} returned {1} cuts, expected {2}".format(label, frame_count, cut_count))
     log("FREEBODY {0}: {1} cuts".format(label, frame_count))
 
+concrete_force_path = os.path.join(
+    freebody_dir, "concrete_axial_force_time_aligned.csv"
+)
+pile_total_force_path = os.path.join(
+    freebody_dir, "pile_total_axial_force_time_aligned.csv"
+)
+section_diagnostics_path = os.path.join(
+    freebody_dir, "rebar_section_diagnostics.csv"
+)
 write_csv(
-    os.path.join(freebody_dir, "concrete_axial_force_time_aligned.csv"),
+    concrete_force_path,
     list(concrete_rows[0].keys()),
     concrete_rows,
 )
 write_csv(
-    os.path.join(freebody_dir, "pile_total_axial_force_time_aligned.csv"),
-    list(combined_rows[0].keys()),
-    combined_rows,
-)
-write_csv(
-    os.path.join(freebody_dir, "rebar_section_diagnostics.csv"),
+    section_diagnostics_path,
     list(section_diagnostic_rows[0].keys()),
     section_diagnostic_rows,
+)
+if rebar_force_failures:
+    if os.path.isfile(pile_total_force_path):
+        os.remove(pile_total_force_path)
+    preview = "\n".join(rebar_force_failures[:12])
+    if len(rebar_force_failures) > 12:
+        preview += "\n... {0} additional failures".format(
+            len(rebar_force_failures) - 12
+        )
+    raise RuntimeError(
+        "Incomplete or ambiguous reinforcement output: no complete pile-total result "
+        "was written. See rebar_section_diagnostics.csv.\n" + preview
+    )
+write_csv(
+    pile_total_force_path,
+    list(combined_rows[0].keys()),
+    combined_rows,
 )
 
 damage_rows = []
@@ -1020,10 +1401,39 @@ metadata = {
     "pile_steel_set": config.get("pile_steel_set", ""),
     "soil_set": soil_set_name,
     "rebar_set": rebar_set_name,
-    "odb_detected_bar_count": len(component_list),
+    "longitudinal_material": longitudinal_material_name,
+    "comparison_group": config.get("comparison_group", ""),
+    "legend_ranges": config.get("legend_ranges", {}),
+    "rebar_method": rebar_method,
+    "RebarSectionRule": REBAR_SECTION_RULE,
+    "RebarInterpolationRule": REBAR_INTERPOLATION_METHOD,
+    "RebarActiveRule": (
+        REBAR_SECTION_RULE
+        if rebar_method == "element_cut"
+        else REBAR_INTERPOLATION_METHOD
+    ),
+    "odb_detected_bar_count": detected_rebar_count,
+    "configured_expected_longitudinal_rebar_count": configured_expected_rebar_count,
+    "effective_expected_longitudinal_rebar_count": effective_expected_rebar_count,
+    "expected_longitudinal_rebar_count_source": expected_rebar_count_source,
     "rebar_element_count": len(element_geometry),
+    # Keep the historic names for readers that still consume them, while making
+    # clear that they are only the fallback when ODB section area is unavailable.
     "rebar_diameter_mm": bar_diameter_mm,
     "bar_area_mm2": bar_area_mm2,
+    "configured_fallback_bar_diameter_mm": bar_diameter_mm,
+    "configured_fallback_bar_area_mm2": bar_area_mm2,
+    "configured_area_assumption": (
+        "uniform circular diameter; fallback only when an element's ODB "
+        "truss-section area is unavailable"
+    ),
+    "bar_area_source_priority": (
+        "odb instance.sectionAssignments -> odb.sections[sectionName].area; "
+        "configured uniform diameter only when unavailable"
+    ),
+    "bar_area_source_counts": area_source_counts,
+    "bar_area_values_model_units_squared": area_values,
+    "bar_area_fallback_warning": bool(fallback_area_elements),
     "ground_elevation_model_z_mm": ground_z,
     "freebody_targets": [label for label, _item in targets],
     "freebody_append": False,

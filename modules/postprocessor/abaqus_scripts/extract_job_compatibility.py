@@ -50,45 +50,9 @@ source = source.replace(
     '{"name": "PILE_U_MAG", "set": pile_display_set_name, "variable": "U", "refinement": (INVARIANT, "Magnitude"), "position": NODAL}',
 )
 
-# Select longitudinal reinforcement by material first, then by element type and
-# orientation.  The material is intentionally mandatory: silently including
-# stirrups would corrupt both the cloud plot and the real axial force.
-source = source.replace(
-    'rebar_set_name = config["rebar_set"]\n',
-    'rebar_set_name = config["rebar_set"]\n'
-    'longitudinal_material_name = str(config.get("longitudinal_material", "HRB400")).strip()\n'
-    'if not longitudinal_material_name:\n'
-    '    raise RuntimeError("longitudinal_material must not be blank")\n',
-)
-source = source.replace(
-    '    if not instance_name or not element.type.upper().startswith("T3D2"):\n'
-    '        continue\n'
-    '    if instance_name not in node_maps:',
-    '    if not instance_name or not element.type.upper().startswith("T3D2"):\n'
-    '        continue\n'
-    '    section_category_name = str(getattr(getattr(element, "sectionCategory", None), "name", ""))\n'
-    '    if longitudinal_material_name.upper() not in section_category_name.upper():\n'
-    '        continue\n'
-    '    if instance_name not in node_maps:',
-)
-source = source.replace(
-    'components = {}\nfor geometry in element_geometry.values():',
-    'if not element_geometry:\n'
-    '    raise RuntimeError("No longitudinal T3D2 elements with material {0} were found in {1}".format(longitudinal_material_name, rebar_set_name))\n\n'
-    'components = {}\nfor geometry in element_geometry.values():',
-)
-source = source.replace(
-    '            "method": "T3D2 per element, no FreeBody slicing",\n',
-    '            "method": "material + T3D2 orientation; per element; no FreeBody slicing",\n'
-    '            "longitudinal_material": longitudinal_material_name,\n',
-)
-source = source.replace(
-    '    "rebar_set": rebar_set_name,\n',
-    '    "rebar_set": rebar_set_name,\n'
-    '    "longitudinal_material": longitudinal_material_name,\n'
-    '    "comparison_group": config.get("comparison_group", ""),\n'
-    '    "legend_ranges": config.get("legend_ranges", {}),\n',
-)
+# Longitudinal-material selection and per-element truss-section area lookup live
+# in the stable worker.  Keeping them there avoids a compatibility-only result
+# path and makes mixed-diameter behavior identical in both entry points.
 
 # A view cut used for FreeBody must be disabled before changing to a different
 # display group; otherwise embedded truss elements can trigger an Abaqus error.
@@ -198,7 +162,11 @@ source = source.replace(
 
 required = [
     "def primary_variable(variable, refinement, output_position):",
-    "longitudinal_material_name = str(config.get",
+    "longitudinal_material_name = str(",
+    "collect_element_section_data()",
+    'odb.sections[section_name]',
+    '"longitudinal_material": longitudinal_material_name',
+    '"RebarSectionRule": REBAR_SECTION_RULE',
     "LeafFromElementLabels(\n                partInstanceName=instance_name",
     "backgroundColor=\"#FFFFFF\"",
     "session.pngOptions.setValues(imageSize=image_size_setting)",

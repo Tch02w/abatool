@@ -68,7 +68,9 @@ def sum_crossing_rebar_force(
     Each mapping contains ``bar_id``, ``reference_first``, ``reference_last``,
     ``current_first``, ``current_last`` and ``axial_force``.  Intersection is
     evaluated in the reference geometry to match Abaqus' undeformed Free Body
-    Cut; projection uses the current geometry when COORD is available.
+    Cut; projection uses the current geometry resolved from COORD or
+    reference coordinates plus U, with reference geometry only as a final
+    explicitly diagnosed fallback.
     """
 
     selected: dict[object, Mapping[str, object]] = {}

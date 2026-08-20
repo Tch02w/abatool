@@ -18,7 +18,7 @@ The Qt application is the only product Implementation. Its canonical package nam
 - One PyInstaller specification produces `AbaqusSubmitter`.
 - Configuration, queue state, and the Scheduler State Repository live in the Application Data Directory.
 
-The internal Qt compatibility Module remains a real Seam because it has PySide6 and PyQt6 Adapters. This does not create a second application mainline.
+The internal Qt compatibility Module remains a migration Seam, but it re-exports PySide6 only. Falling back to PyQt6 is intentionally unsupported so every embedded page shares one Qt object model and one `QApplication`.
 
 ## Consequences
 

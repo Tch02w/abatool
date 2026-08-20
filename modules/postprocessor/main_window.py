@@ -10,7 +10,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
-    QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+    QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -27,7 +27,7 @@ from .legends import (
 from .models import OdbScan, choose_name
 from .postprocess import finalize_output
 from .runner import run_job, scan_field_ranges, scan_folder
-from .ui_style import configure_main_window
+from .ui_style import build_main_stylesheet, configure_main_window
 
 
 FRAME_MODE_LABELS = {
@@ -66,10 +66,14 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         central = QWidget(); self.setCentralWidget(central); layout = QVBoxLayout(central)
-        layout.setContentsMargins(14, 12, 14, 12)
+        central.setObjectName("postprocessPage")
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        folder_row = QHBoxLayout()
+        folder_card = QFrame(); folder_card.setObjectName("ppCard")
+        folder_row = QHBoxLayout(folder_card)
+        self.folder_row_layout = folder_row
+        folder_row.setContentsMargins(12, 8, 12, 8)
         folder_row.setSpacing(8)
         folder_label = QLabel("ODB 文件夹")
         folder_label.setProperty("role", "title")
@@ -80,9 +84,12 @@ class MainWindow(QMainWindow):
         browse = QPushButton("浏览…"); browse.clicked.connect(self._browse_folder); folder_row.addWidget(browse)
         self.scan_button = QPushButton("扫描 ODB"); self.scan_button.clicked.connect(self._scan); folder_row.addWidget(self.scan_button)
         self.scan_button.setProperty("primary", True)
-        layout.addLayout(folder_row)
+        layout.addWidget(folder_card)
 
-        option_row = QHBoxLayout()
+        option_card = QFrame(); option_card.setObjectName("ppCard")
+        option_row = QHBoxLayout(option_card)
+        self.option_row_layout = option_row
+        option_row.setContentsMargins(12, 8, 12, 8)
         option_row.setSpacing(8)
         self.full_timehistory = QCheckBox("全部帧执行 FreeBodyCut（耗时较长）")
         self.full_timehistory.setChecked(bool(self.defaults["full_timehistory_freebody"])); option_row.addWidget(self.full_timehistory)
@@ -98,7 +105,7 @@ class MainWindow(QMainWindow):
         option_row.addStretch(1)
         self.run_button = QPushButton("运行选中项目"); self.run_button.clicked.connect(self._run_selected); option_row.addWidget(self.run_button)
         self.run_button.setProperty("primary", True)
-        layout.addLayout(option_row)
+        layout.addWidget(option_card)
 
         self.table = GroupDropTable(0, len(self.columns)); self.table.setHorizontalHeaderLabels(self.columns)
         self.table.setAlternatingRowColors(True); self.table.setSortingEnabled(False)
@@ -116,12 +123,14 @@ class MainWindow(QMainWindow):
         self.log_label.setProperty("role", "title")
         layout.addWidget(self.log_label)
         self.log = QPlainTextEdit()
+        self.log.setObjectName("ppLog")
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("扫描、升级和提取过程会显示在这里。")
         self.log.setMaximumBlockCount(5000)
         self.log.setMinimumHeight(105)
         self.log.setMaximumHeight(170)
         layout.addWidget(self.log, 0)
+        self.setStyleSheet(build_main_stylesheet())
 
     def _browse_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "选择 ODB 文件夹", self.folder_edit.text())

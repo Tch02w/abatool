@@ -7,7 +7,7 @@ name = "abaqus-tools"
 version = "0.1.0"
 description = "Unified desktop workspace for Abaqus job submission and ODB postprocessing"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "paramiko>=4.0,<5.0",
     "psutil>=5.9",
@@ -24,6 +24,9 @@ dependencies = [
 
 [project.gui-scripts]
 abaqus-tools = "main:main"
+abaqus-submitter = "modules.submitter.__main__:run"
+abaqus-odb-post = "modules.postprocessor.app:main"
+abaqus-odb-results = "modules.postprocessor.result_browser:main"
 
 [project.optional-dependencies]
 dev = [

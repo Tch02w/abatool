@@ -9,15 +9,21 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .cache import (
+    NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS,
+    NUMERIC_PIPELINE_VERSION,
+    numeric_payload_is_valid,
+    numeric_payload_validation_errors,
+)
 from .config import save_json
 from .file_attributes import ensure_windows_hidden
 
-
-RESULT_LAYOUT_VERSION = 2
+RESULT_LAYOUT_VERSION = 3
 SHARED_DATA_ROOT_NAME = "ODB数据"
 ASSET_MANIFEST_NAME = "_odb_data_manifest.json"
 GROUP_MEMBER_MANIFEST_NAME = "_group_member_manifest.json"
-NUMERIC_DIRECTORIES = ("data", "History_Output", "rebar", "freebody")
+NUMERIC_DIRECTORIES = ("data", "History_Output", "rebar", "freebody", "plots")
+NUMERIC_FILES = ("metadata.json", "summary.xlsx")
 
 
 def safe_result_name(value: str) -> str:
@@ -50,11 +56,22 @@ def copy_numeric_payload(source: Path | str, target: Path | str) -> None:
     target_root.mkdir(parents=True, exist_ok=True)
     for name in NUMERIC_DIRECTORIES:
         source_path = source_root / name
-        if source_path.exists():
-            shutil.copytree(source_path, target_root / name, dirs_exist_ok=True)
-    metadata_source = source_root / "metadata.json"
-    if metadata_source.is_file():
-        shutil.copy2(metadata_source, target_root / "metadata.json")
+        target_path = target_root / name
+        if target_path.is_symlink() or target_path.is_file():
+            target_path.unlink()
+        elif target_path.is_dir():
+            shutil.rmtree(target_path)
+        if source_path.is_dir():
+            shutil.copytree(source_path, target_path)
+    for name in NUMERIC_FILES:
+        source_path = source_root / name
+        target_path = target_root / name
+        if target_path.is_symlink() or target_path.is_file():
+            target_path.unlink()
+        elif target_path.is_dir():
+            shutil.rmtree(target_path)
+        if source_path.is_file():
+            shutil.copy2(source_path, target_path)
 
 
 def write_numeric_asset_manifest(
@@ -66,11 +83,17 @@ def write_numeric_asset_manifest(
     abaqus_version: str,
 ) -> Path:
     root = Path(asset_dir).resolve()
+    validation_errors = numeric_payload_validation_errors(root)
+    if validation_errors:
+        raise ValueError(
+            "数值资产不完整，拒绝写入可复用清单：" + "；".join(validation_errors)
+        )
     manifest = root / ASSET_MANIFEST_NAME
     save_json(
         manifest,
         {
             "layout_version": RESULT_LAYOUT_VERSION,
+            "numeric_pipeline_version": NUMERIC_PIPELINE_VERSION,
             "kind": "odb_shared_numeric_data",
             "asset_id": numeric_asset_id(
                 content_fingerprint, numeric_config_hash
@@ -81,9 +104,12 @@ def write_numeric_asset_manifest(
             "abaqus_version": str(abaqus_version),
             "group_independent_contents": [
                 *NUMERIC_DIRECTORIES,
-                "plots",
-                "summary.xlsx",
+                *NUMERIC_FILES,
             ],
+            "required_csv_columns": {
+                path: list(columns)
+                for path, columns in NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS.items()
+            },
         },
     )
     ensure_windows_hidden(manifest)
@@ -99,21 +125,21 @@ def numeric_asset_is_valid(
 ) -> bool:
     root = Path(asset_dir)
     manifest_path = root / ASSET_MANIFEST_NAME
-    required = (
-        root / "data" / "timeline_alignment.csv",
-        root / "rebar",
-        root / "freebody",
-        root / "metadata.json",
-        root / "summary.xlsx",
-    )
-    if not manifest_path.is_file() or not all(path.exists() for path in required):
+    if not manifest_path.is_file() or not numeric_payload_is_valid(root):
         return False
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            return False
+        layout_version = int(manifest.get("layout_version", -1))
+        numeric_pipeline_version = int(
+            manifest.get("numeric_pipeline_version", -1)
+        )
     except (OSError, ValueError, TypeError):
         return False
     return (
-        int(manifest.get("layout_version", -1)) == RESULT_LAYOUT_VERSION
+        layout_version == RESULT_LAYOUT_VERSION
+        and numeric_pipeline_version == NUMERIC_PIPELINE_VERSION
         and manifest.get("kind") == "odb_shared_numeric_data"
         and manifest.get("content_fingerprint") == content_fingerprint
         and manifest.get("numeric_config_hash") == numeric_config_hash
@@ -138,6 +164,7 @@ def write_group_member_manifest(
         manifest_path,
         {
             "layout_version": RESULT_LAYOUT_VERSION,
+            "numeric_pipeline_version": NUMERIC_PIPELINE_VERSION,
             "kind": "comparison_group_member",
             "comparison_group": comparison_group,
             "odb_path": str(Path(odb_path).resolve()),

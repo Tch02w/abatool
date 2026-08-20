@@ -6,12 +6,17 @@ from pathlib import Path
 from modules.postprocessor import runner as runner_module
 from modules.postprocessor.cache import (
     CACHE_SCHEMA_VERSION,
+    NUMERIC_PIPELINE_VERSION,
     cache_entry_dir,
+    cache_metadata,
     load_json_cache,
+    metadata_matches,
+    numeric_cache_is_valid,
     numeric_config_snapshot,
     quick_odb_fingerprint,
     save_json_cache,
     stable_config_hash,
+    write_numeric_cache_metadata,
 )
 
 
@@ -432,3 +437,87 @@ def test_numeric_cache_hash_includes_rebar_section_method_and_tolerance() -> Non
     payload["rebar_method"] = "element_cut"
     payload["settings"]["rebar_cut_tolerance_mm"] = 0.001
     assert stable_config_hash(numeric_config_snapshot(payload)) != first
+
+
+def test_numeric_cache_identity_has_an_explicit_pipeline_version(
+    tmp_path: Path,
+) -> None:
+    odb = tmp_path / "A.odb"
+    odb.write_bytes(b"odb")
+    snapshot = numeric_config_snapshot({})
+    config_hash = stable_config_hash(snapshot)
+    fingerprint = quick_odb_fingerprint(odb)
+    metadata = cache_metadata(
+        kind="numeric",
+        odb_path=odb,
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+        config_snapshot=snapshot,
+    )
+
+    assert CACHE_SCHEMA_VERSION >= 2
+    assert snapshot["numeric_pipeline_version"] == NUMERIC_PIPELINE_VERSION
+    assert metadata["numeric_pipeline_version"] == NUMERIC_PIPELINE_VERSION
+    assert metadata_matches(
+        metadata,
+        kind="numeric",
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+    )
+
+    legacy = dict(metadata)
+    legacy.pop("numeric_pipeline_version")
+    assert not metadata_matches(
+        legacy,
+        kind="numeric",
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+    )
+    legacy = dict(metadata)
+    legacy["schema_version"] = CACHE_SCHEMA_VERSION - 1
+    assert not metadata_matches(
+        legacy,
+        kind="numeric",
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+    )
+
+
+def test_empty_legacy_numeric_cache_directories_are_invalid(
+    tmp_path: Path,
+) -> None:
+    odb = tmp_path / "A.odb"
+    odb.write_bytes(b"odb")
+    fingerprint = quick_odb_fingerprint(odb)
+    snapshot = numeric_config_snapshot({})
+    config_hash = stable_config_hash(snapshot)
+    entry = cache_entry_dir(
+        tmp_path / "cache", "numeric", fingerprint, config_hash
+    )
+    (entry / "data").mkdir(parents=True)
+    (entry / "data" / "timeline_alignment.csv").write_text(
+        "SequenceIndex\n0\n", encoding="utf-8"
+    )
+    (entry / "rebar").mkdir()
+    (entry / "freebody").mkdir()
+    (entry / "metadata.json").write_text("{}", encoding="utf-8")
+    (entry / "summary.xlsx").write_bytes(b"xlsx")
+    write_numeric_cache_metadata(
+        entry,
+        odb_path=odb,
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+        config_snapshot=snapshot,
+    )
+
+    assert not numeric_cache_is_valid(
+        entry,
+        content_fingerprint=fingerprint,
+        abaqus_version="2025|abaqus",
+        config_hash=config_hash,
+    )

@@ -9,21 +9,23 @@ import posixpath
 import shutil
 import sys
 import threading
+import time
 import traceback
 import zipfile
-from xml.etree import ElementTree
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from xml.etree import ElementTree
 
 from PySide6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
     QObject,
     QSize,
-    QThread,
     Qt,
+    QThread,
     QUrl,
     Signal,
 )
@@ -41,8 +43,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
-    QHeaderView,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -61,6 +63,11 @@ from PySide6.QtWidgets import (
 )
 
 from .naming import natural_sort_key
+from .result_assets import (
+    ASSET_MANIFEST_NAME,
+    SHARED_DATA_ROOT_NAME,
+    resolve_group_member_asset,
+)
 from .result_index import (
     INDEX_FILENAME,
     INDEX_SCHEMA_VERSION,
@@ -70,11 +77,6 @@ from .result_index import (
     index_path,
     load_result_index,
     update_result_index_scopes,
-)
-from .result_assets import (
-    ASSET_MANIFEST_NAME,
-    SHARED_DATA_ROOT_NAME,
-    resolve_group_member_asset,
 )
 
 
@@ -1261,7 +1263,7 @@ class ResultBrowserDialog(QDialog):
         )
         self.preview.setWordWrap(True)
         self.preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.preview.setStyleSheet("QLabel { border: 1px solid palette(mid); padding: 8px; }")
+        self.preview.setObjectName("resultPreview")
 
         self.data_preview = QTableWidget()
         self.data_preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -1355,17 +1357,28 @@ class ResultBrowserDialog(QDialog):
         selected = self.scope_tree.currentItem()
         if selected is not None:
             selected_path = str(selected.data(0, PATH_ROLE) or "")
+        read_errors: list[tuple[Path, OSError]] = []
+
+        def child_directories(path: Path) -> list[Path]:
+            try:
+                if not path.is_dir():
+                    return []
+                return [child for child in path.iterdir() if child.is_dir()]
+            except OSError as error:
+                read_errors.append((path, error))
+                return []
+
         self.scope_tree.blockSignals(True)
-        self.scope_tree.clear()
-        root = self.result_root
-        root_item = self._tree_item(
-            self.scope_tree, "全部结果", root, "root"
-        )
-        restore_item = root_item
-        include_internal = self.show_internal.isChecked()
-        if root.is_dir():
+        try:
+            self.scope_tree.clear()
+            root = self.result_root
+            root_item = self._tree_item(
+                self.scope_tree, "全部结果", root, "root"
+            )
+            restore_item = root_item
+            include_internal = self.show_internal.isChecked()
             for group_dir in sorted(
-                (path for path in root.iterdir() if path.is_dir()),
+                child_directories(root),
                 key=lambda path: natural_sort_key(path.name),
             ):
                 if group_dir.name.startswith("_") and not include_internal:
@@ -1378,7 +1391,7 @@ class ResultBrowserDialog(QDialog):
                         "shared_root",
                     )
                     for odb_data_dir in sorted(
-                        (path for path in group_dir.iterdir() if path.is_dir()),
+                        child_directories(group_dir),
                         key=lambda path: natural_sort_key(path.name),
                     ):
                         odb_data_item = self._tree_item(
@@ -1388,11 +1401,7 @@ class ResultBrowserDialog(QDialog):
                             "shared_odb",
                         )
                         for asset_dir in sorted(
-                            (
-                                path
-                                for path in odb_data_dir.iterdir()
-                                if path.is_dir()
-                            ),
+                            child_directories(odb_data_dir),
                             key=lambda path: natural_sort_key(path.name),
                             reverse=True,
                         ):
@@ -1411,7 +1420,7 @@ class ResultBrowserDialog(QDialog):
                 if str(group_dir) == selected_path:
                     restore_item = group_item
                 for batch_dir in sorted(
-                    (path for path in group_dir.iterdir() if path.is_dir()),
+                    child_directories(group_dir),
                     key=_time_directory_priority,
                     reverse=True,
                 ):
@@ -1429,7 +1438,7 @@ class ResultBrowserDialog(QDialog):
                     if str(batch_dir) == selected_path:
                         restore_item = batch_item
                     for odb_dir in sorted(
-                        (path for path in batch_dir.iterdir() if path.is_dir()),
+                        child_directories(batch_dir),
                         key=lambda path: natural_sort_key(path.name),
                     ):
                         odb_item = self._tree_item(
@@ -1441,16 +1450,35 @@ class ResultBrowserDialog(QDialog):
                         )
                         if str(odb_dir) == selected_path:
                             restore_item = odb_item
-        root_item.setExpanded(True)
-        self.scope_tree.setCurrentItem(restore_item)
-        self.scope_tree.blockSignals(False)
+            root_item.setExpanded(True)
+            self.scope_tree.setCurrentItem(restore_item)
+        finally:
+            self.scope_tree.blockSignals(False)
+
+        error_text = ""
+        if read_errors:
+            path, error = read_errors[0]
+            detail = error.strerror or str(error)
+            suffix = (
+                f"；另有 {len(read_errors) - 1} 个目录无法读取"
+                if len(read_errors) > 1
+                else ""
+            )
+            error_text = f"无法读取结果目录 {path}：{detail}{suffix}"
         if restore_item is root_item:
             self._show_scope_placeholder(
-                root, "请选择一个时间目录；启动阶段未读取任何结果索引。"
+                root,
+                error_text
+                or "请选择一个时间目录；启动阶段未读取任何结果索引。",
             )
-            self._update_scope_index_status()
+            if error_text:
+                self.index_status_label.setText(error_text)
+            else:
+                self._update_scope_index_status()
         else:
             self._scope_changed()
+            if error_text:
+                self.index_status_label.setText(error_text)
         self._refresh_index_controls()
 
     def _scope_changed(self) -> None:
@@ -1636,6 +1664,23 @@ class ResultBrowserDialog(QDialog):
 
         thread.finished.connect(cleanup)
         thread.start()
+
+    def _wait_for_background_threads(self, timeout_ms: int = 30000) -> bool:
+        """Wait for in-flight directory/preview reads before destroying the page."""
+
+        deadline = time.monotonic() + max(0, timeout_ms) / 1000.0
+        for thread in list(self._background_threads):
+            remaining_ms = max(0, round((deadline - time.monotonic()) * 1000))
+            if thread.isRunning() and not thread.wait(remaining_ms):
+                return False
+        return True
+
+    def prepare_close(self, timeout_ms: int = 30000) -> bool:
+        """Quiesce short-lived readers without hiding the embedded browser."""
+
+        self._direct_request += 1
+        self._preview_request += 1
+        return self._wait_for_background_threads(timeout_ms)
 
     def _start_direct_browse(self, scope: Path) -> None:
         self._direct_request += 1
@@ -2239,8 +2284,14 @@ class ResultBrowserDialog(QDialog):
         )
 
     def closeEvent(self, event) -> None:
-        self._direct_request += 1
-        self._preview_request += 1
+        if not self.prepare_close(30000):
+            QMessageBox.warning(
+                self,
+                "结果读取仍在退出",
+                "后台目录读取或文件预览尚未安全结束，请稍后再关闭结果浏览器。",
+            )
+            event.ignore()
+            return
         if self._owns_coordinator and not self.coordinator.shutdown(30000):
             QMessageBox.warning(
                 self,
@@ -2253,7 +2304,7 @@ class ResultBrowserDialog(QDialog):
 
 
 def main() -> int:
-    from .ui_style import apply_application_style
+    from .ui_style import apply_application_style, build_main_stylesheet
 
     application = QApplication(sys.argv)
     apply_application_style(application)
@@ -2264,6 +2315,7 @@ def main() -> int:
         else requested / RESULT_ROOT_NAME
     )
     window = ResultBrowserDialog(result_root)
+    window.setStyleSheet(build_main_stylesheet())
     window.showMaximized()
     return application.exec()
 

@@ -5,19 +5,23 @@ from __future__ import annotations
 import copy
 import json
 import math
+import shutil
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
-    QHeaderView,
+    QDoubleSpinBox,
+    QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -27,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from . import comparison_groups as _base
 from .cache import (
+    NUMERIC_PIPELINE_VERSION,
     abaqus_cache_version,
     cache_entry_dir,
     load_json_cache,
@@ -46,19 +51,20 @@ from .legends import (
     choose_sequences,
 )
 from .naming import OdbNameInfo, natural_sort_key, parse_odb_name
-from .postprocess import finalize_numeric_output, finalize_render_output
 from .paths import batch_temp_dir, result_root_for_odb, scan_cache_dir
-from .result_browser import (
-    RESULT_ROOT_NAME,
-    ResultBrowserDialog,
-    ResultIndexCoordinator,
-)
+from .postprocess import finalize_numeric_output, finalize_render_output
 from .result_assets import (
+    RESULT_LAYOUT_VERSION,
     copy_numeric_payload,
     numeric_asset_dir,
     numeric_asset_is_valid,
     write_group_member_manifest,
     write_numeric_asset_manifest,
+)
+from .result_browser import (
+    RESULT_ROOT_NAME,
+    ResultBrowserDialog,
+    ResultIndexCoordinator,
 )
 from .runner_parallel import (
     MultiProcessController,
@@ -67,7 +73,6 @@ from .runner_parallel import (
     run_job,
     scan_field_ranges,
 )
-
 
 AUTO_DIRECTION = "自动"
 UNRECOGNIZED_DIRECTION = "（未识别）"
@@ -116,7 +121,7 @@ class MainWindow(_base.MainWindow):
         header = self.group_tree.header()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
 
-        option_layout = self.centralWidget().layout().itemAt(2).layout()
+        option_layout = self.option_row_layout
         self.parallel_label = QLabel("并行任务数")
         self.parallel_label.setToolTip("同时启动的独立 Abaqus ODB 读取或后处理进程数")
         option_layout.insertWidget(option_layout.count() - 2, self.parallel_label)
@@ -178,13 +183,12 @@ class MainWindow(_base.MainWindow):
             "按荷载—位移、桩轴力、桩弯矩、钢筋、云图和动画等用途查找结果"
         )
         self.result_browser_button.clicked.connect(self._open_result_browser)
-        folder_layout = self.centralWidget().layout().itemAt(0).layout()
-        folder_layout.addWidget(self.result_browser_button)
+        self.folder_row_layout.addWidget(self.result_browser_button)
 
         output_panel = QWidget()
         output_panel.setObjectName("outputImageSettings")
         output_layout = QHBoxLayout(output_panel)
-        output_layout.setContentsMargins(10, 4, 10, 4)
+        output_layout.setContentsMargins(12, 8, 12, 8)
         output_layout.setSpacing(8)
         output_title = QLabel("输出图像")
         output_title.setProperty("role", "title")
@@ -293,7 +297,115 @@ class MainWindow(_base.MainWindow):
             self._background_output_changed
         )
         self._update_image_ratio()
-        self.centralWidget().layout().insertWidget(3, output_panel)
+
+        self.rebar_settings_panel = QFrame()
+        self.rebar_settings_panel.setObjectName("ppCard")
+        rebar_layout = QHBoxLayout(self.rebar_settings_panel)
+        rebar_layout.setContentsMargins(12, 8, 12, 8)
+        rebar_layout.setSpacing(8)
+        rebar_title = QLabel("纵筋截面力")
+        rebar_title.setProperty("role", "title")
+        rebar_layout.addWidget(rebar_title)
+
+        rebar_layout.addWidget(QLabel("提取方法"))
+        self.rebar_method_selector = QComboBox()
+        self.rebar_method_selector.setObjectName("rebar_method")
+        self.rebar_method_selector.setMinimumWidth(180)
+        self.rebar_method_selector.addItem("截面单元切割（推荐）", "element_cut")
+        self.rebar_method_selector.addItem(
+            "旧版插值（仅对照）", "legacy_interpolation"
+        )
+        self.rebar_method_selector.setToolTip(
+            "正式分析请使用截面单元切割；旧版插值仅用于与历史结果对照。"
+        )
+        saved_method = str(
+            self.state.get(
+                "rebar_method",
+                self.defaults.get("rebar_method", "element_cut"),
+            )
+        ).strip().lower()
+        if saved_method not in ("element_cut", "legacy_interpolation"):
+            saved_method = "element_cut"
+        self.rebar_method_selector.setCurrentIndex(
+            self.rebar_method_selector.findData(saved_method)
+        )
+        rebar_layout.addWidget(self.rebar_method_selector)
+
+        rebar_layout.addWidget(QLabel("预期纵筋数"))
+        self.expected_longitudinal_rebar_count_input = QSpinBox()
+        self.expected_longitudinal_rebar_count_input.setObjectName(
+            "expected_longitudinal_rebar_count"
+        )
+        self.expected_longitudinal_rebar_count_input.setRange(0, 10000)
+        self.expected_longitudinal_rebar_count_input.setSpecialValueText(
+            "自动（按 ODB 检测）"
+        )
+        self.expected_longitudinal_rebar_count_input.setSuffix(" 根")
+        self.expected_longitudinal_rebar_count_input.setAlignment(Qt.AlignCenter)
+        self.expected_longitudinal_rebar_count_input.setKeyboardTracking(False)
+        self.expected_longitudinal_rebar_count_input.setMinimumWidth(132)
+        self.expected_longitudinal_rebar_count_input.setToolTip(
+            "用于校验截面切到的纵筋数量；"
+            "0 表示自动采用 ODB 检测到的纵筋数量。"
+        )
+        try:
+            saved_rebar_count = int(
+                self.state.get(
+                    "expected_longitudinal_rebar_count",
+                    self.defaults.get("expected_longitudinal_rebar_count", 0),
+                )
+            )
+        except (TypeError, ValueError):
+            saved_rebar_count = 0
+        self.expected_longitudinal_rebar_count_input.setValue(
+            max(0, saved_rebar_count)
+        )
+        rebar_layout.addWidget(self.expected_longitudinal_rebar_count_input)
+
+        rebar_layout.addWidget(QLabel("切面容差"))
+        self.rebar_cut_tolerance_mm_input = QDoubleSpinBox()
+        self.rebar_cut_tolerance_mm_input.setObjectName("rebar_cut_tolerance_mm")
+        self.rebar_cut_tolerance_mm_input.setRange(0.0, 100.0)
+        self.rebar_cut_tolerance_mm_input.setDecimals(6)
+        self.rebar_cut_tolerance_mm_input.setSingleStep(0.0001)
+        self.rebar_cut_tolerance_mm_input.setSuffix(" mm")
+        self.rebar_cut_tolerance_mm_input.setAlignment(Qt.AlignCenter)
+        self.rebar_cut_tolerance_mm_input.setKeyboardTracking(False)
+        self.rebar_cut_tolerance_mm_input.setMinimumWidth(152)
+        self.rebar_cut_tolerance_mm_input.setToolTip(
+            "判断钢筋单元是否穿过提取截面的几何容差，单位为 mm。"
+        )
+        try:
+            saved_cut_tolerance = abs(
+                float(
+                    self.state.get(
+                        "rebar_cut_tolerance_mm",
+                        self.defaults.get("rebar_cut_tolerance_mm", 0.0001),
+                    )
+                )
+            )
+        except (TypeError, ValueError):
+            saved_cut_tolerance = 0.0001
+        self.rebar_cut_tolerance_mm_input.setValue(saved_cut_tolerance)
+        rebar_layout.addWidget(self.rebar_cut_tolerance_mm_input)
+
+        rebar_hint = QLabel("旧版插值仅用于历史结果对照")
+        rebar_hint.setProperty("role", "hint")
+        rebar_layout.addWidget(rebar_hint)
+        rebar_layout.addStretch(1)
+        self.rebar_method_selector.currentIndexChanged.connect(
+            self._rebar_section_settings_changed
+        )
+        self.expected_longitudinal_rebar_count_input.valueChanged.connect(
+            self._rebar_section_settings_changed
+        )
+        self.rebar_cut_tolerance_mm_input.valueChanged.connect(
+            self._rebar_section_settings_changed
+        )
+
+        main_layout = self.centralWidget().layout()
+        main_layout.insertWidget(3, output_panel)
+        main_layout.insertWidget(4, self.rebar_settings_panel)
 
     def _consume_force_rescan(self) -> bool:
         enabled = bool(self.force_rescan_checkbox.isChecked())
@@ -302,12 +414,9 @@ class MainWindow(_base.MainWindow):
         return enabled
 
     def _open_result_browser(self) -> None:
-        odb_folder = Path(self.folder_edit.text().strip())
-        result_root = (
-            odb_folder / RESULT_ROOT_NAME
-            if odb_folder.is_dir()
-            else Path.cwd() / RESULT_ROOT_NAME
-        )
+        folder_text = self.folder_edit.text().strip()
+        odb_folder = Path(folder_text).expanduser() if folder_text else Path.cwd()
+        result_root = odb_folder / RESULT_ROOT_NAME
         existing = getattr(self, "_result_browser_dialog", None)
         if existing is not None:
             existing.set_result_root(result_root)
@@ -433,6 +542,19 @@ class MainWindow(_base.MainWindow):
         self.state["parallel_odb_workers"] = int(workers)
         save_json(self.state_path, self.state)
 
+    def _rebar_section_settings_changed(self, *_args) -> None:
+        method = str(self.rebar_method_selector.currentData() or "element_cut")
+        if method not in ("element_cut", "legacy_interpolation"):
+            method = "element_cut"
+        self.state["rebar_method"] = method
+        self.state["expected_longitudinal_rebar_count"] = int(
+            self.expected_longitudinal_rebar_count_input.value()
+        )
+        self.state["rebar_cut_tolerance_mm"] = float(
+            self.rebar_cut_tolerance_mm_input.value()
+        )
+        save_json(self.state_path, self.state)
+
     def _set_busy(self, busy: bool) -> None:
         super()._set_busy(busy)
         if hasattr(self, "parallel_workers"):
@@ -443,6 +565,10 @@ class MainWindow(_base.MainWindow):
             self.image_unit_selector.setEnabled(not busy)
             self.export_white_background_checkbox.setEnabled(not busy)
             self.export_transparent_background_checkbox.setEnabled(not busy)
+        if hasattr(self, "rebar_method_selector"):
+            self.rebar_method_selector.setEnabled(not busy)
+            self.expected_longitudinal_rebar_count_input.setEnabled(not busy)
+            self.rebar_cut_tolerance_mm_input.setEnabled(not busy)
         if hasattr(self, "cancel_run_button"):
             self.cancel_run_button.setEnabled(bool(busy and self.batch_active))
         if not busy and hasattr(self, "group_tabs"):
@@ -522,7 +648,16 @@ class MainWindow(_base.MainWindow):
         settings["export_transparent_background_png"] = bool(
             self.export_transparent_background_checkbox.isChecked()
         )
+        settings["rebar_cut_tolerance_mm"] = float(
+            self.rebar_cut_tolerance_mm_input.value()
+        )
         payload["settings"] = settings
+        payload["rebar_method"] = str(
+            self.rebar_method_selector.currentData() or "element_cut"
+        )
+        payload["expected_longitudinal_rebar_count"] = int(
+            self.expected_longitudinal_rebar_count_input.value()
+        )
         info = self._name_info(row)
         selected_direction = row["direction"].currentText()
         automatic = selected_direction == automatic_direction_label(info)
@@ -1145,6 +1280,13 @@ class MainWindow(_base.MainWindow):
                     abaqus_version=abaqus_version,
                     config_hash=numeric_hash,
                 )
+                # An interrupted or legacy extraction can leave files in the
+                # deterministic asset directory.  Rebuild from a clean root
+                # whether the current payload comes from cache or Abaqus.
+                if shared_data_dir.is_symlink() or shared_data_dir.is_file():
+                    shared_data_dir.unlink()
+                elif shared_data_dir.is_dir():
+                    shutil.rmtree(shared_data_dir)
                 if cache_ready:
                     copy_numeric_payload(numeric_entry, shared_data_dir)
                     tagged(
@@ -1184,7 +1326,8 @@ class MainWindow(_base.MainWindow):
                             "numeric_cache_reused": cache_ready,
                             "content_fingerprint": fingerprint,
                             "numeric_config_hash": numeric_hash,
-                            "result_layout_version": 2,
+                            "result_layout_version": RESULT_LAYOUT_VERSION,
+                            "numeric_pipeline_version": NUMERIC_PIPELINE_VERSION,
                             "comparison_group_independent": True,
                         }
                     )
@@ -1341,6 +1484,17 @@ class MainWindow(_base.MainWindow):
     def closeEvent(self, event) -> None:
         self._save_state()
         has_index_work = self.result_index_coordinator.has_work()
+        group_worker_running = bool(
+            self.group_worker is not None and self.group_worker.isRunning()
+        )
+        if self._exit_after_cancel and (
+            self._has_group_work() or group_worker_running or has_index_work
+        ):
+            # A first close has already requested safe cancellation.  Repeated
+            # close gestures must not destroy the window while its QThread or
+            # Abaqus child processes are still unwinding.
+            event.ignore()
+            return
         if (
             (self._has_group_work() or has_index_work)
             and not self._exit_after_cancel

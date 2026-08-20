@@ -8,6 +8,7 @@ from pathlib import Path
 from modules.common.app_paths import resolve_app_data_dir
 
 APP_NAME = "AbaqusODBPostProcessor"
+APP_DATA_DIR_ENV = "ABAQUS_POSTPROCESSOR_DATA_DIR"
 
 
 def temp_root() -> Path:
@@ -32,7 +33,11 @@ def batch_temp_dir(batch_id: str) -> Path:
 
 def state_file() -> Path:
     path = (
-        resolve_app_data_dir(APP_NAME, roaming_on_windows=True)
+        resolve_app_data_dir(
+            APP_NAME,
+            environment_variable=APP_DATA_DIR_ENV,
+            roaming_on_windows=True,
+        )
         / "project_state.json"
     )
     path.parent.mkdir(parents=True, exist_ok=True)

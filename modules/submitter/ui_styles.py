@@ -17,35 +17,46 @@ RUNTIME_LOG_WIDTH_SAMPLE = "****************************************************
 # Horizontal padding inside runtimeBodyCard: 8 + 8.
 RUNTIME_BODY_HORIZONTAL_MARGIN = 16
 
-APP_BG = "#f3f6fa"
-CARD_BG = "#ffffff"
-LOG_BG = "#f8fafc"
-TEXT = "#111827"
-HINT = "#64748b"
-PRIMARY = "#2563eb"
-PRIMARY_HOVER = "#1d4ed8"
-LIGHT = "#e7edf6"
-LIGHT_HOVER = "#d8e2ef"
-DANGER = "#dc2626"
-DANGER_HOVER = "#b91c1c"
-BORDER = "#c7d2e1"
-BORDER_SOFT = "#dbe4ef"
-FOCUS = "#60a5fa"
-FIELD_BG = "#ffffff"
-FIELD_MUTED_BG = "#f8fafc"
-TABLE_HEADER_BG = "#edf2f8"
-TABLE_GRID = "#e5e7eb"
-SELECTION_BG = "#dbeafe"
-SELECTION_TEXT = "#0f172a"
-RUNTIME_SELECTOR_FALLBACK_BG = "#e2e8f0"
-
-RADIUS_CARD = 10
-RADIUS_CONTROL = 7
-CONTROL_HEIGHT = 32
-BUTTON_HEIGHT = 28
-SCROLLBAR_BG = "#f8fafc"
-SCROLLBAR_HANDLE = "#cbd5e1"
-SCROLLBAR_HANDLE_HOVER = "#94a3b8"
+# Design tokens are shared with the postprocessor via modules.common.qt_theme
+# so both domain pages stay visually unified. Values must not diverge here.
+from modules.common.qt_theme import (
+    APP_BG,
+    BORDER,
+    BORDER_SOFT,
+    BUTTON_HEIGHT,
+    CARD_BG,
+    CONTROL_HEIGHT,
+    DANGER,
+    DANGER_HOVER,
+    DANGER_PRESSED,
+    DISABLED_BG,
+    DISABLED_TEXT,
+    FIELD_BG,
+    FIELD_DISABLED_BG,
+    FIELD_MUTED_BG,
+    FIELD_SELECTION_BG,
+    FOCUS,
+    HINT,
+    LIGHT,
+    LIGHT_HOVER,
+    LIGHT_PRESSED,
+    LOG_BG,
+    PRIMARY,
+    PRIMARY_HOVER,
+    PRIMARY_PRESSED,
+    RADIUS_CARD,
+    RADIUS_CONTROL,
+    RUNTIME_SELECTOR_FALLBACK_BG,
+    SCROLLBAR_BG,
+    SCROLLBAR_HANDLE,
+    SCROLLBAR_HANDLE_HOVER,
+    SELECTION_BG,
+    SELECTION_TEXT,
+    TAB_TEXT,
+    TABLE_GRID,
+    TABLE_HEADER_BG,
+    TEXT,
+)
 
 
 def _app_font_stack() -> str:
@@ -89,18 +100,18 @@ def _button_styles() -> str:
                 background: {DANGER_HOVER};
             }}
             QPushButton:pressed {{
-                background: #cbd5e1;
+                background: {LIGHT_PRESSED};
                 padding-top: 1px;
             }}
             QPushButton#primary:pressed {{
-                background: #1e40af;
+                background: {PRIMARY_PRESSED};
             }}
             QPushButton#danger:pressed {{
-                background: #991b1b;
+                background: {DANGER_PRESSED};
             }}
             QPushButton:disabled {{
-                background: #e5e7eb;
-                color: #94a3b8;
+                background: {DISABLED_BG};
+                color: {DISABLED_TEXT};
                 border-color: transparent;
             }}
             """
@@ -109,8 +120,8 @@ def _button_styles() -> str:
 def _path_picker_styles() -> str:
     return f"""
             QPushButton#pathPicker {{
-                background: #f8fafc;
-                color: #475569;
+                background: {FIELD_MUTED_BG};
+                color: {TAB_TEXT};
                 border: 1px solid {BORDER};
                 border-radius: 5px;
                 min-width: 30px;
@@ -121,12 +132,12 @@ def _path_picker_styles() -> str:
                 font-weight: 600;
             }}
             QPushButton#pathPicker:hover {{
-                background: #ffffff;
+                background: {FIELD_BG};
                 border-color: #94a3b8;
             }}
             QPushButton#pathPicker:disabled {{
-                background: #f1f5f9;
-                color: #94a3b8;
+                background: {FIELD_DISABLED_BG};
+                color: {DISABLED_TEXT};
                 border-color: {BORDER_SOFT};
             }}
             """
@@ -142,15 +153,15 @@ def _field_styles() -> str:
                 min-height: {CONTROL_HEIGHT}px;
                 max-height: {CONTROL_HEIGHT}px;
                 padding: 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QLineEdit:focus {{
                 border-color: {FOCUS};
                 background: {FIELD_BG};
             }}
             QLineEdit:disabled {{
-                background: #f1f5f9;
-                color: #94a3b8;
+                background: {FIELD_DISABLED_BG};
+                color: {DISABLED_TEXT};
                 border-color: {BORDER_SOFT};
             }}
             QSpinBox {{
@@ -161,7 +172,7 @@ def _field_styles() -> str:
                 min-height: {CONTROL_HEIGHT}px;
                 max-height: {CONTROL_HEIGHT}px;
                 padding: 0 20px 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QSpinBox:focus {{
                 border-color: {FOCUS};
@@ -185,7 +196,7 @@ def _field_styles() -> str:
                 min-height: {CONTROL_HEIGHT}px;
                 max-height: {CONTROL_HEIGHT}px;
                 padding: 0 24px 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QComboBox:focus {{
                 border-color: {FOCUS};
@@ -221,12 +232,12 @@ def _segmented_spinbox_styles() -> str:
                 background: {FIELD_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
+                border-radius: {RADIUS_CONTROL}px;
                 min-width: 112px;
-                min-height: 30px;
-                max-height: 30px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QSpinBox[segmentedSpin="true"]:focus {{
                 border-color: {FOCUS};
@@ -251,7 +262,7 @@ def _segmented_spinbox_styles() -> str:
             }}
             QSpinBox[segmentedSpin="true"] QToolButton#spinStepDown,
             QSpinBox[segmentedSpin="true"] QToolButton#spinStepUp {{
-                background: #f8fafc;
+                background: {FIELD_MUTED_BG};
                 color: #334155;
                 border: 0;
                 border-radius: 0;
@@ -282,7 +293,7 @@ def _segmented_spinbox_styles() -> str:
                 color: #1d4ed8;
             }}
             QSpinBox[segmentedSpin="true"] QToolButton:disabled {{
-                background: #f8fafc;
+                background: {FIELD_MUTED_BG};
                 color: #b8c2d0;
             }}
             """
@@ -449,16 +460,16 @@ def build_queue_manager_stylesheet(*, compact: bool = False) -> str:
             }}
             QGroupBox {{
                 background: {CARD_BG};
-                border: 1px solid {BORDER_SOFT};
-                border-radius: {RADIUS_CARD}px;
-                margin-top: 12px;
+                border: 1px solid {BORDER};
+                border-radius: 6px;
+                margin-top: 10px;
                 padding-top: 14px;
                 font-weight: 600;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px;
+                left: 9px;
+                padding: 0 5px;
                 background: {CARD_BG};
             }}
             QGroupBox QLabel,
@@ -605,7 +616,7 @@ def build_main_stylesheet() -> str:
                 color: {SELECTION_TEXT};
             }}
             QMenu#workbenchPopupMenu::item:disabled {{
-                color: #94a3b8;
+                color: {DISABLED_TEXT};
             }}
             QMenu#workbenchPopupMenu::separator {{
                 height: 1px;
@@ -614,8 +625,8 @@ def build_main_stylesheet() -> str:
             }}
             QPushButton#success:disabled,
             QPushButton#outlineDanger:disabled {{
-                background: #e5e7eb;
-                color: #94a3b8;
+                background: {DISABLED_BG};
+                color: {DISABLED_TEXT};
                 border-color: #d1d5db;
             }}
             QComboBox#connectionState {{
@@ -639,7 +650,7 @@ def build_main_stylesheet() -> str:
             }}
             QPushButton#toolIcon {{
                 background: transparent;
-                color: #475569;
+                color: {TAB_TEXT};
                 border: 0;
                 min-width: 28px;
                 max-width: 28px;
@@ -651,8 +662,8 @@ def build_main_stylesheet() -> str:
                 background: #e2e8f0;
             }}
             QPushButton#compactPicker {{
-                background: #f8fafc;
-                color: #475569;
+                background: {FIELD_MUTED_BG};
+                color: {TAB_TEXT};
                 border: 1px solid {BORDER};
                 border-radius: 5px;
                 min-width: 30px;
@@ -673,7 +684,7 @@ def build_main_stylesheet() -> str:
                 padding: 1px 3px;
             }}
             QTreeWidget#projectTree::item:hover {{
-                background: #f1f5f9;
+                background: {FIELD_DISABLED_BG};
                 color: {TEXT};
             }}
             QFrame#resourceSummary {{
@@ -696,7 +707,7 @@ def build_main_stylesheet() -> str:
                 border-radius: 0;
             }}
             QFrame#resourceNodeSummary:hover {{
-                background: #f1f5f9;
+                background: {FIELD_DISABLED_BG};
             }}
             QFrame#resourceNodeSummary[selected="true"] {{
                 background: #f8fbff;
@@ -743,8 +754,35 @@ def build_main_stylesheet() -> str:
                 background: #eef2f7;
                 color: #475569;
                 border: 1px solid {BORDER_SOFT};
+            }}
+            QTabWidget#workbenchTabs QTabBar::tab {{
+                padding: 7px 8px;
+                min-width: 60px;
+            }}
+            QTabWidget#workbenchLogDock QTabBar::tab {{
                 padding: 7px 15px;
                 min-width: 104px;
+            }}
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollLeftButton,
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollRightButton {{
+                background: {CARD_BG};
+                color: {TAB_TEXT};
+                border: 1px solid {BORDER_SOFT};
+                border-radius: 4px;
+                min-width: 20px;
+                max-width: 20px;
+                margin: 2px 1px;
+                padding: 0;
+            }}
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollLeftButton:hover,
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollRightButton:hover {{
+                background: {LIGHT};
+                border-color: {BORDER};
+            }}
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollLeftButton:disabled,
+            QTabWidget#workbenchTabs QTabBar QToolButton#ScrollRightButton:disabled {{
+                background: {FIELD_DISABLED_BG};
+                color: {DISABLED_TEXT};
             }}
             QTabWidget#workbenchTabs QTabBar::tab:selected,
             QTabWidget#workbenchLogDock QTabBar::tab:selected {{
@@ -770,7 +808,7 @@ def build_main_stylesheet() -> str:
                 border: 1px solid {BORDER};
                 border-radius: 6px;
                 margin-top: 10px;
-                font-weight: 700;
+                font-weight: 600;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
@@ -859,7 +897,7 @@ def build_main_stylesheet() -> str:
                 padding-right: 8px;
             }}
             QLineEdit#globalSearch {{
-                background: #f8fafc;
+                background: {FIELD_MUTED_BG};
                 border-color: {BORDER_SOFT};
             }}
             QFrame#clusterNavigation {{
@@ -880,7 +918,7 @@ def build_main_stylesheet() -> str:
                 font-weight: 500;
             }}
             QPushButton#navButton:hover {{
-                background: #f1f5f9;
+                background: {FIELD_DISABLED_BG};
             }}
             QPushButton#navSelected {{
                 background: #dbeafe;
@@ -973,7 +1011,7 @@ def build_main_stylesheet() -> str:
                 border-color: {PRIMARY};
             }}
             QPlainTextEdit#eventLog {{
-                background: #f8fafc;
+                background: {LOG_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER_SOFT};
                 border-radius: 7px;
@@ -1120,9 +1158,9 @@ def build_main_stylesheet() -> str:
                 background: #dbe3ee;
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
-                min-height: 30px;
-                max-height: 30px;
+                border-radius: {RADIUS_CONTROL}px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0 24px 0 9px;
             }}
 
@@ -1207,33 +1245,33 @@ def build_main_stylesheet() -> str:
                 border-color: #94a3b8;
             }}
             QLineEdit {{
-                background: #ffffff;
+                background: {FIELD_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
-                min-height: 30px;
-                max-height: 30px;
+                border-radius: {RADIUS_CONTROL}px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QLineEdit:focus {{
                 border-color: {FOCUS};
-                background: #ffffff;
+                background: {FIELD_BG};
             }}
             QLineEdit:disabled {{
-                background: #f1f5f9;
-                color: #94a3b8;
+                background: {FIELD_DISABLED_BG};
+                color: {DISABLED_TEXT};
                 border-color: {BORDER_SOFT};
             }}
             QSpinBox {{
-                background: #ffffff;
+                background: {FIELD_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
-                min-height: 30px;
-                max-height: 30px;
+                border-radius: {RADIUS_CONTROL}px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0 20px 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QSpinBox:focus {{
                 border-color: {FOCUS};
@@ -1251,12 +1289,12 @@ def build_main_stylesheet() -> str:
             }}
             QLineEdit#submitParamEdit,
             QComboBox#submitParamCombo {{
-                background: #f8fafc;
+                background: {FIELD_MUTED_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
-                min-height: 30px;
-                max-height: 30px;
+                border-radius: {RADIUS_CONTROL}px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0 8px;
                 font-weight: 500;
             }}
@@ -1269,14 +1307,14 @@ def build_main_stylesheet() -> str:
                 border-left: 1px solid {BORDER_SOFT};
             }}
             QComboBox {{
-                background: #ffffff;
+                background: {FIELD_BG};
                 color: {TEXT};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
-                min-height: 30px;
-                max-height: 30px;
+                border-radius: {RADIUS_CONTROL}px;
+                min-height: {CONTROL_HEIGHT}px;
+                max-height: {CONTROL_HEIGHT}px;
                 padding: 0 24px 0 8px;
-                selection-background-color: #bfdbfe;
+                selection-background-color: {FIELD_SELECTION_BG};
             }}
             QComboBox:focus {{
                 border-color: {FOCUS};
@@ -1292,17 +1330,17 @@ def build_main_stylesheet() -> str:
                 height: 0;
             }}
             QComboBox QAbstractItemView {{
-                background: #ffffff;
+                background: {FIELD_BG};
                 border: 1px solid {BORDER};
-                border-radius: 6px;
+                border-radius: {RADIUS_CONTROL}px;
                 padding: 4px;
                 outline: 0;
-                selection-background-color: #dbeafe;
-                selection-color: #0f172a;
+                selection-background-color: {SELECTION_BG};
+                selection-color: {SELECTION_TEXT};
             }}
             QPlainTextEdit#log {{
-                background: #f8fafc;
-                color: #111827;
+                background: {LOG_BG};
+                color: {TEXT};
                 border: 1px solid #d8e1ee;
                 border-radius: 8px;
                 font-family: Consolas, "Microsoft YaHei", monospace;
@@ -1315,7 +1353,7 @@ def build_main_stylesheet() -> str:
             }}
             QLabel#staStickyHeader {{
                 background: {LOG_BG};
-                color: #111827;
+                color: {TEXT};
                 border: 0;
                 border-bottom: 1px solid {BORDER};
                 padding: 6px 8px 4px 8px;
@@ -1324,17 +1362,48 @@ def build_main_stylesheet() -> str:
             }}
             QPlainTextEdit#runtimeLog {{
                 background: transparent;
-                color: #111827;
+                color: {TEXT};
                 border: 0;
                 border-radius: 0;
                 padding: 6px 0 6px 8px;
                 font-family: "Cascadia Mono", Consolas, "Microsoft YaHei", monospace;
                 font-size: 12px;
-                selection-background-color: #bfdbfe;
-                selection-color: #0f172a;
+                selection-background-color: {FIELD_SELECTION_BG};
+                selection-color: {SELECTION_TEXT};
             }}
             QPlainTextEdit#runtimeLog QWidget {{
                 background: {LOG_BG};
+            }}
+            QStatusBar#workspaceStatusBar {{
+                background: {CARD_BG};
+                color: {TEXT};
+                border: 0;
+                border-top: 1px solid {BORDER_SOFT};
+                min-height: 28px;
+                max-height: 28px;
+            }}
+            QStatusBar#workspaceStatusBar::item {{
+                border: 0;
+            }}
+            QStatusBar#workspaceStatusBar QLabel {{
+                background: transparent;
+                color: {HINT};
+                padding: 0 8px;
+                border: 0;
+                border-left: 1px solid {BORDER_SOFT};
+            }}
+            QLabel#workspaceStatusModule {{
+                color: {PRIMARY};
+                border-left: 0;
+                font-weight: 700;
+            }}
+            QLabel#workspaceStatusContext {{
+                color: {TEXT};
+            }}
+            QLabel#workspaceStatusBinding {{
+                color: #166534;
+                background: #f0fdf4;
+                font-weight: 600;
             }}
             QToolTip {{
                 background: #0f172a;

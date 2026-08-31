@@ -12,9 +12,11 @@ from modules.postprocessor.file_attributes import (
     hide_internal_result_json_files,
 )
 from modules.postprocessor.paths import (
+    APP_DATA_DIR_ENV,
     batch_temp_dir,
     result_root_for_odb,
     scan_cache_dir,
+    state_file,
 )
 
 
@@ -42,6 +44,13 @@ def test_batch_scratch_is_in_system_temp() -> None:
 def test_results_are_next_to_odb(tmp_path: Path) -> None:
     odb = tmp_path / "case.odb"
     assert result_root_for_odb(odb) == tmp_path / "AbaqusODBPostProcessor_Results"
+
+
+def test_state_file_supports_an_isolated_data_directory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv(APP_DATA_DIR_ENV, str(tmp_path))
+    assert state_file() == tmp_path.resolve() / "project_state.json"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows file attributes only")

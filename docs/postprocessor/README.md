@@ -1,14 +1,12 @@
 # Abaqus ODB PostProcessor
 
-Abaqus 2025 ODB 批量后处理工具。当前工作树只保留唯一最新版代码；旧实现通过 Git 历史保存，不再使用 `*_v2.py`、`*_final.py` 等本地副本。
-
-GitHub：<https://github.com/Tch02w/AbaqusODBPostProcessor>
+Abaqus ODB 批量后处理领域说明。当前实现由原生 WinUI 3 页面调用 Qt-free 批处理核心；PySide6 页面在迁移验收期作为兼容入口保留。
 
 ## 本地目录职责
 
-- 项目与源码：`G:\PythonProject\AbaqusODBPostProcessor`
-- ODB：`G:\Job\GJA_ODB`
-- 提取结果：`G:\Job\GJA_ODB\AbaqusODBPostProcessor_Results`
+- 项目源码：当前 Git 仓库根目录
+- ODB：用户在原生页面中选择的目录
+- 提取结果：所选 ODB 根目录下的 `AbaqusODBPostProcessor_Results`
 - 持久扫描/预扫描/数值缓存：所选 ODB 根目录下的 `cache`
 - 当前会话批次临时目录：`%TEMP%\AbaqusODBPostProcessor\batches`
 - 用户界面状态：`%APPDATA%\AbaqusODBPostProcessor\project_state.json`
@@ -17,10 +15,7 @@ GitHub：<https://github.com/Tch02w/AbaqusODBPostProcessor>
 
 ## 启动
 
-- 双击 `Abaqus ODB 后处理器.lnk`；或
-- 双击 `启动AbaqusODB后处理器.bat`。
-
-双击 `打开源代码文件夹.bat` 可直接打开当前源码目录。
+原生入口见仓库根目录 `README.md`。兼容入口可运行 `uv run abaqus-odb-post`。
 
 ## 文件名规则
 
@@ -104,6 +99,19 @@ ODB 的基础缓存；运行当前组时重建该组预扫描缓存；运行全�
 原文件名下的新版 ODB 会在下一次读取时创建新的基础缓存，避免采样指纹极端情况下
 误用升级前的结果。
 
+“纵筋截面力”默认使用 `element_cut`：对每个 Free Body Cut 高程按参考几何
+`[z_min, z_max)` 归属穿过截面的纵向 T3D2，物理最顶端单独包含，并按连通纵筋
+去重。单元轴力采用 `S11 × A`，每个单元的面积和材料优先从 ODB 的
+`sectionAssignments`/`sections` 读取，因此可正确处理混合直径；只有 ODB 没有可读面积时
+才使用界面直径作显式告警回退。投影方向逐节点按 `COORD → 参考坐标 + U →
+参考几何` 选择，并在诊断 CSV 中记录各来源的节点数。
+
+同一次提取同时保留截面单元法和旧版高度插值法，正式总轴力依“提取方法”选择，
+曲线图会同时显示新旧两条纵筋力供对照；不对轴力做平滑。“预期纵筋数”为 0 时
+按每个 ODB 实际检测数自动校验。若交叉单元缺少 S/S11，或同一纵筋出现无法唯一
+归属的重复交叉候选，程序会先写出 `rebar_section_diagnostics.csv`，再以失败结束；
+不会写出伪完整的桩总轴力，也不会把该结果放入可复用缓存。
+
 每个 GIF 都包含开始 Step 到结束 Step 的完整正式加载历程。同一对比组内，同一变量
 按“组内全部 ODB × 全部正式加载帧”统计一次统一上下限，并在整段动画中固定；因此
 早期帧不会因末帧数值较大而全部落在色标下限之外。静态云图使用另一套范围，只按
@@ -172,7 +180,7 @@ ODB 正在从超算下载或复制，应等待文件大小稳定后再检测。
 ## 结果结构
 
 ```text
-G:\Job\GJA_ODB\AbaqusODBPostProcessor_Results\
+<ODB 根目录>\AbaqusODBPostProcessor_Results\
 ├─ ODB数据\
 │  └─ ODB名称\
 │     └─ 内容指纹-数值配置哈希\

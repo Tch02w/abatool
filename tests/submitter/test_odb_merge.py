@@ -143,18 +143,17 @@ class OdbMergePlanTests(unittest.TestCase):
             worker.succeeded.connect(results.append)
             worker.failed.connect(failures.append)
 
-            def fake_process(_worker, plan, arguments):
-                if arguments[0] == "restartjoin":
-                    plan.working_odb.write_bytes(
-                        plan.working_odb.read_bytes() + b" + joined"
-                    )
-                    return "restartjoin complete"
-                return "ABASUB_ODB_VALIDATION_OK"
+            def fake_process(arguments, cwd, log=None, controller=None):
+                if arguments[1] == "restartjoin":
+                    working = cwd / "abasub_join_working.odb"
+                    working.write_bytes(working.read_bytes() + b" + joined")
+                else:
+                    self.assertEqual(arguments[1], "python")
+                    self.assertIsNotNone(log)
+                    log("ABASUB_ODB_VALIDATION_OK")
 
-            with mock.patch.object(
-                _OdbMergeWorker,
-                "_run_process",
-                autospec=True,
+            with mock.patch(
+                "modules.submitter.odb_merge_execution.run_process",
                 side_effect=fake_process,
             ):
                 worker.run()
@@ -197,19 +196,20 @@ class OdbMergePlanTests(unittest.TestCase):
             worker.succeeded.connect(results.append)
             worker.failed.connect(failures.append)
 
-            def fake_process(_worker, plan, arguments):
-                if arguments[0] == "restartjoin":
+            def fake_process(arguments, cwd, log=None, controller=None):
+                if arguments[1] == "restartjoin":
                     self.assertIn("copyoriginal", arguments)
-                    plan.restartjoin_output_odb.write_bytes(
-                        plan.working_odb.read_bytes() + b" + joined"
+                    working = cwd / "abasub_join_working.odb"
+                    (cwd / "Restart_abasub_join_working.odb").write_bytes(
+                        working.read_bytes() + b" + joined"
                     )
-                    return "restartjoin complete"
-                return "ABASUB_ODB_VALIDATION_OK"
+                else:
+                    self.assertEqual(arguments[1], "python")
+                    self.assertIsNotNone(log)
+                    log("ABASUB_ODB_VALIDATION_OK")
 
-            with mock.patch.object(
-                _OdbMergeWorker,
-                "_run_process",
-                autospec=True,
+            with mock.patch(
+                "modules.submitter.odb_merge_execution.run_process",
                 side_effect=fake_process,
             ):
                 worker.run()

@@ -1,0 +1,276 @@
+<Page
+    x:Class="AbaqusTools.WinUI.Pages.OdbPostprocessingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border
+            Padding="16"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBox
+                    x:Name="RootTextBox"
+                    Header="ODB 根目录"
+                    KeyDown="OnRootTextBoxKeyDown"
+                    PlaceholderText="选择包含待处理 ODB 的工程目录" />
+                <Button
+                    x:Name="BrowseButton"
+                    Grid.Column="1"
+                    Margin="0,24,0,0"
+                    Click="OnBrowseClicked"
+                    Content="选择文件夹"
+                    Style="{StaticResource WorkbenchPickerButtonStyle}" />
+                <Button
+                    x:Name="DiscoverButton"
+                    Grid.Column="2"
+                    Margin="0,24,0,0"
+                    Click="OnDiscoverClicked"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ProgressRing x:Name="DiscoveryProgress" Width="16" Height="16" IsActive="False" />
+                        <TextBlock x:Name="DiscoverButtonText" Text="发现 ODB" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="OpenResultsButton"
+                    Grid.Column="3"
+                    Margin="0,24,0,0"
+                    Click="OnOpenResultsClicked"
+                    Content="打开结果浏览"
+                    IsEnabled="False" />
+                <CheckBox
+                    x:Name="RecursiveCheckBox"
+                    Grid.Row="1"
+                    Margin="0,8,0,0"
+                    Content="递归扫描子目录"
+                    IsChecked="True" />
+                <StackPanel
+                    Grid.Row="1"
+                    Grid.Column="2"
+                    Grid.ColumnSpan="2"
+                    Margin="0,8,0,0"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <TextBlock VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="并行 Abaqus 进程" />
+                    <NumberBox x:Name="ParallelWorkersNumberBox" Width="86" Minimum="1" Maximum="4" SpinButtonPlacementMode="Compact" Value="2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="1" Spacing="8">
+            <InfoBar x:Name="ErrorInfoBar" IsClosable="True" IsOpen="False" Severity="Error" Title="操作失败" />
+            <InfoBar x:Name="WarningInfoBar" IsClosable="True" IsOpen="False" Severity="Warning" Title="操作提示" />
+        </StackPanel>
+
+        <Grid Grid.Row="2" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.1*" MinWidth="560" />
+                <ColumnDefinition Width="1*" MinWidth="360" MaxWidth="460" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="16,11" Background="{ThemeResource LayerFillColorDefaultBrush}" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="源文件与处理计划" />
+                            <TextBlock x:Name="ResultCountText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0 个" />
+                            <TextBlock x:Name="SelectionCountText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="已选择 0 / 0" />
+                            <TextBlock x:Name="DiscoveryMetadataText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="尚未扫描" />
+                        </StackPanel>
+                        <Button x:Name="SelectAllButton" Grid.Column="1" Click="OnSelectAllClicked" Content="全选" IsEnabled="False" />
+                        <Button x:Name="SelectNoneButton" Grid.Column="2" Click="OnSelectNoneClicked" Content="全不选" IsEnabled="False" />
+                        <Button x:Name="InvertSelectionButton" Grid.Column="3" Click="OnInvertSelectionClicked" Content="反选" IsEnabled="False" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" Padding="16,10" Background="{ThemeResource LayerFillColorAltBrush}" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox x:Name="ForceRescanCheckBox" VerticalAlignment="Center" Content="本次强制重扫" IsEnabled="False" />
+                        <Button x:Name="CompatibilityCheckButton" Grid.Column="1" Click="OnCompatibilityCheckClicked" Content="检查兼容性" IsEnabled="False" />
+                        <Button x:Name="AnalyzeButton" Grid.Column="2" Click="OnAnalyzeClicked" Content="读取结构与默认参数" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
+                        <StackPanel Grid.Column="3" Spacing="4">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock x:Name="CompatibilityStatusText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="尚未运行兼容性检查" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="CompatibilityProgressText" Grid.Column="1" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0 / 0" />
+                            </Grid>
+                            <ProgressBar x:Name="CompatibilityProgress" Height="4" Maximum="1" Value="0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ListView
+                            x:Name="OdbList"
+                            IsItemClickEnabled="False"
+                            IsMultiSelectCheckBoxEnabled="True"
+                            SelectionChanged="OnOdbSelectionChanged"
+                            SelectionMode="Multiple">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="8,9" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.5*" />
+                                            <ColumnDefinition Width="1.5*" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="1.7*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{Binding RelativePath}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="{Binding ComparisonGroup}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{Binding SizeDisplay}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding CompatibilityStatusDisplay}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding CompatibilityMessage}" />
+                                        <TextBlock Grid.Column="3" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding PostprocessStatusDisplay}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{Binding PostprocessSummary}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding PostprocessSummary}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                            <FontIcon HorizontalAlignment="Center" FontSize="32" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE8B7;" />
+                            <TextBlock x:Name="EmptyStateTitle" HorizontalAlignment="Center" FontSize="16" FontWeight="SemiBold" Text="尚未发现 ODB" />
+                            <TextBlock HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="选择目录并运行发现。" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="12">
+                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                        <StackPanel Spacing="10">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="选择与对比组" />
+                            <TextBlock x:Name="SelectedPlanText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="选择 ODB 后可编辑参数" TextWrapping="Wrap" />
+                            <TextBox x:Name="GroupNameTextBox" Header="将当前选择设为对比组" PlaceholderText="多个组用分号分隔" Text="对比组 1" />
+                            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <Button x:Name="ApplyGroupButton" HorizontalAlignment="Stretch" Click="OnApplyGroupClicked" Content="应用组名" IsEnabled="False" />
+                                <Button x:Name="ConfigureButton" Grid.Column="1" HorizontalAlignment="Stretch" Click="OnConfigureClicked" Content="编辑提取参数" IsEnabled="False" />
+                                <Button x:Name="LegendButton" Grid.Column="2" HorizontalAlignment="Stretch" Click="OnLegendClicked" Content="图例范围" IsEnabled="False" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Expander
+                        x:Name="OutputSettingsExpander"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Header="输出与计算设置"
+                        IsExpanded="True">
+                        <StackPanel Padding="16,12,16,16" Spacing="10">
+                            <CheckBox x:Name="FullTimehistoryCheckBox" Content="全部帧执行 FreeBodyCut（耗时较长）" />
+                            <Grid x:Name="OutputSettingsGrid" MinWidth="0" ColumnSpacing="10" RowSpacing="8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <ComboBox x:Name="RebarMethodComboBox" Grid.ColumnSpan="2" Header="纵筋截面力" SelectedIndex="0">
+                                    <ComboBoxItem Content="截面单元切割（推荐）" Tag="element_cut" />
+                                    <ComboBoxItem Content="旧版插值（仅对照）" Tag="legacy_interpolation" />
+                                </ComboBox>
+                                <NumberBox x:Name="ExpectedRebarCountNumberBox" Grid.Row="1" Grid.ColumnSpan="2" Header="预期纵筋数（0=自动）" Minimum="0" Maximum="10000" SpinButtonPlacementMode="Compact" Value="0" />
+                                <ComboBox x:Name="ImageUnitComboBox" Grid.Row="2" Header="图像尺寸单位" SelectionChanged="OnImageUnitChanged" SelectedIndex="0">
+                                    <ComboBoxItem Content="像素 px" Tag="px" />
+                                    <ComboBoxItem Content="毫米 mm" Tag="mm" />
+                                </ComboBox>
+                                <NumberBox x:Name="AnimationFpsNumberBox" Grid.Row="2" Grid.Column="1" Header="动画帧率" Minimum="1" Maximum="60" SpinButtonPlacementMode="Compact" Value="5" />
+                                <NumberBox x:Name="ImageWidthNumberBox" Grid.Row="3" Header="图像宽度" Minimum="320" Maximum="4096" SpinButtonPlacementMode="Compact" Value="1500" />
+                                <NumberBox x:Name="ImageHeightNumberBox" Grid.Row="3" Grid.Column="1" Header="图像高度" Minimum="320" Maximum="4096" SpinButtonPlacementMode="Compact" Value="1000" />
+                                <NumberBox x:Name="RebarToleranceNumberBox" Grid.Row="4" Grid.ColumnSpan="2" Header="纵筋切面容差 mm" Minimum="0" Maximum="100" SmallChange="0.0001" Value="0.0001" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <CheckBox x:Name="WhiteBackgroundCheckBox" Content="白底 PNG" IsChecked="True" />
+                                <CheckBox x:Name="TransparentBackgroundCheckBox" Content="透明底 PNG" IsChecked="True" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+
+                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                        <StackPanel Spacing="10">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="执行" />
+                            <TextBlock x:Name="PostprocessPhaseText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="读取结构并完成配置后即可运行" TextWrapping="Wrap" />
+                            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ProgressBar x:Name="PostprocessProgress" Height="6" Maximum="100" Value="0" />
+                                <TextBlock x:Name="PostprocessPercentText" Grid.Column="1" VerticalAlignment="Center" Text="0%" />
+                            </Grid>
+                            <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <Button x:Name="RunPostprocessButton" HorizontalAlignment="Stretch" Click="OnRunPostprocessClicked" Content="运行后处理" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
+                                <Button x:Name="CancelPostprocessButton" Grid.Column="1" HorizontalAlignment="Stretch" Click="OnCancelPostprocessClicked" Content="停止当前操作" IsEnabled="False" />
+                            </Grid>
+                            <Button x:Name="CancelCompatibilityButton" HorizontalAlignment="Stretch" Click="OnCancelCompatibilityClicked" Content="取消兼容性检查" IsEnabled="False" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Expander
+            x:Name="PostprocessLogExpander"
+            Grid.Row="3"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            Header="运行日志"
+            IsExpanded="True">
+            <TextBox
+                x:Name="PostprocessLogTextBox"
+                Height="118"
+                MinWidth="0"
+                HorizontalAlignment="Stretch"
+                AcceptsReturn="True"
+                FontFamily="Consolas"
+                FontSize="12"
+                IsReadOnly="True"
+                PlaceholderText="预扫描、缓存命中、提取、渲染和索引消息会显示在这里。"
+                TextWrapping="NoWrap" />
+        </Expander>
+    </Grid>
+</Page>

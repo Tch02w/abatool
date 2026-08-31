@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import csv, json, math, re, shutil
+import csv
+import json
+import math
+import re
+import shutil
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 import xlsxwriter
+from PIL import Image
 
 from .file_attributes import hide_internal_result_json_files
 
@@ -165,26 +169,147 @@ def build_pile_force_moment(output_dir: Path) -> tuple[Path | None, Path | None]
     return target, maxima_path
 
 
+def _axial_group_key(row: dict[str, str]) -> tuple[str, int]:
+    status = str(row.get("Status", "")).strip().upper() or "UNSPECIFIED"
+    sequence_value = row.get("SequenceIndex", "")
+    sequence = int(float(sequence_value)) if str(sequence_value).strip() else 0
+    return status, sequence
+
+
+def _group_axial_profiles(
+    rows: list[dict[str, str]],
+) -> dict[tuple[str, int], list[dict[str, str]]]:
+    groups: dict[tuple[str, int], list[dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        groups[_axial_group_key(row)].append(row)
+    return groups
+
+
+def _preferred_axial_group(
+    groups: dict[tuple[str, int], list[dict[str, str]]],
+) -> tuple[str, int]:
+    """Prefer the latest LAST frame, then the latest available sequence."""
+
+    return max(
+        groups,
+        key=lambda key: (key[0] == "LAST", key[1], key[0]),
+    )
+
+
+def _axial_rebar_method(rows: list[dict[str, str]]) -> str:
+    for row in rows:
+        method = str(row.get("RebarMethod", "")).strip().casefold()
+        if method in ("element_cut", "legacy_interpolation"):
+            return method
+    return ""
+
+
+def _optional_axial_series(
+    rows: list[dict[str, str]], column: str
+) -> list[float] | None:
+    values = []
+    for row in rows:
+        raw_value = row.get(column, "")
+        if str(raw_value).strip() == "":
+            return None
+        values.append(float(raw_value) / 1000.0)
+    return values
+
+
+def _plot_pile_axial_profile(
+    rows: list[dict[str, str]],
+    target: Path,
+    *,
+    status: str,
+    sequence: int,
+) -> None:
+    profile = sorted(rows, key=lambda row: float(row["DepthFromGround_mm"]))
+    depth = [float(row["DepthFromGround_mm"]) / 1000.0 for row in profile]
+    concrete = [
+        float(row["ConcreteAxial_CompressionPositive_N"]) / 1000.0
+        for row in profile
+    ]
+    section = _optional_axial_series(
+        profile, "RebarAxial_Section_CompressionPositive_N"
+    )
+    legacy = _optional_axial_series(
+        profile, "RebarAxial_Interpolated_CompressionPositive_N"
+    )
+    total = [
+        float(row["PileTotalAxial_CompressionPositive_N"]) / 1000.0
+        for row in profile
+    ]
+    method = _axial_rebar_method(profile)
+    active_method = {
+        "element_cut": "element-cut",
+        "legacy_interpolation": "legacy interpolation",
+    }.get(method, "unspecified")
+
+    fig, ax = plt.subplots(figsize=(7.6, 8.0), constrained_layout=True)
+    ax.plot(concrete, depth, label="Concrete/pipe FreeBody")
+    if section is not None:
+        section_role = "active" if method == "element_cut" else "comparison"
+        ax.plot(section, depth, label=f"Rebar element-cut ({section_role})")
+    if legacy is not None:
+        legacy_role = "active" if method == "legacy_interpolation" else "comparison"
+        ax.plot(legacy, depth, label=f"Rebar legacy interpolation ({legacy_role})")
+    ax.plot(
+        total,
+        depth,
+        label=f"Pile total (active: {active_method})",
+        linewidth=2.4,
+    )
+    ax.axhline(0, color="black", linewidth=0.8)
+    ax.invert_yaxis()
+    ax.grid(True, alpha=0.25)
+    ax.set_xlabel("Axial force, compression positive (kN)")
+    ax.set_ylabel("Depth from ground (m)")
+    ax.set_title(
+        f"Status {status} · Sequence {sequence} · active rebar: {active_method}"
+    )
+    ax.legend()
+    fig.savefig(target, dpi=180)
+    plt.close(fig)
+
+
+def _axial_group_plot_path(
+    plot_dir: Path, status: str, sequence: int
+) -> Path:
+    status_token = re.sub(r"[^A-Z0-9]+", "_", status).strip("_") or "UNSPECIFIED"
+    return plot_dir / (
+        f"pile_total_axial_force_depth_{status_token}_SEQ{sequence:04d}.png"
+    )
+
+
 def plot_pile_axial(output_dir: Path) -> Path | None:
     source = output_dir / "freebody" / "pile_total_axial_force_time_aligned.csv"
-    if not source.exists(): return None
+    if not source.exists():
+        return None
     rows = read_csv(source)
-    if not rows: return None
-    depth = [float(row["DepthFromGround_mm"])/1000 for row in rows]
-    concrete = [float(row["ConcreteAxial_CompressionPositive_N"])/1000 for row in rows]
-    has_section_force = "RebarAxial_Section_CompressionPositive_N" in rows[0] and all(
-        row.get("RebarAxial_Section_CompressionPositive_N", "") != "" for row in rows
+    if not rows:
+        return None
+
+    groups = _group_axial_profiles(rows)
+    preferred_key = _preferred_axial_group(groups)
+    plot_dir = output_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    canonical_target = plot_dir / "pile_total_axial_force_depth.png"
+    _plot_pile_axial_profile(
+        groups[preferred_key],
+        canonical_target,
+        status=preferred_key[0],
+        sequence=preferred_key[1],
     )
-    rebar_column = "RebarAxial_Section_CompressionPositive_N" if has_section_force else "RebarAxial_Interpolated_CompressionPositive_N"
-    rebar = [float(row[rebar_column])/1000 for row in rows]
-    total = [float(row["PileTotalAxial_CompressionPositive_N"])/1000 for row in rows]
-    plot_dir = output_dir/"plots"; plot_dir.mkdir(parents=True, exist_ok=True); target = plot_dir/"pile_total_axial_force_depth.png"
-    fig, ax = plt.subplots(figsize=(7.6, 8.0), constrained_layout=True)
-    rebar_label = "Rebar section force" if rebar_column.startswith("RebarAxial_Section") else "Rebar interpolated (legacy)"
-    ax.plot(concrete, depth, label="Concrete/pipe FreeBody"); ax.plot(rebar, depth, label=rebar_label)
-    ax.plot(total, depth, label="Pile total", linewidth=2.4); ax.axhline(0, color="black", linewidth=0.8)
-    ax.invert_yaxis(); ax.grid(True, alpha=0.25); ax.set_xlabel("Axial force, compression positive (kN)")
-    ax.set_ylabel("Depth from ground (m)"); ax.legend(); fig.savefig(target, dpi=180); plt.close(fig); return target
+    for key in sorted(groups, key=lambda item: (item[1], item[0])):
+        if key == preferred_key:
+            continue
+        _plot_pile_axial_profile(
+            groups[key],
+            _axial_group_plot_path(plot_dir, *key),
+            status=key[0],
+            sequence=key[1],
+        )
+    return canonical_target
 
 
 def plot_pile_bending(output_dir: Path) -> list[Path]:
@@ -548,6 +673,44 @@ def plot_load_resistance(output_dir: Path) -> Path | None:
     return target
 
 
+def _selected_axial_rebar_method(output_dir: Path) -> str:
+    axial_path = output_dir / "freebody" / "pile_total_axial_force_time_aligned.csv"
+    if axial_path.exists():
+        rows = read_csv(axial_path)
+        if rows:
+            groups = _group_axial_profiles(rows)
+            method = _axial_rebar_method(groups[_preferred_axial_group(groups)])
+            if method:
+                return method
+
+    rebar_metadata_path = output_dir / "rebar" / "rebar_metadata.json"
+    if rebar_metadata_path.exists():
+        rebar_metadata = json.loads(rebar_metadata_path.read_text(encoding="utf-8"))
+        method = str(rebar_metadata.get("method", "")).strip().casefold()
+        if method in ("element_cut", "legacy_interpolation"):
+            return method
+    return ""
+
+
+def _pile_axial_method_summary(method: str) -> str:
+    if method == "element_cut":
+        return (
+            "RebarMethod=element_cut: concrete/pipe FreeBody + element-cut T3D2 "
+            "section force (active); centroid interpolation retained as the legacy "
+            "comparison; compression positive"
+        )
+    if method == "legacy_interpolation":
+        return (
+            "RebarMethod=legacy_interpolation: concrete/pipe FreeBody + centroid-"
+            "interpolated T3D2 force (active legacy comparison mode); element-cut "
+            "section force retained for comparison; compression positive"
+        )
+    return (
+        "RebarMethod unavailable: concrete/pipe FreeBody + reported T3D2 rebar "
+        "force; compression positive"
+    )
+
+
 def build_xlsx(output_dir: Path) -> Path:
     target = output_dir/"summary.xlsx"; workbook = xlsxwriter.Workbook(target)
     title = workbook.add_format({"bold": True, "font_color": "white", "bg_color": "#134E4A", "font_size": 16})
@@ -556,10 +719,11 @@ def build_xlsx(output_dir: Path) -> Path:
     summary = workbook.add_worksheet("Summary"); summary.hide_gridlines(2); summary.merge_range("A1:F1", "Abaqus ODB postprocessing summary", title)
     summary.write_row("A3", ["Item", "Value"], header)
     metadata_path = output_dir/"metadata.json"; metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+    rebar_method = _selected_axial_rebar_method(output_dir)
     entries = [("ODB", metadata.get("odb_path", "")), ("Timeline", "Selected SequenceIndex + StepName + FrameIndex + TotalTime"),
         ("Load sharing", "Pile-top reaction, individual root keys, root-key total/average, shaft friction, and unresolved balance; kN"),
         ("Rebar", "HRB400 + near-Z T3D2; per-element S11 × area"),
-        ("Pile axial", "Concrete/pipe FreeBody + intersected T3D2 rebar section force; compression positive"),
+        ("Pile axial", _pile_axial_method_summary(rebar_method)),
         ("Pile bending", "Global-1 lateral loading uses total My; rebar My = Σ(-xN)"),
         ("Rendering", "This workbook is group-independent; contour and GIF legends are stored with each comparison-group render")]
     for index, values in enumerate(entries, 3): summary.write_row(index, 0, values, cell)

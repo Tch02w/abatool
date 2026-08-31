@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 from pathlib import Path
@@ -10,9 +11,10 @@ from PySide6.QtWidgets import QApplication
 
 from modules.postprocessor import batch_window as batch_module
 from modules.postprocessor.app import MainWindow
+from modules.postprocessor.cache import NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS
 from modules.postprocessor.models import OdbScan
-from modules.postprocessor.runner_parallel import MultiProcessController
 from modules.postprocessor.result_assets import resolve_group_member_asset
+from modules.postprocessor.runner_parallel import MultiProcessController
 
 
 def application() -> QApplication:
@@ -33,6 +35,73 @@ def scan(path: Path) -> OdbScan:
         ],
         field_outputs=["U", "S", "PEMAG"],
     )
+
+
+def write_valid_numeric_extraction(output: Path) -> None:
+    rows = {
+        "data/timeline_alignment.csv": {
+            "SequenceIndex": 0,
+            "StepIndex": 0,
+            "StepName": "Load",
+            "FrameIndex": 0,
+            "TotalTime": 0.0,
+        },
+        "rebar/rebar_element_stress_force_timehistory.csv": {
+            "SequenceIndex": 0,
+            "InstanceName": "REBAR-1",
+            "ElementLabel": 1,
+            "ElementAxialForce_TensionPositive_N": 10.0,
+            "ElementAxialForce_CompressionPositive_N": -10.0,
+        },
+    }
+    diagnostic_row = {
+        "SequenceIndex": 0,
+        "Elevation_mm": 0.0,
+        "RebarMethod": "element_cut",
+        "RebarSectionRule": "section_t3d2_intersection",
+        "RebarInterpolationRule": "linear_between_element_centroids",
+        "RebarActiveRule": "section_t3d2_intersection",
+        "RebarAxial_Section_TensionPositive_N": 10.0,
+        "RebarAxial_Section_CompressionPositive_N": -10.0,
+        "RebarAxial_Interpolated_TensionPositive_N": 9.5,
+        "RebarAxial_Interpolated_CompressionPositive_N": -9.5,
+        "CrossingT3D2ElementCount": 24,
+        "CrossingT3D2WithS11Count": 24,
+        "MissingS11CrossingCount": 0,
+        "RebarSectionForceValid": True,
+        "ExpectedLongitudinalRebarCount": 24,
+        "ExpectedLongitudinalRebarCountSource": "odb_detected",
+        "CrossingCountMatchesExpected": True,
+        "CrossingCountValidationApplicable": True,
+        "DuplicateCrossingCandidateCount": 0,
+        "RebarDirectionCoordinateSource": "COORD",
+        "RebarDirectionCOORDNodeCount": 48,
+        "RebarDirectionReferencePlusUNodeCount": 0,
+        "RebarDirectionReferenceNodeCount": 0,
+    }
+    rows["freebody/pile_total_axial_force_time_aligned.csv"] = diagnostic_row
+    rows["freebody/rebar_section_diagnostics.csv"] = diagnostic_row
+    for relative, required_columns in NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS.items():
+        path = output / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(required_columns))
+            writer.writeheader()
+            writer.writerow(rows[relative])
+    (output / "rebar" / "rebar_metadata.json").write_text(
+        json.dumps(
+            {
+                "method": "element_cut",
+                "legacy_method": "linear_between_element_centroids",
+                "element_cut_rule": "section_t3d2_intersection",
+                "cut_tolerance_mm": 0.0001,
+                "longitudinal_element_count": 24,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output / "History_Output").mkdir(exist_ok=True)
+    (output / "metadata.json").write_text("{}", encoding="utf-8")
 
 
 def test_sequential_groups_reuse_prescan_and_numeric_cache(
@@ -76,16 +145,7 @@ def test_sequential_groups_reuse_prescan_and_numeric_cache(
         calls["extract"] += 1
         config = json.loads(Path(config_path).read_text(encoding="utf-8"))
         output = Path(config["output_dir"])
-        (output / "data").mkdir(parents=True)
-        (output / "data" / "timeline_alignment.csv").write_text(
-            "SequenceIndex,StepIndex,FrameIndex,StepName\n"
-            "0,0,0,Load\n1,0,1,Load\n",
-            encoding="utf-8",
-        )
-        (output / "rebar").mkdir()
-        (output / "freebody").mkdir()
-        (output / "History_Output").mkdir()
-        (output / "metadata.json").write_text("{}", encoding="utf-8")
+        write_valid_numeric_extraction(output)
 
     def fake_render(_command, config_path, _log, _controller):
         calls["render"] += 1
@@ -149,7 +209,6 @@ def test_sequential_groups_reuse_prescan_and_numeric_cache(
         logs.append,
     )
 
-    assert calls == {"prescan": 1, "extract": 1, "render": 2}
     first_output = Path(first_outputs[0])
     second_output = Path(second_outputs[0])
     assert not (first_output / "data").exists()
@@ -160,6 +219,53 @@ def test_sequential_groups_reuse_prescan_and_numeric_cache(
     assert first_asset == second_asset
     assert (first_asset / "data" / "timeline_alignment.csv").is_file()
     assert (first_asset / "summary.xlsx").is_file()
+
+    # An incomplete shared asset can be rebuilt from a valid persistent cache.
+    # A sentinel proves that the deterministic shared directory is cleaned
+    # before the cache payload is restored.
+    (first_asset / "freebody" / "rebar_section_diagnostics.csv").write_text(
+        "SequenceIndex\n0\n", encoding="utf-8"
+    )
+    (first_asset / "stale-from-interrupted-run.txt").write_text(
+        "stale", encoding="utf-8"
+    )
+    numeric_entries = list((folder / "cache" / "numeric").glob("*/*"))
+    assert len(numeric_entries) == 1
+    third_outputs = window._execute_group_task(
+        task("c", "组C", "20260723_120002_000001"),
+        1,
+        MultiProcessController(),
+        logs.append,
+    )
+    third_asset = resolve_group_member_asset(Path(third_outputs[0]))
+    assert third_asset == first_asset
+    assert not (first_asset / "stale-from-interrupted-run.txt").exists()
+    assert calls == {"prescan": 1, "extract": 1, "render": 3}
+
+    # If both copies are stale, neither may suppress a fresh Abaqus extraction.
+    (first_asset / "freebody" / "rebar_section_diagnostics.csv").write_text(
+        "SequenceIndex\n0\n", encoding="utf-8"
+    )
+    (first_asset / "stale-from-interrupted-run.txt").write_text(
+        "stale", encoding="utf-8"
+    )
+    (
+        numeric_entries[0]
+        / "freebody"
+        / "rebar_section_diagnostics.csv"
+    ).write_text("SequenceIndex\n0\n", encoding="utf-8")
+    fourth_outputs = window._execute_group_task(
+        task("d", "组D", "20260723_120003_000001"),
+        1,
+        MultiProcessController(),
+        logs.append,
+    )
+
+    assert calls == {"prescan": 1, "extract": 2, "render": 4}
+    fourth_asset = resolve_group_member_asset(Path(fourth_outputs[0]))
+    assert fourth_asset == first_asset
+    assert not (first_asset / "stale-from-interrupted-run.txt").exists()
     assert any("命中预扫描缓存" in message for message in logs)
+    assert any("从持久缓存恢复 ODB 公共数据" in message for message in logs)
     assert any("复用 ODB 公共数据" in message for message in logs)
     window.close()

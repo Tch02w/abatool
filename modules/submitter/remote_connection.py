@@ -1,22 +1,34 @@
-"""Windows SSH connection adapter and asynchronous Qt service."""
+"""Qt-free Windows SSH connection adapter.
+
+``RemoteConnectionService`` remains available through a lazy compatibility
+export so the legacy PySide6 frontend keeps its existing import path without
+making the native control plane import Qt.
+"""
 
 from __future__ import annotations
 
 import base64
 import gzip
 import json
+import ntpath
+import os
 import re
+import stat
 import threading
-import xml.etree.ElementTree as ElementTree
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
+from xml.etree import ElementTree
 
 import paramiko
 
-from .qt_compat import QtCore, Signal, Slot
-from .remote_frontend import ServerProfileDraft
+from .remote_models import ServerProfileDraft
+
+if TYPE_CHECKING:
+    from .remote_connection_qt import RemoteConnectionService
 
 
 class RemoteConnectionError(RuntimeError):
@@ -29,6 +41,10 @@ class HostKeyConfirmationRequired(RemoteConnectionError):
     def __init__(self, fingerprint: str) -> None:
         super().__init__(f"需要确认服务器主机指纹：{fingerprint}")
         self.fingerprint = fingerprint
+
+
+class RemoteTransferCancelled(RemoteConnectionError):
+    """Raised by a cooperative SFTP progress callback."""
 
 
 @dataclass(frozen=True)
@@ -46,7 +62,7 @@ class ServerConnectionRequest:
     profile: ServerProfileDraft
     credentials: ServerCredentials = ServerCredentials()
 
-    def with_fingerprint(self, fingerprint: str) -> "ServerConnectionRequest":
+    def with_fingerprint(self, fingerprint: str) -> ServerConnectionRequest:
         return replace(
             self,
             profile=replace(self.profile, host_fingerprint=fingerprint),
@@ -300,7 +316,11 @@ $abaqusAvailable = [bool](Get-Command -Name ([string]$config.abaqus_command) -Er
 
 
 def _powershell_encoded_command(profile: ServerProfileDraft) -> str:
-    script = _powershell_resource_script(profile)
+    return _powershell_encoded_script(_powershell_resource_script(profile))
+
+
+def _powershell_encoded_script(script: str) -> str:
+    """Encode a trusted application-owned script below cmd.exe length limits."""
     compressed = gzip.compress(script.encode("utf-8"), mtime=0)
     payload = base64.b64encode(compressed).decode("ascii")
     launcher = (
@@ -352,7 +372,7 @@ def parse_resource_snapshot(
             payload.get("abaqus_command_available", False)
         ),
         "host_fingerprint": fingerprint,
-        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 
 
@@ -475,6 +495,277 @@ class RemoteConnectionManager:
             client.close()
         return request.profile.profile_name if request is not None else ""
 
+    def list_directory(self, remote_path: str = "") -> dict[str, Any]:
+        """List one configured, allowed Windows directory over SFTP."""
+        with self._lock:
+            client, profile = self._require_session_locked()
+            requested = remote_path.strip() or self._default_remote_root(profile)
+            normalized = self._require_allowed_remote_path(profile, requested)
+            sftp_path = self._sftp_path(normalized)
+            try:
+                with client.open_sftp() as sftp:
+                    attributes = sftp.listdir_attr(sftp_path)
+            except (OSError, paramiko.SSHException) as exc:
+                raise RemoteConnectionError(f"读取服务器目录失败：{exc}") from exc
+
+        entries = []
+        for item in sorted(
+            attributes,
+            key=lambda entry: (
+                not stat.S_ISDIR(entry.st_mode or 0),
+                entry.filename.casefold(),
+            ),
+        ):
+            name = str(item.filename or "")
+            if not name or name in {".", ".."}:
+                continue
+            item_path = ntpath.join(normalized, name)
+            is_directory = stat.S_ISDIR(item.st_mode or 0)
+            entries.append(
+                {
+                    "name": name,
+                    "path": item_path,
+                    "kind": "directory" if is_directory else "file",
+                    "sizeBytes": 0 if is_directory else max(0, int(item.st_size or 0)),
+                    "modifiedAt": datetime.fromtimestamp(
+                        float(item.st_mtime or 0)
+                    ).astimezone().isoformat(timespec="seconds")
+                    if item.st_mtime
+                    else "",
+                }
+            )
+        parent = ntpath.dirname(normalized)
+        if parent == normalized or not self._is_remote_path_allowed(profile, parent):
+            parent = ""
+        return {
+            "profileName": profile.profile_name,
+            "path": normalized,
+            "parentPath": parent,
+            "entries": entries,
+        }
+
+    def upload_file(
+        self,
+        local_path: str,
+        remote_path: str,
+        *,
+        overwrite: bool = False,
+        progress: Callable[[int, int], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> dict[str, Any]:
+        """Upload one local file atomically inside configured remote roots."""
+        source = Path(local_path).expanduser().resolve()
+        if not source.is_file():
+            raise RemoteConnectionError("待上传的本机文件不存在。")
+        with self._lock:
+            client, profile = self._require_session_locked()
+            destination = self._require_allowed_remote_path(profile, remote_path)
+            temporary = f"{self._sftp_path(destination)}.part-{uuid4().hex}"
+            final_path = self._sftp_path(destination)
+            try:
+                with client.open_sftp() as sftp:
+                    if self._sftp_exists(sftp, final_path) and not overwrite:
+                        raise RemoteConnectionError("服务器目标文件已存在。")
+                    callback = self._transfer_callback(progress, cancel_requested)
+                    try:
+                        sftp.put(str(source), temporary, callback=callback, confirm=True)
+                        if cancel_requested is not None and cancel_requested():
+                            raise RemoteTransferCancelled("文件上传已取消。")
+                        if overwrite and self._sftp_exists(sftp, final_path):
+                            sftp.remove(final_path)
+                        self._sftp_rename(sftp, temporary, final_path)
+                    except BaseException:
+                        try:
+                            sftp.remove(temporary)
+                        except (OSError, paramiko.SSHException):
+                            pass
+                        raise
+            except RemoteConnectionError:
+                raise
+            except (OSError, paramiko.SSHException) as exc:
+                raise RemoteConnectionError(f"上传文件失败：{exc}") from exc
+        return {
+            "profileName": profile.profile_name,
+            "direction": "upload",
+            "source": str(source),
+            "destination": destination,
+            "sizeBytes": source.stat().st_size,
+        }
+
+    def download_file(
+        self,
+        remote_path: str,
+        local_path: str,
+        *,
+        overwrite: bool = False,
+        progress: Callable[[int, int], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> dict[str, Any]:
+        """Download one allowed remote file with an atomic local replacement."""
+        destination = Path(local_path).expanduser().resolve()
+        if destination.exists() and not overwrite:
+            raise RemoteConnectionError("本机目标文件已存在。")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.part")
+        with self._lock:
+            client, profile = self._require_session_locked()
+            source = self._require_allowed_remote_path(profile, remote_path)
+            try:
+                with client.open_sftp() as sftp:
+                    callback = self._transfer_callback(progress, cancel_requested)
+                    try:
+                        sftp.get(
+                            self._sftp_path(source),
+                            str(temporary),
+                            callback=callback,
+                        )
+                        if cancel_requested is not None and cancel_requested():
+                            raise RemoteTransferCancelled("文件下载已取消。")
+                        with temporary.open("rb") as stream:
+                            os.fsync(stream.fileno())
+                        os.replace(temporary, destination)
+                    finally:
+                        temporary.unlink(missing_ok=True)
+            except RemoteConnectionError:
+                raise
+            except (OSError, paramiko.SSHException) as exc:
+                raise RemoteConnectionError(f"下载文件失败：{exc}") from exc
+        return {
+            "profileName": profile.profile_name,
+            "direction": "download",
+            "source": source,
+            "destination": str(destination),
+            "sizeBytes": destination.stat().st_size,
+        }
+
+    def execute_powershell(self, script: str, *, timeout: float = 30) -> str:
+        """Execute one trusted application-owned PowerShell script over SSH."""
+        if not script.strip():
+            raise RemoteConnectionError("远端 PowerShell 脚本不能为空。")
+        with self._lock:
+            client, _profile = self._require_session_locked()
+            try:
+                _stdin, stdout, stderr = client.exec_command(
+                    _powershell_encoded_script(script),
+                    timeout=timeout,
+                )
+                exit_status = stdout.channel.recv_exit_status()
+                output = decode_remote_stream(stdout.read())
+                error_output = clean_remote_error_output(
+                    decode_remote_stream(stderr.read())
+                )
+            except (OSError, paramiko.SSHException) as exc:
+                raise RemoteConnectionError(f"执行服务器命令失败：{exc}") from exc
+        if exit_status != 0:
+            detail = error_output or f"PowerShell 退出码 {exit_status}"
+            raise RemoteConnectionError(f"执行服务器命令失败：{detail}")
+        return output
+
+    @property
+    def connected_profile(self) -> ServerProfileDraft | None:
+        with self._lock:
+            return self._request.profile if self._request is not None else None
+
+    def validate_remote_path(self, remote_path: str) -> str:
+        """Return a normalized path only when it is inside configured roots."""
+        with self._lock:
+            _client, profile = self._require_session_locked()
+            return self._require_allowed_remote_path(profile, remote_path)
+
+    def _require_session_locked(
+        self,
+    ) -> tuple[paramiko.SSHClient, ServerProfileDraft]:
+        client = self._client
+        request = self._request
+        if client is None or request is None:
+            raise RemoteConnectionError("尚未连接服务器。")
+        transport = client.get_transport()
+        if transport is None or not transport.is_active():
+            raise RemoteConnectionError("SSH 连接已断开，请重新连接。")
+        return client, request.profile
+
+    @staticmethod
+    def _configured_remote_roots(profile: ServerProfileDraft) -> tuple[str, ...]:
+        roots = [profile.compute_root, *profile.allowed_roots]
+        return tuple(
+            dict.fromkeys(
+                ntpath.normpath(root.replace("/", "\\"))
+                for root in roots
+                if root.strip()
+            )
+        )
+
+    @classmethod
+    def _default_remote_root(cls, profile: ServerProfileDraft) -> str:
+        roots = cls._configured_remote_roots(profile)
+        if not roots:
+            raise RemoteConnectionError("服务器配置没有允许访问的目录。")
+        return roots[0]
+
+    @classmethod
+    def _is_remote_path_allowed(
+        cls,
+        profile: ServerProfileDraft,
+        remote_path: str,
+    ) -> bool:
+        normalized = ntpath.normpath(remote_path.replace("/", "\\"))
+        if not ntpath.isabs(normalized):
+            return False
+        for root in cls._configured_remote_roots(profile):
+            try:
+                if ntpath.commonpath([root, normalized]).casefold() == root.casefold():
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    @classmethod
+    def _require_allowed_remote_path(
+        cls,
+        profile: ServerProfileDraft,
+        remote_path: str,
+    ) -> str:
+        normalized = ntpath.normpath(remote_path.strip().replace("/", "\\"))
+        if not cls._is_remote_path_allowed(profile, normalized):
+            raise RemoteConnectionError("服务器路径不在配置允许的根目录内。")
+        return normalized
+
+    @staticmethod
+    def _sftp_path(remote_path: str) -> str:
+        return remote_path.replace("\\", "/")
+
+    @staticmethod
+    def _sftp_exists(sftp: paramiko.SFTPClient, remote_path: str) -> bool:
+        try:
+            sftp.stat(remote_path)
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
+    def _sftp_rename(
+        sftp: paramiko.SFTPClient,
+        source: str,
+        destination: str,
+    ) -> None:
+        try:
+            sftp.posix_rename(source, destination)
+        except (AttributeError, OSError):
+            sftp.rename(source, destination)
+
+    @staticmethod
+    def _transfer_callback(
+        progress: Callable[[int, int], None] | None,
+        cancel_requested: Callable[[], bool] | None,
+    ) -> Callable[[int, int], None]:
+        def callback(transferred: int, total: int) -> None:
+            if cancel_requested is not None and cancel_requested():
+                raise RemoteTransferCancelled("文件传输已取消。")
+            if progress is not None:
+                progress(max(0, int(transferred)), max(0, int(total)))
+
+        return callback
+
     @staticmethod
     def _read_snapshot(
         client: paramiko.SSHClient,
@@ -503,133 +794,13 @@ class RemoteConnectionManager:
         )
 
 
-@dataclass(frozen=True)
-class _RemoteOperation:
-    action: str
-    request: ServerConnectionRequest | None = None
+def __getattr__(name: str):
+    """Load the legacy Qt service only when an old caller requests it."""
+    if name == "RemoteConnectionService":
+        from .remote_connection_qt import RemoteConnectionService
 
-
-class _RemoteConnectionWorker(QtCore.QObject):
-    succeeded = Signal(str, object)
-    confirmationRequired = Signal(object, str)
-    failed = Signal(str)
-    done = Signal()
-
-    def __init__(
-        self,
-        manager: RemoteConnectionManager,
-        operation: _RemoteOperation,
-    ) -> None:
-        super().__init__()
-        self.manager = manager
-        self.operation = operation
-
-    @Slot()
-    def run(self) -> None:
-        try:
-            if self.operation.action == "connect":
-                if self.operation.request is None:
-                    raise RemoteConnectionError("连接请求缺少服务器配置。")
-                result = self.manager.connect(self.operation.request)
-            elif self.operation.action == "refresh":
-                result = self.manager.refresh()
-            else:
-                result = self.manager.disconnect()
-        except HostKeyConfirmationRequired as exc:
-            self.confirmationRequired.emit(self.operation.request, exc.fingerprint)
-        except Exception as exc:
-            self.failed.emit(str(exc))
-        else:
-            self.succeeded.emit(self.operation.action, result)
-        finally:
-            self.done.emit()
-
-
-class RemoteConnectionService(QtCore.QObject):
-    """Execute serialized SSH operations without blocking the Qt event loop."""
-
-    busyChanged = Signal(bool)
-    confirmationRequired = Signal(object, str)
-    connected = Signal(object)
-    snapshotReceived = Signal(object)
-    disconnected = Signal(str)
-    failed = Signal(str)
-    idle = Signal()
-
-    def __init__(
-        self,
-        manager: RemoteConnectionManager | None = None,
-        parent=None,
-    ) -> None:
-        super().__init__(parent)
-        self.manager = manager or RemoteConnectionManager()
-        self._thread: QtCore.QThread | None = None
-        self._worker: _RemoteConnectionWorker | None = None
-
-    @property
-    def is_busy(self) -> bool:
-        return self._thread is not None
-
-    def connect_to_server(self, request: ServerConnectionRequest) -> bool:
-        return self._start(_RemoteOperation("connect", request))
-
-    def refresh(self) -> bool:
-        return self._start(_RemoteOperation("refresh"))
-
-    def disconnect(self) -> bool:
-        if self._thread is not None:
-            self.failed.emit("服务器操作正在进行，请稍候。")
-            return False
-        return self._start(_RemoteOperation("disconnect"))
-
-    def _start(self, operation: _RemoteOperation) -> bool:
-        if self._thread is not None:
-            self.failed.emit("服务器操作正在进行，请稍候。")
-            return False
-        thread = QtCore.QThread(self)
-        worker = _RemoteConnectionWorker(self.manager, operation)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.succeeded.connect(self._on_succeeded)
-        worker.confirmationRequired.connect(self.confirmationRequired)
-        worker.failed.connect(self.failed)
-        worker.done.connect(worker.deleteLater)
-        worker.done.connect(thread.quit)
-        thread.finished.connect(self._clear_worker)
-        self._thread = thread
-        self._worker = worker
-        self.busyChanged.emit(True)
-        thread.start()
-        return True
-
-    @Slot(str, object)
-    def _on_succeeded(self, action: str, result: object) -> None:
-        if action == "connect":
-            self.connected.emit(result)
-            self.snapshotReceived.emit(result)
-        elif action == "refresh":
-            self.snapshotReceived.emit(result)
-        else:
-            self.disconnected.emit(str(result or ""))
-
-    @Slot()
-    def _clear_worker(self) -> None:
-        thread = self._thread
-        self._thread = None
-        self._worker = None
-        self.busyChanged.emit(False)
-        self.idle.emit()
-        if thread is not None:
-            thread.deleteLater()
-
-    def shutdown(self) -> None:
-        thread = self._thread
-        if thread is not None:
-            self.manager.disconnect()
-            thread.quit()
-            if thread.isRunning():
-                thread.wait(15000)
-        self.manager.disconnect()
+        return RemoteConnectionService
+    raise AttributeError(name)
 
 
 __all__ = [
@@ -637,6 +808,7 @@ __all__ = [
     "RemoteConnectionError",
     "RemoteConnectionManager",
     "RemoteConnectionService",
+    "RemoteTransferCancelled",
     "ServerConnectionRequest",
     "ServerCredentials",
     "clean_remote_error_output",

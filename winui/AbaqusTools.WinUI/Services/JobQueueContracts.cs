@@ -1,0 +1,257 @@
+using System.Text.Json.Serialization;
+using System.Text.Json;
+
+namespace AbaqusTools.WinUI.Services;
+
+public sealed class JobQueueSnapshot
+{
+    [JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; init; }
+
+    [JsonPropertyName("capturedAt")]
+    public DateTimeOffset CapturedAt { get; init; }
+
+    [JsonPropertyName("candidates")]
+    public IReadOnlyList<JobQueueItem> Candidates { get; init; } = [];
+
+    [JsonPropertyName("queueItems")]
+    public IReadOnlyList<JobQueueItem> QueueItems { get; init; } = [];
+
+    [JsonPropertyName("candidateCount")]
+    public int CandidateCount { get; init; }
+
+    [JsonPropertyName("selectedCandidateCount")]
+    public int SelectedCandidateCount { get; init; }
+
+    [JsonPropertyName("invalidCandidateCount")]
+    public int InvalidCandidateCount { get; init; }
+
+    [JsonPropertyName("queueCount")]
+    public int QueueCount { get; init; }
+
+    [JsonPropertyName("statusCounts")]
+    public IReadOnlyDictionary<string, int> StatusCounts { get; init; } =
+        new Dictionary<string, int>(StringComparer.Ordinal);
+}
+
+public sealed class JobQueueItem
+{
+    [JsonPropertyName("index")]
+    public int Index { get; init; }
+
+    [JsonPropertyName("itemId")]
+    public string ItemId { get; init; } = string.Empty;
+
+    [JsonPropertyName("jobId")]
+    public string JobId { get; init; } = string.Empty;
+
+    [JsonPropertyName("jobName")]
+    public string JobName { get; init; } = string.Empty;
+
+    [JsonPropertyName("inpPath")]
+    public string InpPath { get; init; } = string.Empty;
+
+    [JsonPropertyName("source")]
+    public string Source { get; init; } = string.Empty;
+
+    [JsonPropertyName("selected")]
+    public bool Selected { get; init; }
+
+    [JsonPropertyName("valid")]
+    public bool Valid { get; init; }
+
+    [JsonPropertyName("message")]
+    public string Message { get; init; } = string.Empty;
+
+    [JsonPropertyName("runMode")]
+    public string RunMode { get; init; } = string.Empty;
+
+    [JsonPropertyName("jobType")]
+    public string JobType { get; init; } = string.Empty;
+
+    [JsonPropertyName("oldjobName")]
+    public string OldjobName { get; init; } = string.Empty;
+
+    [JsonPropertyName("oldjobPath")]
+    public string OldjobPath { get; init; } = string.Empty;
+
+    [JsonPropertyName("fortranPath")]
+    public string FortranPath { get; init; } = string.Empty;
+
+    [JsonPropertyName("cores")]
+    public int Cores { get; init; }
+
+    [JsonPropertyName("memory")]
+    public string Memory { get; init; } = string.Empty;
+
+    [JsonPropertyName("runtimeMemoryBytes")]
+    public long RuntimeMemoryBytes { get; init; }
+
+    [JsonPropertyName("priority")]
+    public int Priority { get; init; }
+
+    [JsonPropertyName("held")]
+    public bool Held { get; init; }
+
+    [JsonPropertyName("schedulerState")]
+    public string SchedulerState { get; init; } = string.Empty;
+
+    [JsonPropertyName("pendingReason")]
+    public string PendingReason { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("effectiveWorkDir")]
+    public string EffectiveWorkDir { get; init; } = string.Empty;
+
+    [JsonPropertyName("archiveDestination")]
+    public string ArchiveDestination { get; init; } = string.Empty;
+
+    [JsonPropertyName("archiveStatus")]
+    public string ArchiveStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("archiveError")]
+    public string ArchiveError { get; init; } = string.Empty;
+
+    [JsonPropertyName("elapsed")]
+    public string Elapsed { get; init; } = string.Empty;
+
+    [JsonPropertyName("dependencyJobIds")]
+    public IReadOnlyList<string> DependencyJobIds { get; init; } = [];
+
+    [JsonIgnore]
+    public string SelectedDisplay => Selected ? "✓" : string.Empty;
+
+    [JsonIgnore]
+    public string FortranName => string.IsNullOrWhiteSpace(FortranPath)
+        ? string.Empty
+        : Path.GetFileName(FortranPath);
+
+    [JsonIgnore]
+    public string CoresDisplay => Cores <= 0 ? string.Empty : Cores.ToString();
+
+    [JsonIgnore]
+    public string PriorityDisplay => Priority > 0 ? $"+{Priority}" : Priority.ToString();
+
+    [JsonIgnore]
+    public string SchedulingDisplay => Held ? "已暂停" : "可调度";
+
+    [JsonIgnore]
+    public string RuntimeMemoryDisplay => RuntimeMemoryBytes switch
+    {
+        <= 0 => "未统计",
+        >= 1073741824 => $"{RuntimeMemoryBytes / 1073741824d:0.0} GB",
+        _ => $"{RuntimeMemoryBytes / 1048576d:0} MB",
+    };
+}
+
+internal sealed class JobQueueCommandRequest
+{
+    [JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; init; } = 1;
+
+    [JsonPropertyName("action")]
+    public string Action { get; init; } = string.Empty;
+
+    [JsonPropertyName("paths")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Paths { get; init; }
+
+    [JsonPropertyName("source")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Source { get; init; }
+
+    [JsonPropertyName("root")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Root { get; init; }
+
+    [JsonPropertyName("recursive")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Recursive { get; init; }
+
+    [JsonPropertyName("skipRestartNames")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SkipRestartNames { get; init; }
+
+    [JsonPropertyName("skipExistingResults")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SkipExistingResults { get; init; }
+
+    [JsonPropertyName("itemIds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? ItemIds { get; init; }
+
+    [JsonPropertyName("itemId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ItemId { get; init; }
+
+    [JsonPropertyName("selected")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Selected { get; init; }
+
+    [JsonPropertyName("held")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Held { get; init; }
+
+    [JsonPropertyName("direction")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Direction { get; init; }
+
+    [JsonPropertyName("jobName")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? JobName { get; init; }
+
+    [JsonPropertyName("cores")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Cores { get; init; }
+
+    [JsonPropertyName("memory")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Memory { get; init; }
+
+    [JsonPropertyName("priority")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Priority { get; init; }
+
+    [JsonPropertyName("oldjobPath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OldjobPath { get; init; }
+
+    [JsonPropertyName("fortranPath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FortranPath { get; init; }
+
+    [JsonPropertyName("calculationRootDir")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CalculationRootDir { get; init; }
+
+    [JsonPropertyName("archiveDir")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ArchiveDir { get; init; }
+
+    [JsonPropertyName("draft")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LocalJobDraftPreviewRequest? Draft { get; init; }
+}
+
+public sealed class JobQueueCommandResponse
+{
+    [JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; init; }
+
+    [JsonPropertyName("action")]
+    public string Action { get; init; } = string.Empty;
+
+    [JsonPropertyName("changed")]
+    public int Changed { get; init; }
+
+    [JsonPropertyName("message")]
+    public string Message { get; init; } = string.Empty;
+
+    [JsonPropertyName("stats")]
+    public JsonElement Stats { get; init; }
+
+    [JsonPropertyName("snapshot")]
+    public JobQueueSnapshot Snapshot { get; init; } = new();
+}

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-import os
 import json
-from dataclasses import asdict, fields
+import os
 from pathlib import Path
 
+from .app_paths import CONFIG_PATH
+from .command import (
+    derive_job_name,
+    derive_oldjob_name,
+    inp_has_restart_keyword,
+    validate_job_name,
+)
 from .constants import (
-    ACTIVE_STATUSES,
     STATUS_CANCELED,
     STATUS_COMPLETED,
     STATUS_CONFIRMING,
@@ -26,17 +31,9 @@ from .constants import (
     STATUS_WAITING_DEPENDENCY,
     TERMINAL_STATUSES,
 )
-from .models import QueueItem
-from .app_paths import CONFIG_PATH, JOBLIST_PATH
-
-from .command import derive_job_name, derive_oldjob_name, inp_has_restart_keyword, validate_job_name
 from .diagnostics import StartupTimeline, hang_probe_function
+from .models import QueueItem
 from .qt_compat import QtCore, QtGui, QtWidgets, Signal, Slot
-from .queue_scheduler import (
-    effective_queue_item_work_dir,
-    queue_item_conflict_key,
-    queue_status_counts,
-)
 from .queue_presentation import (
     QueuePresentationCoordinator,
     candidate_row_projection,
@@ -44,6 +41,12 @@ from .queue_presentation import (
     format_runtime_memory,
     runtime_cell_projection,
 )
+from .queue_scheduler import (
+    effective_queue_item_work_dir,
+    queue_item_conflict_key,
+    queue_status_counts,
+)
+from .queue_store import atomic_write_json
 from .restart_dependency import RestartDependencyLifecycle
 from .ui_components import (
     SegmentedSpinBox,
@@ -90,77 +93,6 @@ FORMAL_FORTRAN_COLUMN = 5
 FORMAL_CORE_COLUMN = 6
 FORMAL_MEMORY_COLUMN = 7
 FORMAL_PRIORITY_COLUMN = 8
-
-
-def atomic_write_json(path, payload):
-    """Atomically write JSON so joblist.json is never half-written."""
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path + ".tmp"
-    with open(temp_path, "w", encoding="utf-8") as file:
-        json.dump(payload, file, ensure_ascii=False, indent=2)
-        file.flush()
-        os.fsync(file.fileno())
-    os.replace(temp_path, path)
-
-
-QUEUE_ITEM_FIELD_NAMES = {field.name for field in fields(QueueItem)}
-_last_saved_joblist_payload: dict | None = None
-
-
-def queue_item_to_json(item: QueueItem) -> dict:
-    return asdict(item)
-
-
-def queue_item_from_json(payload: object, *, restore_active_state: bool = True) -> QueueItem | None:
-    if not isinstance(payload, dict):
-        return None
-    values = {key: value for key, value in payload.items() if key in QUEUE_ITEM_FIELD_NAMES}
-    try:
-        item = QueueItem(**values)
-    except TypeError:
-        return None
-    if restore_active_state and item.status in ACTIVE_STATUSES:
-        item.status = STATUS_UNKNOWN
-        item.message = "程序重启后状态待确认"
-        item.active_job_key = ""
-        item.pids = []
-        item.pid_create_times = {}
-        item.rss_bytes = 0
-    return item
-
-
-def load_joblist_state() -> tuple[list[QueueItem], list[QueueItem], str]:
-    try:
-        with JOBLIST_PATH.open("r", encoding="utf-8") as stream:
-            payload = json.load(stream)
-    except FileNotFoundError:
-        return [], [], ""
-    except (OSError, json.JSONDecodeError) as exc:
-        return [], [], str(exc)
-    if not isinstance(payload, dict):
-        return [], [], "joblist.json 格式不是对象"
-
-    def read_items(key: str) -> list[QueueItem]:
-        items = []
-        for raw_item in payload.get(key, []) or []:
-            item = queue_item_from_json(raw_item, restore_active_state=key == "queue_items")
-            if item is not None:
-                items.append(item)
-        return items
-
-    return read_items("candidates"), read_items("queue_items"), ""
-
-
-def save_joblist_state(candidates: list[QueueItem], queue_items: list[QueueItem]) -> None:
-    global _last_saved_joblist_payload
-    payload = {
-        "candidates": [queue_item_to_json(item) for item in candidates],
-        "queue_items": [queue_item_to_json(item) for item in queue_items],
-    }
-    if payload == _last_saved_joblist_payload:
-        return
-    atomic_write_json(str(JOBLIST_PATH), payload)
-    _last_saved_joblist_payload = payload
 
 
 class FolderScanWorker(QtCore.QObject):

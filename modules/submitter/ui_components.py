@@ -58,13 +58,13 @@ class _RoundedPopupSurface(QtCore.QObject):
 
 def _prepare_translucent_popup(widget: QtWidgets.QWidget) -> None:
     """Enable antialiased per-pixel popup corners on Windows."""
-    widget.setWindowFlag(
-        QtCore.Qt.WindowType.NoDropShadowWindowHint,
-        True,
-    )
-    widget.setWindowFlag(
-        QtCore.Qt.WindowType.FramelessWindowHint,
-        True,
+    # Apply both hints atomically.  On Python 3.14/PySide6, two consecutive
+    # ``setWindowFlag`` calls can rebuild the native popup after the first call
+    # and silently drop ``NoDropShadowWindowHint``.
+    widget.setWindowFlags(
+        widget.windowFlags()
+        | QtCore.Qt.WindowType.NoDropShadowWindowHint
+        | QtCore.Qt.WindowType.FramelessWindowHint
     )
     widget.setAttribute(
         QtCore.Qt.WidgetAttribute.WA_TranslucentBackground,

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
-    QApplication,
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QLabel,
     QLineEdit,
@@ -21,9 +24,11 @@ from PySide6.QtWidgets import (
     QTreeWidget,
 )
 
+from modules.postprocessor import comparison_groups as comparison_groups_module
 from modules.postprocessor.app import MainWindow
-from modules.postprocessor.naming import natural_sort_key, parse_odb_name
 from modules.postprocessor.models import OdbScan
+from modules.postprocessor.naming import natural_sort_key, parse_odb_name
+from modules.postprocessor.postprocessor_page import PostProcessorPage
 from modules.postprocessor.ui_style import (
     AccidentalWheelGuard,
     apply_application_style,
@@ -40,7 +45,9 @@ def test_main_window_has_a_result_browser_launch_button() -> None:
     button = window.findChild(QPushButton, "resultBrowserButton")
     assert button is window.result_browser_button
     assert button.text() == "结果浏览器"
-    assert button.parentWidget() is window.centralWidget()
+    folder_card = button.parentWidget()
+    assert folder_card is not None
+    assert folder_card.parentWidget() is window.centralWidget()
     window.close()
 
 
@@ -205,25 +212,159 @@ def test_wheel_guard_blocks_closed_selectors() -> None:
 def test_application_uses_one_font_size_and_native_control_shapes() -> None:
     app = application()
     apply_application_style(app)
+    window = MainWindow()
+    host = window.centralWidget()
     widgets = [
-        QLabel("正文"),
-        QLabel("标题"),
-        QLabel("提示"),
-        QPushButton("按钮"),
-        QLineEdit(),
-        QComboBox(),
-        QSpinBox(),
-        QTableWidget(),
-        QTreeWidget(),
-        QPlainTextEdit(),
+        QLabel("正文", host),
+        QLabel("标题", host),
+        QLabel("提示", host),
+        QPushButton("按钮", host),
+        QLineEdit(host),
+        QComboBox(host),
+        QSpinBox(host),
+        QTableWidget(host),
+        QTreeWidget(host),
+        QPlainTextEdit(host),
     ]
     widgets[1].setProperty("role", "title")
     widgets[2].setProperty("role", "hint")
     for widget in widgets:
         widget.ensurePolished()
-    assert {widget.font().pointSize() for widget in widgets} == {11}
+    # 与 submitter 页面一致：所有控件按样式表统一渲染为 12px。
+    assert {widget.font().pixelSize() for widget in widgets} == {12}
+    stylesheet = window.styleSheet()
+    assert stylesheet
+    # 与 submitter 页面共享同一套设计令牌，保证两个页面风格统一。
+    for token in ("#2563eb", "#f3f6fa", "QPushButton", "QTableWidget"):
+        assert token in stylesheet
+    window.scan_progress.ensurePolished()
+    assert window.scan_progress.minimumHeight() >= 20
+    assert window.scan_progress.maximumHeight() >= 20
+    # 应用级不挂样式表，避免污染共享 QApplication 上的 submitter 页面。
     assert app.styleSheet() == ""
-    assert app.style().objectName().casefold() == "fusion"
+    assert app.font().family() == "Microsoft YaHei UI"
+    assert app.font().pointSize() == 11
+    window.close()
+
+
+def test_result_browser_keeps_a_configured_root_that_does_not_exist(
+    tmp_path: Path,
+) -> None:
+    application()
+    window = MainWindow()
+    configured = tmp_path / "future-project"
+    window.folder_edit.setText(str(configured))
+
+    with patch(
+        "modules.postprocessor.batch_window.ResultBrowserDialog"
+    ) as browser_type:
+        dialog = browser_type.return_value
+        window._open_result_browser()
+
+    assert browser_type.call_args.args[0] == (
+        configured / "AbaqusODBPostProcessor_Results"
+    )
+    dialog.setAttribute.assert_called_once()
+    window.close()
+
+
+def test_embedded_page_propagates_programmatic_folder_changes(
+    tmp_path: Path,
+) -> None:
+    application()
+    page = PostProcessorPage()
+    emitted_roots = []
+    page.resultRootChanged.connect(emitted_roots.append)
+
+    page.controller.folder_edit.setText(str(tmp_path))
+    QTest.qWait(page._folder_change_timer.interval() + 25)
+
+    assert emitted_roots[-1] == (
+        tmp_path / "AbaqusODBPostProcessor_Results"
+    ).resolve()
+    page.shutdown()
+
+
+def test_embedded_page_source_route_emits_once_without_debounce_duplicate(
+    tmp_path: Path,
+) -> None:
+    application()
+    page = PostProcessorPage()
+    emitted_roots = []
+    page.resultRootChanged.connect(emitted_roots.append)
+
+    page.set_source_path(tmp_path / "case.odb")
+    QTest.qWait(page._folder_change_timer.interval() + 25)
+
+    assert emitted_roots == [
+        (tmp_path / "AbaqusODBPostProcessor_Results").resolve()
+    ]
+    page.shutdown()
+
+
+def test_rebar_section_controls_persist_and_drive_job_payload(
+    tmp_path: Path, monkeypatch
+) -> None:
+    application()
+    state_path = tmp_path / "project_state.json"
+    monkeypatch.setattr(
+        comparison_groups_module,
+        "state_file",
+        lambda: state_path,
+    )
+    window = MainWindow()
+
+    assert window.rebar_method_selector.currentData() == "element_cut"
+    legacy_index = window.rebar_method_selector.findData("legacy_interpolation")
+    assert legacy_index >= 0
+    assert "仅对照" in window.rebar_method_selector.itemText(legacy_index)
+    assert window.expected_longitudinal_rebar_count_input.value() == 0
+    assert (
+        window.expected_longitudinal_rebar_count_input.specialValueText()
+        == "自动（按 ODB 检测）"
+    )
+    assert "0 表示自动采用 ODB 检测" in (
+        window.expected_longitudinal_rebar_count_input.toolTip()
+    )
+    assert "不校验" not in window.expected_longitudinal_rebar_count_input.toolTip()
+    assert window.rebar_cut_tolerance_mm_input.value() == pytest.approx(0.0001)
+
+    window.rebar_method_selector.setCurrentIndex(legacy_index)
+    window.expected_longitudinal_rebar_count_input.setValue(24)
+    window.rebar_cut_tolerance_mm_input.setValue(0.0015)
+    saved = json.loads(state_path.read_text(encoding="utf-8"))
+    assert saved["rebar_method"] == "legacy_interpolation"
+    assert saved["expected_longitudinal_rebar_count"] == 24
+    assert saved["rebar_cut_tolerance_mm"] == pytest.approx(0.0015)
+
+    folder = tmp_path / "odb"
+    folder.mkdir()
+    item = make_scan(folder / "GJA-1-R_U100D.odb")
+    window._load_folder_state(str(folder))
+    window._populate([item])
+    row = window.rows_by_path[str(item.path.resolve())]
+    payload = window._job_payload(row, tmp_path / "result")
+    assert payload["rebar_method"] == "legacy_interpolation"
+    assert payload["expected_longitudinal_rebar_count"] == 24
+    assert payload["settings"]["rebar_cut_tolerance_mm"] == pytest.approx(
+        0.0015
+    )
+
+    window._set_busy(True)
+    assert not window.rebar_method_selector.isEnabled()
+    assert not window.expected_longitudinal_rebar_count_input.isEnabled()
+    assert not window.rebar_cut_tolerance_mm_input.isEnabled()
+    window._set_busy(False)
+    assert window.rebar_method_selector.isEnabled()
+    assert window.expected_longitudinal_rebar_count_input.isEnabled()
+    assert window.rebar_cut_tolerance_mm_input.isEnabled()
+    window.close()
+
+    restored = MainWindow()
+    assert restored.rebar_method_selector.currentData() == "legacy_interpolation"
+    assert restored.expected_longitudinal_rebar_count_input.value() == 24
+    assert restored.rebar_cut_tolerance_mm_input.value() == pytest.approx(0.0015)
+    restored.close()
 
 
 def test_manual_direction_and_diameter_are_persisted(tmp_path: Path) -> None:

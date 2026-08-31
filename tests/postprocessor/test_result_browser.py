@@ -1,26 +1,29 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PIL import Image
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QApplication, QTableView
-from PIL import Image
 
+from modules.postprocessor import result_browser, result_catalog
+from modules.postprocessor.result_assets import write_group_member_manifest
 from modules.postprocessor.result_browser import (
     AspectRatioPreviewLabel,
     ResultBrowserDialog,
     ResultIndexCoordinator,
     classify_result,
-    collect_shared_asset_records,
     collect_result_records,
+    collect_shared_asset_records,
     fit_preview_size,
     read_csv_preview,
     result_section,
 )
-from modules.postprocessor.result_assets import write_group_member_manifest
+from modules.postprocessor.result_browser_page import ResultBrowserPage
 from modules.postprocessor.result_index import INDEX_FILENAME, build_result_index
 
 
@@ -260,6 +263,76 @@ def test_result_browser_can_switch_to_the_main_window_result_root(
     dialog.close()
 
 
+def test_result_browser_reports_an_inaccessible_root_without_crashing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    application()
+    inaccessible = tmp_path / "inaccessible"
+    inaccessible.mkdir()
+    inaccessible_resolved = inaccessible.resolve()
+    original_is_dir = Path.is_dir
+
+    def denied_for_target(path: Path) -> bool:
+        if path.resolve() == inaccessible_resolved:
+            raise PermissionError(13, "拒绝访问", str(path))
+        return original_is_dir(path)
+
+    monkeypatch.setattr(Path, "is_dir", denied_for_target)
+    dialog = ResultBrowserDialog(inaccessible)
+
+    assert dialog.scope_tree.topLevelItem(0).childCount() == 0
+    assert "无法读取结果目录" in dialog.status_label.text()
+    assert "拒绝访问" in dialog.index_status_label.text()
+    dialog.close()
+
+
+def test_result_browser_waits_for_preview_threads_before_closing(
+    tmp_path: Path,
+) -> None:
+    application()
+    dialog = ResultBrowserDialog(tmp_path)
+    dialog._start_background(lambda: time.sleep(0.05), lambda _value: None)
+    threads = list(dialog._background_threads)
+
+    assert threads and any(thread.isRunning() for thread in threads)
+    assert dialog.close()
+    assert all(not thread.isRunning() for thread in threads)
+
+
+def test_result_browser_can_prepare_close_without_hiding_the_page(
+    tmp_path: Path,
+) -> None:
+    application()
+    dialog = ResultBrowserDialog(tmp_path)
+    dialog.show()
+    QApplication.processEvents()
+
+    assert dialog.prepare_close()
+    assert dialog.isVisible()
+    dialog.close()
+
+
+def test_embedded_result_browser_refreshes_after_a_rejected_workspace_close(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    application()
+    coordinator = ResultIndexCoordinator()
+    page = ResultBrowserPage(tmp_path, coordinator=coordinator)
+    refreshed_roots = []
+    monkeypatch.setattr(
+        page.browser,
+        "set_result_root",
+        refreshed_roots.append,
+    )
+
+    page.restore_after_failed_shutdown()
+
+    assert refreshed_roots == [page.browser.result_root]
+    page.shutdown()
+    coordinator.shutdown()
+
+
 def test_result_browser_startup_reads_only_directory_structure(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -324,3 +397,9 @@ def test_manual_refresh_replaces_a_pending_incremental_request(
     assert coordinator.pending[0]["operation"] == "refresh"
     assert coordinator.pending[0]["priority"] == 0
     assert coordinator.pending[0]["scopes"] == set()
+def test_result_browser_reuses_the_qt_free_result_catalog() -> None:
+    assert result_browser.ResultRecord is result_catalog.ResultRecord
+    assert result_browser.classify_result is result_catalog.classify_result
+    assert result_browser.collect_result_records is result_catalog.collect_result_records
+    assert result_browser.read_csv_preview is result_catalog.read_csv_preview
+    assert "PySide6" not in (Path(result_catalog.__file__).read_text(encoding="utf-8"))

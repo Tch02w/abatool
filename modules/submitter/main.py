@@ -107,7 +107,7 @@ from .scheduler_adapter import (
 from .scheduler_repository import SQLiteSchedulerRepository
 from .scheduling import ExecutionEvent, ExecutionEventKind, SchedulerCore, StateTransitionError
 from .qt_compat import QtCore, QtGui, QtWidgets, Signal
-from .queue_manager import QueueManagerDialog, load_joblist_state, save_joblist_state
+from .queue_manager import QueueManagerDialog
 from .queue_scheduler import (
     find_queue_item_by_key as scheduler_find_queue_item_by_key,
     get_managed_active_job_keys as scheduler_get_managed_active_job_keys,
@@ -116,6 +116,7 @@ from .queue_scheduler import (
     queue_status_counts as scheduler_queue_status_counts,
     submit_conflict_key as scheduler_submit_conflict_key,
 )
+from .queue_store import load_joblist_state, save_joblist_state
 from .ui_components import (
     duplicated_runtime_job_names as ui_duplicated_runtime_job_names,
     FilePickerRow,

@@ -1,14 +1,12 @@
 # Abaqus ODB PostProcessor
 
-Abaqus 2025 ODB 批量后处理工具。当前工作树只保留唯一最新版代码；旧实现通过 Git 历史保存，不再使用 `*_v2.py`、`*_final.py` 等本地副本。
-
-GitHub：<https://github.com/Tch02w/AbaqusODBPostProcessor>
+Abaqus ODB 批量后处理领域说明。当前实现由原生 WinUI 3 页面调用 Qt-free 批处理核心；PySide6 页面在迁移验收期作为兼容入口保留。
 
 ## 本地目录职责
 
-- 当前独立项目与源码：`G:\PythonProject\abaqusTool`
-- ODB：`G:\Job\GJA_ODB`
-- 提取结果：`G:\Job\GJA_ODB\AbaqusODBPostProcessor_Results`
+- 项目源码：当前 Git 仓库根目录
+- ODB：用户在原生页面中选择的目录
+- 提取结果：所选 ODB 根目录下的 `AbaqusODBPostProcessor_Results`
 - 持久扫描/预扫描/数值缓存：所选 ODB 根目录下的 `cache`
 - 当前会话批次临时目录：`%TEMP%\AbaqusODBPostProcessor\batches`
 - 用户界面状态：`%APPDATA%\AbaqusODBPostProcessor\project_state.json`
@@ -17,10 +15,7 @@ GitHub：<https://github.com/Tch02w/AbaqusODBPostProcessor>
 
 ## 启动
 
-- 双击 `Abaqus ODB 后处理器.lnk`；或
-- 双击 `启动AbaqusODB后处理器.bat`。
-
-双击 `打开源代码文件夹.bat` 可直接打开当前源码目录。
+原生入口见仓库根目录 `README.md`。兼容入口可运行 `uv run abaqus-odb-post`。
 
 ## 文件名规则
 
@@ -185,7 +180,7 @@ ODB 正在从超算下载或复制，应等待文件大小稳定后再检测。
 ## 结果结构
 
 ```text
-G:\Job\GJA_ODB\AbaqusODBPostProcessor_Results\
+<ODB 根目录>\AbaqusODBPostProcessor_Results\
 ├─ ODB数据\
 │  └─ ODB名称\
 │     └─ 内容指纹-数值配置哈希\

@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 .pytest-tmp/
 .test-tmp-*/
+test-tmp-*/
 .test-visual/
 .ruff_cache/
 .uv-cache-local/
@@ -16,10 +17,18 @@ __pycache__/
 .idea/
 .vscode/
 .codex/
+.agents/
+.qoder/
+.workbuddy-ai/
+GPTWork/
 
 # Build artefacts
 build/
 dist/
+bin/
+obj/
+*.user
+*.suo
 
 # Abaqus solver files and local runtime data
 *.odb

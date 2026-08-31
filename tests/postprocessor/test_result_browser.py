@@ -10,6 +10,7 @@ from PIL import Image
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QApplication, QTableView
 
+from modules.postprocessor import result_browser, result_catalog
 from modules.postprocessor.result_assets import write_group_member_manifest
 from modules.postprocessor.result_browser import (
     AspectRatioPreviewLabel,
@@ -22,8 +23,8 @@ from modules.postprocessor.result_browser import (
     read_csv_preview,
     result_section,
 )
-from modules.postprocessor.result_index import INDEX_FILENAME, build_result_index
 from modules.postprocessor.result_browser_page import ResultBrowserPage
+from modules.postprocessor.result_index import INDEX_FILENAME, build_result_index
 
 
 def application() -> QApplication:
@@ -396,3 +397,9 @@ def test_manual_refresh_replaces_a_pending_incremental_request(
     assert coordinator.pending[0]["operation"] == "refresh"
     assert coordinator.pending[0]["priority"] == 0
     assert coordinator.pending[0]["scopes"] == set()
+def test_result_browser_reuses_the_qt_free_result_catalog() -> None:
+    assert result_browser.ResultRecord is result_catalog.ResultRecord
+    assert result_browser.classify_result is result_catalog.classify_result
+    assert result_browser.collect_result_records is result_catalog.collect_result_records
+    assert result_browser.read_csv_preview is result_catalog.read_csv_preview
+    assert "PySide6" not in (Path(result_catalog.__file__).read_text(encoding="utf-8"))

@@ -1,0 +1,109 @@
+<Page
+    x:Class="AbaqusTools.WinUI.Pages.OdbMergePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Padding="24,20,24,28" Spacing="12">
+            <InfoBar x:Name="MergeSafetyInfoBar" IsClosable="False" IsOpen="True" Message="合并始终在隔离工作区执行；源 ODB 只读，结果通过 Abaqus 只读验证后才会发布。" Severity="Success" Title="受保护执行" />
+
+            <Border Style="{StaticResource WorkbenchCardStyle}">
+                <StackPanel Spacing="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="1. 选择 ODB" />
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="源文件只读" />
+                    </Grid>
+                    <Grid ColumnSpacing="10" RowSpacing="10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource WorkbenchFieldLabelStyle}" Text="原始 ODB" />
+                        <TextBox x:Name="OriginalOdbTextBox" Grid.Column="1" IsReadOnly="True" PlaceholderText="请选择第一阶段（原始）ODB" />
+                        <Button x:Name="ChooseOriginalButton" Grid.Column="2" Click="OnChooseOriginalClicked" Content="浏览…" Style="{StaticResource WorkbenchPickerButtonStyle}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource WorkbenchFieldLabelStyle}" Text="重启动 ODB" />
+                        <TextBox x:Name="RestartOdbTextBox" Grid.Row="1" Grid.Column="1" IsReadOnly="True" PlaceholderText="请选择第二阶段（重启动）ODB" />
+                        <Button x:Name="ChooseRestartButton" Grid.Row="1" Grid.Column="2" Click="OnChooseRestartClicked" Content="浏览…" Style="{StaticResource WorkbenchPickerButtonStyle}" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource WorkbenchFieldLabelStyle}" Text="输出 ODB" />
+                        <TextBox x:Name="OutputOdbTextBox" Grid.Row="2" Grid.Column="1" PlaceholderText="选择目录或输入文件名；将自动规范为 _joined.odb" />
+                        <Button x:Name="ChooseOutputButton" Grid.Row="2" Grid.Column="2" Click="OnChooseOutputClicked" Content="选择位置…" Style="{StaticResource WorkbenchPickerButtonStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource WorkbenchCardStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="2. 合并选项" />
+                    <StackPanel Orientation="Horizontal" Spacing="18">
+                        <CheckBox x:Name="IncludeHistoryCheckBox" Content="包含历史输出" IsChecked="True" />
+                        <CheckBox x:Name="CompressResultCheckBox" Content="压缩合并结果" />
+                        <CheckBox x:Name="CopyOriginalCheckBox" Content="保留原始 ODB" />
+                    </StackPanel>
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource WorkbenchFieldLabelStyle}" Text="结果命名" />
+                        <ComboBox x:Name="ResultNamingComboBox" Grid.Column="1" SelectionChanged="OnResultNamingChanged" SelectedIndex="0">
+                            <ComboBoxItem Content="采用重启动 ODB 名称" />
+                            <ComboBoxItem Content="采用原始 ODB 名称" />
+                            <ComboBoxItem Content="自定义输出名称" />
+                        </ComboBox>
+                        <TextBlock Grid.Column="2" Style="{StaticResource WorkbenchFieldLabelStyle}" Text="结果冲突" />
+                        <ComboBox x:Name="ConflictPolicyComboBox" Grid.Column="3" SelectedIndex="0">
+                            <ComboBoxItem Content="已有结果时自动编号" />
+                            <ComboBoxItem Content="执行前确认覆盖" />
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource WorkbenchCardStyle}">
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="3. 检查并执行" />
+                            <TextBlock x:Name="MergePlanSummaryText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="请选择两个源 ODB 和输出位置。" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button x:Name="PreviewButton" Grid.Column="1" VerticalAlignment="Center" Click="OnPreviewClicked" Content="检查合并计划" />
+                        <Button x:Name="ExecuteButton" Grid.Column="2" VerticalAlignment="Center" Click="OnExecuteClicked" Content="执行合并" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
+                        <Button x:Name="StopButton" Grid.Column="3" VerticalAlignment="Center" Click="OnStopClicked" Content="停止" IsEnabled="False" />
+                    </Grid>
+                    <ProgressBar x:Name="MergeProgressBar" Maximum="100" Value="0" />
+                    <InfoBar x:Name="MergePlanInfoBar" IsClosable="False" IsOpen="False" />
+                    <Expander x:Name="MergePlanExpander" Header="安全合并计划" IsExpanded="False">
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Name="MergePlanDetailsText" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="Wrap" />
+                            <ItemsControl x:Name="MergeStepsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2" ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                            <FontIcon FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Glyph="&#xE73E;" />
+                                            <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Expander>
+                    <Expander x:Name="MergeLogExpander" Header="运行输出" IsExpanded="False">
+                        <TextBox x:Name="MergeOperationLogTextBox" MinHeight="110" AcceptsReturn="True" FontFamily="Cascadia Mono" FontSize="12" IsReadOnly="True" TextWrapping="Wrap" />
+                    </Expander>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource WorkbenchCardStyle}">
+                <StackPanel Spacing="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="合并结果" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="OpenResultButton" Click="OnOpenResultClicked" Content="打开结果" IsEnabled="False" />
+                            <Button x:Name="RevealResultButton" Click="OnRevealResultClicked" Content="打开所在目录" IsEnabled="False" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="MergeResultText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="尚无由 WinUI 合并服务生成并通过只读验证的结果。" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

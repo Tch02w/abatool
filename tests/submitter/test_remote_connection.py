@@ -5,7 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import modules.submitter.remote_connection as remote_connection
+from modules.submitter import remote_connection
 from modules.submitter.qt_compat import QtCore, QtWidgets
 from modules.submitter.remote_connection import (
     HostKeyConfirmationRequired,
@@ -261,6 +261,34 @@ class RemoteConnectionTests(unittest.TestCase):
         self.assertEqual(
             normalize_fingerprint("sha256:abc==="),
             "SHA256:abc",
+        )
+
+    def test_remote_paths_cannot_escape_configured_windows_roots(self) -> None:
+        profile = _profile()
+
+        self.assertTrue(
+            RemoteConnectionManager._is_remote_path_allowed(
+                profile,
+                r"D:\Abaqus_Cal\models\case.inp",
+            )
+        )
+        self.assertFalse(
+            RemoteConnectionManager._is_remote_path_allowed(
+                profile,
+                r"D:\Abaqus_Cal\..\Secrets\password.txt",
+            )
+        )
+        self.assertFalse(
+            RemoteConnectionManager._is_remote_path_allowed(
+                profile,
+                r"C:\Users\Administrator\.ssh\id_rsa",
+            )
+        )
+        self.assertFalse(
+            RemoteConnectionManager._is_remote_path_allowed(
+                profile,
+                r"relative\case.inp",
+            )
         )
 
     def test_server_dialog_hides_secrets_from_saved_profile(self) -> None:

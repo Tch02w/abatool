@@ -1,0 +1,202 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using AbaqusTools.WinUI.Services;
+
+namespace AbaqusTools.WinUI.Models;
+
+public sealed class OdbFileRow : INotifyPropertyChanged
+{
+    private string _compatibilityStatus = "unknown";
+    private string _compatibilityStatusDisplay = "未检查";
+    private string _compatibilityMessage = "尚未运行兼容性检查。";
+    private string _postprocessStatusDisplay = "未分析";
+    private string _postprocessSummary = "读取结构后可配置提取参数";
+    private string _comparisonGroup = "对比组 1";
+    private bool _hasPostprocessConfiguration;
+
+    public OdbFileRow(OdbDiscoveryItem item)
+    {
+        Path = item.Path;
+        RelativePath = item.RelativePath;
+        Name = item.Name;
+        SizeBytes = item.SizeBytes;
+        SizeDisplay = item.SizeDisplay;
+        ModifiedAt = item.ModifiedAt;
+        ModifiedDisplay = item.ModifiedDisplay;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Path { get; }
+
+    public string RelativePath { get; }
+
+    public string Name { get; }
+
+    public long SizeBytes { get; }
+
+    public string SizeDisplay { get; }
+
+    public DateTimeOffset ModifiedAt { get; }
+
+    public string ModifiedDisplay { get; }
+
+    public OdbPostprocessScanItem? ScanDetails { get; private set; }
+
+    public OdbPostprocessJobDraft? PostprocessJob { get; private set; }
+
+    public string ComparisonGroup
+    {
+        get => _comparisonGroup;
+        set => SetField(ref _comparisonGroup, value);
+    }
+
+    public string PostprocessStatusDisplay
+    {
+        get => _postprocessStatusDisplay;
+        private set => SetField(ref _postprocessStatusDisplay, value);
+    }
+
+    public string PostprocessSummary
+    {
+        get => _postprocessSummary;
+        private set => SetField(ref _postprocessSummary, value);
+    }
+
+    public bool HasPostprocessConfiguration
+    {
+        get => _hasPostprocessConfiguration;
+        private set => SetField(ref _hasPostprocessConfiguration, value);
+    }
+
+    public string CompatibilityStatus
+    {
+        get => _compatibilityStatus;
+        private set => SetField(ref _compatibilityStatus, value);
+    }
+
+    public string CompatibilityStatusDisplay
+    {
+        get => _compatibilityStatusDisplay;
+        private set => SetField(ref _compatibilityStatusDisplay, value);
+    }
+
+    public string CompatibilityMessage
+    {
+        get => _compatibilityMessage;
+        private set => SetField(ref _compatibilityMessage, value);
+    }
+
+    public void MarkPending()
+    {
+        SetCompatibility("pending", "等待检查", "已加入兼容性检查队列。", 0);
+    }
+
+    public void MarkRunning()
+    {
+        SetCompatibility("running", "正在检查", "Abaqus 正在读取此 ODB。", 0);
+    }
+
+    public void MarkIncomplete(string statusDisplay, string message)
+    {
+        SetCompatibility("incomplete", statusDisplay, message, 0);
+    }
+
+    public void ApplyCompatibilityResult(OdbCompatibilityResult result)
+    {
+        var normalizedStatus = (result.Status ?? string.Empty).Trim().ToLowerInvariant();
+        var (statusDisplay, fallbackMessage) = normalizedStatus switch
+        {
+            "valid" => ("有效", "ODB 可由本机 Abaqus 正常读取。"),
+            "upgrade_required" => ("需要升级", "ODB 来自较早版本，需要升级后读取。"),
+            "newer_release" => ("版本高于本机", "ODB 由更高版本 Abaqus 创建，本机无法读取。"),
+            "invalid" => ("无效", "文件不是有效的 ODB，或 Abaqus 无法读取。"),
+            "missing" => ("文件缺失", "检查时未找到该 ODB 文件。"),
+            "empty" => ("空文件", "ODB 文件大小为零。"),
+            _ => ("未知状态", "控制面返回了 WinUI 尚未识别的兼容性状态。"),
+        };
+        var message = string.IsNullOrWhiteSpace(result.Message)
+            ? fallbackMessage
+            : result.Message.Trim();
+        SetCompatibility(normalizedStatus, statusDisplay, message, result.StepCount ?? 0);
+    }
+
+    public void MarkStructureAnalysisPending()
+    {
+        PostprocessStatusDisplay = "等待分析";
+        PostprocessSummary = "已加入 ODB 结构读取队列";
+    }
+
+    public void MarkStructureAnalysisRunning()
+    {
+        PostprocessStatusDisplay = "正在分析";
+        PostprocessSummary = "Abaqus 正在读取分析步、集合与场输出";
+    }
+
+    public void ApplyPostprocessScan(OdbPostprocessScanItem scan)
+    {
+        ScanDetails = scan;
+        var draft = scan.Suggested.Clone();
+        draft.Path = Path;
+        PostprocessJob = draft;
+        HasPostprocessConfiguration = string.IsNullOrWhiteSpace(scan.Error);
+        PostprocessStatusDisplay = HasPostprocessConfiguration ? "已就绪" : "分析失败";
+        PostprocessSummary = HasPostprocessConfiguration
+            ? $"{scan.Steps.Count} 个分析步 · {scan.AssemblyNodeSets.Count + scan.AssemblyElementSets.Count} 个集合 · {scan.FieldOutputs.Count} 个场输出"
+            : scan.Error;
+    }
+
+    public void MarkPostprocessIncomplete(string status, string message)
+    {
+        PostprocessStatusDisplay = status;
+        PostprocessSummary = message;
+    }
+
+    public void UpdatePostprocessJob(OdbPostprocessJobDraft draft)
+    {
+        draft.Path = Path;
+        PostprocessJob = draft;
+        HasPostprocessConfiguration = true;
+        PostprocessStatusDisplay = "已配置";
+        PostprocessSummary = $"{draft.StartStep} → {draft.EndStep} · {FrameModeDisplay(draft.FrameMode)} · 方向 {draft.LoadDirection}";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PostprocessJob)));
+    }
+
+    public void MarkProcessing(string status, string message)
+    {
+        PostprocessStatusDisplay = status;
+        PostprocessSummary = message;
+    }
+
+    private static string FrameModeDisplay(string frameMode) => frameMode switch
+    {
+        "auto" => "关键帧（自动）",
+        "all" => "全部帧",
+        "manual" => "手动帧",
+        _ => frameMode,
+    };
+
+    private void SetCompatibility(
+        string status,
+        string statusDisplay,
+        string message,
+        int stepCount)
+    {
+        CompatibilityStatus = status;
+        CompatibilityStatusDisplay = statusDisplay;
+        CompatibilityMessage = stepCount > 0
+            ? $"{message} · {stepCount} 个分析步"
+            : message;
+    }
+
+    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}

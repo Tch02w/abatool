@@ -1,33 +1,71 @@
 # Abaqus Tools
 
-用于 Abaqus 作业管理与 ODB 结果后处理的统一 PySide6 桌面程序。应用以原提交器工作台为主壳，在同一窗口中保留标题栏、菜单、资源/属性/日志区域，并加入 ODB 后处理和结果浏览页面。
+Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台。当前原生前端使用 C#、.NET 10 和 WinUI 3；Python 3.14 控制面复用经过验证的提交、调度、SSH、ODB 与结果处理核心。PySide6 实现暂时保留为兼容与回滚入口，不参与原生页面渲染。
 
-## 工作台页面
+## 功能
 
-- 提交与调度：新建作业、作业队列、作业概览、计算资源、重启动链和 ODB 合并。
-- ODB 后处理：ODB 发现、版本检查/升级、批量提取、云图和动画生成。
-- 结果浏览：按工程用途浏览索引、CSV、图片、GIF、日志及导出文件。
-- “后处理”菜单可把提交器中当前作业的 ODB 目录直接交给后处理页。
+- 新建本机或远程作业，校验路径和资源参数并预览实际 Abaqus 命令。
+- 扫描候选 INP、管理正式队列、限制并行数、暂停/恢复/终止和恢复运行状态。
+- 查看作业日志与 STA/MSG/DAT，管理本机和远端计算资源及文件传输。
+- 编辑并校验 Restart/oldjob 依赖链。
+- 异步合并 ODB，支持进度、取消、结果冲突策略和失败清理。
+- 扫描与升级 ODB，按组批量提取、渲染、生成动画和工程结果。
+- 构建结果索引并预览文本、表格、图片和动画。
 
-窗口底部状态栏统一显示当前模块/作业或目录、队列摘要、远端连接、Abaqus PATH 探测和 Qt 绑定；各模块原有的详细进度与日志仍保留。
+## 原生工作台
 
-## 快速开始
-
-仓库只使用根目录独立 `.venv`，并由 `.python-version` 固定使用稳定版
-Python 3.14（当前验证版本为 CPython 3.14.4）。在根目录安装后，通过统一入口启动：
+要求：Windows、.NET 10 SDK，以及仓库根目录的 Python 3.14 `.venv`。
 
 ```powershell
 uv sync --group dev
-uv run python .\main.py
+dotnet restore .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64
+dotnet run --project .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64
 ```
 
-`Ctrl+7` 打开 ODB 后处理，`Ctrl+8` 打开结果浏览。也可通过工作台标签和“后处理”菜单切换。领域说明见 `docs/`。
+WinUI 客户端只连接 `127.0.0.1` 上的随机端口控制面，使用进程级随机 token 鉴权；需要时自动启动：
 
-架构分层与共享边界见 [docs/architecture.md](docs/architecture.md)。
+```powershell
+.\.venv\Scripts\python.exe -m modules.control_plane
+```
 
-## 仓库约定
+如需指定解释器，可设置 `ABAQUS_TOOLS_PYTHON`。只有仓库位于非标准布局时才需要设置 `ABAQUS_TOOLS_ROOT`。
 
-- 源码、测试、文档和打包定义应提交；虚拟环境、IDE 配置、ODB 文件、求解器中间文件、缓存和结果文件不提交。
-- 根级 `main.py` 是统一产品入口；`modules/submitter/__main__.py` 作为兼容入口保留提交器独立启动能力。
-- `modules/workspace.py` 继承提交器工作台壳，只负责页面组合、跨模块路径路由和统一状态呈现，不承载领域计算规则。
-- `modules/submitter/` 与 `modules/postprocessor/` 是同一产品下的领域模块；共享基础设施放在 `modules/common/`。
+## 兼容入口
+
+迁移验收期间仍保留以下 PySide6 入口，用于行为对照与回滚：
+
+```powershell
+uv run python .\main.py
+uv run abaqus-submitter
+uv run abaqus-odb-post
+uv run abaqus-odb-results
+```
+
+## 项目结构
+
+```text
+winui/AbaqusTools.WinUI/   原生 WinUI 3 客户端
+modules/control_plane/     Qt-free 本机 HTTP 控制面
+modules/submitter/         作业、队列、调度、SSH 与 ODB 合并核心
+modules/postprocessor/     ODB 批处理、渲染、缓存与结果浏览核心
+modules/common/            路径与 JSON 等共享基础设施
+tests/                     领域、API 与 WinUI 契约测试
+docs/                      架构、协议、ADR 与 RepoWiki
+```
+
+## 开发验证
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check modules\control_plane tests\control_plane tests\winui
+.\.venv\Scripts\python.exe -m pytest -q --basetemp .\.pytest-tmp
+dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 --no-restore
+```
+
+虚拟环境、IDE 配置、测试临时目录、`bin/obj`、ODB 和求解器输出均不提交。应用配置、队列、SSH 非敏感配置和运行数据库位于用户应用数据目录，不写入源码树。
+
+## 文档
+
+- [RepoWiki](docs/repowiki/README.md)
+- [整体架构](docs/architecture.md)
+- [控制面 API 契约](docs/api-contract.md)
+- [WinUI 迁移与验收合同](docs/winui-migration.md)

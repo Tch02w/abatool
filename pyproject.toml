@@ -28,6 +28,9 @@ abaqus-submitter = "modules.submitter.__main__:run"
 abaqus-odb-post = "modules.postprocessor.app:main"
 abaqus-odb-results = "modules.postprocessor.result_browser:main"
 
+[project.scripts]
+abaqus-tools-control = "modules.control_plane.__main__:main"
+
 [project.optional-dependencies]
 dev = [
     "pyinstaller>=6.0",

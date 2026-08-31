@@ -1,7 +1,7 @@
 {
-  "abaqus_command": "D:\\SIMULIA\\Commands\\abaqus.bat",
+  "abaqus_command": "abaqus",
   "local_abaqus_release": "2025",
-  "default_odb_folder": "G:\\Job\\GJA_ODB",
+  "default_odb_folder": "",
   "default_load_set": "SET-LOAD",
   "default_pile_set": "SET-PILE",
   "default_concrete_set": "SET-PILE_CON",

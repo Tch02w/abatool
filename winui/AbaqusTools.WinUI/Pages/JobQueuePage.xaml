@@ -12,7 +12,7 @@
         <Border Style="{StaticResource WorkbenchCardStyle}">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                <InfoBar x:Name="QueueInfoBar" IsClosable="False" IsOpen="True" Message="候选区与正式队列已接入；本机求解进程控制正在继续迁移。" Severity="Informational" />
+                <InfoBar x:Name="QueueInfoBar" IsClosable="False" IsOpen="True" Message="候选区、正式队列以及外部运行作业的扫描和持续状态监控已接入。" Severity="Informational" />
                 <Grid Grid.Row="1" ColumnSpacing="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
@@ -71,7 +71,7 @@
 
         <Border Grid.Row="1" Style="{StaticResource WorkbenchCardStyle}">
             <Grid RowSpacing="10">
-                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
@@ -86,10 +86,10 @@
                             <ComboBoxItem Content="取消该作业" Tag="cancel" />
                         </ComboBox>
                         <TextBlock VerticalAlignment="Center" Text="并行上限" />
-                        <NumberBox x:Name="ParallelLimitNumberBox" Width="100" Minimum="1" Maximum="999" SpinButtonPlacementMode="Inline" Value="1" />
+                        <NumberBox x:Name="ParallelLimitNumberBox" Width="100" Minimum="1" Maximum="999" SpinButtonPlacementMode="Compact" Value="1" />
                     </StackPanel>
                 </Grid>
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+                <StackPanel x:Name="FormalQueueActionBar" Grid.Row="1" Orientation="Horizontal" Spacing="6">
                     <Button x:Name="StartQueueButton" Click="OnStartQueueClicked" Content="开始队列" Style="{StaticResource AccentButtonStyle}" />
                     <Button x:Name="StopQueueButton" Click="OnStopQueueClicked" Content="停止调度" />
                     <Button x:Name="TerminateQueueItemsButton" Click="OnTerminateQueueItemsClicked" Content="终止运行中" />
@@ -102,7 +102,19 @@
                     <Button Click="OnRemoveQueueItemsClicked" Content="移除" />
                     <Button Click="OnClearFinishedClicked" Content="清理完成记录" />
                 </StackPanel>
-                <Grid Grid.Row="2">
+                <Grid x:Name="ExternalJobScanBar" Grid.Row="2" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="工作目录：" />
+                    <TextBox x:Name="ExternalWorkDirTextBox" Grid.Column="1" PlaceholderText="输入或选择外部 Abaqus 作业工作目录" />
+                    <Button x:Name="ChooseExternalWorkDirButton" Grid.Column="2" Width="88" HorizontalContentAlignment="Center" Click="OnChooseExternalWorkDirClicked" Content="浏览…" />
+                    <Button x:Name="ScanExternalJobsButton" Grid.Column="3" Width="88" HorizontalContentAlignment="Center" Click="OnScanExternalJobsClicked" Content="扫描" Style="{StaticResource AccentButtonStyle}" />
+                </Grid>
+                <Grid Grid.Row="3">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <Grid Padding="8,0" Background="{ThemeResource LayerFillColorAltBrush}" ColumnSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="55" /><ColumnDefinition Width="145" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="125" /><ColumnDefinition Width="70" /><ColumnDefinition Width="85" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="100" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>

@@ -1298,6 +1298,17 @@ public sealed class ControlPlaneHost : IAsyncDisposable
             },
             cancellationToken);
 
+    public Task<JobQueueCommandResponse> ScanExternalJobsAsync(
+        string root,
+        CancellationToken cancellationToken = default) =>
+        ExecuteJobQueueCommandAsync(
+            new JobQueueCommandRequest
+            {
+                Action = "scanExternalJobs",
+                Root = root.Trim(),
+            },
+            cancellationToken);
+
     public Task<JobQueueCommandResponse> SetJobQueueCandidateSelectionAsync(
         IReadOnlyList<string> itemIds,
         bool selected,
@@ -2135,11 +2146,12 @@ public sealed class ControlPlaneHost : IAsyncDisposable
                 && health.SchemaVersion == 1
                 && string.Equals(health.ApiVersion, "v1", StringComparison.Ordinal)
                 && string.Equals(health.Status, "ok", StringComparison.OrdinalIgnoreCase)
+                && health.Capabilities.Contains("jobQueue.scanExternalJobs", StringComparer.Ordinal)
                 && string.Equals(health.InstanceId, descriptor.InstanceId, StringComparison.Ordinal);
             RecordReadinessProbe(
                 healthy
                     ? $"healthz 验证成功，instance {descriptor.InstanceId}"
-                    : $"healthz JSON 校验失败：schema={health?.SchemaVersion}, api={health?.ApiVersion}, status={health?.Status}, instance={health?.InstanceId}, expected={descriptor.InstanceId}");
+                    : $"healthz JSON 校验失败：schema={health?.SchemaVersion}, api={health?.ApiVersion}, status={health?.Status}, capabilities={string.Join(',', health?.Capabilities ?? [])}, instance={health?.InstanceId}, expected={descriptor.InstanceId}");
             return healthy;
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or OperationCanceledException)

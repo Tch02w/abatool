@@ -138,13 +138,13 @@
 
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="280" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <controls:WorkbenchExplorerHost
                         x:Name="ExplorerHost"
-                        Width="260"
+                        Width="280"
                         HorizontalAlignment="Stretch" />
 
                     <Frame x:Name="ContentFrame" Grid.Column="1" />

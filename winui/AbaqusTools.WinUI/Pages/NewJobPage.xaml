@@ -123,7 +123,7 @@
                             <CheckBox x:Name="DatacheckCheckBox" Content="仅数据检查" />
                             <CheckBox x:Name="NotifyCheckBox" Content="结束提醒" IsChecked="True" />
                             <TextBlock VerticalAlignment="Center" Text="本地队列并行上限" />
-                            <NumberBox x:Name="MaxParallelNumberBox" Width="110" Minimum="1" SpinButtonPlacementMode="Inline" Value="1" />
+                            <NumberBox x:Name="MaxParallelNumberBox" Width="110" Minimum="1" SpinButtonPlacementMode="Compact" Value="1" />
                         </StackPanel>
                     </StackPanel>
                     <Button x:Name="PreviewButton" Grid.Column="1" MinWidth="148" VerticalAlignment="Bottom" Click="OnPreviewClicked" Content="预览提交命令" />

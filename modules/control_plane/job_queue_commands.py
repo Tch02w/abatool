@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import logging
 import threading
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from modules.submitter.app_paths import JOBLIST_PATH
 from modules.submitter.command import (
@@ -31,6 +32,11 @@ from modules.submitter.constants import (
     STATUS_WAITING_DEPENDENCY,
     TERMINAL_STATUSES,
 )
+from modules.submitter.external_job_scan_core import (
+    collect_known_external_jobs,
+    merge_external_scan_results,
+    scan_external_jobs,
+)
 from modules.submitter.job_draft import LocalJobDraft
 from modules.submitter.models import QueueItem
 from modules.submitter.queue_scheduler import (
@@ -42,6 +48,9 @@ from modules.submitter.queue_store import load_joblist_state, save_joblist_state
 from .contracts import SCHEMA_VERSION, ApiProblem
 from .job_drafts import LocalJobDraftPreviewRequest
 from .job_queues import project_job_queues
+
+LOGGER = logging.getLogger(__name__)
+ExternalJobScanner = Callable[[str, list[dict]], tuple[list[dict], list[int]]]
 
 RESULT_EXTENSIONS = (".odb", ".sta", ".msg", ".dat", ".log")
 EDITABLE_STATUSES = frozenset({STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY})
@@ -59,6 +68,7 @@ SUPPORTED_ACTIONS = frozenset(
     {
         "addCandidates",
         "scanCandidates",
+        "scanExternalJobs",
         "setCandidateSelection",
         "invertCandidateSelection",
         "removeCandidates",
@@ -166,9 +176,25 @@ def _require_fields(payload: Mapping[str, Any], allowed: set[str]) -> None:
 class JobQueueService:
     """Own safe queue-file transactions for one control-plane instance."""
 
-    def __init__(self, path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        *,
+        external_job_scanner: ExternalJobScanner = scan_external_jobs,
+        external_monitor_interval: float = 5.0,
+    ) -> None:
         self.path = Path(path) if path is not None else Path(JOBLIST_PATH)
         self._lock = threading.RLock()
+        self._external_job_scanner = external_job_scanner
+        self._external_monitor_interval = max(0.05, float(external_monitor_interval))
+        self._external_scan_roots: set[str] = set()
+        self._external_monitor_closing = threading.Event()
+        self._external_monitor = threading.Thread(
+            target=self._external_monitor_loop,
+            name="AbaqusExternalJobMonitor",
+            daemon=True,
+        )
+        self._external_monitor.start()
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -252,6 +278,8 @@ class JobQueueService:
     ) -> tuple[int, str, dict[str, Any]]:
         if action in {"addCandidates", "scanCandidates"}:
             return self._add_candidates(action, payload, candidates, queue_items)
+        if action == "scanExternalJobs":
+            return self._scan_external_jobs(payload, queue_items)
         if action == "setCandidateSelection":
             _require_fields(payload, {"itemIds", "selected"})
             return self._set_candidate_selection(payload, candidates)
@@ -295,6 +323,92 @@ class JobQueueService:
             return self._move_queue_item(payload, queue_items)
         raise AssertionError(f"unhandled queue action: {action}")
 
+    def _scan_external_jobs(
+        self,
+        payload: Mapping[str, Any],
+        queue_items: list[QueueItem],
+    ) -> tuple[int, str, dict[str, Any]]:
+        _require_fields(payload, {"root"})
+        root = _normal_path(_text(payload, "root"))
+        if not Path(root).is_dir():
+            raise ApiProblem(
+                400, "INVALID_EXTERNAL_SCAN_ROOT", "外部作业工作目录不存在或不可读"
+            )
+        self._external_scan_roots.add(os.path.normcase(root))
+        return self._scan_external_roots(queue_items, [root])
+
+    def _scan_external_roots(
+        self,
+        queue_items: list[QueueItem],
+        roots: list[str],
+    ) -> tuple[int, str, dict[str, Any]]:
+        jobs_by_key: dict[tuple[str, str], dict] = {}
+        skipped_pids: set[int] = set()
+        for root in roots:
+            known = collect_known_external_jobs(queue_items, root)
+            jobs, skipped = self._external_job_scanner(root, known)
+            skipped_pids.update(int(pid) for pid in skipped)
+            for job in jobs:
+                job_name = str(job.get("job_name") or "").strip()
+                job_root = str(job.get("work_dir") or root).strip()
+                if job_name and job_root:
+                    jobs_by_key[
+                        (os.path.normcase(_normal_path(job_root)), job_name.casefold())
+                    ] = job
+        merge = merge_external_scan_results(
+            queue_items=queue_items,
+            work_dir=roots[0],
+            jobs=list(jobs_by_key.values()),
+        )
+        added = int(merge["added"])
+        updated = int(merge["updated"])
+        status_only = int(merge["status_only_updates"])
+        scanned = len(jobs_by_key)
+        changed = added + updated + status_only
+        return (
+            changed,
+            f"外部作业扫描完成：发现 {scanned} 个，新增 {added} 个，更新 {updated + status_only} 个",
+            {
+                "scanned": scanned,
+                "added": added,
+                "updated": updated,
+                "statusOnlyUpdates": status_only,
+                "skippedPids": sorted(skipped_pids),
+            },
+        )
+
+    def _external_monitor_loop(self) -> None:
+        while not self._external_monitor_closing.wait(self._external_monitor_interval):
+            try:
+                self.refresh_external_jobs()
+            except Exception:
+                LOGGER.exception("External Abaqus job monitor refresh failed")
+
+    def refresh_external_jobs(self) -> None:
+        with self._lock:
+            candidates, queue_items = self._load()
+            roots = set(self._external_scan_roots)
+            roots.update(
+                os.path.normcase(
+                    _normal_path(item.external_work_dir or item.effective_work_dir)
+                )
+                for item in queue_items
+                if item.is_external
+                and (item.external_work_dir or item.effective_work_dir)
+            )
+            valid_roots = sorted(root for root in roots if Path(root).is_dir())
+            if not valid_roots:
+                return
+            before = project_job_queues(candidates, queue_items)
+            self._scan_external_roots(queue_items, valid_roots)
+            after = project_job_queues(candidates, queue_items)
+            if before != after:
+                save_joblist_state(candidates, queue_items, self.path)
+
+    def close(self) -> None:
+        self._external_monitor_closing.set()
+        self._external_monitor.join(timeout=2)
+
     def _add_candidates(
         self,
         action: str,
@@ -315,11 +429,15 @@ class JobQueueService:
             recursive = _flag(payload, "recursive")
             pattern = "**/*.inp" if recursive else "*.inp"
             try:
-                paths = [str(path) for path in sorted(root.glob(pattern)) if path.is_file()]
+                paths = [
+                    str(path) for path in sorted(root.glob(pattern)) if path.is_file()
+                ]
             except OSError as exc:
                 raise ApiProblem(400, "SCAN_FAILED", "扫描 INP 目录失败") from exc
             if len(paths) > 2000:
-                raise ApiProblem(413, "SCAN_RESULT_TOO_LARGE", "单次扫描的 INP 文件超过 2000 个")
+                raise ApiProblem(
+                    413, "SCAN_RESULT_TOO_LARGE", "单次扫描的 INP 文件超过 2000 个"
+                )
             source = "文件夹"
 
         skip_restart = _flag(payload, "skipRestartNames")
@@ -339,7 +457,10 @@ class JobQueueService:
         }
         for raw_path in paths:
             normalized = _normal_path(raw_path)
-            if not normalized.lower().endswith(".inp") or not Path(normalized).is_file():
+            if (
+                not normalized.lower().endswith(".inp")
+                or not Path(normalized).is_file()
+            ):
                 stats["invalid"] += 1
                 continue
             if skip_restart and "restart" in Path(normalized).name.lower():
@@ -450,7 +571,9 @@ class JobQueueService:
             )
 
         selected_ids = {item.item_id for item in selected}
-        existing_paths = {_path_key(item.inp_path) for item in queue_items if item.inp_path}
+        existing_paths = {
+            _path_key(item.inp_path) for item in queue_items if item.inp_path
+        }
         added = 0
         for item in selected:
             if _path_key(item.inp_path) in existing_paths:
@@ -464,7 +587,9 @@ class JobQueueService:
             queue_items.append(item)
             existing_paths.add(_path_key(item.inp_path))
             added += 1
-        candidates[:] = [item for item in candidates if item.item_id not in selected_ids]
+        candidates[:] = [
+            item for item in candidates if item.item_id not in selected_ids
+        ]
         return added, f"已将 {added} 个候选作业加入正式队列", {}
 
     def _enqueue_draft(
@@ -483,7 +608,9 @@ class JobQueueService:
             item.inp_path and _path_key(item.inp_path) == _path_key(normalized)
             for item in candidates + queue_items
         ):
-            raise ApiProblem(409, "DUPLICATE_JOB_INPUT", "该 INP 已存在于候选区或正式队列")
+            raise ApiProblem(
+                409, "DUPLICATE_JOB_INPUT", "该 INP 已存在于候选区或正式队列"
+            )
         item = QueueItem(
             inp_path=normalized,
             source_inp_path=normalized,
@@ -534,8 +661,10 @@ class JobQueueService:
             item.message = "未选择有效的 Restart 前置作业"
         else:
             item.status = STATUS_PENDING_RUN if item.valid else STATUS_FAILED
-            item.message = "用户暂停调度" if item.valid and item.held else (
-                "待提交" if item.valid else item.message
+            item.message = (
+                "用户暂停调度"
+                if item.valid and item.held
+                else ("待提交" if item.valid else item.message)
             )
         return 1, "正式队列作业设置已更新", {}
 
@@ -547,7 +676,9 @@ class JobQueueService:
         item_ids = set(_string_list(payload, "itemIds"))
         held = _flag(payload, "held")
         selected = [item for item in queue_items if item.item_id in item_ids]
-        blocked = [item.item_id for item in selected if item.status not in EDITABLE_STATUSES]
+        blocked = [
+            item.item_id for item in selected if item.status not in EDITABLE_STATUSES
+        ]
         if blocked:
             raise ApiProblem(
                 409,
@@ -570,7 +701,9 @@ class JobQueueService:
     ) -> tuple[int, str, dict[str, Any]]:
         item_ids = set(_string_list(payload, "itemIds"))
         selected = [item for item in queue_items if item.item_id in item_ids]
-        blocked = [item.item_id for item in selected if item.status not in REQUEUEABLE_STATUSES]
+        blocked = [
+            item.item_id for item in selected if item.status not in REQUEUEABLE_STATUSES
+        ]
         if blocked:
             raise ApiProblem(
                 409,
@@ -617,20 +750,31 @@ class JobQueueService:
         item_id = _text(payload, "itemId")
         direction = _text(payload, "direction")
         if direction not in {"up", "down"}:
-            raise ApiProblem(400, "INVALID_MOVE_DIRECTION", "direction 必须是 up 或 down")
+            raise ApiProblem(
+                400, "INVALID_MOVE_DIRECTION", "direction 必须是 up 或 down"
+            )
         index = next(
-            (position for position, item in enumerate(queue_items) if item.item_id == item_id),
+            (
+                position
+                for position, item in enumerate(queue_items)
+                if item.item_id == item_id
+            ),
             None,
         )
         if index is None:
             raise ApiProblem(404, "QUEUE_ITEM_NOT_FOUND", "未找到正式队列作业")
         item = queue_items[index]
         if item.status in ACTIVE_STATUSES:
-            raise ApiProblem(409, "ACTIVE_QUEUE_ITEMS_PROTECTED", "运行中的作业不能重新排序")
+            raise ApiProblem(
+                409, "ACTIVE_QUEUE_ITEMS_PROTECTED", "运行中的作业不能重新排序"
+            )
         target = index - 1 if direction == "up" else index + 1
         if target < 0 or target >= len(queue_items):
             return 0, "作业已位于队列边界", {}
-        queue_items[index], queue_items[target] = queue_items[target], queue_items[index]
+        queue_items[index], queue_items[target] = (
+            queue_items[target],
+            queue_items[index],
+        )
         return 1, "队列顺序已更新", {}
 
     @staticmethod
@@ -651,7 +795,9 @@ class JobQueueService:
         if "cores" in payload:
             cores = _integer(payload, "cores")
             if not 0 <= cores <= MAX_CPUS:
-                raise ApiProblem(400, "INVALID_CPUS", f"cores 必须在 0 到 {MAX_CPUS} 之间")
+                raise ApiProblem(
+                    400, "INVALID_CPUS", f"cores 必须在 0 到 {MAX_CPUS} 之间"
+                )
             item.cores = cores
         if "memory" in payload:
             memory = _text(payload, "memory")
@@ -667,7 +813,9 @@ class JobQueueService:
         if "oldjobPath" in payload:
             item.oldjob_path = _text(payload, "oldjobPath")
             item.oldjob_name = derive_oldjob_name(item.oldjob_path)
-            item.oldjob_dir = str(Path(item.oldjob_path).parent) if item.oldjob_path else ""
+            item.oldjob_dir = (
+                str(Path(item.oldjob_path).parent) if item.oldjob_path else ""
+            )
         if "fortranPath" in payload:
             item.fortran_path = _text(payload, "fortranPath")
         if "calculationRootDir" in payload:
@@ -675,7 +823,9 @@ class JobQueueService:
         if "archiveDir" in payload:
             item.archive_dir = _text(payload, "archiveDir")
         item.archive_after_complete = bool(item.archive_dir)
-        item.cleanup_after_archive = bool(item.calculation_root_dir and item.archive_dir)
+        item.cleanup_after_archive = bool(
+            item.calculation_root_dir and item.archive_dir
+        )
         item.effective_work_dir = effective_queue_item_work_dir(item)
 
     def _validate_item(
@@ -684,8 +834,10 @@ class JobQueueService:
         candidates: list[QueueItem],
         queue_items: list[QueueItem],
     ) -> None:
-        item.run_mode = "restart" if inp_has_restart_keyword(item.inp_path) else (
-            "restart" if item.oldjob_path else "normal"
+        item.run_mode = (
+            "restart"
+            if inp_has_restart_keyword(item.inp_path)
+            else ("restart" if item.oldjob_path else "normal")
         )
         item.job_type = "重启动" if item.run_mode == "restart" else "普通"
         if not Path(item.inp_path).is_file():
@@ -761,7 +913,9 @@ class JobQueueService:
     @staticmethod
     def _has_result_files(inp_path: str) -> bool:
         base = Path(inp_path).with_suffix("")
-        return any(base.with_suffix(extension).exists() for extension in RESULT_EXTENSIONS)
+        return any(
+            base.with_suffix(extension).exists() for extension in RESULT_EXTENSIONS
+        )
 
 
 __all__ = ["SUPPORTED_ACTIONS", "JobQueueService"]

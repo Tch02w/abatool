@@ -20,7 +20,7 @@ def _integer(value: object, default: int = 0) -> int:
         return default
     try:
         return int(value or default)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -43,7 +43,9 @@ def _project_item(raw: object, index: int) -> dict[str, Any] | None:
         "jobId": _string(raw.get("job_id") or raw.get("item_id")),
         "jobName": _string(raw.get("job_name")) or Path(inp_path).stem,
         "inpPath": inp_path,
-        "source": _string(raw.get("source")) or "文件",
+        "source": "外部接管"
+        if bool(raw.get("is_external", False))
+        else (_string(raw.get("source")) or "文件"),
         "selected": bool(raw.get("selected", True)),
         "valid": bool(raw.get("valid", True)),
         "message": _string(raw.get("message")),
@@ -66,6 +68,7 @@ def _project_item(raw: object, index: int) -> dict[str, Any] | None:
         "archiveStatus": _string(raw.get("archive_status")),
         "archiveError": _string(raw.get("archive_error")),
         "elapsed": _string(raw.get("elapsed")),
+        "isExternal": bool(raw.get("is_external", False)),
         "dependencyJobIds": [
             _string(value)
             for value in raw.get("dependency_job_ids", [])

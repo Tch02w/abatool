@@ -1,7 +1,12 @@
 <UserControl
     x:Class="AbaqusTools.WinUI.Controls.WorkbenchExplorerHost"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:AbaqusTools.WinUI.Controls">
+
+    <UserControl.Resources>
+        <local:NonEmptyStringToVisibilityConverter x:Key="NonEmptyStringToVisibilityConverter" />
+    </UserControl.Resources>
 
     <Border
         Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -84,21 +89,25 @@
                                 <FontIcon
                                     VerticalAlignment="Center"
                                     FontSize="14"
-                                    Glyph="{Binding IconGlyph}" />
+                                    Glyph="{Binding Content.IconGlyph}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        Text="{Binding Content.Title}"
+                                        TextTrimming="CharacterEllipsis" />
                                     <TextBlock
                                         FontSize="10"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{Binding Subtitle}"
-                                        TextTrimming="CharacterEllipsis" />
+                                        Text="{Binding Content.Subtitle}"
+                                        TextTrimming="CharacterEllipsis"
+                                        Visibility="{Binding Content.Subtitle, Converter={StaticResource NonEmptyStringToVisibilityConverter}}" />
                                 </StackPanel>
                                 <TextBlock
                                     Grid.Column="2"
                                     VerticalAlignment="Center"
                                     FontSize="10"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{Binding Badge}" />
+                                    Text="{Binding Content.Badge}" />
                             </Grid>
                         </DataTemplate>
                     </TreeView.ItemTemplate>

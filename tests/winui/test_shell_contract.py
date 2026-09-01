@@ -242,7 +242,7 @@ def test_reported_workbench_layout_regressions_stay_fixed() -> None:
     new_job_root = ET.parse(WINUI_ROOT / "Pages" / "NewJobPage.xaml").getroot()
 
     explorer_host = _named_element(shell_root, "ExplorerHost")
-    assert explorer_host.attrib["Width"] == "260"
+    assert explorer_host.attrib["Width"] == "280"
     explorer_root = ET.parse(
         WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
     ).getroot()
@@ -518,6 +518,79 @@ def test_shell_uses_page_aware_workbench_explorer_modules() -> None:
         assert "ExplorerAdapter" in page
 
 
+def test_workbench_explorer_tree_template_binds_through_tree_node_content() -> None:
+    xaml = (
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
+    ).read_text(encoding="utf-8")
+
+    for field in ("IconGlyph", "Title", "Subtitle", "Badge"):
+        assert f"{{Binding Content.{field}}}" in xaml
+    assert 'Text="{Binding Title}"' not in xaml
+
+
+def test_workbench_explorer_collapses_empty_subtitle_for_single_line_groups() -> None:
+    xaml = (
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
+    ).read_text(encoding="utf-8")
+    converter = (
+        WINUI_ROOT / "Controls" / "NonEmptyStringToVisibilityConverter.cs"
+    ).read_text(encoding="utf-8")
+
+    assert 'x:Key="NonEmptyStringToVisibilityConverter"' in xaml
+    assert (
+        'Visibility="{Binding Content.Subtitle, '
+        'Converter={StaticResource NonEmptyStringToVisibilityConverter}}"'
+    ) in xaml
+    assert 'VerticalAlignment="Center"' in xaml
+    assert "string.IsNullOrWhiteSpace" in converter
+    assert "Visibility.Collapsed" in converter
+
+
+def test_narrow_parallel_limit_number_boxes_use_compact_spin_buttons() -> None:
+    queue_xaml = (WINUI_ROOT / "Pages" / "JobQueuePage.xaml").read_text(
+        encoding="utf-8"
+    )
+    new_job_xaml = (WINUI_ROOT / "Pages" / "NewJobPage.xaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        'x:Name="ParallelLimitNumberBox" Width="100" Minimum="1" Maximum="999" '
+        'SpinButtonPlacementMode="Compact"'
+    ) in queue_xaml
+    assert (
+        'x:Name="MaxParallelNumberBox" Width="110" Minimum="1" '
+        'SpinButtonPlacementMode="Compact"'
+    ) in new_job_xaml
+
+
+def test_job_queue_restores_external_local_job_scan_controls() -> None:
+    xaml = (WINUI_ROOT / "Pages" / "JobQueuePage.xaml").read_text(encoding="utf-8")
+    page = (WINUI_ROOT / "Pages" / "JobQueuePage.xaml.cs").read_text(
+        encoding="utf-8"
+    )
+    host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
+        encoding="utf-8"
+    )
+
+    for control in ("ExternalWorkDirTextBox", "ChooseExternalWorkDirButton", "ScanExternalJobsButton"):
+        assert f'x:Name="{control}"' in xaml
+    assert 'Text="工作目录："' in xaml
+    assert 'Content="浏览…"' in xaml
+    assert 'Content="扫描"' in xaml
+    assert (
+        xaml.index('x:Name="FormalQueueActionBar"')
+        < xaml.index('x:Name="ExternalJobScanBar"')
+        < xaml.index('x:Name="FormalQueueList"')
+    )
+    assert "OnScanExternalJobsClicked" in page
+    assert "ScanExternalJobsAsync" in page
+    assert "ScanExternalJobsAsync" in host
+    assert 'Action = "scanExternalJobs"' in host
+    assert '"jobQueue.scanExternalJobs"' in host
+    assert "health.Capabilities.Contains" in host
+
+
 def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
         encoding="utf-8"
@@ -535,6 +608,9 @@ def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     assert "GetJobQueuesAsync" in page
     assert "AddJobQueueCandidatesAsync" in page
     assert "StartLocalQueueAsync" in page
+    assert "CaptureSelectedFormalItemIds()" in page
+    assert "RestoreFormalSelection(selectedFormalItemIds)" in page
+    assert "FormalQueueList.SelectedItems.Add(item)" in page
     assert 'x:Name="CandidateList"' in xaml
     assert 'x:Name="FormalQueueList"' in xaml
 

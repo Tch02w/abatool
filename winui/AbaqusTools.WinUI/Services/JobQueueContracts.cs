@@ -117,6 +117,9 @@ public sealed class JobQueueItem
     [JsonPropertyName("elapsed")]
     public string Elapsed { get; init; } = string.Empty;
 
+    [JsonPropertyName("isExternal")]
+    public bool IsExternal { get; init; }
+
     [JsonPropertyName("dependencyJobIds")]
     public IReadOnlyList<string> DependencyJobIds { get; init; } = [];
 

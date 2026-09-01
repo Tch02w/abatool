@@ -7,6 +7,7 @@ import time
 
 from .abaqus_diagnostics import inspect_job_files, parse_datetime_from_abaqus_text, read_file_head
 from .constants import ACTIVE_STATUSES, STATUS_PENDING_CONFIRM, STATUS_RUNNING, STATUS_UNKNOWN, TERMINAL_STATUSES
+from .external_job_scan_core import scan_external_jobs
 from .models import QueueItem
 from .process_scanner import (
     EXTERNAL_SCAN_MAX_CHILD_DEPTH,
@@ -45,48 +46,18 @@ class ExternalJobScanWorker(QtCore.QObject):
 
     def run(self) -> None:
         try:
-            scan_roots = [self.work_dir]
-            seen_roots = {normalize_work_dir(self.work_dir)}
-            for known in self.known_external_jobs:
-                known_work_dir = known.get("work_dir") or os.path.dirname(known.get("inp_path", ""))
-                if not known_work_dir:
-                    continue
-                if work_dir_matches_scan_root(
-                    known_work_dir,
-                    self.work_dir,
-                    EXTERNAL_SCAN_MAX_CHILD_DEPTH,
-                ):
-                    continue
-                normalized_known_root = normalize_work_dir(known_work_dir)
-                if not normalized_known_root or normalized_known_root in seen_roots:
-                    continue
-                seen_roots.add(normalized_known_root)
-                scan_roots.append(known_work_dir)
-
             process_rows = self.process_rows
             if process_rows is None:
                 process_rows = fetch_psutil_process_rows_for_external_scan(force=True)
-
-            merged_jobs = {}
-            skipped = []
-            for scan_root in scan_roots:
-                root_jobs, root_skipped = scan_running_abaqus_jobs_by_psutil(
-                    scan_root,
-                    force=True,
-                    known_external_jobs=self.known_external_jobs,
-                    process_rows=process_rows,
-                )
-                skipped.extend(root_skipped)
-                for job in root_jobs:
-                    job_name = str(job.get("job_name") or "").strip().lower()
-                    job_work_dir = normalize_work_dir(job.get("work_dir") or scan_root)
-                    if not job_name or not job_work_dir:
-                        continue
-                    merged_jobs[(job_work_dir, job_name)] = job
+            jobs, skipped = scan_external_jobs(
+                self.work_dir,
+                self.known_external_jobs,
+                process_rows=process_rows,
+            )
         except Exception as exc:  # keep the worker boundary from leaking exceptions
             self.failed.emit(self.work_dir, str(exc))
             return
-        self.finished.emit(self.work_dir, list(merged_jobs.values()), skipped)
+        self.finished.emit(self.work_dir, jobs, skipped)
 
 
 def collect_known_external_jobs(

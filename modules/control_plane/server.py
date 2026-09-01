@@ -338,10 +338,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/result-index-builds" and not target.query:
                 self._handle_create_result_index_build(trace_id)
                 return
-            if (
-                target.path == "/api/v1/odb-compatibility-checks"
-                and not target.query
-            ):
+            if target.path == "/api/v1/odb-compatibility-checks" and not target.query:
                 self._handle_create_compatibility_check(trace_id)
                 return
             operation_id = self._operation_id_from_cancel_path(target.path)
@@ -446,6 +443,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
+            "capabilities": ["jobQueue.scanExternalJobs"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -1028,6 +1026,8 @@ class ControlPlaneRuntime:
         ) = None,
         joblist_path: str | Path | None = None,
         local_job_runner: LocalJobRunner | None = None,
+        external_job_scanner=None,
+        external_monitor_interval: float = 5.0,
         server_profiles_path: str | Path | None = None,
         remote_manager: RemoteManager | None = None,
     ) -> None:
@@ -1056,7 +1056,11 @@ class ControlPlaneRuntime:
         )
         result_index_manager = ResultIndexOperationManager(
             event_history,
-            **({"builder": result_index_builder} if result_index_builder is not None else {}),
+            **(
+                {"builder": result_index_builder}
+                if result_index_builder is not None
+                else {}
+            ),
         )
         odb_merge_kwargs: dict[str, Any] = {}
         if odb_merge_runner is not None:
@@ -1078,7 +1082,12 @@ class ControlPlaneRuntime:
             event_history,
             **postprocess_kwargs,
         )
-        job_queue_service = JobQueueService(joblist_path)
+        job_queue_kwargs: dict[str, Any] = {
+            "external_monitor_interval": external_monitor_interval,
+        }
+        if external_job_scanner is not None:
+            job_queue_kwargs["external_job_scanner"] = external_job_scanner
+        job_queue_service = JobQueueService(joblist_path, **job_queue_kwargs)
         local_queue_runtime = LocalQueueRuntimeManager(
             job_queue_service,
             event_history,
@@ -1119,6 +1128,7 @@ class ControlPlaneRuntime:
             remote_transfer_manager.close()
             remote_server_service.close()
             local_queue_runtime.close()
+            job_queue_service.close()
             postprocess_manager.close()
             operation_manager.close()
             result_index_manager.close()
@@ -1146,6 +1156,7 @@ class ControlPlaneRuntime:
             remote_transfer_manager.close()
             remote_server_service.close()
             local_queue_runtime.close()
+            job_queue_service.close()
             postprocess_manager.close()
             operation_manager.close()
             result_index_manager.close()
@@ -1211,6 +1222,7 @@ class ControlPlaneRuntime:
             self.remote_transfer_manager.close()
             self.remote_server_service.close()
             self.local_queue_runtime.close()
+            self.job_queue_service.close()
             self.postprocess_manager.close()
             self.operation_manager.close()
             self.result_index_manager.close()

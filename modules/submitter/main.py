@@ -83,6 +83,8 @@ from .diagnostics import StartupTimeline, external_scan_debug_enabled, hang_prob
 from .external_jobs import (
     ExternalJobCoordinator,
     ExternalJobScanWorker,
+)
+from .external_job_scan_core import (
     build_queue_item_index as external_build_queue_item_index,
     collect_known_external_jobs as external_collect_known_external_jobs,
     merge_external_scan_results,

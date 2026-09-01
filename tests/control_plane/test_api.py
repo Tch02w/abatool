@@ -94,6 +94,7 @@ def test_health_requires_bearer_token_and_matches_descriptor(tmp_path: Path) -> 
         health = json.loads(body.decode("utf-8"))
         assert health["status"] == "ok"
         assert health["apiVersion"] == "v1"
+        assert "jobQueue.scanExternalJobs" in health["capabilities"]
         assert health["instanceId"] == descriptor["instanceId"] == runtime.instance_id
         assert descriptor["host"] == "127.0.0.1"
         assert descriptor["port"] == runtime.port

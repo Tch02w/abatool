@@ -68,6 +68,9 @@ internal sealed class HealthResponse
     [JsonPropertyName("status")]
     public string Status { get; init; } = string.Empty;
 
+    [JsonPropertyName("capabilities")]
+    public IReadOnlyList<string> Capabilities { get; init; } = [];
+
     [JsonPropertyName("instanceId")]
     public string InstanceId { get; init; } = string.Empty;
 }

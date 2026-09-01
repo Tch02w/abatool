@@ -135,6 +135,35 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             "正在扫描 INP 文件…");
     }
 
+    private async void OnChooseExternalWorkDirClicked(object sender, RoutedEventArgs e)
+    {
+        var root = await PickFolderAsync("选择外部作业工作目录");
+        if (root is not null)
+        {
+            ExternalWorkDirTextBox.Text = root;
+        }
+    }
+
+    private async void OnScanExternalJobsClicked(object sender, RoutedEventArgs e)
+    {
+        var root = ExternalWorkDirTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            root = await PickFolderAsync("选择并扫描外部作业目录") ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                return;
+            }
+            ExternalWorkDirTextBox.Text = root;
+        }
+        await ScanExternalJobsAsync(root);
+    }
+
+    private Task ScanExternalJobsAsync(string root) =>
+        RunMutationAsync(
+            () => App.Current.ControlPlane.ScanExternalJobsAsync(root),
+            "正在检测本机运行的 Abaqus 作业…");
+
     private async void OnCandidateCheckClicked(object sender, RoutedEventArgs e)
     {
         if (sender is not CheckBox checkBox
@@ -602,13 +631,23 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private void ApplySnapshot(JobQueueSnapshot snapshot)
     {
+        var selectedFormalItemIds = CaptureSelectedFormalItemIds();
         _queueExplorerAdapter.Update(snapshot);
         ReplaceItems(_candidates, snapshot.Candidates);
         ReplaceItems(_queueItems, snapshot.QueueItems);
+        RestoreFormalSelection(selectedFormalItemIds);
         SelectPendingFormalItem();
         CandidateSummaryText.Text =
             $"候选：{snapshot.CandidateCount} · 已选 {snapshot.SelectedCandidateCount} · 异常 {snapshot.InvalidCandidateCount}";
         FormalQueueSummaryText.Text = FormatQueueSummary(snapshot);
+        if (string.IsNullOrWhiteSpace(ExternalWorkDirTextBox.Text))
+        {
+            ExternalWorkDirTextBox.Text = snapshot.QueueItems
+                .FirstOrDefault(item => item.IsExternal
+                    && !string.IsNullOrWhiteSpace(item.EffectiveWorkDir))
+                ?.EffectiveWorkDir
+                ?? string.Empty;
+        }
         CandidateEmptyPanel.Visibility = snapshot.CandidateCount == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -680,6 +719,9 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         AddCurrentInputButton.IsEnabled = !busy;
         AddCandidateFilesButton.IsEnabled = !busy;
         ScanCandidateFolderButton.IsEnabled = !busy;
+        ChooseExternalWorkDirButton.IsEnabled = !busy;
+        ScanExternalJobsButton.IsEnabled = !busy;
+        ExternalWorkDirTextBox.IsEnabled = !busy;
         if (!string.IsNullOrWhiteSpace(status))
         {
             App.Current.MainWindow.ReportPageStatus(status);
@@ -688,6 +730,20 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private JobQueueItem[] SelectedFormalItems() =>
         FormalQueueList.SelectedItems.OfType<JobQueueItem>().ToArray();
+
+    private HashSet<string> CaptureSelectedFormalItemIds() =>
+        SelectedFormalItems()
+            .Select(item => item.ItemId)
+            .Where(itemId => !string.IsNullOrWhiteSpace(itemId))
+            .ToHashSet(StringComparer.Ordinal);
+
+    private void RestoreFormalSelection(IReadOnlySet<string> selectedItemIds)
+    {
+        foreach (var item in _queueItems.Where(item => selectedItemIds.Contains(item.ItemId)))
+        {
+            FormalQueueList.SelectedItems.Add(item);
+        }
+    }
 
     private JobQueueItem[]? RequireFormalSelection()
     {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from modules.submitter.constants import STATUS_PENDING_RUN, STATUS_RUNNING
@@ -107,6 +108,67 @@ def test_folder_scan_filters_restart_names_and_existing_results(tmp_path: Path) 
     assert payload["stats"]["restartName"] == 1
     assert payload["stats"]["existingResult"] == 1
     assert payload["snapshot"]["candidates"][0]["jobName"] == "kept"
+
+
+def test_external_job_scan_attaches_and_refreshes_running_job(tmp_path: Path) -> None:
+    joblist = tmp_path / "joblist.json"
+    work_dir = tmp_path / "external"
+    work_dir.mkdir()
+    inp = work_dir / "manual_job.inp"
+    inp.write_text("*Heading\n", encoding="utf-8")
+    calls = 0
+
+    def scanner(root: str, known_jobs: list[dict]) -> tuple[list[dict], list[int]]:
+        nonlocal calls
+        calls += 1
+        status = STATUS_RUNNING if calls == 1 else "已完成"
+        return ([{
+            "job_name": "manual_job",
+            "work_dir": root,
+            "inp_path": str(inp),
+            "runtime_status": status,
+            "runtime_message": "外部作业运行中" if calls == 1 else "外部作业已完成",
+            "cores": "8",
+            "memory_setting": "80%",
+            "job_type": "Abaqus Standard",
+            "pids": [1234] if calls == 1 else [],
+            "pid_create_times": {"1234": 1.0} if calls == 1 else {},
+            "rss_bytes": 1024 if calls == 1 else 0,
+        }], [999])
+
+    with running_control_plane(
+        tmp_path,
+        joblist_path=joblist,
+        external_job_scanner=scanner,
+        external_monitor_interval=0.2,
+    ) as runtime:
+        attached_payload = json_response(post_command(
+            runtime,
+            command("scanExternalJobs", root=str(work_dir)),
+        ))
+        assert attached_payload["changed"] == 1
+        assert attached_payload["stats"] == {
+            "scanned": 1,
+            "added": 1,
+            "updated": 0,
+            "statusOnlyUpdates": 0,
+            "skippedPids": [999],
+        }
+        item = attached_payload["snapshot"]["queueItems"][0]
+        assert item["jobName"] == "manual_job"
+        assert item["source"] == "外部接管"
+        assert item["status"] == STATUS_RUNNING
+        assert item["effectiveWorkDir"] == str(work_dir)
+        assert item["isExternal"] is True
+
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            refreshed_payload = json_response(api_request(runtime, "/api/v1/job-queues"))
+            if refreshed_payload["queueItems"][0]["status"] == "已完成":
+                break
+            time.sleep(0.03)
+        assert refreshed_payload["queueCount"] == 1
+        assert refreshed_payload["queueItems"][0]["status"] == "已完成"
 
 
 def test_enqueue_draft_update_hold_move_and_remove(tmp_path: Path) -> None:

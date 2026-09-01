@@ -79,3 +79,7 @@ def test_restart_chain_endpoint_reports_valid_missing_and_cycle_nodes(
         "validCount": 1,
     }
     assert payload["hasIssues"] is True
+    graph_by_id = {node["jobId"]: node for node in payload["graphNodes"]}
+    assert graph_by_id["base"]["isRestart"] is False
+    assert graph_by_id["phase2"]["isRestart"] is True
+    assert payload["graphNodeCount"] == len(payload["graphNodes"])

@@ -1,3 +1,4 @@
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -5,8 +6,9 @@ using Windows.Storage.Pickers;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class NewJobPage : Page
+public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 {
+    private readonly WorkspaceExplorerAdapter _workspaceExplorerAdapter;
     private bool _previewBusy;
     private bool _submitBusy;
     private int _lastExecutionIndex;
@@ -14,8 +16,13 @@ public sealed partial class NewJobPage : Page
     public NewJobPage()
     {
         InitializeComponent();
+        _workspaceExplorerAdapter = new WorkspaceExplorerAdapter(
+            () => PickFolderAsync("选择工作目录"),
+            ActivateExplorerItemAsync);
         Loaded += OnPageLoaded;
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _workspaceExplorerAdapter;
 
     private bool IsRemote => ExecutionLocationComboBox.SelectedIndex is 1 or 2;
 
@@ -324,7 +331,25 @@ public sealed partial class NewJobPage : Page
         }
 
         App.Current.MainWindow.UpdateSelectedInputPath(path);
+        _workspaceExplorerAdapter.UsePath(path);
         UpdatePathDecision();
+    }
+
+    private Task ActivateExplorerItemAsync(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.InputFile)
+        {
+            LoadInputPath(item.Path);
+        }
+        else if (item.Kind == ExplorerItemKind.OdbFile)
+        {
+            OldjobPathTextBox.Text = item.Path;
+        }
+        else if (item.Kind == ExplorerItemKind.UserSubroutine)
+        {
+            FortranPathTextBox.Text = item.Path;
+        }
+        return Task.CompletedTask;
     }
 
     private void UpdatePathDecision()

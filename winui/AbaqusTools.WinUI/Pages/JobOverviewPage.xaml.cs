@@ -1,3 +1,4 @@
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,9 +8,10 @@ using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class JobOverviewPage : Page
+public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 {
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _refreshTimer;
+    private readonly JobMonitorExplorerAdapter _jobExplorerAdapter;
     private JobOverviewEntry? _currentEntry;
     private LocalQueueRuntimeSnapshot? _runtime;
     private RemoteJobListResponse _remoteJobs = new();
@@ -18,12 +20,17 @@ public sealed partial class JobOverviewPage : Page
     public JobOverviewPage()
     {
         InitializeComponent();
+        _jobExplorerAdapter = new JobMonitorExplorerAdapter(
+            App.Current.ControlPlane,
+            SelectExplorerItem);
         _refreshTimer = DispatcherQueue.CreateTimer();
         _refreshTimer.Interval = TimeSpan.FromSeconds(1.5);
         _refreshTimer.Tick += OnRefreshTimerTick;
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _jobExplorerAdapter;
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
@@ -64,6 +71,7 @@ public sealed partial class JobOverviewPage : Page
                 .Select(JobOverviewEntry.FromLocal)
                 .Concat(_remoteJobs.Operations.Select(JobOverviewEntry.FromRemote))
                 .ToArray();
+            _jobExplorerAdapter.Update(snapshot, _remoteJobs.Operations);
             JobSelector.ItemsSource = entries;
             JobSelector.IsEnabled = entries.Length > 0;
             JobStatsText.Text = FormatStats(snapshot, _remoteJobs.Operations);
@@ -98,6 +106,24 @@ public sealed partial class JobOverviewPage : Page
             ApplyJob(JobSelector.SelectedItem as JobOverviewEntry);
         }
     }
+
+    public void SelectJob(string key)
+    {
+        if (JobSelector.ItemsSource is not IEnumerable<JobOverviewEntry> entries)
+        {
+            return;
+        }
+        var selected = entries.FirstOrDefault(
+            item => string.Equals(item.Key, key, StringComparison.Ordinal));
+        if (selected is null)
+        {
+            return;
+        }
+        JobSelector.SelectedItem = selected;
+        ApplyJob(selected);
+    }
+
+    private void SelectExplorerItem(ExplorerItem item) => SelectJob(item.StableId);
 
     private void ApplyJob(JobOverviewEntry? entry)
     {

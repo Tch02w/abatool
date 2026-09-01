@@ -12,38 +12,23 @@
                 <Grid RowSpacing="10">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="依赖拓扑" />
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="依赖拓扑 · 重启动计算图谱" />
                         <TextBlock x:Name="ChainSummaryText" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0 条链 · 0 个作业" />
-                        <Button x:Name="RefreshButton" Grid.Column="2" Margin="8,0,0,0" Click="OnRefreshClicked" Content="刷新依赖" />
-                        <Button Grid.Column="3" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
+                        <Button x:Name="ZoomOutButton" Grid.Column="2" Margin="8,0,0,0" Click="OnZoomOutClicked" Content="−" ToolTipService.ToolTip="缩小" />
+                        <Button x:Name="ZoomInButton" Grid.Column="3" Margin="6,0,0,0" Click="OnZoomInClicked" Content="＋" ToolTipService.ToolTip="放大" />
+                        <Button x:Name="RefreshButton" Grid.Column="4" Margin="8,0,0,0" Click="OnRefreshClicked" Content="刷新依赖" />
+                        <Button Grid.Column="5" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
                     </Grid>
                     <InfoBar x:Name="ChainInfoBar" Grid.Row="1" IsClosable="False" IsOpen="True" Message="正式队列中尚无包含 oldjob 的真实作业。" Severity="Informational" Title="没有重启动依赖" />
-                    <Grid Grid.Row="2">
-                        <Grid.RowDefinitions><RowDefinition Height="36" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                        <Grid Padding="8,0" Background="{ThemeResource LayerFillColorAltBrush}" ColumnSpacing="8">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="70" /><ColumnDefinition Width="180" /><ColumnDefinition Width="50" /><ColumnDefinition Width="180" /><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" Text="阶段" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="作业" />
-                            <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="前置作业" />
-                            <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="校验状态" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="ODB / INP 路径" />
-                        </Grid>
-                        <ListView x:Name="ChainList" Grid.Row="1" SelectionChanged="OnChainSelectionChanged" SelectionMode="Single">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Padding="8,8" ColumnSpacing="8">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="70" /><ColumnDefinition Width="180" /><ColumnDefinition Width="50" /><ColumnDefinition Width="180" /><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding StageDisplay}" /><TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding JobName}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="2" HorizontalAlignment="Center" Text="{Binding ArrowDisplay}" /><TextBlock Grid.Column="3" Text="{Binding ParentJobName}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="4" Text="{Binding ValidationStatusDisplay}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding ValidationMessage}" />
-                                        <TextBlock Grid.Column="5" Text="{Binding PathDisplay}" TextTrimming="CharacterEllipsis" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <StackPanel x:Name="EmptyChainPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="8">
+                    <Grid Grid.Row="2" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                        <ScrollViewer x:Name="RestartGraphScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ZoomMode="Disabled">
+                            <Canvas x:Name="RestartGraphCanvas" MinWidth="860" MinHeight="520" Background="Transparent" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="EmptyChainPanel" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="8">
                             <FontIcon FontSize="34" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE8D7;" />
                              <TextBlock FontSize="16" Text="正式队列中尚无重启动依赖" />
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="每个阶段可查看来源路径、提交顺序与失败传播。" />
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="加入带 oldjob 的作业后，将按计算依赖显示分支图谱。" />
                         </StackPanel>
                     </Grid>
                 </Grid>
@@ -67,7 +52,8 @@
                     <StackPanel Spacing="10">
                         <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="所选阶段" />
                         <TextBlock x:Name="SelectedStageText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="选择依赖节点后显示作业名、前置作业、输入文件、预期 ODB 与状态传播。" TextWrapping="Wrap" />
-                        <Button x:Name="EditDependencyButton" HorizontalAlignment="Stretch" Click="OnEditDependencyClicked" Content="编辑依赖" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
+                        <Button x:Name="GenerateFullResultButton" HorizontalAlignment="Stretch" Click="OnGenerateFullResultClicked" Content="生成此节点完整结果" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
+                        <Button x:Name="EditDependencyButton" HorizontalAlignment="Stretch" Click="OnEditDependencyClicked" Content="编辑依赖" IsEnabled="False" />
                         <Button x:Name="LocateInQueueButton" HorizontalAlignment="Stretch" Click="OnLocateInQueueClicked" Content="在队列中定位" IsEnabled="False" />
                     </StackPanel>
                 </Border>

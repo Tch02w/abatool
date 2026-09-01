@@ -10,3 +10,5 @@ Current records:
 
 - `0001-local-control-plane-scheduling.md`
 - `0002-native-winui-control-plane.md`
+- `0003-page-aware-workbench-explorer.md`
+- `0004-separate-restart-computation-and-result-materialization.md`

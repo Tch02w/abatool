@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -13,7 +14,7 @@ using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class ResultBrowserPage : Page
+public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 {
     private static readonly IReadOnlyList<SectionOption> Sections =
     [
@@ -39,10 +40,16 @@ public sealed partial class ResultBrowserPage : Page
     private bool _updatingFilters;
     private bool _recoveryAttempted;
     private long _previewRequest;
+    private IReadOnlyList<ResultScopeNode> _scopeNodes = [];
+    private readonly ResultExplorerAdapter _explorerAdapter;
 
     public ResultBrowserPage()
     {
         InitializeComponent();
+        _explorerAdapter = new ResultExplorerAdapter(
+            () => RefreshScopesAsync(_selectedScope?.Path),
+            SelectExplorerItem,
+            ActivateExplorerItemAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         ResultList.ItemsSource = _records;
         SectionComboBox.ItemsSource = Sections;
@@ -52,6 +59,8 @@ public sealed partial class ResultBrowserPage : Page
         Loaded += OnPageLoaded;
         RefreshInteractionState();
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
@@ -212,7 +221,9 @@ public sealed partial class ResultBrowserPage : Page
                 root,
                 ShowInternalCheckBox.IsChecked is true);
             RootTextBox.Text = response.Root;
+            _scopeNodes = response.Nodes;
             BuildScopeTree(response.Nodes);
+            UpdateExplorer();
             ScopeStatusText.Text = $"{response.Count} 个范围节点";
             if (response.Warnings.Count > 0)
             {
@@ -274,6 +285,103 @@ public sealed partial class ResultBrowserPage : Page
         foreach (var rootNode in ScopeTree.RootNodes)
         {
             rootNode.IsExpanded = true;
+        }
+    }
+
+    private void UpdateExplorer()
+    {
+        var byParent = _scopeNodes
+            .GroupBy(scope => scope.ParentPath ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var knownPaths = _scopeNodes.Select(scope => scope.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var roots = _scopeNodes
+            .Where(scope => string.IsNullOrWhiteSpace(scope.ParentPath)
+                || !knownPaths.Contains(scope.ParentPath))
+            .Select(scope => ScopeExplorerItem(scope, byParent))
+            .ToArray();
+        var records = _records.Select(record => new ExplorerItem
+        {
+            StableId = $"result:record:{record.Path.ToUpperInvariant()}",
+            Kind = ExplorerItemKind.ResultRecord,
+            Title = record.Name,
+            Subtitle = string.IsNullOrWhiteSpace(record.Description)
+                ? record.UseCase
+                : record.Description,
+            Path = record.Path,
+            Status = record.Section,
+            Badge = record.Recommended ? "推荐" : record.Suffix,
+            IconGlyph = record.IsDirectory ? "\uE8B7" : "\uE8A5",
+        }).ToArray();
+        _explorerAdapter.Update(
+            RootTextBox.Text.Trim(),
+            $"范围 {_scopeNodes.Count} · 当前结果 {records.Length}",
+            [
+                WorkbenchExplorerAdapterBase.Group("results:scopes", "结果范围", roots, roots.Length.ToString()),
+                WorkbenchExplorerAdapterBase.Group("results:records", "当前结果", records, records.Length.ToString()),
+            ]);
+    }
+
+    private static ExplorerItem ScopeExplorerItem(
+        ResultScopeNode scope,
+        IReadOnlyDictionary<string, ResultScopeNode[]> byParent)
+    {
+        var item = new ExplorerItem
+        {
+            StableId = $"result:scope:{scope.Path.ToUpperInvariant()}",
+            Kind = ExplorerItemKind.ResultScope,
+            Title = scope.Name,
+            Subtitle = scope.Kind,
+            Path = scope.Path,
+            Status = scope.IndexState,
+            Badge = scope.IndexStateDisplay,
+            IconGlyph = "\uE8B7",
+            IsExpanded = true,
+        };
+        if (byParent.TryGetValue(scope.Path, out var children))
+        {
+            foreach (var child in children)
+            {
+                item.Children.Add(ScopeExplorerItem(child, byParent));
+            }
+        }
+        return item;
+    }
+
+    private void SelectExplorerItem(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.ResultScope
+            && _treeNodes.TryGetValue(item.Path, out var node))
+        {
+            ScopeTree.SelectedNode = node;
+            ExpandAncestors(node);
+            return;
+        }
+        if (item.Kind == ExplorerItemKind.ResultRecord)
+        {
+            var record = _records.FirstOrDefault(candidate => string.Equals(
+                candidate.Path,
+                item.Path,
+                StringComparison.OrdinalIgnoreCase));
+            if (record is not null)
+            {
+                ResultList.SelectedItem = record;
+                ResultList.ScrollIntoView(record);
+            }
+        }
+    }
+
+    private async Task ActivateExplorerItemAsync(ExplorerItem item)
+    {
+        SelectExplorerItem(item);
+        if (item.Kind == ExplorerItemKind.ResultRecord
+            && _records.FirstOrDefault(candidate => string.Equals(
+                candidate.Path,
+                item.Path,
+                StringComparison.OrdinalIgnoreCase)) is { } record
+            && !record.Internal
+            && !record.IsDirectory)
+        {
+            await LoadPreviewAsync(record);
         }
     }
 
@@ -357,6 +465,7 @@ public sealed partial class ResultBrowserPage : Page
             {
                 _records.Add(record);
             }
+            UpdateExplorer();
 
             UpdateUseCases(response.UseCases, useCase);
             EmptyResultsPanel.Visibility = _records.Count == 0

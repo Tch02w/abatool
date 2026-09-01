@@ -62,6 +62,7 @@ from .remote_servers import RemoteManager, RemoteServerService
 from .remote_transfers import RemoteTransferOperationManager, RemoteTransferRequest
 from .resources import capture_local_resource
 from .restart_chains import read_restart_chains
+from .restart_result_plans import build_restart_result_plan
 from .result_indexing import (
     ResultIndexBuilder,
     ResultIndexBuildRequest,
@@ -305,6 +306,13 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/odb-merge-draft-previews" and not target.query:
                 self._handle_odb_merge_draft_preview(trace_id)
+                return
+            if target.path == "/api/v1/restart-result-plans" and not target.query:
+                self._send_json(
+                    HTTPStatus.OK,
+                    build_restart_result_plan(self._read_json_object()),
+                    trace_id,
+                )
                 return
             if target.path == "/api/v1/odb-merge-operations" and not target.query:
                 self._handle_create_odb_merge_operation(trace_id)

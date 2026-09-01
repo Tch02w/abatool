@@ -1,3 +1,4 @@
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,7 +8,7 @@ using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class OdbMergePage : Page
+public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 {
     private bool _previewBusy;
     private bool _operationBusy;
@@ -17,11 +18,43 @@ public sealed partial class OdbMergePage : Page
     private string? _activeOperationId;
     private long _lastOperationVersion = -1;
     private string _lastResultPath = string.Empty;
+    private RestartResultPlan? _materializationPlan;
+    private readonly OdbMergeExplorerAdapter _explorerAdapter;
 
     public OdbMergePage()
     {
         InitializeComponent();
+        _explorerAdapter = new OdbMergeExplorerAdapter(SelectExplorerItem);
         Loaded += OnPageLoaded;
+        UpdateExplorer();
+    }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
+
+    public void LoadMaterializationPlan(RestartResultPlan plan)
+    {
+        _materializationPlan = plan;
+        MaterializationPlanCard.Visibility = Visibility.Visible;
+        MaterializationTargetText.Text =
+            $"目标节点：{plan.TargetJobName} · 仅沿该节点的唯一祖先路径生成完整 ODB；兄弟分支不会参与。";
+        MaterializationAncestryList.ItemsSource = plan.Ancestry;
+        MaterializationStepsList.ItemsSource = plan.Steps;
+        if (plan.Steps.FirstOrDefault() is { } first)
+        {
+            ApplyMaterializationStep(first, first.OriginalOdb);
+        }
+        _planReady = plan.Valid;
+        MergePlanSummaryText.Text = plan.Valid
+            ? $"完整结果计划包含 {plan.Steps.Count} 个顺序合并步骤。"
+            : string.Join(Environment.NewLine, plan.Issues);
+        ShowPlanState(
+            plan.Valid ? "完整结果计划已加载" : "完整结果计划不可执行",
+            plan.Valid
+                ? "计算依赖图与结果生成链保持分离；执行时将逐步验证并发布结果。"
+                : MergePlanSummaryText.Text,
+            plan.Valid ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        UpdateExplorer();
+        RefreshInteractionState();
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -75,8 +108,10 @@ public sealed partial class OdbMergePage : Page
         }
 
         OriginalOdbTextBox.Text = path;
+        DetachMaterializationPlan();
         ApplySuggestedOutput(force: false);
         InvalidatePlan();
+        UpdateExplorer();
     }
 
     private async void OnChooseRestartClicked(object sender, RoutedEventArgs e)
@@ -88,8 +123,10 @@ public sealed partial class OdbMergePage : Page
         }
 
         RestartOdbTextBox.Text = path;
+        DetachMaterializationPlan();
         ApplySuggestedOutput(force: false);
         InvalidatePlan();
+        UpdateExplorer();
     }
 
     private async void OnChooseOutputClicked(object sender, RoutedEventArgs e)
@@ -102,6 +139,7 @@ public sealed partial class OdbMergePage : Page
 
         OutputOdbTextBox.Text = Path.Combine(folder, $"{SuggestedResultStem()}_joined.odb");
         InvalidatePlan();
+        UpdateExplorer();
     }
 
     private void OnResultNamingChanged(object sender, SelectionChangedEventArgs e)
@@ -150,6 +188,12 @@ public sealed partial class OdbMergePage : Page
     {
         if (_previewBusy || _operationBusy)
         {
+            return;
+        }
+
+        if (_materializationPlan is not null)
+        {
+            await ExecuteMaterializationPlanAsync();
             return;
         }
 
@@ -250,7 +294,9 @@ public sealed partial class OdbMergePage : Page
         }
     }
 
-    private async Task ObserveOperationAsync(OdbMergeOperationSnapshot initial)
+    private async Task<OdbMergeOperationSnapshot> ObserveOperationAsync(
+        OdbMergeOperationSnapshot initial,
+        bool applyCompletion = true)
     {
         _activeOperationId = initial.OperationId;
         _lastOperationVersion = -1;
@@ -263,7 +309,11 @@ public sealed partial class OdbMergePage : Page
                 initial,
                 progress);
             ApplyOperationSnapshot(final);
-            ApplyCompletedOperation(final);
+            if (applyCompletion)
+            {
+                ApplyCompletedOperation(final);
+            }
+            return final;
         }
         finally
         {
@@ -271,6 +321,183 @@ public sealed partial class OdbMergePage : Page
             _lastOperationVersion = -1;
             _cancelRequested = false;
             SetOperationBusy(false);
+        }
+    }
+
+    private async Task ExecuteMaterializationPlanAsync()
+    {
+        var plan = _materializationPlan;
+        if (plan is null || !plan.Valid || plan.Steps.Count == 0)
+        {
+            return;
+        }
+
+        _previewBusy = true;
+        RefreshInteractionState();
+        MergeOperationLogTextBox.Text = string.Empty;
+        MergeLogExpander.IsExpanded = true;
+        var currentFullResult = plan.Steps[0].OriginalOdb;
+        try
+        {
+            for (var index = 0; index < plan.Steps.Count; index++)
+            {
+                var step = plan.Steps[index];
+                ApplyMaterializationStep(step, currentFullResult);
+                MergePlanSummaryText.Text =
+                    $"正在检查完整结果步骤 {index + 1}/{plan.Steps.Count}：{step.JobName}";
+                var preview = await PreviewDraftAsync();
+                ApplyDraftPreview(preview);
+                if (!preview.Valid)
+                {
+                    throw new ControlPlaneException(preview.ValidationMessage);
+                }
+                if (preview.WillOverwrite && !await ConfirmOverwriteAsync(preview.NormalizedOutputOdb))
+                {
+                    ShowPlanState("已取消完整结果生成", "没有修改任何源 ODB。", InfoBarSeverity.Warning);
+                    return;
+                }
+
+                _previewBusy = false;
+                SetOperationBusy(true);
+                MergePlanSummaryText.Text =
+                    $"正在生成完整结果 {index + 1}/{plan.Steps.Count}：{step.JobName}";
+                var initial = await App.Current.ControlPlane.StartOdbMergeAsync(
+                    currentFullResult,
+                    step.RestartOdb,
+                    preview.NormalizedOutputOdb,
+                    IncludeHistoryCheckBox.IsChecked is true,
+                    CompressResultCheckBox.IsChecked is true,
+                    CopyOriginalCheckBox.IsChecked is true,
+                    ConflictPolicyComboBox.SelectedIndex == 1 ? "overwrite" : "auto_number",
+                    Guid.NewGuid());
+                var completed = await ObserveOperationAsync(initial, applyCompletion: false);
+                if (string.Equals(completed.Status, "cancelled", StringComparison.Ordinal))
+                {
+                    throw new OperationCanceledException("完整结果生成已取消。");
+                }
+                if (!completed.IsSuccessful || completed.Result is null)
+                {
+                    throw new ControlPlaneException(
+                        completed.Error?.Message ?? $"步骤 {index + 1} 未成功完成。");
+                }
+                currentFullResult = completed.Result.OutputOdb;
+                _previewBusy = true;
+            }
+
+            _lastResultPath = currentFullResult;
+            MergeResultText.Text =
+                $"目标节点：{plan.TargetJobName}\n完整结果：{currentFullResult}\n"
+                + $"已完成 {plan.Steps.Count} 个受保护合并步骤。";
+            OpenResultButton.IsEnabled = File.Exists(_lastResultPath);
+            RevealResultButton.IsEnabled = Directory.Exists(Path.GetDirectoryName(_lastResultPath));
+            MergeProgressBar.Value = 100;
+            ShowPlanState(
+                "完整计算结果已生成",
+                "最终 ODB 已通过每一步的 Abaqus 只读验证；兄弟分支未参与。",
+                InfoBarSeverity.Success);
+            App.Current.MainWindow.ReportPageStatus($"{plan.TargetJobName} 的完整结果已生成");
+            UpdateExplorer();
+        }
+        catch (OperationCanceledException)
+        {
+            ShowPlanState("完整结果生成已停止", "未修改任何源 ODB。", InfoBarSeverity.Warning);
+        }
+        catch (ControlPlaneException exception)
+        {
+            ShowPlanState("完整结果生成失败", exception.ToDisplayMessage(), InfoBarSeverity.Error);
+        }
+        catch (Exception exception)
+        {
+            ShowPlanState("完整结果生成失败", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _previewBusy = false;
+            SetOperationBusy(false);
+            RefreshInteractionState();
+        }
+    }
+
+    private void ApplyMaterializationStep(RestartResultStep step, string originalOdb)
+    {
+        OriginalOdbTextBox.Text = originalOdb;
+        RestartOdbTextBox.Text = step.RestartOdb;
+        OutputOdbTextBox.Text = step.OutputOdb;
+        ResultNamingComboBox.SelectedIndex = 2;
+        _planReady = true;
+    }
+
+    private void OnClearMaterializationClicked(object sender, RoutedEventArgs e)
+    {
+        DetachMaterializationPlan();
+        InvalidatePlan();
+        MergePlanSummaryText.Text = "已切换为手工单次 ODB 合并。";
+    }
+
+    private void DetachMaterializationPlan()
+    {
+        _materializationPlan = null;
+        MaterializationPlanCard.Visibility = Visibility.Collapsed;
+        MaterializationAncestryList.ItemsSource = null;
+        MaterializationStepsList.ItemsSource = null;
+        UpdateExplorer();
+    }
+
+    private void UpdateExplorer()
+    {
+        var sources = new List<ExplorerItem>();
+        if (!string.IsNullOrWhiteSpace(OriginalOdbTextBox.Text))
+        {
+            sources.Add(MergeFileItem("original", "原始 ODB", OriginalOdbTextBox.Text));
+        }
+        if (!string.IsNullOrWhiteSpace(RestartOdbTextBox.Text))
+        {
+            sources.Add(MergeFileItem("restart", "重启动 ODB", RestartOdbTextBox.Text));
+        }
+        var steps = _materializationPlan?.Steps.Select(step => new ExplorerItem
+        {
+            StableId = $"merge:step:{step.Index}:{step.JobId}",
+            Kind = ExplorerItemKind.MergeResult,
+            Title = step.Title,
+            Subtitle = Path.GetFileName(step.OutputOdb),
+            Path = step.OutputOdb,
+            Badge = step.Status,
+            IconGlyph = "\uE895",
+        }).ToArray() ?? [];
+        var results = string.IsNullOrWhiteSpace(_lastResultPath)
+            ? Array.Empty<ExplorerItem>()
+            : [MergeFileItem("result", "已验证完整结果", _lastResultPath, true)];
+        _explorerAdapter.Update(
+            _materializationPlan is null
+                ? "手工单次合并"
+                : $"目标：{_materializationPlan.TargetJobName}",
+            $"源 {sources.Count} · 步骤 {steps.Length} · 结果 {results.Length}",
+            [
+                WorkbenchExplorerAdapterBase.Group("merge:sources", "源 ODB", sources, sources.Count.ToString()),
+                WorkbenchExplorerAdapterBase.Group("merge:steps", "生成步骤", steps, steps.Length.ToString()),
+                WorkbenchExplorerAdapterBase.Group("merge:results", "完整结果", results, results.Length.ToString()),
+            ]);
+    }
+
+    private static ExplorerItem MergeFileItem(string id, string title, string path, bool result = false) =>
+        new()
+        {
+            StableId = $"merge:{id}:{path.ToUpperInvariant()}",
+            Kind = result ? ExplorerItemKind.MergeResult : ExplorerItemKind.MergeSource,
+            Title = title,
+            Subtitle = Path.GetFileName(path),
+            Path = path,
+            Status = File.Exists(path) ? "可用" : "等待生成",
+            IconGlyph = result ? "\uE73E" : "\uE8B7",
+        };
+
+    private void SelectExplorerItem(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.MergeResult && File.Exists(item.Path))
+        {
+            _lastResultPath = item.Path;
+            OpenResultButton.IsEnabled = true;
+            RevealResultButton.IsEnabled = true;
         }
     }
 
@@ -315,6 +542,7 @@ public sealed partial class OdbMergePage : Page
                 + $"重启动备份：{snapshot.Result.RestartBackup}";
             OpenResultButton.IsEnabled = File.Exists(_lastResultPath);
             RevealResultButton.IsEnabled = Directory.Exists(Path.GetDirectoryName(_lastResultPath));
+            UpdateExplorer();
             ShowPlanState(
                 "ODB 合并完成",
                 "合并结果已通过 Abaqus 只读验证并安全发布。",
@@ -450,6 +678,7 @@ public sealed partial class OdbMergePage : Page
             "overwrite",
             StringComparison.Ordinal) ? 1 : 0;
         ResultNamingComboBox.SelectedIndex = 2;
+        UpdateExplorer();
     }
 
     private void ApplySuggestedOutput(bool force)

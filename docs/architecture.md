@@ -24,6 +24,8 @@ PySide6 工作台仍保留为迁移验收期的兼容和回滚入口，但 WinUI
 ```text
 winui/AbaqusTools.WinUI/
 ├── MainWindow.xaml(.cs)           原生壳层、导航、菜单、状态与关闭
+├── Controls/                      通用工作台控件
+├── Explorer/                      浏览器模型、稳定接口与页面适配器
 ├── Pages/                         八个完整业务页面
 ├── Models/                        页面模型
 └── Services/                      控制面宿主和版本化 DTO
@@ -52,6 +54,10 @@ modules/
 
 ## 界面架构
 
-主导航固定为新建作业、作业队列、作业概览、计算资源、重启动链、ODB 合并、ODB 后处理和结果浏览。各页面拥有自己的上下文、进度、日志和操作区；壳层不再叠加静态项目栏、属性栏或重复的全局 TabView。
+主导航固定为新建作业、作业队列、作业概览、计算资源、重启动链、ODB 合并、ODB 后处理和结果浏览。各页面拥有自己的上下文、进度、日志和操作区；壳层不再叠加静态属性栏或重复的全局 TabView。
+
+左侧是页面感知的通用浏览器。`MainWindow` 只负责承载 `WorkbenchExplorerHost`；当前页面通过 `IWorkbenchExplorerPage` 暴露适配器。浏览器按稳定 ID 差量同步节点并保存每个页面的选择、展开和搜索状态。八个业务页面分别提供工作目录、队列、作业状态、计算资源、重启动阶段、合并计划、后处理分组和结果范围结构；兼容项目适配器仅用于没有页面上下文时的回退。
+
+重启动计算图与结果物化链是两个独立模型。前者只描述队列作业和 `oldjob` 依赖，后者由目标 Restart 节点临时生成并交给 ODB 合并页执行。结果计划只包含目标节点的唯一祖先路径，不跨越兄弟分支。
 
 详细导航见 [RepoWiki](repowiki/README.md)，API 见 [api-contract.md](api-contract.md)，迁移验收见 [winui-migration.md](winui-migration.md)。

@@ -1,7 +1,8 @@
 <Window
     x:Class="AbaqusTools.WinUI.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
     <Grid
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
@@ -141,115 +142,10 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <Border
-                        x:Name="ProjectExplorerRail"
+                    <controls:WorkbenchExplorerHost
+                        x:Name="ExplorerHost"
                         Width="260"
-                        HorizontalAlignment="Left"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                        BorderThickness="0,0,1,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <Border
-                                Padding="12,7"
-                                Background="{ThemeResource LayerFillColorAltBrush}"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="0,0,0,1">
-                                <Grid>
-                                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="项目" />
-                                    <Button
-                                        x:Name="ProjectRefreshButton"
-                                        Width="30"
-                                        Height="30"
-                                        HorizontalAlignment="Right"
-                                        Padding="0"
-                                        Click="OnRefreshProjectExplorerClicked"
-                                        ToolTipService.ToolTip="刷新本地项目与队列">
-                                        <SymbolIcon Symbol="Refresh" />
-                                    </Button>
-                                </Grid>
-                            </Border>
-
-                            <TreeView
-                                x:Name="ProjectTree"
-                                Grid.Row="1"
-                                Padding="5,8"
-                                DoubleTapped="OnProjectTreeDoubleTapped"
-                                SelectionMode="Single">
-                                <TreeView.RootNodes>
-                                    <TreeViewNode x:Name="CurrentProjectNode" Content="当前项目" IsExpanded="True">
-                                        <TreeViewNode.Children>
-                                            <TreeViewNode x:Name="InputFilesNode" Content="输入文件" IsExpanded="True">
-                                                <TreeViewNode.Children>
-                                                    <TreeViewNode Content="尚未选择 INP" />
-                                                </TreeViewNode.Children>
-                                            </TreeViewNode>
-                                            <TreeViewNode x:Name="ResultFilesNode" Content="结果文件" IsExpanded="True">
-                                                <TreeViewNode.Children>
-                                                    <TreeViewNode Content="尚无 ODB 结果" />
-                                                </TreeViewNode.Children>
-                                            </TreeViewNode>
-                                            <TreeViewNode x:Name="JobsNode" Content="作业" IsExpanded="True">
-                                                <TreeViewNode.Children>
-                                                    <TreeViewNode Content="尚无调度作业" />
-                                                </TreeViewNode.Children>
-                                            </TreeViewNode>
-                                            <TreeViewNode x:Name="MergePlansNode" Content="合并计划" IsExpanded="True">
-                                                <TreeViewNode.Children>
-                                                    <TreeViewNode Content="尚无重启动合并计划" />
-                                                </TreeViewNode.Children>
-                                            </TreeViewNode>
-                                        </TreeViewNode.Children>
-                                    </TreeViewNode>
-                                </TreeView.RootNodes>
-                            </TreeView>
-
-                            <Border
-                                Grid.Row="2"
-                                Margin="8,0,8,8"
-                                Padding="11,9"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                                <StackPanel Spacing="7">
-                                    <TextBlock FontWeight="SemiBold" Text="资源总览" />
-                                    <TextBlock
-                                        x:Name="ProjectNodeStatusText"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="本机 · 正在检测" />
-                                    <TextBlock x:Name="ProjectCpuText" FontSize="12" Text="CPU —" />
-                                    <ProgressBar x:Name="ProjectCpuProgress" Height="5" Maximum="100" Value="0" />
-                                    <TextBlock x:Name="ProjectMemoryText" FontSize="12" Text="内存 —" />
-                                    <ProgressBar x:Name="ProjectMemoryProgress" Height="5" Maximum="100" Value="0" />
-                                    <TextBlock x:Name="ProjectJobsText" FontSize="12" Text="作业 0 · 运行 0 · 等待 0" />
-                                    <TextBlock
-                                        x:Name="ProjectRemoteText"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="远端 · 未连接"
-                                        TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Border>
-
-                            <Border
-                                Grid.Row="3"
-                                Padding="12,7"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="0,1,0,0">
-                                <TextBlock
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="双击 INP 或 ODB 可载入主界面"
-                                    TextWrapping="Wrap" />
-                            </Border>
-                        </Grid>
-                    </Border>
+                        HorizontalAlignment="Stretch" />
 
                     <Frame x:Name="ContentFrame" Grid.Column="1" />
                 </Grid>

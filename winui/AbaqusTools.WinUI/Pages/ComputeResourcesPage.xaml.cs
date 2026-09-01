@@ -1,12 +1,13 @@
 using System.Collections.ObjectModel;
 using AbaqusTools.WinUI.Services;
+using AbaqusTools.WinUI.Explorer;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class ComputeResourcesPage : Page
+public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 {
     private readonly DispatcherTimer _remoteRefreshTimer;
     private LocalResourceSnapshot? _localSnapshot;
@@ -14,17 +15,23 @@ public sealed partial class ComputeResourcesPage : Page
     private string _activeTransferId = string.Empty;
     private bool _busy;
     private bool _backgroundRefreshBusy;
+    private readonly ResourceExplorerAdapter _explorerAdapter;
 
     public ObservableCollection<ResourceNodeRow> ResourceNodes { get; } = [];
 
     public ComputeResourcesPage()
     {
         InitializeComponent();
+        _explorerAdapter = new ResourceExplorerAdapter(
+            RefreshSelectedAsync,
+            SelectExplorerResource);
         _remoteRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _remoteRefreshTimer.Tick += OnRemoteRefreshTimerTick;
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
     public void ApplySnapshot(LocalResourceSnapshot snapshot)
     {
@@ -741,6 +748,61 @@ public sealed partial class ComputeResourcesPage : Page
         }
         ResourceList.SelectedItem = ResourceNodes.FirstOrDefault(item => item.Key == selectedKey)
             ?? ResourceNodes.FirstOrDefault();
+        ApplySelection();
+        UpdateExplorer();
+    }
+
+    private void UpdateExplorer()
+    {
+        var local = ResourceNodes.Where(row => row.IsLocal).Select(ResourceItem).ToArray();
+        var remote = ResourceNodes.Where(row => !row.IsLocal).Select(ResourceItem).ToArray();
+        _explorerAdapter.Update(
+            _remoteSnapshot.Connection.Status == "connected"
+                ? $"已连接 · {_remoteSnapshot.Connection.ProfileName}"
+                : "本机与已保存服务器",
+            $"本机 {local.Length} · 远端 {remote.Length}",
+            [
+                WorkbenchExplorerAdapterBase.Group("resources:local", "本机", local, local.Length.ToString()),
+                WorkbenchExplorerAdapterBase.Group("resources:remote", "远端服务器", remote, remote.Length.ToString()),
+            ]);
+    }
+
+    private static ExplorerItem ResourceItem(ResourceNodeRow row)
+    {
+        var item = new ExplorerItem
+        {
+            StableId = $"resource:{row.Key}",
+            Kind = ExplorerItemKind.ResourceNode,
+            EntityId = row.Key,
+            Title = row.Name,
+            Subtitle = $"{row.StatusDisplay} · CPU {row.CpuDisplay} · 内存 {row.MemoryDisplay}",
+            Status = row.StatusDisplay,
+            Badge = row.IsConnected ? "在线" : "未连接",
+            Path = row.ComputeRoot,
+            IconGlyph = row.IsLocal ? "\uE770" : "\uE968",
+        };
+        foreach (var job in row.ActiveJobs)
+        {
+            item.Children.Add(new ExplorerItem
+            {
+                StableId = $"resource:{row.Key}:job:{job}",
+                Kind = ExplorerItemKind.RemoteJob,
+                Title = job,
+                Subtitle = "活动作业",
+                IconGlyph = "\uE9D5",
+            });
+        }
+        return item;
+    }
+
+    private void SelectExplorerResource(ExplorerItem item)
+    {
+        if (item.Kind != ExplorerItemKind.ResourceNode)
+        {
+            return;
+        }
+        ResourceList.SelectedItem = ResourceNodes.FirstOrDefault(row =>
+            string.Equals(row.Key, item.EntityId, StringComparison.Ordinal));
         ApplySelection();
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Models;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
@@ -10,7 +11,7 @@ using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class OdbPostprocessingPage : Page
+public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 {
     private readonly ObservableCollection<OdbFileRow> _odbItems = [];
     private readonly Dictionary<string, OdbFileRow> _odbByPath =
@@ -46,15 +47,22 @@ public sealed partial class OdbPostprocessingPage : Page
     private string? _activePostprocessKind;
     private long _lastPostprocessVersion = -1;
     private int _displayedLogCount;
+    private readonly PostprocessingExplorerAdapter _explorerAdapter;
 
     public OdbPostprocessingPage()
     {
         InitializeComponent();
+        _explorerAdapter = new PostprocessingExplorerAdapter(
+            DiscoverAsync,
+            SelectExplorerOdb,
+            ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         OdbList.ItemsSource = _odbItems;
         Loaded += OnPageLoaded;
         RefreshInteractionState();
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
     public async Task LoadOdbPathAsync(string path)
     {
@@ -168,6 +176,7 @@ public sealed partial class OdbPostprocessingPage : Page
         ResultCountText.Text = $"{_odbItems.Count} 个";
         DiscoveryMetadataText.Text = "从未完成的结构读取恢复";
         EmptyState.Visibility = _odbItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateExplorer();
     }
 
     private async Task RecoverActiveCompatibilityOperationAsync()
@@ -255,6 +264,7 @@ public sealed partial class OdbPostprocessingPage : Page
         DiscoveryMetadataText.Text = "从未完成操作恢复";
         EmptyState.Visibility = _odbItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyStateTitle.Text = _odbItems.Count == 0 ? "未能恢复 ODB 列表" : "尚未发现 ODB";
+        UpdateExplorer();
     }
 
     private static OdbDiscoveryItem CreateRecoveryDiscoveryItem(string root, string path)
@@ -378,6 +388,7 @@ public sealed partial class OdbPostprocessingPage : Page
 
             App.Current.MainWindow.ReportPageStatus(
                 result.Count == 0 ? "扫描完成 · 未发现 ODB" : $"扫描完成 · 发现 {result.Count} 个 ODB");
+            UpdateExplorer();
         }
         catch (ControlPlaneException exception)
         {
@@ -395,6 +406,52 @@ public sealed partial class OdbPostprocessingPage : Page
         {
             SetDiscoveryBusy(false);
         }
+    }
+
+    private void UpdateExplorer()
+    {
+        var groups = _odbItems
+            .GroupBy(row => string.IsNullOrWhiteSpace(row.ComparisonGroup)
+                ? "未分组"
+                : row.ComparisonGroup)
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => WorkbenchExplorerAdapterBase.Group(
+                $"postprocess:group:{group.Key}",
+                group.Key,
+                group.Select(row => new ExplorerItem
+                {
+                    StableId = $"postprocess:odb:{row.Path.ToUpperInvariant()}",
+                    Kind = ExplorerItemKind.OdbFile,
+                    Title = row.Name,
+                    Subtitle = $"{row.CompatibilityStatusDisplay} · {row.PostprocessStatusDisplay}",
+                    Path = row.Path,
+                    Status = row.CompatibilityStatus,
+                    Badge = row.CompatibilityStatusDisplay,
+                    IconGlyph = "\uE8B7",
+                }),
+                group.Count().ToString()))
+            .ToArray();
+        _explorerAdapter.Update(
+            RootTextBox.Text.Trim(),
+            $"ODB {_odbItems.Count} · 分组 {groups.Length}",
+            groups);
+    }
+
+    private void SelectExplorerOdb(ExplorerItem item)
+    {
+        if (_odbByPath.TryGetValue(PathKey(item.Path), out var row))
+        {
+            OdbList.SelectedItems.Clear();
+            OdbList.SelectedItem = row;
+            OdbList.ScrollIntoView(row);
+            RefreshInteractionState();
+        }
+    }
+
+    private Task ActivateExplorerOdbAsync(ExplorerItem item)
+    {
+        SelectExplorerOdb(item);
+        return Task.CompletedTask;
     }
 
     private void OnOdbSelectionChanged(object sender, SelectionChangedEventArgs e)

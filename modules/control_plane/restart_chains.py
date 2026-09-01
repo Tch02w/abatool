@@ -53,6 +53,22 @@ def _stage(job_id: str, parent_by_child: dict[str, str], cycle_ids: set[str]) ->
     return depth
 
 
+def _output_odb(item: dict[str, Any]) -> str:
+    job_name = str(item.get("jobName") or "").strip()
+    candidates: list[Path] = []
+    for field in ("archiveDestination", "effectiveWorkDir"):
+        directory = str(item.get(field) or "").strip()
+        if directory and job_name:
+            candidates.append(Path(directory) / f"{job_name}.odb")
+    inp_path = str(item.get("inpPath") or "").strip()
+    if inp_path and job_name:
+        candidates.append(Path(inp_path).parent / f"{job_name}.odb")
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return str(candidates[0]) if candidates else ""
+
+
 def read_restart_chains() -> dict[str, Any]:
     queue = read_job_queues()
     items = list(queue["queueItems"])
@@ -123,6 +139,42 @@ def read_restart_chains() -> dict[str, Any]:
             }
         )
     nodes.sort(key=lambda node: (node["stage"], node["jobName"].casefold()))
+    graph_job_ids = {
+        str(item["jobId"])
+        for item in restart_items
+        if item.get("jobId")
+    } | set(parent_by_child.values())
+    graph_nodes: list[dict[str, Any]] = []
+    restart_node_by_id = {node["jobId"]: node for node in nodes}
+    for job_id in graph_job_ids:
+        item = by_id.get(job_id)
+        if item is None:
+            continue
+        restart_node = restart_node_by_id.get(job_id)
+        graph_nodes.append(
+            {
+                "itemId": item["itemId"],
+                "jobId": job_id,
+                "jobName": item["jobName"],
+                "parentJobId": parent_by_child.get(job_id, ""),
+                "parentJobName": parent_name_by_child.get(job_id, ""),
+                "stage": _stage(job_id, parent_by_child, cycle_ids),
+                "jobStatus": item["status"],
+                "validationStatus": (
+                    restart_node["validationStatus"] if restart_node else "valid"
+                ),
+                "validationMessage": (
+                    restart_node["validationMessage"]
+                    if restart_node
+                    else "基础计算节点"
+                ),
+                "inpPath": item["inpPath"],
+                "oldjobPath": item["oldjobPath"],
+                "outputOdb": _output_odb(item),
+                "isRestart": item["runMode"] == "restart",
+            }
+        )
+    graph_nodes.sort(key=lambda node: (node["stage"], node["jobName"].casefold()))
     roots = {
         parent_id
         for parent_id in parent_by_child.values()
@@ -131,6 +183,8 @@ def read_restart_chains() -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "nodes": nodes,
+        "graphNodes": graph_nodes,
+        "graphNodeCount": len(graph_nodes),
         "nodeCount": len(nodes),
         "chainCount": len(roots),
         "checks": {

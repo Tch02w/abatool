@@ -10,6 +10,12 @@ public sealed class RestartChainSnapshot
     [JsonPropertyName("nodes")]
     public IReadOnlyList<RestartChainNode> Nodes { get; init; } = [];
 
+    [JsonPropertyName("graphNodes")]
+    public IReadOnlyList<RestartChainNode> GraphNodes { get; init; } = [];
+
+    [JsonPropertyName("graphNodeCount")]
+    public int GraphNodeCount { get; init; }
+
     [JsonPropertyName("nodeCount")]
     public int NodeCount { get; init; }
 
@@ -72,6 +78,12 @@ public sealed class RestartChainNode
 
     [JsonPropertyName("oldjobPath")]
     public string OldjobPath { get; init; } = string.Empty;
+
+    [JsonPropertyName("outputOdb")]
+    public string OutputOdb { get; init; } = string.Empty;
+
+    [JsonPropertyName("isRestart")]
+    public bool IsRestart { get; init; }
 
     [JsonIgnore]
     public string StageDisplay => Stage <= 0 ? "—" : Stage.ToString();

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,11 +8,12 @@ using Windows.Storage.Pickers;
 
 namespace AbaqusTools.WinUI.Pages;
 
-public sealed partial class JobQueuePage : Page
+public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 {
     private readonly ObservableCollection<JobQueueItem> _candidates = [];
     private readonly ObservableCollection<JobQueueItem> _queueItems = [];
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _runtimeTimer;
+    private readonly QueueExplorerAdapter _queueExplorerAdapter;
     private bool _busy;
     private bool _runtimeRefreshBusy;
     private string? _pendingFormalSelectionId;
@@ -21,12 +23,19 @@ public sealed partial class JobQueuePage : Page
         InitializeComponent();
         CandidateList.ItemsSource = _candidates;
         FormalQueueList.ItemsSource = _queueItems;
+        _queueExplorerAdapter = new QueueExplorerAdapter(
+            App.Current.ControlPlane,
+            () => PickFolderAsync("选择队列工作目录"),
+            ActivateExplorerItemAsync,
+            SelectExplorerItem);
         _runtimeTimer = DispatcherQueue.CreateTimer();
         _runtimeTimer.Interval = TimeSpan.FromSeconds(1.5);
         _runtimeTimer.Tick += OnRuntimeTimerTick;
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
+
+    public IWorkbenchExplorerAdapter ExplorerAdapter => _queueExplorerAdapter;
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
@@ -593,6 +602,7 @@ public sealed partial class JobQueuePage : Page
 
     private void ApplySnapshot(JobQueueSnapshot snapshot)
     {
+        _queueExplorerAdapter.Update(snapshot);
         ReplaceItems(_candidates, snapshot.Candidates);
         ReplaceItems(_queueItems, snapshot.QueueItems);
         SelectPendingFormalItem();
@@ -611,6 +621,34 @@ public sealed partial class JobQueuePage : Page
     {
         _pendingFormalSelectionId = itemId.Trim();
         SelectPendingFormalItem();
+    }
+
+    private void SelectExplorerItem(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.CandidateJob)
+        {
+            CandidateList.SelectedItem = _candidates.FirstOrDefault(
+                candidate => string.Equals(candidate.ItemId, item.EntityId, StringComparison.Ordinal));
+        }
+        else if (item.Kind == ExplorerItemKind.QueueJob)
+        {
+            SelectFormalItem(item.EntityId);
+        }
+    }
+
+    private async Task ActivateExplorerItemAsync(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.InputFile && !string.IsNullOrWhiteSpace(item.Path))
+        {
+            await AddCandidatePathsAsync([item.Path]);
+            return;
+        }
+        if (item.Kind == ExplorerItemKind.QueueJob)
+        {
+            App.Current.MainWindow.NavigateToJobOverview($"local:{item.EntityId}");
+            return;
+        }
+        SelectExplorerItem(item);
     }
 
     private void SelectPendingFormalItem()

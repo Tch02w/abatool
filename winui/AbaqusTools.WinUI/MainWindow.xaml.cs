@@ -1,4 +1,5 @@
 using AbaqusTools.WinUI.Pages;
+using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -23,13 +24,10 @@ public sealed partial class MainWindow : Window
 
     private readonly ControlPlaneHost _controlPlane;
     private readonly DispatcherTimer _resourceTimer;
-    private readonly Dictionary<TreeViewNode, string> _projectNodePaths = [];
+    private readonly ProjectExplorerAdapter _fallbackExplorerAdapter;
     private bool _resourceRefreshBusy;
-    private bool _projectRefreshBusy;
     private bool _shutdownStarted;
     private bool _shutdownComplete;
-    private string _selectedInputPath = string.Empty;
-    private JobQueueSnapshot? _latestQueueSnapshot;
 
     public LocalResourceSnapshot? LatestLocalResource { get; private set; }
 
@@ -37,6 +35,9 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         _controlPlane = controlPlane;
+        _fallbackExplorerAdapter = new ProjectExplorerAdapter(
+            controlPlane,
+            ActivateFallbackExplorerItemAsync);
         _resourceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _resourceTimer.Tick += OnResourceTimerTick;
         _controlPlane.StateChanged += OnControlPlaneStateChanged;
@@ -75,13 +76,6 @@ public sealed partial class MainWindow : Window
         RemoteStatusText.Foreground = snapshot.Connection.Status == "connected"
             ? (Brush)Application.Current.Resources["AbaqusSuccessBrush"]
             : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-        ProjectRemoteText.Text = snapshot.Connection.Status switch
-        {
-            "connected" => $"远端 · {snapshot.Connection.ProfileName}",
-            "confirmationRequired" => "远端 · 等待指纹确认",
-            "error" => "远端 · 连接异常",
-            _ => "远端 · 未连接",
-        };
     }
 
     public async Task OpenResultBrowserAsync(string root)
@@ -118,7 +112,6 @@ public sealed partial class MainWindow : Window
         catch (Exception exception)
         {
             LocalResourceStatusText.Text = "本机资源不可用";
-            ProjectNodeStatusText.Text = "本机 · 资源不可用";
             if (ContentFrame.Content is ComputeResourcesPage page)
             {
                 page.ShowResourceError(exception.Message);
@@ -129,7 +122,6 @@ public sealed partial class MainWindow : Window
             _resourceRefreshBusy = false;
         }
 
-        await RefreshProjectExplorerAsync();
     }
 
     private void ApplyLocalResourceSnapshot(LocalResourceSnapshot snapshot)
@@ -138,14 +130,6 @@ public sealed partial class MainWindow : Window
             $"本机 CPU {snapshot.BusyCpus}/{snapshot.LogicalCpus} · 内存 {snapshot.MemoryPercent:0}%";
         QueueStatusText.Text =
             $"队列 {snapshot.TotalJobs} · 运行 {snapshot.RunningJobs} · 等待 {snapshot.WaitingJobs}";
-        ProjectNodeStatusText.Text = string.IsNullOrWhiteSpace(snapshot.Name)
-            ? "本机 · 在线"
-            : $"{snapshot.Name} · 在线";
-        ProjectCpuText.Text = $"CPU {snapshot.BusyCpus}/{snapshot.LogicalCpus} · {snapshot.CpuPercent:0}%";
-        ProjectCpuProgress.Value = Math.Clamp(snapshot.CpuPercent, 0, 100);
-        ProjectMemoryText.Text = $"内存 {snapshot.MemoryPercent:0}%";
-        ProjectMemoryProgress.Value = Math.Clamp(snapshot.MemoryPercent, 0, 100);
-        ProjectJobsText.Text = $"作业 {snapshot.TotalJobs} · 运行 {snapshot.RunningJobs} · 等待 {snapshot.WaitingJobs}";
         AbaqusStatusText.Text = snapshot.AbaqusAvailable
             ? string.IsNullOrWhiteSpace(snapshot.AbaqusRelease)
                 ? "Abaqus ● 可用"
@@ -162,223 +146,7 @@ public sealed partial class MainWindow : Window
 
     public void UpdateSelectedInputPath(string path)
     {
-        _selectedInputPath = path.Trim();
-        ApplyProjectSnapshot(_latestQueueSnapshot ?? new JobQueueSnapshot());
-    }
-
-    private async Task RefreshProjectExplorerAsync()
-    {
-        if (_shutdownStarted || _projectRefreshBusy)
-        {
-            return;
-        }
-
-        _projectRefreshBusy = true;
-        try
-        {
-            var snapshot = await _controlPlane.GetJobQueuesAsync();
-            _latestQueueSnapshot = snapshot;
-            ApplyProjectSnapshot(snapshot);
-        }
-        catch (OperationCanceledException)
-        {
-            // Window shutdown cancels the explorer refresh together with the control plane.
-        }
-        catch (Exception)
-        {
-            // Preserve the most recent project tree when a transient refresh fails.
-        }
-        finally
-        {
-            _projectRefreshBusy = false;
-        }
-    }
-
-    private void ApplyProjectSnapshot(JobQueueSnapshot snapshot)
-    {
-        _projectNodePaths.Clear();
-        var inputs = new List<string>();
-        AddDistinctPath(inputs, _selectedInputPath);
-        foreach (var item in snapshot.Candidates.Concat(snapshot.QueueItems))
-        {
-            AddDistinctPath(inputs, item.InpPath);
-        }
-
-        CurrentProjectNode.Content = ProjectName(inputs);
-        InputFilesNode.Children.Clear();
-        if (inputs.Count == 0)
-        {
-            InputFilesNode.Children.Add(new TreeViewNode { Content = "尚未选择 INP" });
-        }
-        else
-        {
-            foreach (var path in inputs)
-            {
-                AddPathNode(InputFilesNode, Path.GetFileName(path), path);
-            }
-        }
-
-        var results = DiscoverResultFiles(inputs);
-        ResultFilesNode.Children.Clear();
-        if (results.Count == 0)
-        {
-            ResultFilesNode.Children.Add(new TreeViewNode { Content = "尚无 ODB 结果" });
-        }
-        else
-        {
-            foreach (var path in results)
-            {
-                AddPathNode(ResultFilesNode, Path.GetFileName(path), path);
-            }
-        }
-
-        JobsNode.Children.Clear();
-        if (snapshot.QueueItems.Count == 0)
-        {
-            JobsNode.Children.Add(new TreeViewNode { Content = "尚无调度作业" });
-        }
-        else
-        {
-            foreach (var item in snapshot.QueueItems)
-            {
-                var name = string.IsNullOrWhiteSpace(item.JobName) ? "未命名作业" : item.JobName;
-                var status = string.IsNullOrWhiteSpace(item.Status) ? "未提交" : item.Status;
-                JobsNode.Children.Add(new TreeViewNode { Content = $"{name}　{status}" });
-            }
-        }
-
-        var restartItems = snapshot.QueueItems
-            .Where(item => !string.IsNullOrWhiteSpace(item.OldjobName)
-                || !string.IsNullOrWhiteSpace(item.OldjobPath))
-            .ToArray();
-        MergePlansNode.Children.Clear();
-        if (restartItems.Length == 0)
-        {
-            MergePlansNode.Children.Add(new TreeViewNode { Content = "尚无重启动合并计划" });
-        }
-        else
-        {
-            foreach (var item in restartItems)
-            {
-                var parent = string.IsNullOrWhiteSpace(item.OldjobName)
-                    ? Path.GetFileNameWithoutExtension(item.OldjobPath)
-                    : item.OldjobName;
-                MergePlansNode.Children.Add(
-                    new TreeViewNode { Content = $"{parent} → {item.JobName}" });
-            }
-        }
-
-        CurrentProjectNode.IsExpanded = true;
-        InputFilesNode.IsExpanded = true;
-        ResultFilesNode.IsExpanded = true;
-        JobsNode.IsExpanded = true;
-        MergePlansNode.IsExpanded = true;
-    }
-
-    private void AddPathNode(TreeViewNode parent, string label, string path)
-    {
-        var node = new TreeViewNode
-        {
-            Content = string.IsNullOrWhiteSpace(label) ? path : label,
-        };
-        parent.Children.Add(node);
-        _projectNodePaths[node] = path;
-    }
-
-    private static void AddDistinctPath(List<string> paths, string path)
-    {
-        var trimmed = path.Trim();
-        if (!string.IsNullOrWhiteSpace(trimmed)
-            && !paths.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
-        {
-            paths.Add(trimmed);
-        }
-    }
-
-    private static string ProjectName(IReadOnlyList<string> inputs)
-    {
-        if (inputs.Count == 0)
-        {
-            return "当前项目";
-        }
-
-        var directory = Path.GetDirectoryName(inputs[0]);
-        return string.IsNullOrWhiteSpace(directory)
-            ? "当前项目"
-            : new DirectoryInfo(directory).Name;
-    }
-
-    private static IReadOnlyList<string> DiscoverResultFiles(IEnumerable<string> inputs)
-    {
-        var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var input in inputs)
-        {
-            var directory = Path.GetDirectoryName(input);
-            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-            {
-                continue;
-            }
-
-            try
-            {
-                foreach (var path in Directory.EnumerateFiles(directory, "*.odb"))
-                {
-                    results.Add(path);
-                }
-            }
-            catch (IOException)
-            {
-                // A project directory can disappear while the explorer is refreshing.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Keep other visible project entries when one directory is inaccessible.
-            }
-        }
-
-        return results.OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase).ToArray();
-    }
-
-    private async void OnRefreshProjectExplorerClicked(object sender, RoutedEventArgs e)
-    {
-        ProjectRefreshButton.IsEnabled = false;
-        try
-        {
-            await RefreshLocalResourceNowAsync();
-        }
-        finally
-        {
-            ProjectRefreshButton.IsEnabled = true;
-        }
-    }
-
-    private async void OnProjectTreeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        if (ProjectTree.SelectedNode is not { } node
-            || !_projectNodePaths.TryGetValue(node, out var path))
-        {
-            return;
-        }
-
-        var extension = Path.GetExtension(path);
-        if (string.Equals(extension, ".inp", StringComparison.OrdinalIgnoreCase))
-        {
-            NavigateToRoute("new-job");
-            if (ContentFrame.Content is NewJobPage newJobPage)
-            {
-                newJobPage.LoadInputPath(path);
-            }
-        }
-        else if (string.Equals(extension, ".odb", StringComparison.OrdinalIgnoreCase))
-        {
-            NavigateToRoute("odb-postprocessing");
-            if (ContentFrame.Content is OdbPostprocessingPage postprocessingPage)
-            {
-                await postprocessingPage.LoadOdbPathAsync(path);
-            }
-        }
-
-        e.Handled = true;
+        _fallbackExplorerAdapter.UsePath(path);
     }
 
     private async void OnResourceTimerTick(object? sender, object e)
@@ -427,7 +195,7 @@ public sealed partial class MainWindow : Window
             {
                 ContentFrame.Navigate(typeof(OdbPostprocessingPage));
             }
-
+            AttachExplorerForCurrentPage();
             return;
         }
 
@@ -439,7 +207,7 @@ public sealed partial class MainWindow : Window
             {
                 ContentFrame.Navigate(typeof(ResultBrowserPage));
             }
-
+            AttachExplorerForCurrentPage();
             return;
         }
 
@@ -458,6 +226,45 @@ public sealed partial class MainWindow : Window
             && LatestLocalResource is not null)
         {
             resourcePage.ApplySnapshot(LatestLocalResource);
+        }
+        AttachExplorerForCurrentPage();
+    }
+
+    private void AttachExplorerForCurrentPage()
+    {
+        var adapter = (ContentFrame.Content as IWorkbenchExplorerPage)?.ExplorerAdapter
+            ?? _fallbackExplorerAdapter;
+        ExplorerHost.Attach(adapter);
+    }
+
+    private async Task ActivateFallbackExplorerItemAsync(ExplorerItem item)
+    {
+        if (item.Kind == ExplorerItemKind.QueueJob && !string.IsNullOrWhiteSpace(item.EntityId))
+        {
+            NavigateToQueueItem(item.EntityId);
+            return;
+        }
+        if (item.Kind == ExplorerItemKind.RestartChain && !string.IsNullOrWhiteSpace(item.EntityId))
+        {
+            NavigateToQueueItem(item.EntityId);
+            return;
+        }
+        if (item.Kind == ExplorerItemKind.InputFile)
+        {
+            NavigateToRoute("new-job");
+            if (ContentFrame.Content is NewJobPage newJobPage)
+            {
+                newJobPage.LoadInputPath(item.Path);
+            }
+            return;
+        }
+        if (item.Kind == ExplorerItemKind.OdbFile)
+        {
+            NavigateToRoute("odb-postprocessing");
+            if (ContentFrame.Content is OdbPostprocessingPage postprocessingPage)
+            {
+                await postprocessingPage.LoadOdbPathAsync(item.Path);
+            }
         }
     }
 
@@ -479,6 +286,24 @@ public sealed partial class MainWindow : Window
         if (ContentFrame.Content is JobQueuePage page)
         {
             page.SelectFormalItem(itemId);
+        }
+    }
+
+    public void NavigateToJobOverview(string key)
+    {
+        NavigateToRoute("job-overview");
+        if (ContentFrame.Content is JobOverviewPage page)
+        {
+            page.SelectJob(key);
+        }
+    }
+
+    public void NavigateToOdbMergePlan(RestartResultPlan plan)
+    {
+        NavigateToRoute("odb-merge");
+        if (ContentFrame.Content is OdbMergePage page)
+        {
+            page.LoadMaterializationPlan(plan);
         }
     }
 

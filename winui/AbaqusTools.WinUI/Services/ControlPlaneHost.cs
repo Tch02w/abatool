@@ -1603,9 +1603,46 @@ public sealed class ControlPlaneHost : IAsyncDisposable
             requestBody: null,
             "重启动依赖链",
             effectiveSource.Token);
-        if (response.SchemaVersion != 1 || response.NodeCount != response.Nodes.Count)
+        if (response.SchemaVersion != 1
+            || response.NodeCount != response.Nodes.Count
+            || response.GraphNodeCount != response.GraphNodes.Count)
         {
             throw new ControlPlaneException("控制面返回了无效的重启动依赖链。");
+        }
+
+        return response;
+    }
+
+    public async Task<RestartResultPlan> CreateRestartResultPlanAsync(
+        string itemId,
+        string outputDirectory = "",
+        CancellationToken cancellationToken = default)
+    {
+        using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            _shutdownSource.Token);
+        effectiveSource.CancelAfter(TimeSpan.FromSeconds(10));
+        var descriptor = await EnsureReadyAsync(effectiveSource.Token);
+        var response = await SendJsonRequestAsync<RestartResultPlan>(
+            descriptor,
+            HttpMethod.Post,
+            "/api/v1/restart-result-plans",
+            new RestartResultPlanRequest
+            {
+                ItemId = itemId.Trim(),
+                OutputDirectory = outputDirectory.Trim(),
+            },
+            "重启动完整结果计划",
+            effectiveSource.Token);
+        if (response.SchemaVersion != 1
+            || !string.Equals(
+                response.PlanKind,
+                "restart-result-materialization",
+                StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(response.TargetJobId)
+            || (response.Valid && response.Steps.Count == 0))
+        {
+            throw new ControlPlaneException("控制面返回了无效的完整结果计划。");
         }
 
         return response;

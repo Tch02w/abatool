@@ -241,31 +241,34 @@ def test_reported_workbench_layout_regressions_stay_fixed() -> None:
     odb_root = ET.parse(WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").getroot()
     new_job_root = ET.parse(WINUI_ROOT / "Pages" / "NewJobPage.xaml").getroot()
 
-    project_rail = _named_element(shell_root, "ProjectExplorerRail")
-    assert project_rail.attrib["Width"] == "260"
-    assert _named_element(shell_root, "ProjectTree") is not None
-    assert _named_element(shell_root, "ProjectRefreshButton") is not None
-    assert _named_element(shell_root, "ProjectCpuProgress") is not None
-    assert _named_element(shell_root, "ProjectMemoryProgress") is not None
-    shell_text = (WINUI_ROOT / "MainWindow.xaml").read_text(encoding="utf-8")
+    explorer_host = _named_element(shell_root, "ExplorerHost")
+    assert explorer_host.attrib["Width"] == "260"
+    explorer_root = ET.parse(
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
+    ).getroot()
+    assert _named_element(explorer_root, "ExplorerTree") is not None
+    assert _named_element(explorer_root, "ExplorerRefreshButton") is not None
+    assert _named_element(explorer_root, "ExplorerSearchBox") is not None
+    assert _named_element(explorer_root, "ExplorerSelectionCard") is not None
+    shell_text = (
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
+    ).read_text(encoding="utf-8")
     for expected_text in (
-        "项目",
-        "当前项目",
-        "输入文件",
-        "结果文件",
-        "作业",
-        "合并计划",
-        "资源总览",
-        "双击 INP 或 ODB 可载入主界面",
+        "搜索当前内容",
+        "刷新当前浏览内容",
+        "当前没有可浏览的内容",
     ):
         assert expected_text in shell_text
 
     window_code = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")
-    assert "RefreshProjectExplorerAsync" in window_code
-    assert "GetJobQueuesAsync" in window_code
-    assert "ApplyProjectSnapshot" in window_code
-    assert "DiscoverResultFiles" in window_code
-    assert "OnProjectTreeDoubleTapped" in window_code
+    adapter_code = (
+        WINUI_ROOT / "Explorer" / "WorkbenchExplorerAdapters.cs"
+    ).read_text(encoding="utf-8")
+    assert "ExplorerHost.Attach" in window_code
+    assert "RefreshProjectExplorerAsync" not in window_code
+    assert "ProjectExplorerAdapter" in adapter_code
+    assert "DiscoverSiblingOdbs" in adapter_code
+    assert "ActivateFallbackExplorerItemAsync" in window_code
     new_job_code = (WINUI_ROOT / "Pages" / "NewJobPage.xaml.cs").read_text(
         encoding="utf-8"
     )
@@ -457,6 +460,64 @@ def test_compute_resource_background_refresh_keeps_toolbar_interactive() -> None
     assert "UpdateButtons();" not in background_refresh
 
 
+def test_shell_uses_page_aware_workbench_explorer_modules() -> None:
+    shell = (WINUI_ROOT / "MainWindow.xaml").read_text(encoding="utf-8")
+    window = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")
+    models = (WINUI_ROOT / "Explorer" / "WorkbenchExplorerModels.cs").read_text(
+        encoding="utf-8"
+    )
+    adapters = (
+        WINUI_ROOT / "Explorer" / "WorkbenchExplorerAdapters.cs"
+    ).read_text(encoding="utf-8")
+    host_xaml = (
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml"
+    ).read_text(encoding="utf-8")
+    host_code = (
+        WINUI_ROOT / "Controls" / "WorkbenchExplorerHost.xaml.cs"
+    ).read_text(encoding="utf-8")
+
+    assert "IWorkbenchExplorerAdapter" in models
+    assert "IWorkbenchExplorerPage" in models
+    assert "StableId" in models
+    for adapter in (
+        "ProjectExplorerAdapter",
+        "WorkspaceExplorerAdapter",
+        "QueueExplorerAdapter",
+        "JobMonitorExplorerAdapter",
+        "ResourceExplorerAdapter",
+        "RestartChainExplorerAdapter",
+        "OdbMergeExplorerAdapter",
+        "PostprocessingExplorerAdapter",
+        "ResultExplorerAdapter",
+    ):
+        assert f"class {adapter}" in adapters
+
+    assert "WorkbenchExplorerHost" in shell
+    assert "ProjectExplorerRail" not in shell
+    assert "ProjectTree" not in shell
+    assert "ExplorerHost.Attach" in window
+    assert "_projectNodePaths" not in window
+    assert 'x:Name="ExplorerSearchBox"' in host_xaml
+    assert "RestoreSelection" in host_code
+    assert "ApplyFilter" in host_code
+
+    for page_name in (
+        "NewJobPage",
+        "JobQueuePage",
+        "JobOverviewPage",
+        "ComputeResourcesPage",
+        "RestartChainPage",
+        "OdbMergePage",
+        "OdbPostprocessingPage",
+        "ResultBrowserPage",
+    ):
+        page = (WINUI_ROOT / "Pages" / f"{page_name}.xaml.cs").read_text(
+            encoding="utf-8"
+        )
+        assert f"{page_name} : Page, IWorkbenchExplorerPage" in page
+        assert "ExplorerAdapter" in page
+
+
 def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
         encoding="utf-8"
@@ -513,8 +574,40 @@ def test_restart_chain_page_uses_the_control_plane_dependency_model() -> None:
     assert "GetRestartChainsAsync" in host
     assert "ObservableCollection<RestartChainNode>" in page
     assert "GetRestartChainsAsync" in page
-    assert 'x:Name="ChainList"' in xaml
+    assert 'x:Name="RestartGraphCanvas"' in xaml
+    assert "RenderRestartGraph" in page
+    assert "GenerateFullResultButton" in xaml
+    assert "CreateRestartResultPlanAsync" in page
+    assert "NavigateToOdbMergePlan" in page
     assert 'x:Name="CycleCheckText"' in xaml
+
+
+def test_restart_result_materialization_is_separate_from_the_job_graph() -> None:
+    host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
+        encoding="utf-8"
+    )
+    restart_page = (WINUI_ROOT / "Pages" / "RestartChainPage.xaml.cs").read_text(
+        encoding="utf-8"
+    )
+    restart_xaml = (WINUI_ROOT / "Pages" / "RestartChainPage.xaml").read_text(
+        encoding="utf-8"
+    )
+    merge_page = (WINUI_ROOT / "Pages" / "OdbMergePage.xaml.cs").read_text(
+        encoding="utf-8"
+    )
+    merge_xaml = (WINUI_ROOT / "Pages" / "OdbMergePage.xaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"/api/v1/restart-result-plans"' in host
+    assert "CreateRestartResultPlanAsync" in host
+    assert "RestartResultPlan" in restart_page
+    assert "MergeNode" not in restart_page
+    assert "合并节点" not in restart_xaml
+    assert "LoadMaterializationPlan" in merge_page
+    assert "ExecuteMaterializationPlanAsync" in merge_page
+    assert 'x:Name="MaterializationPlanCard"' in merge_xaml
+    assert 'x:Name="MaterializationStepsList"' in merge_xaml
 
 
 def test_odb_merge_page_uses_native_pickers_and_safe_plan_preview() -> None:

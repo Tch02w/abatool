@@ -7,6 +7,45 @@
         <StackPanel Padding="24,20,24,28" Spacing="12">
             <InfoBar x:Name="MergeSafetyInfoBar" IsClosable="False" IsOpen="True" Message="合并始终在隔离工作区执行；源 ODB 只读，结果通过 Abaqus 只读验证后才会发布。" Severity="Success" Title="受保护执行" />
 
+            <Border x:Name="MaterializationPlanCard" Style="{StaticResource WorkbenchCardStyle}" Visibility="Collapsed">
+                <StackPanel Spacing="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="来自重启动计算图谱的完整结果计划" />
+                            <TextBlock x:Name="MaterializationTargetText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Click="OnClearMaterializationClicked" Content="切换为手工合并" />
+                    </Grid>
+                    <ItemsControl x:Name="MaterializationAncestryList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="10,5" Background="{ThemeResource LayerFillColorAltBrush}" CornerRadius="4">
+                                    <TextBlock Text="{Binding Display}" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl x:Name="MaterializationStepsList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3" ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <FontIcon Margin="2,3,0,0" FontSize="14" Glyph="&#xE895;" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                        <TextBlock FontFamily="Cascadia Mono" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{Binding Detail}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource WorkbenchCardStyle}">
                 <StackPanel Spacing="12">
                     <Grid>

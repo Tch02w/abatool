@@ -12,6 +12,8 @@
 
 命令每次在 `GPTWork/release-win-x64-*` 创建新目录，保留旧产物。先冻结 Qt-free 控制面，再用 Release、win-x64、SelfContained=true 发布 WinUI；同时带上 Windows App SDK 运行文件。构建日志分别为 `control-plane-build.log` 和 `winui-publish.log`。首次还原需要访问 NuGet；已用相同参数还原后，可附加 `--no-restore`。
 
+发布目录使用随机唯一名称并继承项目目录权限。Windows Python 3.14 的 `tempfile.mkdtemp` 使用仅创建者可访问的权限，因此不用于最终发布目录；构建账户与使用账户不同时，交付前必须从使用账户读取清单及程序文件。已有候选的权限不被自动更改。
+
 产物 `AbaqusTools` 包含：
 
 - `AbaqusTools.WinUI.exe`、.NET 与 Windows App SDK 运行库。

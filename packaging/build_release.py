@@ -7,8 +7,8 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 from release_inventory import write_inventory
 
@@ -32,7 +32,11 @@ def main() -> None:
         raise RuntimeError("Use this project's .venv/Scripts/python.exe on Windows.")
     work = ROOT / "GPTWork"
     work.mkdir(exist_ok=True)
-    output = Path(tempfile.mkdtemp(prefix="release-win-x64-", dir=work))
+    # A distributable directory must inherit the workspace's normal access.
+    # tempfile uses mode 0700 on Windows Python 3.14, hiding it from the user
+    # when a separate build account creates the release.
+    output = work / f"release-win-x64-{uuid4().hex[:12]}"
+    output.mkdir()
     bundle = output / "AbaqusTools"
     environment = dict(os.environ)
     environment.update(DOTNET_CLI_HOME=str(work / "dotnet-home"),

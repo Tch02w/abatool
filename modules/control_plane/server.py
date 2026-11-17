@@ -51,6 +51,7 @@ from .odb_merge_operations import (
     OdbMergeOperationRequest,
     OdbMergeRunner,
 )
+from .odb_result_batches import OdbResultBatchManager
 from .odb_result_graphs import OdbResultGraphService
 from .odb_upgrade_drafts import preview_odb_upgrade
 from .odb_upgrade_operations import OdbUpgradeOperationManager
@@ -95,18 +96,21 @@ class ControlPlaneContext:
     remote_transfer_manager: RemoteTransferOperationManager
     remote_job_manager: RemoteJobOperationManager
     odb_result_graph_service: OdbResultGraphService
+    odb_result_batch_manager: OdbResultBatchManager
 
     def prepare_odb_shutdown(self) -> dict[str, Any]:
-        # Reserve both file-mutating managers atomically in a fixed lock order.
+        # Reserve all file-mutating managers atomically in a fixed lock order.
         # A failed check must not leave the other manager permanently reserved.
-        with self.odb_merge_manager._lock, self.odb_upgrade_manager._lock:
+        with self.odb_result_batch_manager._lock, self.odb_merge_manager._lock, self.odb_upgrade_manager._lock:
+            batch = self.odb_result_batch_manager.prepare_shutdown(reserve=False)
             merge = self.odb_merge_manager.prepare_shutdown(reserve=False)
             upgrade = self.odb_upgrade_manager.prepare_shutdown(reserve=False)
-            safe = merge["safeToStop"] and upgrade["safeToStop"]
+            safe = batch["safeToStop"] and merge["safeToStop"] and upgrade["safeToStop"]
             if safe:
+                self.odb_result_batch_manager.prepare_shutdown()
                 self.odb_merge_manager.prepare_shutdown()
                 self.odb_upgrade_manager.prepare_shutdown()
-            return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": merge["operations"] + upgrade["operations"]}
+            return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": batch["operations"] + merge["operations"] + upgrade["operations"]}
 
 
 class ControlPlaneHttpServer(ThreadingHTTPServer):
@@ -156,6 +160,14 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/odb-merge-operations":
                 self._handle_list_odb_merge_operations(target.query, trace_id)
+                return
+            if target.path == "/api/v1/odb-result-batches":
+                active = self._parse_active_only(target.query, "完整结果批量任务")
+                self._send_json(HTTPStatus.OK, {"schemaVersion": 1, "operations": self.context.odb_result_batch_manager.list_snapshots(active_only=active)}, trace_id)
+                return
+            batch_id = self._batch_id_from_path(target.path)
+            if batch_id is not None and not target.query:
+                self._send_json(HTTPStatus.OK, self.context.odb_result_batch_manager.get(batch_id), trace_id)
                 return
             if target.path == "/api/v1/odb-postprocess-operations":
                 self._handle_list_postprocess_operations(target.query, trace_id)
@@ -380,6 +392,15 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/odb-merge-operations" and not target.query:
                 self._handle_create_odb_merge_operation(trace_id)
                 return
+            if target.path == "/api/v1/odb-result-batches" and not target.query:
+                self._send_json(HTTPStatus.ACCEPTED, self.context.odb_result_batch_manager.create(self._read_json_object()), trace_id)
+                return
+            for action in ("cancel", "resume"):
+                batch_id = self._batch_id_from_path(target.path, action=action)
+                if batch_id is not None and not target.query:
+                    method = getattr(self.context.odb_result_batch_manager, action)
+                    self._send_json(HTTPStatus.OK, method(batch_id), trace_id)
+                    return
             if target.path == "/api/v1/odb-postprocess-scans" and not target.query:
                 request = PostprocessScanRequest.from_payload(self._read_json_object())
                 self._send_json(
@@ -525,7 +546,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.upgrade.safe-v1", "odb.upgrade.history-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -655,6 +676,15 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if job.get("request", {}).get("jobName")
         ]
         return snapshot
+
+    @staticmethod
+    def _batch_id_from_path(path: str, *, action: str = "") -> str | None:
+        parts = path.split("/")
+        if (parts[:4] == ["", "api", "v1", "odb-result-batches"]
+                and len(parts) == (6 if action else 5) and parts[4]
+                and (not action or parts[5] == action)):
+            return parts[4]
+        return None
 
     def _handle_odb_merge_draft_preview(self, trace_id: str) -> None:
         payload = preview_odb_merge_draft(self._read_json_object())
@@ -1196,6 +1226,11 @@ class ControlPlaneRuntime:
             event_history,
             remote_server_service,
         )
+        odb_result_graph_service = OdbResultGraphService(odb_result_graph_path)
+        odb_result_batch_manager = OdbResultBatchManager(
+            odb_merge_manager, odb_result_graph_service,
+            self.descriptor_path.with_name("odb-result-batches.sqlite3"),
+        )
         context = ControlPlaneContext(
             token=self.token,
             instance_id=self.instance_id,
@@ -1211,11 +1246,13 @@ class ControlPlaneRuntime:
             remote_server_service=remote_server_service,
             remote_transfer_manager=remote_transfer_manager,
             remote_job_manager=remote_job_manager,
-            odb_result_graph_service=OdbResultGraphService(odb_result_graph_path),
+            odb_result_graph_service=odb_result_graph_service,
+            odb_result_batch_manager=odb_result_batch_manager,
         )
         try:
             self.httpd = ControlPlaneHttpServer((LOOPBACK_HOST, int(port)), context)
         except BaseException:
+            odb_result_batch_manager.close()
             remote_job_manager.close()
             remote_transfer_manager.close()
             remote_server_service.close()
@@ -1245,6 +1282,7 @@ class ControlPlaneRuntime:
             write_descriptor_atomic(self.descriptor_path, descriptor)
         except BaseException:
             self.httpd.server_close()
+            odb_result_batch_manager.close()
             remote_job_manager.close()
             remote_transfer_manager.close()
             remote_server_service.close()
@@ -1316,6 +1354,7 @@ class ControlPlaneRuntime:
                 return
             self._closed = True
             self.httpd.server_close()
+            self.httpd.context.odb_result_batch_manager.close()
             self.remote_job_manager.close()
             self.remote_transfer_manager.close()
             self.remote_server_service.close()

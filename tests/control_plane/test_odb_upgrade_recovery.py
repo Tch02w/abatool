@@ -180,9 +180,9 @@ def test_http_history_survives_actual_runtime_recreation(tmp_path):
 
 def test_actual_process_crash_preserves_completed_receipt_without_reexecution(tmp_path):
     import os
+    import queue
     import subprocess
     import sys
-    import time
     from pathlib import Path
 
     import psutil
@@ -195,15 +195,15 @@ def test_actual_process_crash_preserves_completed_receipt_without_reexecution(tm
         worker = psutil.Process(int(child.stdout.readline().strip()))
         assert 'tests.control_plane.upgrade_crash_child' in worker.cmdline()
         assert str(journal) in worker.cmdline()
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            assert child.poll() is None, child.stderr.read().decode(errors='replace')
-            if journal.exists():
-                saved = json.loads(journal.read_text(encoding='utf-8'))['operations'][0]
-                if len(saved['results']) == 1: break
-            time.sleep(.02)
-        else:
-            raise AssertionError('child did not durably save the first receipt')
+        # A Windows reader can deny an atomic replace while its file handle is
+        # open. Wait for the writer's checkpoint instead of polling that file.
+        checkpoint = queue.Queue()
+        reader = threading.Thread(target=lambda: checkpoint.put(child.stdout.readline()), daemon=True)
+        reader.start()
+        assert checkpoint.get(timeout=15).strip() == b'receipt-ready'
+        reader.join(timeout=5)
+        saved = json.loads(journal.read_text(encoding='utf-8'))['operations'][0]
+        assert len(saved['results']) == 1
         # Terminate only the disposable test child, never a user/application process.
         worker.kill()
         worker.wait(timeout=5)

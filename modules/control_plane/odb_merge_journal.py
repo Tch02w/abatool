@@ -2,88 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import os
-import sqlite3
 from pathlib import Path
 
+from .operation_journal import OperationJournal
 
-class MergeJournal:
+
+class MergeJournal(OperationJournal):
     def __init__(self, path: Path):
-        self.path = Path(path)
-        self._owner = None
-        self._database = None
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        owner = self.path.with_name(self.path.name + ".lock").open("a+b")
-        try:
-            if owner.tell() == 0:
-                owner.write(b"\0")
-                owner.flush()
-            owner.seek(0)
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(owner.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            self._owner = owner
-            is_new = not self.path.exists()
-            self._database = sqlite3.connect(
-                self.path, timeout=0, check_same_thread=False
-            )
-            if is_new:
-                with self._database:
-                    self._database.execute(
-                        "CREATE TABLE merge_operations (operation_id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
-                    )
-                    self._database.execute("PRAGMA user_version=1")
-            if self._database.execute("PRAGMA user_version").fetchone()[0] != 1:
-                raise ValueError("合并记录版本无效")
-            if self._database.execute("PRAGMA quick_check").fetchone() != ("ok",):
-                raise ValueError("合并记录完整性检查失败")
-            self._database.execute("PRAGMA synchronous=FULL")
-        except BaseException:
-            self.close()
-            owner.close()
-            raise
-
-    def load(self) -> list[dict]:
-        rows = self._database.execute(
-            "SELECT operation_id, payload FROM merge_operations ORDER BY rowid"
-        ).fetchall()
-        records = []
-        for operation_id, payload in rows:
-            record = json.loads(payload)
-            validate_record(record)
-            if operation_id != record["snapshot"]["operationId"]:
-                raise ValueError("合并记录标识不一致")
-            records.append(record)
-        return records
-
-    def save(self, record: dict) -> None:
-        validate_record(record)
-        if self._database is None:
-            raise OSError("合并记录写入锁已关闭")
-        # Update one operation, not the whole history, for each durable checkpoint.
-        with self._database:
-            self._database.execute(
-                "INSERT INTO merge_operations(operation_id, payload) VALUES (?, ?) "
-                "ON CONFLICT(operation_id) DO UPDATE SET payload=excluded.payload",
-                (
-                    record["snapshot"]["operationId"],
-                    json.dumps(record, ensure_ascii=False),
-                ),
-            )
-
-    def close(self) -> None:
-        if self._database is not None:
-            self._database.close()
-            self._database = None
-        if self._owner is not None:
-            self._owner.close()
-            self._owner = None
+        super().__init__(path, table="merge_operations", validator=validate_record)
 
 
 def validate_record(record: dict) -> None:

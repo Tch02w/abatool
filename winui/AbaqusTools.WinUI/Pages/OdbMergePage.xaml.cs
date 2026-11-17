@@ -71,14 +71,23 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
-        if (_recoveryAttempted)
+        if (_recoveryAttempted || _batchBusy || _operationBusy || _previewBusy)
         {
             return;
         }
 
         _recoveryAttempted = true;
+        _previewBusy = true;
+        RefreshInteractionState();
         try
         {
+            var batches = await App.Current.ControlPlane.ListOdbResultBatchesAsync();
+            var batch = batches.Operations.FirstOrDefault(b => b.IsActive || b.CanResume);
+            if (batch is not null)
+            {
+                await ObserveBatchAsync(batch);
+                return;
+            }
             var active = await App.Current.ControlPlane.ListOdbMergeOperationsAsync(
                 activeOnly: true);
             var snapshot = active.Operations.FirstOrDefault();
@@ -92,7 +101,14 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             }
 
             var history = await App.Current.ControlPlane.ListOdbMergeOperationsAsync();
-            var latest = history.Operations.FirstOrDefault();
+            var latest = history.Operations.FirstOrDefault(item => item.Request?.ClientRequestId.StartsWith("batch:", StringComparison.Ordinal) != true);
+            var latestBatch = batches.Operations.FirstOrDefault();
+            if (latestBatch is not null && _materializationPlan is null && _batchPlan is null
+                && (latest is null || latestBatch.CreatedAt >= latest.CreatedAt))
+            {
+                ApplyBatchSnapshot(latestBatch);
+                return;
+            }
             if (latest is not null && _materializationPlan is null && _batchPlan is null)
             {
                 MergeModeComboBox.SelectedIndex = 1;
@@ -121,6 +137,11 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         catch (Exception exception)
         {
             ShowPlanState("无法恢复合并状态", exception.Message, InfoBarSeverity.Warning);
+        }
+        finally
+        {
+            _previewBusy = false;
+            RefreshInteractionState();
         }
     }
 
@@ -294,19 +315,18 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     {
         if (_batchBusy)
         {
-            _batchCancellation?.Cancel();
             _cancelRequested = true;
             MergePlanSummaryText.Text = "正在停止整批合并，后续步骤不会启动。";
             RefreshInteractionState();
-            if (!string.IsNullOrWhiteSpace(_activeOperationId))
+            if (!string.IsNullOrWhiteSpace(_activeBatchId))
             {
                 try
                 {
-                    await App.Current.ControlPlane.CancelOdbMergeOperationAsync(_activeOperationId);
+                    await App.Current.ControlPlane.CancelOdbResultBatchAsync(_activeBatchId);
                 }
                 catch (Exception exception)
                 {
-                    ShowPlanState("停止请求未确认", exception.Message + "；等待当前步骤结束，后续步骤保持停止。", InfoBarSeverity.Warning);
+                    ShowPlanState("停止请求未确认", exception.Message + "；尚不能确认后台已停止，请重新读取任务。", InfoBarSeverity.Warning);
                 }
             }
             return;
@@ -350,8 +370,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     {
         _activeOperationId = initial.OperationId;
         _lastOperationVersion = -1;
-        _cancelRequested = _batchCancellation?.IsCancellationRequested is true
-            || string.Equals(initial.Status, "cancelling", StringComparison.Ordinal);
+        _cancelRequested = string.Equals(initial.Status, "cancelling", StringComparison.Ordinal);
         ApplyOperationSnapshot(initial);
         try
         {
@@ -398,6 +417,8 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void DetachMaterializationPlan()
     {
+        _displayedBatchId = null;
+        _resumableBatchId = null;
         _batchPlan = null;
         _materializationPlan = null;
         MaterializationPlanCard.Visibility = Visibility.Collapsed;
@@ -738,6 +759,9 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
+        ResumeBatchButton.Visibility = _resumableBatchId is null ? Visibility.Collapsed : Visibility.Visible;
+        ResumeBatchButton.IsEnabled = !_batchBusy && !_operationBusy && !_previewBusy;
+        RefreshBatchButton.IsEnabled = !_batchBusy && !_operationBusy && !_previewBusy;
         var editingEnabled = !_previewBusy && !_operationBusy && !_batchBusy;
         MergeModeComboBox.IsEnabled = editingEnabled;
         ResultGraphEditor.SetExecutionBusy(!editingEnabled);

@@ -81,6 +81,7 @@ try
     await Check("reconnect failure", "", false, connectionCleanup: true);
     CheckUpgradeContracts();
     CheckMergeRecoveryContracts();
+    CheckBatchContracts();
     ControlPlaneLaunchChecks.Run();
     Console.WriteLine("8 host process lifecycle checks passed.");
     return 0;
@@ -93,6 +94,35 @@ catch (Exception error)
 
 static void SetField(ControlPlaneHost host, string name, object value) =>
     typeof(ControlPlaneHost).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, value);
+
+static void CheckBatchContracts()
+{
+    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+    var value = JsonNode.Parse("""
+        {"schemaVersion":1,"kind":"odb.result_batch","operationId":"batch-id","clientRequestId":"request-id",
+         "status":"suspended","phase":"等待继续","totalSteps":2,"completedSteps":1,"options":{},
+         "plans":[{"valid":true,"steps":[{},{}]}],"results":[]}
+        """)!;
+    var paused = value.Deserialize<OdbResultBatchSnapshot>(options)!;
+    paused.Validate("batch-id");
+    if (!paused.CanResume || paused.IsActive) throw new Exception("Suspended batch must offer explicit resume");
+    value["status"] = "running";
+    var running = value.Deserialize<OdbResultBatchSnapshot>(options)!;
+    running.Validate();
+    if (!running.IsActive || running.CanResume) throw new Exception("Running batch cannot resume twice");
+    foreach (var field in new[] { "status", "completedSteps", "schemaVersion" })
+    {
+        var invalid = value.DeepClone();
+        if (field == "status") invalid[field] = "succeeded"; // One stage and result still missing.
+        else invalid[field] = 99;
+        try { invalid.Deserialize<OdbResultBatchSnapshot>(options)!.Validate(); }
+        catch (ControlPlaneException) { continue; }
+        throw new Exception($"Invalid batch {field} was accepted");
+    }
+    try { paused.Validate("other-id"); }
+    catch (ControlPlaneException) { Console.WriteLine("6 batch recovery contract checks passed."); return; }
+    throw new Exception("Mismatched batch identity was accepted");
+}
 
 static void CheckMergeRecoveryContracts()
 {

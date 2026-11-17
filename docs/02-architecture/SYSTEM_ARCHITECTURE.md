@@ -37,7 +37,8 @@ OdbPostprocessingPage → ControlPlaneHost → server.py
 - 后处理编辑工作区由 `winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs` 保存；页面使用本地应用数据 `AbaqusTools/postprocess-workspaces`。只持久化编辑配置，不把旧结构有效性视为永远有效。
 - 输出默认位于所选根目录下 `AbaqusODBPostProcessor_Results`；通用结果另分 `通用对象提取`。源 ODB 只读。
 - 升级恢复专用 `modules/control_plane/odb_upgrade_journal.py`；**不能据此推断所有异步任务均有跨控制面重启恢复能力**。
-- F013 合并记录在 `modules/control_plane/odb_merge_journal.py`，使用 descriptor 同目录的 SQLite 文件恢复终态和请求身份，非终态显示中断待核对。升级/合并联合退出预留见 [ADR 0006](../submitter/adr/0006-durable-merge-history.md)；F012 批量游标及其他任务的跨后台恢复仍需分别实现与验收。
+- F013 合并记录在 `modules/control_plane/odb_merge_journal.py`，使用 descriptor 同目录的 SQLite 文件恢复终态和请求身份，非终态显示中断待核对。升级/合并联合退出预留见 [ADR 0006](../submitter/adr/0006-durable-merge-history.md)。
+- F012 批量计划与阶段提交记录由 `modules/control_plane/odb_result_batches.py` 持久管理，WinUI 只提交和观察。批量/合并/升级按固定顺序联合退出预留；后台重启后显式检查再继续，不能重跑不明子任务。见 [ADR 0007](../submitter/adr/0007-durable-result-batches.md)。其他任务的跨后台恢复仍需分别实现与验收。
 - 控制面 descriptor 含 bearer token，只供本机客户端使用，不进入文档、Git 或验收截图。
 
 ## 修改的影响链

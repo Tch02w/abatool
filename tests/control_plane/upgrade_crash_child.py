@@ -9,6 +9,7 @@ from modules.control_plane.odb_upgrade_operations import OdbUpgradeOperationMana
 
 def runner(preview, *, on_result, **kwargs):
     on_result({'source_path': 'case.odb', 'status': 'upgraded'})
+    print('receipt-ready' if manager._storage_error is None else 'receipt-error', flush=True)
     threading.Event().wait()
 
 

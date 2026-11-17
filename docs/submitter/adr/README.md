@@ -14,3 +14,5 @@ Current records:
 - `0004-separate-restart-computation-and-result-materialization.md`
 - `0005-self-contained-winui-control-plane.md`
 - `0006-durable-merge-history.md`
+
+- [0007-durable-result-batches.md](0007-durable-result-batches.md)

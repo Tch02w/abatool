@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from modules.common.json_io import save_json_mapping
+from modules.control_plane.restart_result_plans import build_restart_result_plan
 from tests.control_plane.test_api import (
     api_request,
     json_response,
@@ -154,3 +157,33 @@ def test_restart_result_plan_rejects_unknown_fields(tmp_path: Path) -> None:
 
     assert response[0] == 400
     assert json_response(response)["error"]["code"] == "UNKNOWN_FIELDS"
+
+
+@pytest.mark.parametrize("dependencies", [["base", "other"], ["missing"], []])
+def test_ambiguous_or_missing_parent_never_silently_selects_first(
+    tmp_path, monkeypatch, dependencies
+):
+    (tmp_path / "base.odb").write_bytes(b"base")
+    (tmp_path / "target.odb").write_bytes(b"target")
+    items = [
+        {"itemId": "one", "jobId": "base", "jobName": "base", "runMode": "normal"},
+        {"itemId": "two", "jobId": "other", "jobName": "base", "runMode": "normal"},
+        {
+            "itemId": "target",
+            "jobId": "target",
+            "jobName": "target",
+            "runMode": "restart",
+            "dependencyJobIds": dependencies,
+            "oldjobName": "base",
+            "oldjobPath": str(tmp_path / "base.odb"),
+            "effectiveWorkDir": str(tmp_path),
+        },
+    ]
+    monkeypatch.setattr(
+        "modules.control_plane.job_queues.read_job_queues",
+        lambda: {"queueItems": items},
+    )
+    result = build_restart_result_plan(
+        {"schemaVersion": 1, "itemId": "target", "outputDirectory": str(tmp_path)}
+    )
+    assert not result["valid"] and result["steps"] == [] and result["issues"]

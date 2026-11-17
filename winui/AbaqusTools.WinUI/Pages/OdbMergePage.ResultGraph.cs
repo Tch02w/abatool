@@ -10,8 +10,10 @@ public sealed partial class OdbMergePage
 {
     private readonly ObservableCollection<OdbBatchTargetResult> _batchResults = [];
     private OdbResultBatchPlan? _batchPlan;
-    private CancellationTokenSource? _batchCancellation;
     private bool _batchBusy;
+    private string? _activeBatchId;
+    private string? _resumableBatchId;
+    private string? _displayedBatchId;
     private int _batchTotalSteps;
     private int _batchCompletedSteps;
 
@@ -63,119 +65,138 @@ public sealed partial class OdbMergePage
 
     private async Task ExecuteResultBatchAsync()
     {
-        IReadOnlyList<RestartResultPlan> plans = _batchPlan?.Plans
-            ?? (_materializationPlan is null ? [] : new[] { _materializationPlan });
-        if (plans.Count == 0 || _batchBusy)
+        if (_batchBusy) return;
+        object source;
+        if (_batchPlan is { } batch)
         {
-            return;
+            if (ResultGraphEditor.HasUnsavedChanges)
+            {
+                ShowPlanState("结果图已修改", "请重新检查并生成计划。", InfoBarSeverity.Warning);
+                return;
+            }
+            source = new { kind = "graph", revision = batch.GraphRevision,
+                targetNodeIds = batch.Plans.Select(p => p.TargetJobId).ToArray() };
         }
+        else if (_materializationPlan is { } plan)
+            source = new { kind = "restart", expectedPlan = plan };
+        else return;
         _batchBusy = true;
         _cancelRequested = false;
-        using var cancellation = new CancellationTokenSource();
-        _batchCancellation = cancellation;
-        _batchResults.Clear();
-        BatchResultsList.Visibility = Visibility.Visible;
-        _lastResultPath = string.Empty;
-        OpenResultButton.IsEnabled = false;
-        RevealResultButton.IsEnabled = false;
-        _batchTotalSteps = plans.Sum(plan => plan.Steps.Count);
-        _batchCompletedSteps = 0;
-        MergeLogExpander.IsExpanded = true;
-        MergeOperationLogTextBox.Text = string.Empty;
+        _resumableBatchId = null;
         RefreshInteractionState();
         try
         {
-            // Recheck document revision before starting any operations in this batch.
-            if (_batchPlan is { } savedBatch)
-            {
-                var current = await App.Current.ControlPlane.GetOdbResultGraphAsync(cancellation.Token);
-                if (current.Revision != savedBatch.GraphRevision || ResultGraphEditor.HasUnsavedChanges)
-                {
-                    _planReady = false;
-                    throw new InvalidOperationException("结果图已修改，请重新检查并生成计划。");
-                }
-            }
-            await OdbResultBatchRunner.RunAsync(plans, ExecuteResultStepAsync, ApplyBatchProgress, cancellation.Token);
-            MergeProgressBar.Value = 100;
-            ShowPlanState("完整结果生成完成", $"已生成 {_batchResults.Count} 个目标结果，可在下方或左侧浏览器中选择。", InfoBarSeverity.Success);
-        }
-        catch (OperationCanceledException)
-        {
-            ShowPlanState("整批合并已停止", $"已完成 {_batchResults.Count} 个目标；后续步骤未启动，已验证的结果保留。", InfoBarSeverity.Warning);
+            var initial = await App.Current.ControlPlane.StartOdbResultBatchAsync(source,
+                new OdbResultBatchOptions { IncludeHistory = IncludeHistoryCheckBox.IsChecked is true,
+                    CompressResult = CompressResultCheckBox.IsChecked is true, CopyOriginal = CopyOriginalCheckBox.IsChecked is true },
+                Guid.NewGuid());
+            _activeBatchId = initial.OperationId;
+            if (_cancelRequested) initial = await App.Current.ControlPlane.CancelOdbResultBatchAsync(initial.OperationId);
+            await ObserveBatchAsync(initial);
         }
         catch (Exception exception)
         {
-            var message = exception is ControlPlaneException control ? control.ToDisplayMessage() : exception.Message;
-            ShowPlanState("整批合并未完成", message + $" 已保留 {_batchResults.Count} 个完整目标结果。", InfoBarSeverity.Error);
+            // A lost POST response does not prove that no batch was created.
+            _planReady = false;
+            _recoveryAttempted = false;
+            ShowPlanState("批量状态需要重新读取", exception.Message + "；请点击读取后台任务，确认后再开始新的批次。", InfoBarSeverity.Warning);
         }
         finally
         {
-            _batchCancellation = null;
             _batchBusy = false;
-            _previewBusy = false;
             _cancelRequested = false;
-            SetOperationBusy(false);
-            UpdateExplorer();
-            App.Current.MainWindow.ReportPageStatus($"整批合并结束 · 完整结果 {_batchResults.Count}/{plans.Count}");
+            RefreshInteractionState();
         }
     }
 
-    private async Task<string> ExecuteResultStepAsync(RestartResultStep step, string original, CancellationToken cancellationToken)
+    private async Task ObserveBatchAsync(OdbResultBatchSnapshot snapshot)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        ApplyMaterializationStep(step, original);
-        var preview = await PreviewDraftAsync(cancellationToken);
-        if (!preview.Valid)
+        _activeBatchId = snapshot.OperationId;
+        _batchBusy = snapshot.IsActive;
+        try
         {
-            throw new InvalidOperationException(preview.ValidationMessage);
-        }
-        ApplyDraftPreview(preview);
-        cancellationToken.ThrowIfCancellationRequested();
-        SetOperationBusy(true);
-        // Do not abandon a POST after it may have created an operation: obtain its ID,
-        // cancel it if requested meanwhile, and observe cleanup before releasing the UI.
-        var initial = await App.Current.ControlPlane.StartOdbMergeAsync(
-            original, step.RestartOdb, preview.NormalizedOutputOdb,
-            IncludeHistoryCheckBox.IsChecked is true, CompressResultCheckBox.IsChecked is true,
-            CopyOriginalCheckBox.IsChecked is true, "auto_number", Guid.NewGuid());
-        if (cancellationToken.IsCancellationRequested)
-        {
-            try
+            ApplyBatchSnapshot(snapshot);
+            while (snapshot.IsActive)
             {
-                await App.Current.ControlPlane.CancelOdbMergeOperationAsync(initial.OperationId);
-            }
-            catch (Exception exception)
-            {
-                ShowPlanState("正在等待当前步骤结束", exception.Message + "；后续步骤保持停止。", InfoBarSeverity.Warning);
+                await Task.Delay(400);
+                snapshot = await App.Current.ControlPlane.GetOdbResultBatchAsync(snapshot.OperationId);
+                ApplyBatchSnapshot(snapshot);
             }
         }
-        var completed = await ObserveOperationAsync(initial, applyCompletion: false);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (completed.Status == "cancelled")
+        finally
         {
-            throw new OperationCanceledException("当前合并步骤已取消。");
+            _batchBusy = false;
+            _activeBatchId = null;
+            _cancelRequested = false;
+            RefreshInteractionState();
         }
-        if (!completed.IsSuccessful || completed.Result is null)
-        {
-            throw new InvalidOperationException(completed.Error?.Message ?? $"阶段 {step.JobName} 未成功完成。");
-        }
-        return completed.Result.OutputOdb;
     }
 
-    private void ApplyBatchProgress(OdbBatchProgress progress)
+    private void ApplyBatchSnapshot(OdbResultBatchSnapshot snapshot)
     {
-        _batchCompletedSteps = progress.CompletedSteps;
-        _batchTotalSteps = progress.TotalSteps;
-        MergeProgressBar.IsIndeterminate = false;
-        MergeProgressBar.Value = progress.TotalSteps == 0 ? 0 : 100.0 * progress.CompletedSteps / progress.TotalSteps;
-        MergePlanSummaryText.Text = $"目标 {progress.CompletedTargets}/{progress.TotalTargets} · 阶段 {progress.CompletedSteps}/{progress.TotalSteps}"
-            + (progress.Reused ? " · 已复用本批次验证结果" : string.Empty);
-        if (progress.Result is { } result)
+        _resumableBatchId = snapshot.CanResume ? snapshot.OperationId : null;
+        _batchTotalSteps = snapshot.TotalSteps;
+        _batchCompletedSteps = snapshot.CompletedSteps;
+        _planReady = false;
+        if (_displayedBatchId != snapshot.OperationId)
         {
-            _batchResults.Add(result);
-            BatchResultsList.SelectedItem = result;
-            UpdateExplorer();
+            _displayedBatchId = snapshot.OperationId;
+            MaterializationPlanCard.Visibility = Visibility.Visible;
+            MaterializationTargetText.Text = $"{snapshot.Plans.Count} 个完整结果目标：" + string.Join("、", snapshot.Plans.Select(p => p.TargetJobName));
+            MaterializationStepsList.ItemsSource = snapshot.Plans.SelectMany(p => p.Steps).ToArray();
+            IncludeHistoryCheckBox.IsChecked = snapshot.Options.IncludeHistory;
+            CompressResultCheckBox.IsChecked = snapshot.Options.CompressResult;
+            CopyOriginalCheckBox.IsChecked = snapshot.Options.CopyOriginal;
         }
+        BatchResultsList.Visibility = Visibility.Visible;
+        // Keep the selected result and avoid rebuilding the list on every poll.
+        var results = snapshot.Results.Select(r => new OdbBatchTargetResult(r.TargetJobName, r.OutputOdb)).ToArray();
+        if (!_batchResults.SequenceEqual(results))
+        {
+            var selected = BatchResultsList.SelectedItem as OdbBatchTargetResult;
+            _batchResults.Clear();
+            foreach (var result in results) _batchResults.Add(result);
+            BatchResultsList.SelectedItem = _batchResults.FirstOrDefault(r => r == selected) ?? _batchResults.LastOrDefault();
+        }
+        if (_batchResults.Count == 0)
+        {
+            _lastResultPath = string.Empty;
+            OpenResultButton.IsEnabled = RevealResultButton.IsEnabled = false;
+            MergeResultText.Text = "当前批次尚无完成校验的目标结果。";
+        }
+        var childProgress = snapshot.CurrentOperation is { IsTerminal: false } child ? child.Progress.Percent / 100.0 : 0;
+        MergeProgressBar.Value = 100.0 * (snapshot.CompletedSteps + childProgress) / snapshot.TotalSteps;
+        MergePlanSummaryText.Text = $"目标 {snapshot.Results.Count}/{snapshot.Plans.Count} · 独立阶段 {snapshot.CompletedSteps}/{snapshot.TotalSteps}";
+        MergeLogExpander.IsExpanded = true;
+        var text = snapshot.CurrentOperation is { } current ? string.Join(Environment.NewLine, current.Logs) : snapshot.Phase;
+        if (MergeOperationLogTextBox.SelectionLength == 0 && MergeOperationLogTextBox.Text != text)
+            MergeOperationLogTextBox.Text = text;
+        var severity = snapshot.Status == "succeeded" ? (snapshot.Warnings.Count > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success)
+            : snapshot.Status == "failed" ? InfoBarSeverity.Error
+            : snapshot.IsActive ? InfoBarSeverity.Informational : InfoBarSeverity.Warning;
+        var message = snapshot.Phase + (snapshot.Warnings.Count > 0 ? "；" + string.Join("；", snapshot.Warnings) : string.Empty);
+        ShowPlanState(snapshot.IsActive ? "正在生成完整结果" : snapshot.CanResume ? "批量任务等待继续" : "批量任务已结束", message, severity);
+        RefreshInteractionState();
+        UpdateExplorer();
+    }
+
+    private async void OnResumeBatchClicked(object sender, RoutedEventArgs e)
+    {
+        if (_resumableBatchId is not { } id || _batchBusy) return;
+        _displayedBatchId = null;
+        _batchBusy = true;
+        RefreshInteractionState();
+        try { await ObserveBatchAsync(await App.Current.ControlPlane.ResumeOdbResultBatchAsync(id)); }
+        catch (Exception exception) { ShowPlanState("未能继续批量任务", exception.Message, InfoBarSeverity.Warning); }
+        finally { _batchBusy = false; RefreshInteractionState(); }
+    }
+
+    private void OnRefreshBatchClicked(object sender, RoutedEventArgs e)
+    {
+        if (_batchBusy || _operationBusy) return;
+        _recoveryAttempted = false;
+        _displayedBatchId = null;
+        OnPageLoaded(sender, e);
     }
 
     private void OnBatchResultSelected(object sender, SelectionChangedEventArgs e)

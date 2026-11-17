@@ -2767,6 +2767,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string[] operationIds;
         string[] resultIndexOperationIds;
         string[] odbMergeOperationIds;
+        string[] resultBatchIds;
         string[] postprocessOperationIds;
         try
         {
@@ -2775,6 +2776,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 operationIds = [.. _activeOperationIds];
                 resultIndexOperationIds = [.. _activeResultIndexOperationIds];
                 odbMergeOperationIds = [.. _activeOdbMergeOperationIds];
+                resultBatchIds = [.. _activeResultBatchIds];
                 postprocessOperationIds = [.. _activePostprocessOperationIds];
             }
         }
@@ -2787,6 +2789,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         if ((operationIds.Length == 0
                 && resultIndexOperationIds.Length == 0
                 && odbMergeOperationIds.Length == 0
+                && resultBatchIds.Length == 0
                 && postprocessOperationIds.Length == 0)
             || descriptor is null
             || !IsValidDescriptor(descriptor))
@@ -2817,6 +2820,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 timeoutSource.Token));
         await Task.WhenAll(
             compatibilityCancellations
+                .Concat(resultBatchIds.Select(id => BestEffortCancelBatchAsync(descriptor, id, timeoutSource.Token)))
                 .Concat(resultIndexCancellations)
                 .Concat(odbMergeCancellations)
                 .Concat(postprocessCancellations));

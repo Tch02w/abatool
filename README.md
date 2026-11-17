@@ -11,6 +11,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 - 查看作业日志与 STA/MSG/DAT，管理本机和远端计算资源及文件传输。
 - 编辑并校验 Restart/oldjob 依赖链。
 - 异步合并 ODB，支持逐步逐帧内容校验、校验回执、无结果帧提示、持久任务记录、重启去重与中断提示，以及取消、冲突策略和失败清理；[规则与边界](docs/03-features/ODB_MERGE.md)。
+- 按独立结果图批量生成完整 ODB，后台保存计划与阶段，重启后检查并继续；[批量恢复边界](docs/03-features/ODB_RESULT_BATCH.md)。
 - 扫描与升级 ODB，按组批量提取、渲染、生成动画和工程结果。
 - 构建结果索引并预览文本、表格、图片和动画。
 

@@ -6,8 +6,9 @@
 
 | 功能 | 可定位证据 | 已证明 | 尚未证明 |
 |---|---|---|---|
+| F012 后台批量与恢复（11-18） | `GPTWork/control-batch-regression-20261118.xml`、`GPTWork/result-batches-final-20261118.xml`、`tests/control_plane/test_odb_result_batches.py` | 完整控制面 198 项及最后的批量/单步恢复专项 33 项通过（重叠不相加）；隔离进程真实退出、子任务去重与已发布结果续接、祖先共享、来源/中间结果变化拒绝、停止等待、部分结果保留、记录损坏与联合退出；C# 批量契约 6 项、Release 0 警告/0 错误 | 真实多阶段工程 ODB、原生读取/继续/停止与新冻结包；不代表全应用持久恢复 |
 | F026 最终包用户账户访问和恢复（11-18） | `GPTWork/release-win-x64-c39d9688d751/archive-verification.json`、`GPTWork/frozen-merge-recovery-658jvpc7/verification.json` | 用户账户逐项核对 1645 文件/19 worker，ZIP CRC、正式主机启动/API/退出、两次冻结后台启动和请求去重通过；修正临时发布目录仅构建账户可读的问题 | 原生页面、真实外部进程崩溃、无开发环境目标机器 |
-| F013 持久记录和恢复（11-18） | `GPTWork/control-history-regression-20261118.xml`、`tests/control_plane/test_odb_merge_recovery.py` | 178 项控制面回归，含测试进程真实终止、HTTP 重建、请求去重、损坏/磁盘失败、已提交结果保护、日志节流和联合退出；C# 3 项恢复信息检查通过 | 外部 Abaqus 实际运行中崩溃、原生页面恢复、F012 完整批量游标续接 |
+| F013 持久记录和恢复（11-18） | `GPTWork/control-history-regression-20261118.xml`、`tests/control_plane/test_odb_merge_recovery.py` | 178 项控制面回归，含测试进程真实终止、HTTP 重建、请求去重、损坏/磁盘失败、已提交结果保护、日志节流和联合退出；C# 3 项恢复信息检查通过 | 外部 Abaqus 实际运行中崩溃、原生页面恢复；F012 新证据见本表 |
 | F026 含 F013 的目录候选（11-18） | `GPTWork/release-win-x64-g_asfnjp/archive-verification.json`、`GPTWork/package-merge-probe/bundle-probe-xb9j82ur/verification.json` | 干净 16859c4 提交构建、1644 文件与 19 worker 核对、包内诊断、正式主机启动/API/退出及 ZIP CRC 通过 | 原生窗口、无开发环境机器、安装和二进制发布 |
 | F013 合并内容校验（11-18） | `GPTWork/merge-real-fv8_supj/verification.json`、`GPTWork/merge-regression-20261118.xml` | V20D 8 步/70 帧场值及历史一致；U100D 12 步/63 帧、四个无结果帧步骤如实保留，历史关闭/压缩/额外副本与发布通过，原始三份 ODB 全文件摘要不变；99 项相关回归及 C# 批量执行器 10 项通过 | 真实多节点、原生操作、进程崩溃恢复仍待验收 |
 | 全项目自动化基线（11-18） | `GPTWork/migration-tests-20261118.xml` | 648 测试和 9 子检查通过，测试发现范围固定为 tests | 八页全部原生交互、真实 SSH 和无开发环境发布 |

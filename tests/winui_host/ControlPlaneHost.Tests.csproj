@@ -10,6 +10,7 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs" Link="ControlPlaneHost.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneLaunch.cs" Link="ControlPlaneLaunch.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.OdbUpgrade.cs" Link="ControlPlaneHost.OdbUpgrade.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.ResultBatch.cs" Link="ControlPlaneHost.ResultBatch.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/*Contracts.cs" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -47,12 +47,19 @@ def _parent(
 ) -> Mapping[str, Any] | None:
     dependency_ids = item.get("dependencyJobIds")
     if isinstance(dependency_ids, list):
-        for dependency_id in dependency_ids:
-            parent = by_id.get(str(dependency_id or "").strip())
-            if parent is not None:
-                return parent
+        identifiers = list(dict.fromkeys(str(value or "").strip() for value in dependency_ids))
+        identifiers = [value for value in identifiers if value]
+        if len(identifiers) > 1:
+            raise ValueError(f"{item.get('jobName')} 有多个前置作业，无法确定唯一祖先路径。")
+        if identifiers:
+            parent = by_id.get(identifiers[0])
+            if parent is None:
+                raise ValueError(f"{item.get('jobName')} 指定的前置作业不存在。")
+            return parent
     oldjob_name = str(item.get("oldjobName") or "").strip().casefold()
     candidates = by_name.get(oldjob_name, [])
+    if len(candidates) > 1:
+        raise ValueError(f"{item.get('jobName')} 的前置名称对应多个作业，请先指定唯一前置作业。")
     return candidates[0] if candidates else None
 
 
@@ -108,7 +115,11 @@ def build_restart_result_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
             issues.append("重启动依赖存在循环，无法生成完整结果。")
             break
         seen.add(job_id)
-        parent = _parent(current, by_id, by_name)
+        try:
+            parent = _parent(current, by_id, by_name)
+        except ValueError as error:
+            issues.append(str(error))
+            break
         if parent is None:
             external_path = Path(str(current.get("oldjobPath") or ""))
             if external_path.is_file() and external_path.suffix.lower() == ".odb":

@@ -448,6 +448,29 @@ class OdbMergeOperationManager:
             self._require_history()
             return self._snapshot_locked(self._require_locked(operation_id))
 
+    def find_request(
+        self, client_request_id: str, *, signature: tuple[Any, ...] | None = None
+    ) -> dict[str, Any] | None:
+        """Read a durable child by identity without admitting or replaying work."""
+        with self._lock:
+            self._require_history()
+            operation_id = self._client_requests.get(client_request_id)
+            if (
+                operation_id
+                and signature is not None
+                and self._operations[operation_id].request.signature != signature
+            ):
+                raise ApiProblem(
+                    409,
+                    "IDEMPOTENCY_CONFLICT",
+                    "已记录的合并步骤与批量计划不一致，不能继续。",
+                )
+            return (
+                self._snapshot_locked(self._operations[operation_id])
+                if operation_id
+                else None
+            )
+
     def list_snapshots(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             self._require_history()

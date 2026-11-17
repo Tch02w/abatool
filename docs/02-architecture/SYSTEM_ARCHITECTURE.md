@@ -14,6 +14,8 @@
 
 本机队列：`JobQueuePage → LocalQueueRuntimeManager → LocalQueueScheduling → SchedulerCore / SQLiteSchedulerRepository → execute_local_job`。计划先持久化再启动；后台重启保留未知条目并扫描原目录，不自动重复执行。合计 CPU、绝对内存、百分比限制和双文件提交边界见 [本机调度说明](../03-features/LOCAL_SCHEDULING.md) 与 [ADR 0010](../submitter/adr/0010-native-shared-local-scheduler.md)。
 
+本机观测：多个执行器共用进程快照，以执行身份和 PID 创建时间约束统计；回调先聚合，再由队列线程批量保存。`LocalMemoryMonitor` 复用纯 Python 学习服务，历史写入同一 SQLite 的兼容元信息表，按 job ID 将估计交给调度核心。采样不可读与零占用不同，当前 RSS 与历史估计不同；详见 [内存说明](../03-features/MEMORY_MONITORING.md) 和 [ADR 0011](../submitter/adr/0011-native-memory-observation.md)。
+
 ## 后处理数据流
 
 ```text

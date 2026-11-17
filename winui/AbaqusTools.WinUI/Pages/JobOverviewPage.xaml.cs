@@ -196,6 +196,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             RuntimeProgressBar.Value = 0;
             ElapsedSummaryText.Text = "00:00:00";
             MemorySummaryText.Text = "—";
+            ToolTipService.SetToolTip(MemorySummaryText, null);
             InputPathText.Text = "未记录";
             WorkDirectoryText.Text = "尚未分配";
             RestartDependencyText.Text = "无";
@@ -230,6 +231,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             ? (string.IsNullOrWhiteSpace(item.Elapsed) ? "00:00:00" : item.Elapsed)
             : FormatElapsed(operation);
         MemorySummaryText.Text = item.RuntimeMemoryDisplay;
+        ToolTipService.SetToolTip(MemorySummaryText, item.MemoryDetailsDisplay);
         InputPathText.Text = string.IsNullOrWhiteSpace(item.InpPath) ? "未记录" : item.InpPath;
         WorkDirectoryText.Text = ResolveWorkDirectory(item) ?? "尚未分配";
         RestartDependencyText.Text = string.IsNullOrWhiteSpace(item.OldjobName)
@@ -262,6 +264,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         MemorySummaryText.Text = string.IsNullOrWhiteSpace(operation.Request.Memory)
             ? "服务器默认"
             : operation.Request.Memory;
+        ToolTipService.SetToolTip(MemorySummaryText, null);
         InputPathText.Text = operation.Request.InputPath;
         WorkDirectoryText.Text = string.IsNullOrWhiteSpace(operation.WorkDirectory)
             ? "正在分配"

@@ -87,6 +87,21 @@ public sealed class JobQueueItem
     [JsonPropertyName("runtimeMemoryBytes")]
     public long RuntimeMemoryBytes { get; init; }
 
+    [JsonPropertyName("memoryObservationStatus")]
+    public string MemoryObservationStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("memoryPeakBytes")]
+    public long MemoryPeakBytes { get; init; }
+
+    [JsonPropertyName("memoryEstimatedBytes")]
+    public long MemoryEstimatedBytes { get; init; }
+
+    [JsonPropertyName("memorySampleCount")]
+    public int MemorySampleCount { get; init; }
+
+    [JsonPropertyName("memoryEstimateSource")]
+    public string MemoryEstimateSource { get; init; } = string.Empty;
+
     [JsonPropertyName("priority")]
     public int Priority { get; init; }
 
@@ -141,11 +156,30 @@ public sealed class JobQueueItem
     public string SchedulingDisplay => Held ? "已暂停" : "可调度";
 
     [JsonIgnore]
-    public string RuntimeMemoryDisplay => RuntimeMemoryBytes switch
+    public string RuntimeMemoryDisplay => MemoryObservationStatus switch
+    {
+        "unavailable" => "暂不可读",
+        "stale" => "待更新",
+        "waiting" => "采集中",
+        "ended" => "已结束",
+        _ => FormatMemory(RuntimeMemoryBytes),
+    };
+
+    [JsonIgnore]
+    public string MemoryDetailsDisplay => $"当前：{RuntimeMemoryDisplay} · 观测峰值：{FormatMemory(MemoryPeakBytes)}"
+        + (MemoryEstimatedBytes > 0 ? $"\n调度参考：{FormatMemory(MemoryEstimatedBytes)}（{MemoryEstimateSource switch
+        {
+            "history" => "同模型历史",
+            "reference" => "本次运行的其他作业参考",
+            "observed" => "已观测峰值含安全余量",
+            _ => "预估",
+        }}）" : "\n尚无内存估计，仍受并行数与 CPU 限制");
+
+    private static string FormatMemory(long bytes) => bytes switch
     {
         <= 0 => "未统计",
-        >= 1073741824 => $"{RuntimeMemoryBytes / 1073741824d:0.0} GB",
-        _ => $"{RuntimeMemoryBytes / 1048576d:0} MB",
+        >= 1073741824 => $"{bytes / 1073741824d:0.0} GB",
+        _ => $"{bytes / 1048576d:0} MB",
     };
 }
 

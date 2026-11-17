@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from modules.submitter.scheduling import (
 )
 
 from .contracts import ApiProblem
+from .local_memory import LocalMemoryMonitor
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,7 @@ class LocalQueueScheduling:
         self.resource_provider = resource_provider
         self.repository = SQLiteSchedulerRepository(queue_service.path.with_name("scheduler_state.db"))
         self.core = SchedulerCore(self.repository)
+        self.memory = LocalMemoryMonitor(self.repository)
         self.notice = self.repository.recovery_message
         self._recovery_pending = True
         try:
@@ -94,13 +97,15 @@ class LocalQueueScheduling:
                     item.status = STATUS_UNKNOWN
                     item.message = "后台重启，等待核对原作业；不会自动重复提交"
                     item.active_job_key = ""
+                    item.memory_observation_status = "stale"
                     item.effective_work_dir = effective_queue_item_work_dir(item)
                     if stored is not None and stored.attempt_id:
                         item.attempt_id = stored.attempt_id
                     recovered.append(item.job_name)
                     directories.append(item.effective_work_dir)
             self.core.recover_orphaned_attempts({item.job_id for item in items})
-            reconcile_scheduler_from_queue(self.core, items)
+            estimates = self.memory.project_estimates(items)
+            reconcile_scheduler_from_queue(self.core, items, estimated_memory_by_job_id=estimates)
 
         with self.core.transaction():
             self.queue_service.runtime_transaction(mutation)
@@ -111,8 +116,8 @@ class LocalQueueScheduling:
     def reserve(self, ready_ids: list[str], max_parallel: int, finishing_ids: set[str]):
         self._ensure_recovered()
         resources = self.resource_provider()
-        if resources.logical_cpus < 1 or resources.available_memory_bytes < 0:
-            raise ValueError("本机资源读数无效，已暂停新作业调度")
+        if resources.logical_cpus < 1 or resources.available_memory_bytes <= 0:
+            raise ValueError("本机资源读数无效或已无可用内存，已暂停新作业调度")
         allocations = []
 
         def mutation(_candidates, items):
@@ -137,16 +142,20 @@ class LocalQueueScheduling:
                 eligible.add(item.job_id)
             # Keep disappeared active entries from reserving stale directory keys.
             self.core.recover_orphaned_attempts(set(by_job))
-            reconcile_scheduler_from_queue(self.core, items)
+            estimates = self.memory.project_estimates(items)
+            reconcile_scheduler_from_queue(self.core, items, estimated_memory_by_job_id=estimates)
             active_cores = sum(max(0, item.cores) for item in active)
             unknown_cores = any(item.cores <= 0 for item in active)
             # OS available memory already excludes RSS; reserve only each job's
             # configured absolute requirement not yet represented by observed RSS.
-            unobserved_memory = sum(max(0, parse_memory_request_bytes(item.memory) - item.rss_bytes) for item in active)
+            now = time.time()
+            unobserved_memory = sum(max(0, max(parse_memory_request_bytes(item.memory), estimates.get(item.job_id, 0)) -
+                (item.rss_bytes if item.memory_observation_status == "observed" and 0 <= now - item.memory_observed_at <= 10 else 0))
+                for item in active)
             budget = ResourceSnapshot(
                 available_slots=0 if unknown else max(0, max_parallel - len(active)),
                 available_cores=0 if unknown_cores else max(0, resources.logical_cpus - active_cores),
-                available_memory_bytes=max(0, resources.available_memory_bytes - unobserved_memory),
+                available_memory_bytes=max(0, int(resources.available_memory_bytes * self.memory.service.usable_memory_ratio) - unobserved_memory),
             )
             reserved = {queue_item_conflict_key(item) for item in active
                         if item.archive_status not in {"", "已归档"} or item.item_id in finishing_ids}

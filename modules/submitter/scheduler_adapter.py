@@ -158,8 +158,10 @@ def reconcile_scheduler_from_queue(
     queue_items: list[QueueItem],
     *,
     estimated_memory_by_job: Mapping[str, int] | None = None,
+    estimated_memory_by_job_id: Mapping[str, int] | None = None,
 ) -> None:
     estimates = estimated_memory_by_job or {}
+    estimates_by_id = estimated_memory_by_job_id or {}
     with scheduler.transaction():
         for order, item in enumerate(queue_items):
             if not item.job_name:
@@ -168,7 +170,7 @@ def reconcile_scheduler_from_queue(
                 item,
                 queue_items=queue_items,
                 submitted_order=order,
-                estimated_memory_bytes=int(estimates.get(item.job_name) or 0),
+                estimated_memory_bytes=int(estimates_by_id.get(item.job_id, estimates.get(item.job_name) or 0)),
             )
             state = scheduler_state_from_queue_status(item.status)
             if state in ACTIVE_JOB_STATES and not item.attempt_id:

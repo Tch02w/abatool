@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -26,6 +27,18 @@ def _integer(value: object, default: int = 0) -> int:
 
 def _string(value: object) -> str:
     return str(value or "").strip()
+
+
+def _memory_status(raw):
+    status = _string(raw.get("memory_observation_status"))
+    if status == "observed":
+        try:
+            age = time.time() - float(raw.get("memory_observed_at") or 0)
+        except (ValueError, TypeError):
+            age = -1
+        if not 0 <= age <= 10:
+            return "stale"
+    return status
 
 
 def _project_item(raw: object, index: int) -> dict[str, Any] | None:
@@ -58,6 +71,11 @@ def _project_item(raw: object, index: int) -> dict[str, Any] | None:
         "cores": max(0, _integer(raw.get("cores"))),
         "memory": _string(raw.get("memory")),
         "runtimeMemoryBytes": max(0, _integer(raw.get("rss_bytes"))),
+        "memoryObservationStatus": _memory_status(raw),
+        "memoryPeakBytes": max(0, _integer(raw.get("memory_peak_bytes"))),
+        "memoryEstimatedBytes": max(0, _integer(raw.get("memory_estimated_bytes"))),
+        "memorySampleCount": max(0, _integer(raw.get("memory_sample_count"))),
+        "memoryEstimateSource": _string(raw.get("memory_estimate_source")),
         "priority": _integer(raw.get("priority")),
         "held": bool(raw.get("held", False)),
         "schedulerState": _string(raw.get("scheduler_state")),

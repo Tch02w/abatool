@@ -6,6 +6,25 @@
 
 ## 接续顺序
 
+### 2026-11-18 F005/F007 自有进程内存与历史估计（源码通过，冻结包待验）
+
+修改前已向用户说明方案：接入按执行身份约束的实际进程采样，以峰值和安全余量辅助资源分配，按输入与执行参数区分历史；多作业共用扫描，未知读数不当零。已实现共享快照、PID/创建时间/子进程核对、首次与最终立即保存和中间 5 秒批量保存、短时峰值保留；外部刷新保留不变数值的时间戳。内存学习复用纯 Python 服务，SQLite 兼容元信息保留历史，队列和概览提示区分当前/峰值/估计来源。资源预算使用当前可用内存的 85%，抵扣活动作业尚未由新鲜 RSS 覆盖的预留。功能、错误和限制见 [内存说明](../../03-features/MEMORY_MONITORING.md)、[ADR 0011](../../submitter/adr/0011-native-memory-observation.md)。
+
+实际验证（重叠集合不累计）：
+
+- 首轮 32 项通过：`GPTWork/memory-first-20261118.xml`。扩展控制面、执行器、调度、队列及 WinUI 契约 **314 项通过**，`GPTWork/memory-regression-20261118.xml`（169.62 秒）；在末次外部时间戳/首次立即保存/85% 预算修改之前。
+- 最后专项 **45 项通过，107.98 秒**，`GPTWork/memory-external-final2-20261118.xml`（日志同名 `.log`，临时目录 `GPTWork/pytest-memory-external-final2`）。
+- 上一遍同集合 `GPTWork/memory-external-final-20261118.xml` 为 1 失败/44 通过：`test_observations_reach_api_queue_and_persisted_profile_without_new_scanner` 发现初始空队列保存周期会推迟首个样本 5 秒。每次执行第一次回调立即触发保存后通过，失败证据保留。
+- C# 主机回归通过，新加 **6 项内存显示检查**，包括旧响应缺字段兼容；日志 `GPTWork/memory-host-20261118.log`。WinUI Release **0 警告/0 错误**，23.10 秒，`GPTWork/memory-winui-20261118.log`。Ruff 检查全部修改 Python 文件通过。
+- README、Wiki、API、功能索引、架构/ADR、状态及任务同步更新后，标准文档导航检查 **41 项通过**（`tests/common/test_documentation_navigation.py`，`--basetemp=GPTWork/pytest-docs`）。
+- 源码实际 Windows 进程：`.\.venv\Scripts\python.exe packaging/verify_local_memory.py`，回执 `GPTWork/local-memory-live-2bbf2fa42a36/verification.json`。两次独立后台启动，隔离 helper 各实际分配 96 MiB；观测 125173760/125001728 字节，历史估计 137691136 字节，PID/创建时间匹配，父后台未计入。重启保留估计、不自动再运行，明确重新排队产生新执行身份；关闭等待安全终态后退出 0、连接描述文件移除、源夹具不变。helper 181896/21032、包装进程 212460/211788 均已检查不存在，没有调用 Abaqus 求解。该回执在末次外部时间戳/首次立即保存/85% 预算修改之前；最终冻结验证将覆盖这些修改。
+
+当前测试句柄均已结束（最终 60975 日志确认 45 项通过），没有遗留已知自有 helper。读取目录按钮修正仍保留；未操纵旧原生窗口，不能把内存显示逻辑通过当作悬停/布局验收。真实 Abaqus/MPI 高负载、完整原生业务、真实 SSH、三层连续 ODB 链和无开发环境目标机器仍待验。周额度本次最近剩余 59%，未触及暂停阈值。
+
+准确续接点：先完成文档导航检查并本地提交，基于干净提交构建新完整目录，再运行用户账户清单/依赖/正式主机检查和 `packaging/verify_local_memory.py --bundle <新目录>`。记录失败句柄及原进程后才考虑重跑，不为验收启动求解。GitHub 推送仍等待此前具体远端确认；当前 `b0e12f955ac4` 包是前一阶段，不包含此内存改动。
+
+### 全范围顺序
+
 1. TASK-001 后处理和结果浏览验收，保留现有 PySide6 基准。
 2. 目录整理：保留有效源码/文档/测试/证据；梳理 GPTWork 大型样本、历史构建和临时输出引用，先形成可恢复移动清单，不凭文件名删除。用户数据和原始模型不属于清理对象。
 3. F011–F013：计算重启动与结果合并图分离、空节点有效性、分支祖先路径、点击目标生成完整结果、链式批量实际执行、取消和失败传播。

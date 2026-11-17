@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from pathlib import Path
@@ -368,6 +369,18 @@ class JobQueueService:
             work_dir=roots[0],
             jobs=list(jobs_by_key.values()),
         )
+        for record in merge.get("memory_records", []):
+            item, job = record["item"], record["job"]
+            item.memory_observed_at = time.time()
+            if item.status not in ACTIVE_STATUSES:
+                item.memory_observation_status = "ended"
+                item.rss_bytes = 0
+            elif int(job.get("rss_bytes") or 0) > 0 and item.pids and all(
+                float(item.pid_create_times.get(str(pid)) or 0) > 0 for pid in item.pids
+            ):
+                item.memory_observation_status = "observed"
+            else:
+                item.memory_observation_status = "unavailable"
         added = int(merge["added"])
         updated = int(merge["updated"])
         status_only = int(merge["status_only_updates"])
@@ -407,9 +420,9 @@ class JobQueueService:
             valid_roots = sorted(root for root in roots if Path(root).is_dir())
             if not valid_roots:
                 return
-            before = project_job_queues(candidates, queue_items)
+            before = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
             self._scan_external_roots(queue_items, valid_roots)
-            after = project_job_queues(candidates, queue_items)
+            after = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
             if before != after:
                 save_joblist_state(candidates, queue_items, self.path)
 

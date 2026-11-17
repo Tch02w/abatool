@@ -47,6 +47,12 @@ class QueueItem:
     pids: list = field(default_factory=list)
     pid_create_times: dict = field(default_factory=dict)
     rss_bytes: int = 0
+    memory_observed_at: float = 0.0
+    memory_observation_status: str = ""
+    memory_peak_bytes: int = 0
+    memory_estimated_bytes: int = 0
+    memory_sample_count: int = 0
+    memory_estimate_source: str = ""
     priority: int = 0
     held: bool = False
     scheduler_state: str = ""

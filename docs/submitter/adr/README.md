@@ -19,3 +19,4 @@ Current records:
 - [0008-all-worker-shutdown-fence.md](0008-all-worker-shutdown-fence.md)
 - [0009-reversible-workbench-close.md](0009-reversible-workbench-close.md)
 - [0010-native-shared-local-scheduler.md](0010-native-shared-local-scheduler.md)
+- [0011-native-memory-observation.md](0011-native-memory-observation.md)

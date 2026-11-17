@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -27,9 +28,8 @@ from .constants import (
     STATUS_TERMINATED,
     STATUS_UNKNOWN,
 )
-from .models import QueueItem
 from .cpu_policy import validate_local_cpus
-from .process_scanner import get_psutil_process_snapshot
+from .models import QueueItem
 from .runtime_evidence import (
     collect_runtime_evidence,
     runtime_completion_ready,
@@ -37,9 +37,11 @@ from .runtime_evidence import (
     update_file_stability,
     update_runtime_phase,
 )
+from .runtime_observation import SHARED_PROCESS_SNAPSHOTS, observe_local_job
 
 LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[str, str, int, str], None]
+LOGGER = logging.getLogger(__name__)
 EXISTING_RESULT_EXTENSIONS = (".odb", ".sta")
 RESTART_DEPENDENCY_EXTENSIONS = (
     ".odb",
@@ -86,10 +88,12 @@ class LocalJobExecutionResult:
 class LocalJobProcessController:
     """Request Abaqus termination without force-killing the solver tree."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, observer=None, snapshots=SHARED_PROCESS_SNAPSHOTS) -> None:
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None
         self.cancel_requested = False
+        self.observer = observer
+        self.snapshots = snapshots
 
     def attach(self, process: subprocess.Popen[str]) -> None:
         with self._lock:
@@ -340,14 +344,21 @@ def execute_local_job(
                 _emit(progress, "terminating", "正在终止 Abaqus 作业", 92)
                 _terminate_abaqus(item, work_dir, log)
 
-            rows = get_psutil_process_snapshot(force=True, include_details=True)
+            snapshot = controller.snapshots.capture()
+            rows = snapshot.rows or ()
             run["process_snapshot"] = rows
             run["process_snapshot_by_pid"] = {
                 int(row.get("ProcessId") or 0): row for row in rows
             }
             run["process_snapshot_solver_rows"] = rows
-            run["process_snapshot_available"] = True
+            run["process_snapshot_available"] = snapshot.rows is not None
             evidence = collect_runtime_evidence(run)
+            if controller.observer is not None:
+                try:
+                    controller.observer(observe_local_job(snapshot, evidence, work_dir=work_dir,
+                                                          submitted_at=submitted_at, launcher_pid=process.pid))
+                except Exception:
+                    LOGGER.exception("Memory observation failed; continuing to monitor the owned job")
             sta_delta = str(evidence.get("sta_delta") or "").strip()
             if sta_delta and log:
                 for line in sta_delta.splitlines():

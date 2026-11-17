@@ -6,8 +6,8 @@ import json
 import sqlite3
 import threading
 import time
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
@@ -18,7 +18,6 @@ from .scheduling import (
     ResourceRequest,
     SchedulerJobSnapshot,
 )
-
 
 SCHEMA_VERSION = 1
 
@@ -285,6 +284,19 @@ class SQLiteSchedulerRepository:
                 self._connection.close()
             except sqlite3.Error:
                 pass
+
+    def load_memory_profiles(self) -> dict[str, str]:
+        """Additive metadata; legacy schema-1 readers can ignore these entries."""
+        with self._lock:
+            rows = self._connection.execute("SELECT key, value FROM scheduler_meta WHERE key LIKE 'memory_profile:%'").fetchall()
+        return {str(row["key"]).removeprefix("memory_profile:"): str(row["value"]) for row in rows}
+
+    def save_memory_profile(self, key: str, value: dict) -> None:
+        with self.transaction():
+            self._connection.execute(
+                "INSERT INTO scheduler_meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                ("memory_profile:" + key, json.dumps(value, separators=(",", ":"))),
+            )
 
     @staticmethod
     def _encode_specification(specification: JobSpecification) -> str:

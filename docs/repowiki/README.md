@@ -11,6 +11,7 @@
 - [整体架构](architecture.md)：进程边界、目录职责和数据流。
 - [原生工作台](native-workbench.md)：WinUI 3 壳层、八个页面和交互约定。
 - [作业提交与调度](submitter.md)：草稿、队列、本机执行、远程资源和重启动链。
+- [作业内存与调度估计](../03-features/MEMORY_MONITORING.md)：当前占用、峰值、历史来源、失败状态及资源余量。
 - [ODB 后处理](postprocessor.md)：发现、兼容性、合并、批处理和结果浏览。
 - [WinUI 结果浏览操作](../03-features/POSTPROCESSING.md#winui-结果列表与表格预览f021)说明如何翻页、查看 CSV 和 Excel 宽表，以及复制预览。
 - [开发、测试与发布](development.md)：环境、验证命令、生成物和安全约定。

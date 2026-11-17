@@ -38,6 +38,7 @@ from modules.submitter.queue_scheduler import (
     oldjob_name_from_item,
     queue_item_matches_oldjob_path,
 )
+from modules.submitter.runtime_observation import LocalJobObservation
 from modules.submitter.scheduling import ExecutionEventKind
 
 from .contracts import SCHEMA_VERSION, ApiProblem, utc_now_text
@@ -74,6 +75,7 @@ class _RuntimeRecord:
     finished_at: str = ""
     logs: list[str] = field(default_factory=list)
     paused: bool = False
+    observation_started: bool = False
     thread: threading.Thread | None = field(default=None, repr=False)
 
     @property
@@ -127,6 +129,8 @@ class LocalQueueRuntimeManager:
         self._scheduler_closed = False
         self._pending_results = {}
         self._retry_results_after = 0.0
+        self._pending_observations = {}
+        self._next_observation_flush = 0.0
         self._dispatcher = threading.Thread(
             target=self._dispatch_loop,
             name="AbaqusLocalQueueDispatcher",
@@ -151,7 +155,8 @@ class LocalQueueRuntimeManager:
                 "maxParallel": self._max_parallel,
                 "existingResultPolicy": self._existing_result_policy,
                 "startedAt": self._started_at or None,
-                "schedulerMessage": self._scheduler_error or self._scheduling.notice,
+                "schedulerMessage": self._scheduler_error or "；".join(filter(None, [
+                    self._scheduling.notice, self._scheduling.memory.notice])),
                 "activeItemIds": [
                     record.item_id for record in self._runs.values() if record.active
                 ],
@@ -349,6 +354,13 @@ class LocalQueueRuntimeManager:
         while True:
             self._wake.wait(timeout=0.5)
             self._wake.clear()
+            try:
+                self._flush_observations()
+            except Exception as exc:
+                LOGGER.exception("Unable to persist local observations")
+                with self._lock:
+                    self._active = False
+                    self._scheduler_error = f"运行采样保存失败：{exc}。仍在监控原作业，已暂停新派发。"
             with self._lock:
                 retry_results = []
                 if not self._closing and self._pending_results and time.monotonic() >= self._retry_results_after:
@@ -509,6 +521,13 @@ class LocalQueueRuntimeManager:
                 item.status = STATUS_STARTING
                 item.message = "正在准备本机执行环境"
                 item.active_job_key = item.item_id
+                item.rss_bytes = 0
+                item.memory_peak_bytes = 0
+                item.memory_sample_count = 0
+                item.memory_observed_at = 0
+                item.memory_observation_status = "waiting"
+                item.pids = []
+                item.pid_create_times = {}
                 self._scheduling.event(item, ExecutionEventKind.STARTING, item.message)
                 selected = deepcopy(item)
                 return
@@ -517,7 +536,9 @@ class LocalQueueRuntimeManager:
             self.queue_service.runtime_transaction(mutation)
         if selected is None:
             return False
-        controller = LocalJobProcessController()
+        controller = LocalJobProcessController(observer=lambda observation:
+            self._receive_observation(item_id, attempt_id, observation))
+        self._scheduling.memory.begin(selected)
         record = _RuntimeRecord(
             item_id=selected.item_id,
             job_name=selected.job_name,
@@ -544,6 +565,7 @@ class LocalQueueRuntimeManager:
             thread.start()
         except Exception:
             self._runs.pop(item_id, None)
+            self._scheduling.memory.finish(attempt_id)
             raise
         return True
 
@@ -601,6 +623,7 @@ class LocalQueueRuntimeManager:
 
     def _store_result(self, item, record, result):
         try:
+            self._flush_observations(force=True)
             self._update_queue_item(
                 item.item_id,
                 status=result.status,
@@ -634,6 +657,7 @@ class LocalQueueRuntimeManager:
             record.message = result.message
             record.progress = 100
             record.finished_at = utc_now_text()
+            self._scheduling.memory.finish(record.attempt_id)
             self._close_scheduler_if_idle(excluding=record)
         self.event_store.append(
             aggregate_type="localJob",
@@ -643,6 +667,55 @@ class LocalQueueRuntimeManager:
             payload={"status": result.status, "message": result.message, "attemptId": record.attempt_id},
         )
         self._wake.set()
+
+    def _receive_observation(self, item_id, attempt_id, observation):
+        # Called on the executor thread: no disk access and no process scan here.
+        with self._lock:
+            record = self._runs.get(item_id)
+            if record is None or not record.active or record.attempt_id != attempt_id:
+                return
+            if not record.observation_started:
+                record.observation_started = True
+                self._next_observation_flush = 0
+            previous = self._pending_observations.get(item_id)
+            peak = max(previous[2] if previous else 0, observation.rss_bytes or 0)
+            self._pending_observations[item_id] = (record, observation, peak)
+        self._wake.set()
+
+    def _flush_observations(self, *, force=False):
+        with self._lock:
+            if self._scheduler_closed:
+                return
+            if not force and time.monotonic() < self._next_observation_flush:
+                return
+            self._next_observation_flush = time.monotonic() + 5
+            pending = dict(self._pending_observations)
+
+            def mutation(_candidates, items):
+                for item in items:
+                    entry = pending.get(item.item_id)
+                    if entry is None:
+                        owned = self._runs.get(item.item_id)
+                        if item.attempt_id and item.status in ACTIVE_STATUSES and not (owned and owned.active) and (
+                            item.memory_observation_status == "observed" and 0 <= time.time() - item.memory_observed_at <= 10
+                        ):
+                            observation = LocalJobObservation(item.memory_observed_at, item.effective_work_dir,
+                                rss_bytes=item.rss_bytes, pids=tuple(item.pids), status="observed",
+                                pid_create_times=tuple((int(pid), float(stamp)) for pid, stamp in item.pid_create_times.items()))
+                            self._scheduling.memory.apply(item, observation, item.rss_bytes)
+                        continue
+                    record, observation, peak = entry
+                    if item.attempt_id == record.attempt_id and record.active:
+                        self._scheduling.memory.apply(item, observation, peak)
+                active_attempts = {item.attempt_id for item in items if item.status in ACTIVE_STATUSES}
+                for attempt_id in list(self._scheduling.memory.live_estimates):
+                    if attempt_id not in active_attempts:
+                        self._scheduling.memory.finish(attempt_id)
+
+            self.queue_service.runtime_transaction(mutation)
+            for item_id in pending:
+                self._pending_observations.pop(item_id, None)
+            self._scheduling.memory.flush()
 
     def _update_queue_item(
         self,
@@ -682,6 +755,7 @@ class LocalQueueRuntimeManager:
                     item.pids = []
                     item.pid_create_times = {}
                     item.rss_bytes = 0
+                    item.memory_observation_status = "ended"
                 return
 
         with self._lock, self._scheduling.core.transaction():

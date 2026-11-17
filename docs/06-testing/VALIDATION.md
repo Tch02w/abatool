@@ -1,6 +1,6 @@
 # 验收记录与已知缺口
 
-本轮完整包 `8e27c8c8cb26` 已通过文件清单、包内诊断和正式主机/冻结关闭检查；执行身份一致，但保存的 `scheduler_state` 曾滞留 DISPATCHED，已修正，32 项调度/运行/退出专项通过。正在重建最终候选，原包不作为该字段修正后的证据。详情与最终候选见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+本轮最终完整包 `GPTWork/release-win-x64-b0e12f955ac4/AbaqusTools`（干净 `d5b661e`）已通过用户账户 1651 文件/19 worker、包内诊断、正式主机和冻结关闭检查。首包 `8e27c8c8cb26` 的队列调度状态滞留已修正，32 项相关检查通过；最终 `GPTWork/frozen-close-d76ed1a80c40/scheduler-verification.json` 确认队列 API/文件与数据库同为 CANCELED、执行身份一致，测试命令仅一次，后台正常退出且源夹具不变。原始模型与原生窗口未操作，详情见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 核对日期：2026-11-17（F020 分组出图及 F021 结果浏览）。历史测试数不与本次测试累计相加。GPTWork 是本地忽略目录，新机器不会随 Git 自动获得其中的样本和报告。
 

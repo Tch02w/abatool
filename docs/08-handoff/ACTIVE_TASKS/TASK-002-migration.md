@@ -28,7 +28,7 @@
 - 最终专项、适配器与文档导航 **67 项通过**，31.49 秒，33278 退出 0，`GPTWork/native-scheduler-docs-final-20261118.xml`。覆盖第二次重启、未知执行结局、进度保存失败继续监控、损坏队列修复后启动、外部 Core 未知不记作零和文档路径。与 299 项存在重叠，不相加。
 - 正式 C# HTTP 关闭客户端 **5 项通过**，8.29 秒，`GPTWork/native-scheduler-close-api-20261118.xml`；真实 loopback 后台配隔离执行器，无求解/SSH。Ruff 与 `git diff --check` 通过。
 
-准确续接点：本轮测试与构建均已结束，首轮失败保留。下一项制作新完整目录并核对冻结后台执行/关闭；当前完整目录仍为上一阶段 `60ea97c39143`，未含本轮统一调度；旧原生窗口未操作。动态内存学习、自有作业持续 RSS、真实 CPU/内存负载、原生业务和真实远程仍待验收。既有“读取目录”居中/加载指示修正和 GIF 两种计时模式已在上一候选，未重复改动；不能把构建和模拟派发当作界面或求解验收。GitHub 仍等待此前具体远端确认。
+准确续接点：本轮测试与构建均已结束，首轮失败保留。最终完整包与冻结执行/关闭已经通过，见下一节；旧原生窗口未操作。下一项审查动态内存学习、自有作业持续 RSS，并继续真实 CPU/内存负载、原生业务和真实远程验收。既有“读取目录”居中/加载指示修正和 GIF 两种计时模式保留；不能把构建和模拟派发当作界面或求解验收。GitHub 仍等待此前具体远端确认。
 
 ### 本轮完整包与状态投影修正
 
@@ -37,6 +37,14 @@
 冻结后台关闭验证 84238 退出 0，`GPTWork/frozen-close-fd075271b206/verification.json` 确认后台继续/取消保留同一任务，停止后正常退出、连接文件移除、测试命令只执行一次、源测试文件未变。PID 193576 已确认结束。只读核对同目录 `scheduler-verification.json` 确认运行记录、队列存储和 SQLite 的执行身份一致，SQLite 为 CANCELED；但随后发现队列 `scheduler_state` 仍为 DISPATCHED。人类状态已经是“已终止”，问题在持久化调度状态投影。已补充每次执行事件同步该字段的修正及完成/未知状态断言，**32 项调度/运行/退出专项通过**，211.09 秒，34248 退出 0，`GPTWork/scheduler-projection-20261118.xml`。命令：`.\.venv\Scripts\python.exe -m pytest tests/control_plane/test_local_scheduling.py tests/control_plane/test_local_queue_runtime_api.py tests/control_plane/test_shutdown_guard.py -q --basetemp=GPTWork/pytest-scheduler-projection --junitxml=GPTWork/scheduler-projection-20261118.xml`。将重建候选后再验收投影一致性。
 
 辅助检查脚本第一次误把内部 `attempt_id` 当成队列 API 的字段，出现 KeyError；改为读取队列存储后身份检查通过，没有为脚本增加多余 API 字段。首包及失败过程保留。未调用 Abaqus、SSH 或操作原生窗口；周额度最近剩余 61%。
+
+### 最终候选与准确续接点
+
+投影修正已本地提交 **`d5b661e91a65fd2ec45a05d27d2dc0d618147ad9`**。完整构建 88507 退出 0；最终目录 **`GPTWork/release-win-x64-b0e12f955ac4/AbaqusTools`**，来源干净。用户账户 `inventory-verification.json` 核对全部 **1651 文件/19 worker**。包内诊断 `GPTWork/scheduler-final-probe-20261118/bundle-probe-0x1kq3mj/verification.json`、正式 C# 主机启动/资源与队列 API/退出均通过（`GPTWork/scheduler-final-host-20261118.log`）。
+
+最终冻结关闭 6679 退出 0，回执 `GPTWork/frozen-close-d76ed1a80c40/verification.json`：后台继续/取消保留同一任务，合作停止后后台自行退出 0、连接文件移除、命令仅一次、源测试文件不变。`scheduler-verification.json` 进一步核对运行记录、队列文件和 SQLite 的执行身份一致，队列 API、队列文件及数据库状态均为 CANCELED。后台 PID 200552 已确认结束。复现命令：`.\.venv\Scripts\python.exe GPTWork/verify_frozen_close_20261118.py GPTWork/release-win-x64-b0e12f955ac4/AbaqusTools GPTWork/release-win-x64-8e27c8c8cb26/host-check-client/ControlPlaneHost.Tests.dll`，只读投影核对为 `.\.venv\Scripts\python.exe GPTWork/verify_scheduler_execution_20261118.py GPTWork/frozen-close-d76ed1a80c40`。C# 客户端是本轮正式源码构建，无本轮代码未包含的旧客户端行为。
+
+所有本轮测试和自有后台已结束，没有启动 Abaqus 求解。最终文档导航 40 项通过；包内文档是构建时快照，本段回执与最终状态在仓库补记。本轮没有新 ZIP、安装程序或 GitHub Release，未替换正在运行的旧原生窗口，未推送。周额度最终剩余 61%，目标保持进行中。下一项按上面的续接点审查内存学习和观察能力，再推进原生与真实场景，不重跑已通过样本。
 
 ## 2026-11-18 F001 可撤销关闭、页面草稿与后台继续
 

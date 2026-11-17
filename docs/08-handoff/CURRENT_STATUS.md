@@ -4,13 +4,15 @@
 
 ## 工作区事实
 
+本轮 F012 功能、测试与 Wiki 已提交 `ef471f8`，尚未推送；自动审批以未明确授权具体远端为由拒绝 `git push origin main`，等待用户确认 `https://github.com/Tch02w/abatool.git` 的 main 分支。以下包与推送记录是上一轮事实。
+
 2026-11-18 已将合并持久恢复、发布目录访问修正、测试、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，运行功能提交 `7efd7b8`、发布访问修正 `2406e8b`，最近 push 返回 `7efd7b8..2406e8b main -> main`。上轮完整目录与 ZIP 候选在 `GPTWork/release-win-x64-c39d9688d751`，包含此前读取目录按钮修正，尚未包含本轮 F012 后台批量功能；需重新冻结打包。已从用户账户核对全部文件、包内诊断、两次后台启动恢复及正式主机启动/退出；整体迁移、原生和目标机器验收继续进行，尚未发布正式安装包或二进制 GitHub Release。
 
 用户要求周额度剩余 15% 时暂停并等待确认。通过 Codex 用量工具读取账户周额度，11 月 18 日最近一次剩余 70%。后续执行需重新读取，达到阈值后调用暂停并停止目标工作。
 
 GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJB 成品：25 帧/秒时为 4.04 / 1.64 秒，统一时长均为 4 秒，全部 1500×1000；88 项相关 Python 检查及 C# 后处理状态检查通过。当前运行候选来自 `GPTWork/winui-migration-20261118`。业务页按钮定位返回 `coordinate input geometry is unavailable`，模式切换和点击导出仍待验收。见 [任务记录](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
-- 项目：`G:\PythonProject\abaqusTool`。最新代码提交 `2406e8b`，接手仍须检查 Git 状态，不用本文代替当前源码和远端检查。
+- 项目：`G:\PythonProject\abaqusTool`。本轮功能代码提交 `ef471f8`，接手仍须检查 Git 状态，不用本文代替当前源码和远端检查。
 - Python 独立 `.venv`，WinUI/.NET 10；原 PySide6 保留。
 - 原始用户模型只读，真实验收基于 GPTWork 副本。没有为通用校核启动求解。
 - CPU 策略是用户指定的软件规则：Abaqus ≤2021 用逻辑线程上限，>2021 用物理核心上限；后处理进程并行上限单独按逻辑线程数，不固定为 4。实现定位 F007，不宣称这是许可证规则。

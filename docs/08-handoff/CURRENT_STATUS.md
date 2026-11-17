@@ -4,13 +4,13 @@
 
 ## 工作区事实
 
-2026-11-18 已将发布构建、按钮修正、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，功能提交为 `90d6608`，push 返回 `8cdd9ac..90d6608 main -> main`。该干净提交的完整目录与 ZIP 候选在 `GPTWork/release-win-x64-_eok77y5`；整体迁移、原生和目标机器验收继续进行，尚未发布正式安装包或二进制 GitHub Release。
+2026-11-18 已将合并内容校验、测试、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，功能提交为 `16859c4`，push 返回 `3192c19..16859c4 main -> main`。该干净提交的完整目录与 ZIP 候选在 `GPTWork/release-win-x64-g_asfnjp`，包含此前读取目录按钮修正。清单、包内诊断及正式主机启动/退出通过；整体迁移、原生和目标机器验收继续进行，尚未发布正式安装包或二进制 GitHub Release。
 
 用户要求周额度剩余 15% 时暂停并等待确认。通过 Codex 用量工具读取账户周额度，11 月 18 日最近一次剩余 74%。后续执行需重新读取，达到阈值后调用暂停并停止目标工作。
 
 GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJB 成品：25 帧/秒时为 4.04 / 1.64 秒，统一时长均为 4 秒，全部 1500×1000；88 项相关 Python 检查及 C# 后处理状态检查通过。当前运行候选来自 `GPTWork/winui-migration-20261118`。业务页按钮定位返回 `coordinate input geometry is unavailable`，模式切换和点击导出仍待验收。见 [任务记录](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
-- 项目：`G:\PythonProject\abaqusTool`。最新功能提交 `90d6608`，接手仍须检查 Git 状态，不用本文代替当前源码和远端检查。
+- 项目：`G:\PythonProject\abaqusTool`。最新功能提交 `16859c4`，接手仍须检查 Git 状态，不用本文代替当前源码和远端检查。
 - Python 独立 `.venv`，WinUI/.NET 10；原 PySide6 保留。
 - 原始用户模型只读，真实验收基于 GPTWork 副本。没有为通用校核启动求解。
 - CPU 策略是用户指定的软件规则：Abaqus ≤2021 用逻辑线程上限，>2021 用物理核心上限；后处理进程并行上限单独按逻辑线程数，不固定为 4。实现定位 F007，不宣称这是许可证规则。
@@ -26,7 +26,7 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
 | F005 作业概览日志 | 选中/拖选冻结、相同文本去重、清选后刷新、作业归属保护；9 项状态测试和合并构建通过 | 用户恢复 UI 验证后，在合并候选检查业务页复制、拖选和滚动 |
 | F025 共用数字输入与参数说明 | 16 处入口，新增 GIF 单轮时长；完整外观模板及说明已构建，既有控件自身原生窗口 35 项通过 | 业务页视觉、悬停/点击/键盘仍待验收；影响 F003/F004/F007/F008/F022 |
 | F001/F003/F004 窗口与布局 | 资源两列对齐/窄屏换行、队列设置行居中、屏蔽容器快捷键误提示；1250×690 DIP 客户区下限按 DPI/工作区调整，13 项计算检查通过 | 原生布局、拖动缩小、跨屏缩放与恢复验收 |
-| F013 单步合并 | 两组真实内容校验通过；压缩/历史关/额外副本的新发布流程及源文件摘要已核对；99 项相关回归通过 | 随包构建、原生操作、真实多节点与后台重启恢复 |
+| F013 单步合并 | 两组真实内容校验通过；压缩/历史关/额外副本的新发布流程及源文件摘要已核对；99 项相关回归通过，已进入完整目录候选 | 原生操作、真实多节点与后台重启恢复 |
 | F015 升级 / F012 结果链 | 实现及测试入口存在，不能宣称完整迁移已交付 | 按原迁移合同核对真实任务与恢复 |
 | F001–F011/F022–F024 | 已定位实现；本轮没有全面重验这些模块 | 后处理交付后继续剩余迁移与类 Slurm 调度目标 |
 | 文档体系 | 核心导航、26 项功能定位和交接制度已建立，旧编号保留 | 每完成功能同步更新，不积压到项目结束 |
@@ -40,13 +40,13 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
    F013 两组真实合并的当前证据为 `GPTWork/merge-real-fv8_supj/verification.json`。无需重跑已通过样本，继续完整结果多节点、后台重启恢复与原生操作。
 2. 人工样例截面指派已修复，六组实体实际 Abaqus 解析校核通过；证据 `GPTWork/real-odb-validation/known-region-fumxjvn1/verification.json`，不要重跑已完成排查。
 3. 本次真实恢复证据：`GPTWork/real-odb-validation/region-delivery-zfmk0ni6/verification-resumed-2.json`，三组均成功且源全文件 SHA256 未变。生产源保护为大小/mtime/采样摘要，不称完整文件验证。旧 CSV schema 差异已明确校核并保留失败记录，不需重跑已完成三组。
-4. 最新完整目录候选为 `GPTWork/release-win-x64-_eok77y5/AbaqusTools/AbaqusTools.WinUI.exe`，包含已验收的后处理/GIF代码与读取按钮修正。启动前需正常退出旧候选窗口；目前无法通过桌面工具激活旧窗口，新包的原生窗口未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
+4. 最新完整目录候选为 `GPTWork/release-win-x64-g_asfnjp/AbaqusTools/AbaqusTools.WinUI.exe`，包含后处理/GIF、读取按钮修正及 F013 内容校验。启动前需正常退出旧候选窗口；此前无法通过桌面工具激活旧窗口，新包的原生窗口未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
 5. 最新数字控件回执 `GPTWork/winui-numberbox-preview-checks/verification-preview-matched.json` 与同名 .exit.txt：35 项通过、exit 0，包含外观几何、主题切换、数值语义、帮助 Header、占位与焦点状态。它不覆盖业务页布局、日志拖选或帮助弹层悬停。参数说明悬停 180ms 打开、按钮/提示区内保持、离开两区 240ms 关闭，保留点击/键盘，无“知道了”；14px 小圆问号保留 28px 热区。用户按 Esc 停止 Computer Use 后已停止 UI 操作，业务页验收未完成；详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 6. 持续同步文档；后续目录清理与剩余迁移保留任务索引，不能挤占当前后处理交付。
 
 ## 运行与等待状态
 
-11 月 18 日发布验证使用独立测试控制面，所有构建、测试及其自有控制面均已结束。旧候选 `GPTWork/winui-migration-20261118/AbaqusTools.WinUI.exe` 窗口 58461048 仍可读取，激活连续失败；未强制关闭，见 TASK-002。前序 ABQcaeG/ABQcaeK 归属未确认，不得据此终止用户 CAE。
+11 月 18 日两组真实合并、源文件摘要复核、构建、测试及独立测试控制面均已确认结束。旧候选 `GPTWork/winui-migration-20261118/AbaqusTools.WinUI.exe` 窗口 58461048 此前可读取，但激活连续失败；本轮没有操作该窗口或强制关闭，见 TASK-002。用户运行中的 Python/Abaqus 进程归属不能从进程名称判断，不得据此终止。
 
 ## 持续交接要求（用户明确要求）
 

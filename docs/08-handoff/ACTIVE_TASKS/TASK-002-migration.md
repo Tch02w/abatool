@@ -30,7 +30,11 @@
 
 ### 准确续接点
 
-已运行 `.venv/Scripts/python.exe GPTWork/verify_real_merge_acceptance.py`，59434 退出 0。`GPTWork/merge-real-fv8_supj/verification.json` 核实原始三份 ODB/输入副本完整摘要不变，源备份与输入一致，无结果帧列表、回执及失败目录清理符合预期。该副本目录由提升权限进程创建，普通读取可能拒绝访问；不要把权限问题当作文件不存在。54813/58927/15537/22343/45990/59434 均已确认结束，无须重跑两组真实样本。下一项为更新发布候选、原生点击及真实多节点批量/后台重启恢复验收。
+已运行 `.venv/Scripts/python.exe GPTWork/verify_real_merge_acceptance.py`，59434 退出 0。`GPTWork/merge-real-fv8_supj/verification.json` 核实原始三份 ODB/输入副本完整摘要不变，源备份与输入一致，无结果帧列表、回执及失败目录清理符合预期。该副本目录由提升权限进程创建，普通读取可能拒绝访问；不要把权限问题当作文件不存在。54813/58927/15537/22343/45990/59434 均已确认结束，无须重跑两组真实样本。下一项为原生点击、真实多节点批量及后台重启恢复验收。
+
+代码、测试和文档功能提交 `16859c4b457a084e2e78019c285a504b98242728` 已推送 GitHub origin/main，push 返回 `3192c19..16859c4 main -> main`。新完整目录 `GPTWork/release-win-x64-g_asfnjp/AbaqusTools` 从该干净提交构建，62767 退出 0。1644 个清单文件摘要全部匹配，19 个 worker 均与源码逐文件相同。包内诊断 `GPTWork/package-merge-probe/bundle-probe-xb9j82ur/verification.json` 与正式 C# 主机独立启动/资源和队列 API/安全关闭均通过；独立数据目录 `GPTWork/package-merge-host`。本轮没有启动或关闭原生窗口。
+
+同级压缩包 `AbaqusTools-win-x64-16859c4.zip` 为 149463345 字节，SHA256=`14c915c80b05bb0e3bad30948436a60798d1b7ecbc2535cc8f72b48250c7ae75`，CRC 和清单核对通过，回执 `archive-verification.json`。目录和 ZIP 是本地候选，尚未上传二进制 Release；包内文档对应功能提交，构建后的验收记录保存在仓库当前文档。最终文档路径检查 38 passed；所有本轮自有构建、合并、检查和测试主机均已结束。周额度复查剩余 74%，整体目标保持 active。
 
 ## 2026-11-18 完整目录包与读取目录按钮（已构建，原生/目标机器待验收）
 

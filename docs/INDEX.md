@@ -20,6 +20,7 @@
 | 系统分层、数据流、模块边界 | [系统架构导航](02-architecture/SYSTEM_ARCHITECTURE.md) |
 | 每个功能在哪些文件、该测什么 | [功能索引](03-features/FUNCTION_INDEX.md) |
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
+| 本机优先级、资源准入、后台重启与未知状态 | [本机调度说明](03-features/LOCAL_SCHEDULING.md) |
 | 完整结果批量执行、共享祖先与重启继续 | [批量结果说明](03-features/ODB_RESULT_BATCH.md) |
 | ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |
 | 日志选择刷新、16 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |

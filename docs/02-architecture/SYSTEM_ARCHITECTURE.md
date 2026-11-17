@@ -12,6 +12,8 @@
 
 兼容入口：`main.py` → `modules/workspace.py`；独立旧后处理 `modules/postprocessor/app.py`。暂不删除 PySide6。
 
+本机队列：`JobQueuePage → LocalQueueRuntimeManager → LocalQueueScheduling → SchedulerCore / SQLiteSchedulerRepository → execute_local_job`。计划先持久化再启动；后台重启保留未知条目并扫描原目录，不自动重复执行。合计 CPU、绝对内存、百分比限制和双文件提交边界见 [本机调度说明](../03-features/LOCAL_SCHEDULING.md) 与 [ADR 0010](../submitter/adr/0010-native-shared-local-scheduler.md)。
+
 ## 后处理数据流
 
 ```text

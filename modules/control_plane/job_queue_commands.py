@@ -6,6 +6,7 @@ import logging
 import os
 import threading
 from collections.abc import Callable, Mapping
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +62,7 @@ REQUEUEABLE_STATUSES = frozenset(
         STATUS_CANCELED,
         STATUS_TERMINATED,
         STATUS_INTERRUPTED,
-        STATUS_UNKNOWN,
+        STATUS_PENDING_CONFIRM,
     }
 )
 SUPPORTED_ACTIONS = frozenset(
@@ -206,9 +207,16 @@ class JobQueueService:
 
         with self._lock:
             candidates, queue_items = self._load()
+            before = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
             result = mutation(candidates, queue_items)
-            save_joblist_state(candidates, queue_items, self.path)
+            after = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
+            if before != after:
+                save_joblist_state(candidates, queue_items, self.path)
             return result
+
+    def observe_recovered_directories(self, directories):
+        with self._lock:
+            self._external_scan_roots.update(os.path.normcase(_normal_path(root)) for root in directories if root)
 
     def runtime_items(self) -> tuple[list[QueueItem], list[QueueItem]]:
         """Return detached queue objects for the runtime dispatcher."""
@@ -314,7 +322,7 @@ class JobQueueService:
             _require_fields(payload, set())
             previous = len(queue_items)
             queue_items[:] = [
-                item for item in queue_items if item.status not in TERMINAL_STATUSES
+                item for item in queue_items if item.status not in TERMINAL_STATUSES or item.status == STATUS_UNKNOWN
             ]
             changed = previous - len(queue_items)
             return changed, f"已清理 {changed} 条完成或终止记录", {}
@@ -708,13 +716,14 @@ class JobQueueService:
             raise ApiProblem(
                 409,
                 "QUEUE_ITEMS_NOT_REQUEUEABLE",
-                "所选作业中包含不能重新排队的状态",
+                "所选作业中包含不能重新排队的状态；状态未知的原作业请先扫描核对",
                 details={"itemIds": blocked},
             )
         for item in selected:
             item.status = STATUS_PENDING_RUN
             item.scheduler_state = ""
             item.pending_reason = ""
+            item.attempt_id = ""
             item.active_job_key = ""
             item.pids = []
             item.pid_create_times = {}
@@ -729,12 +738,12 @@ class JobQueueService:
     ) -> tuple[int, str, dict[str, Any]]:
         item_ids = set(_string_list(payload, "itemIds"))
         selected = [item for item in queue_items if item.item_id in item_ids]
-        blocked = [item.item_id for item in selected if item.status in ACTIVE_STATUSES]
+        blocked = [item.item_id for item in selected if item.status in ACTIVE_STATUSES | {STATUS_UNKNOWN}]
         if blocked:
             raise ApiProblem(
                 409,
                 "ACTIVE_QUEUE_ITEMS_PROTECTED",
-                "运行中的作业不能从队列删除，请先终止作业",
+                "运行中或状态未知的作业不能删除，请先停止作业或扫描核对状态",
                 details={"itemIds": blocked},
             )
         previous = len(queue_items)
@@ -811,6 +820,7 @@ class JobQueueService:
                 raise ApiProblem(400, "INVALID_PRIORITY", "priority 超出允许范围")
             item.priority = priority
         if "oldjobPath" in payload:
+            item.dependency_job_ids = []
             item.oldjob_path = _text(payload, "oldjobPath")
             item.oldjob_name = derive_oldjob_name(item.oldjob_path)
             item.oldjob_dir = (

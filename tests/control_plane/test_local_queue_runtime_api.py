@@ -51,6 +51,7 @@ def queue_item(tmp_path: Path, name: str) -> QueueItem:
         status=STATUS_PENDING_RUN,
         message="待提交",
         selected=False,
+        cores=1,
     )
 
 

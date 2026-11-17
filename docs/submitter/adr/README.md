@@ -18,3 +18,4 @@ Current records:
 - [0007-durable-result-batches.md](0007-durable-result-batches.md)
 - [0008-all-worker-shutdown-fence.md](0008-all-worker-shutdown-fence.md)
 - [0009-reversible-workbench-close.md](0009-reversible-workbench-close.md)
+- [0010-native-shared-local-scheduler.md](0010-native-shared-local-scheduler.md)

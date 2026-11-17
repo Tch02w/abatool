@@ -180,6 +180,7 @@ def queue_item_matches_oldjob_path(item: QueueItem, candidate: QueueItem) -> boo
     if path.stem.lower() != candidate.job_name.lower():
         return False
     candidate_dirs = [
+        effective_queue_item_work_dir(candidate),
         candidate.archive_destination,
         candidate.effective_work_dir,
         candidate.external_work_dir,

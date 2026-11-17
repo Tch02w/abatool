@@ -4,6 +4,16 @@
 
 ## 启动与就绪
 
+### 本机调度补充（2026-11-18，F004/F005）
+
+`GET /api/v1/local-queue-runtime` 保留现有结构并增加可选兼容字段 `schedulerMessage`（空字符串表示无调度提示）；`operations[]` 增加 `attemptId`，每次真正分配执行生成新的身份，后台重启观察原作业时保留身份、不重放操作。
+
+`POST /api/v1/local-queue-controls` 的 `start` 在待运行未暂停条目的 Core 未设置时返回 409 `LOCAL_QUEUE_CORE_REQUIRED`，`details.jobNames` 列出作业。队列不足或状态未核对不构成重复提交的许可。资源、依赖和目录等待显示在队列消息与 `pendingReason`；保存/派发异常暂停新派发并设置 `schedulerMessage`。队列文件损坏保留原文件，队列 API 返回 500 `JOB_QUEUE_STATE_UNREADABLE`，不阻止健康检查和其余服务启动。
+
+`POST /api/v1/job-queue-commands` 的 `clearFinished` 保留状态未知条目；删除未知或活动条目返回 409 `ACTIVE_QUEUE_ITEMS_PROTECTED`，重新排队未知条目返回 409 `QUEUE_ITEMS_NOT_REQUEUEABLE`。扫描核对后处于待确认状态的条目允许用户明确重新排队。重启扫描及双文件持久边界见 [本机调度说明](03-features/LOCAL_SCHEDULING.md)。
+
+### 进程启动
+
 开发环境启动命令：
 
 ```powershell

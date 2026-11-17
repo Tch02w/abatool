@@ -61,6 +61,7 @@
 
 - F020/F022 的 GIF 播放方式同时检查 `tests/postprocessor/test_animation.py`（完整源帧及计时）、`tests/control_plane/test_postprocessing_api.py`（`animationDurationSeconds` 可选字段及校验）和 `tests/winui_postprocess/Program.cs`（模式持久化与旧工作区兼容）。
 - CPU 规则变动同时检查 F003/F004/F005/F007；后处理进程并行数不是单作业 CPU 数。
+- F004/F005 原生统一调度：`modules/control_plane/local_scheduling.py` / `LocalQueueScheduling.reserve`、`_recover`，复用 `modules/submitter/scheduling.py` / `SchedulerCore` 与 `scheduler_repository.py`；`local_queue_runtime.py` / `_store_result` 保留失败保存并重试。测试 `tests/control_plane/test_local_scheduling.py`、`tests/submitter/test_scheduler_adapter.py`、`test_scheduling.py`、`test_scheduler_repository.py`；资源口径及恢复限制见 [本机调度说明](LOCAL_SCHEDULING.md)。
 - F025 的 16 处数字输入已统一为 Inline：右侧并排下/上折线、数值居中、最小宽度 160；同时提供 16 处参数说明。修改时核对 0/空值/容差、上下限、禁用状态和说明口径，详见 [界面交互说明](UI_INTERACTION.md)。
 - 用户已认可预览，但指出实际 WinUI 外观不同；边框、40px 高度、每个按钮 40px 和竖分隔线正在向预览统一，不能把此前控件行为检查当作本次视觉调整验收。说明图标已改为 14px 问号并保留 28px 悬停热区。
 - 列表刷新/勾选/浏览器选择检查 F002/F004/F022，不仅调整 XAML。

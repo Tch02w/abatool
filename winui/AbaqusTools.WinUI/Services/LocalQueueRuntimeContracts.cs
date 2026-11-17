@@ -34,6 +34,9 @@ public sealed class LocalQueueRuntimeSnapshot
     [JsonPropertyName("stopRequested")]
     public bool StopRequested { get; init; }
 
+    [JsonPropertyName("schedulerMessage")]
+    public string SchedulerMessage { get; init; } = string.Empty;
+
     [JsonPropertyName("maxParallel")]
     public int MaxParallel { get; init; }
 
@@ -55,6 +58,8 @@ public sealed class LocalQueueRuntimeSnapshot
 
 public sealed class LocalJobRuntimeOperation
 {
+    [JsonPropertyName("attemptId")]
+    public string AttemptId { get; init; } = string.Empty;
     [JsonPropertyName("itemId")]
     public string ItemId { get; init; } = string.Empty;
 

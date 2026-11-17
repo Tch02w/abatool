@@ -614,6 +614,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private void ApplyRuntime(LocalQueueRuntimeSnapshot runtime)
     {
         ApplySnapshot(runtime.Queue);
+        SchedulerInfoBar.Message = runtime.SchedulerMessage;
+        SchedulerInfoBar.IsOpen = !string.IsNullOrWhiteSpace(runtime.SchedulerMessage);
         var drafts = App.Current.Session.State.Pages.GetValueOrDefault("job-queue");
         // Runtime polling must not replace a setting the user is still editing.
         if (runtime.Active || (_lastRuntimeParallel is { } previousParallel

@@ -14,6 +14,7 @@
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <InfoBar x:Name="QueueInfoBar" IsClosable="False" IsOpen="True" Message="候选区、正式队列以及外部运行作业的扫描和持续状态监控已接入。" Severity="Informational" />
+                <InfoBar x:Name="SchedulerInfoBar" IsClosable="False" IsOpen="False" Title="调度与恢复" Severity="Warning" />
                 <Grid Grid.Row="1" ColumnSpacing="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />

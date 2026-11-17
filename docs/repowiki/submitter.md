@@ -9,6 +9,8 @@
 
 正式队列是唯一调度入口。队列操作由 `modules/control_plane/job_queue_commands.py` 执行，运行循环由 `local_queue_runtime.py` 管理，实际进程启动与停止位于 `modules/submitter/local_job_execution.py`。界面刷新只读取快照，不直接改变调度状态。
 
+原生控制面通过 `local_scheduling.py` 复用 `SchedulerCore` 和 SQLite 记录，按优先级、资源、依赖与目录冲突分配，保存执行身份后再启动。状态未知先扫描，不重复执行；结果保存失败只重试保存。百分比内存、自有 RSS 和原生验收限制详见 [F004/F005 本机调度](../03-features/LOCAL_SCHEDULING.md)。
+
 ## 重启动与结果
 
 Restart 作业通过 `oldjobPath` 和依赖 job ID 建链。`restart_chains.py` 计算阶段、循环、缺失父作业和路径兼容性；原生页面可编辑依赖并定位正式队列条目。

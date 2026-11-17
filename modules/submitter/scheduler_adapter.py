@@ -29,6 +29,7 @@ from .queue_scheduler import (
     effective_queue_item_work_dir,
     oldjob_name_from_item,
     queue_item_conflict_key,
+    queue_item_matches_oldjob_path,
 )
 from .scheduling import (
     ACTIVE_JOB_STATES,
@@ -40,7 +41,6 @@ from .scheduling import (
     SchedulerJobSnapshot,
     pending_reason_text,
 )
-
 
 _MEMORY_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?\s*$", re.IGNORECASE)
 
@@ -109,6 +109,8 @@ def build_dependency_job_ids(
         if candidate.item_id == item.item_id:
             continue
         if candidate.job_name.lower() == oldjob_name:
+            if item.oldjob_path and not queue_item_matches_oldjob_path(item, candidate):
+                continue
             return (candidate.job_id or candidate.item_id,)
     return ()
 

@@ -1,13 +1,17 @@
 import unittest
 
-from modules.submitter.constants import STATUS_PENDING_RUN, STATUS_RUNNING, STATUS_WAITING_DEPENDENCY
+from modules.submitter.constants import (
+    STATUS_PENDING_RUN,
+    STATUS_RUNNING,
+    STATUS_WAITING_DEPENDENCY,
+)
 from modules.submitter.models import QueueItem
 from modules.submitter.scheduler_adapter import (
     build_dependency_job_ids,
     parse_memory_request_bytes,
     queue_item_to_job_specification,
-    scheduler_state_from_queue_status,
     reconcile_scheduler_from_queue,
+    scheduler_state_from_queue_status,
 )
 from modules.submitter.scheduling import JobState, SchedulerCore
 
@@ -21,6 +25,14 @@ class SchedulerAdapterTests(unittest.TestCase):
         base = QueueItem(job_id="job-base", job_name="base")
         restart = QueueItem(job_id="job-restart", job_name="restart", oldjob_name="base")
         self.assertEqual(build_dependency_job_ids(restart, [base, restart]), ("job-base",))
+
+    def test_restart_path_disambiguates_same_name_and_computed_work_directory(self):
+        foreign = QueueItem(job_id="foreign", job_name="base", inp_path="D:/other/base.inp")
+        base = QueueItem(job_id="base", job_name="base", inp_path="D:/inputs/base.inp",
+                         calculation_root_dir="D:/scratch")
+        restart = QueueItem(job_id="restart", job_name="restart", oldjob_name="base",
+                            oldjob_path="D:/scratch/base/base.odb")
+        self.assertEqual(build_dependency_job_ids(restart, [foreign, base, restart]), ("base",))
 
     def test_resource_request_reads_common_memory_units(self):
         self.assertEqual(parse_memory_request_bytes("1.5 GB"), int(1.5 * 1024**3))

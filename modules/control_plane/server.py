@@ -10,7 +10,7 @@ import secrets
 import threading
 from collections.abc import Callable
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -74,6 +74,7 @@ from .result_indexing import (
     ResultIndexOperationManager,
 )
 from .results import discover_result_scopes, list_result_records, preview_result
+from .shutdown_protocol import ShutdownProtocol
 
 LOGGER = logging.getLogger(__name__)
 LOOPBACK_HOST = "127.0.0.1"
@@ -98,8 +99,9 @@ class ControlPlaneContext:
     remote_job_manager: RemoteJobOperationManager
     odb_result_graph_service: OdbResultGraphService
     odb_result_batch_manager: OdbResultBatchManager
+    shutdown_protocol: ShutdownProtocol = field(default_factory=ShutdownProtocol)
 
-    def prepare_odb_shutdown(self) -> dict[str, Any]:
+    def prepare_odb_shutdown(self, *, reserve: bool = True) -> dict[str, Any]:
         # Retain the v1 route for older clients, but fence every managed worker.
         # Batch -> merge lock order matches batch child submission. No manager
         # may be reserved if any other manager still needs this process.
@@ -113,7 +115,7 @@ class ControlPlaneContext:
                 locks.enter_context(manager._lock)
             snapshots = [manager.prepare_shutdown(reserve=False) for manager in managers]
             safe = all(snapshot["safeToStop"] for snapshot in snapshots)
-            if safe:
+            if safe and reserve:
                 for manager in managers:
                     manager.prepare_shutdown()
             return {"schemaVersion": 1, "scope": "all-workers-v1", "safeToStop": safe,
@@ -130,7 +132,16 @@ class ControlPlaneHttpServer(ThreadingHTTPServer):
         context: ControlPlaneContext,
     ) -> None:
         self.context = context
+        self._shutdown_requested = False
+        self._shutdown_lock = threading.Lock()
         super().__init__(server_address, ControlPlaneRequestHandler)
+
+    def request_shutdown(self):
+        with self._shutdown_lock:
+            if self._shutdown_requested:
+                return
+            self._shutdown_requested = True
+        threading.Thread(target=self.shutdown, name="ControlPlaneGracefulShutdown", daemon=True).start()
 
 
 class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
@@ -153,6 +164,11 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         try:
             self._require_authorization()
             target = urlsplit(self.path)
+            prefix = "/api/v1/shutdown-requests/"
+            if target.path.startswith(prefix) and not target.query and "/" not in target.path[len(prefix):]:
+                self._send_json(HTTPStatus.OK,
+                    self.context.shutdown_protocol.get(self.context, target.path[len(prefix):]), trace_id)
+                return
             if target.path == "/healthz":
                 self._handle_health(trace_id)
                 return
@@ -297,10 +313,48 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             )
 
     def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        if path.startswith("/api/v1/shutdown-requests") or path == "/api/v1/odb-upgrade-shutdown-check":
+            self._dispatch_post()
+            return
+        try:
+            self._require_authorization()
+            with self.context.shutdown_protocol.request():
+                self._dispatch_post()
+        except ApiProblem as problem:
+            self._send_problem(problem, new_trace_id())
+
+    def _dispatch_post(self) -> None:
         trace_id = new_trace_id()
         try:
             self._require_authorization()
             target = urlsplit(self.path)
+            if target.path == "/api/v1/shutdown-requests" and not target.query:
+                self._send_json(HTTPStatus.OK,
+                    self.context.shutdown_protocol.prepare(self.context, self._read_json_object()), trace_id)
+                return
+            prefix = "/api/v1/shutdown-requests/"
+            if target.path.startswith(prefix) and not target.query:
+                parts = target.path[len(prefix):].split("/")
+                if len(parts) != 2 or parts[1] not in {"stop", "commit", "abort"}:
+                    raise ApiProblem(404, "NOT_FOUND", "关闭操作不存在")
+                request_id, action = parts
+                payload = self._read_json_object()
+                protocol = self.context.shutdown_protocol
+                protocol.validate(payload, fields=("mode",) if action == "commit" else ())
+                if action == "commit":
+                    state = protocol.commit(self.context, request_id, payload.get("mode"))
+                else:
+                    state = getattr(protocol, action)(self.context, request_id)
+                try:
+                    self._send_json(HTTPStatus.OK, state, trace_id)
+                    self.wfile.flush()
+                finally:
+                    # Once committed, the decision is independent of the socket.
+                    # A lost acknowledgement must not strand a sealed backend.
+                    if action == "commit" and state["stopBackend"]:
+                        self.control_server.request_shutdown()
+                return
             if target.path == "/api/v1/odb-discoveries" and not target.query:
                 self._handle_odb_discovery(trace_id)
                 return
@@ -369,7 +423,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                     self.context.odb_upgrade_manager.create(self._read_json_object()), trace_id)
                 return
             if target.path == "/api/v1/odb-upgrade-shutdown-check" and not target.query:
-                self._send_json(HTTPStatus.OK, self.context.prepare_odb_shutdown(), trace_id)
+                self._send_json(HTTPStatus.OK, self.context.shutdown_protocol.legacy_reserve(self.context), trace_id)
                 return
             upgrade_id = self._upgrade_id_from_path(target.path, cancel=True)
             if upgrade_id is not None and not target.query:
@@ -553,7 +607,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -1045,6 +1099,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         if length > MAX_REQUEST_BODY_BYTES:
             raise ApiProblem(413, "REQUEST_TOO_LARGE", "请求正文超过大小限制")
         raw = self.rfile.read(length)
+        self._request_body_consumed = True
         if len(raw) != length:
             raise ApiProblem(400, "INCOMPLETE_REQUEST_BODY", "请求正文不完整")
         try:
@@ -1080,6 +1135,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         *,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
+        self._discard_unread_request_body()
         headers = dict(extra_headers or {})
         if problem.status == HTTPStatus.UNAUTHORIZED:
             headers["WWW-Authenticate"] = "Bearer"
@@ -1089,6 +1145,28 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             trace_id,
             extra_headers=headers,
         )
+
+    def _discard_unread_request_body(self) -> None:
+        # Admission/authentication can reject before JSON parsing. Closing a
+        # Windows socket with unread request bytes can reset the connection and
+        # hide the intended 401/503 response. Drain only bounded, declared bodies.
+        if self.command != "POST" or getattr(self, "_request_body_consumed", False):
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return
+        if not 0 < length <= MAX_REQUEST_BODY_BYTES:
+            return
+        previous_timeout = self.connection.gettimeout()
+        try:
+            self.connection.settimeout(1)
+            self.rfile.read(length)
+            self._request_body_consumed = True
+        except OSError:
+            pass
+        finally:
+            self.connection.settimeout(previous_timeout)
 
     def _send_bytes(
         self,

@@ -637,6 +637,19 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         return response;
     }
 
+    public async Task<RemoteTransferListSnapshot> GetActiveRemoteTransfersAsync(CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownSource.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        var descriptor = await EnsureReadyAsync(timeout.Token);
+        var response = await SendJsonRequestAsync<RemoteTransferListSnapshot>(descriptor, HttpMethod.Get,
+            "/api/v1/remote-transfers?activeOnly=true", null, "后台传输列表", timeout.Token);
+        if (response.SchemaVersion != 1 || response.Operations is null)
+            throw new InvalidDataException("后台传输列表无效。");
+        foreach (var operation in response.Operations) ValidateRemoteTransferSnapshot(operation);
+        return response;
+    }
+
     public async Task<RemoteTransferOperationSnapshot> GetRemoteTransferAsync(
         string operationId,
         CancellationToken cancellationToken = default)
@@ -2831,6 +2844,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string operationId,
         CancellationToken cancellationToken = default)
     {
+        if (_preserveBackground) return;
         try
         {
             using var request = new HttpRequestMessage(
@@ -2869,6 +2883,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string operationId,
         CancellationToken cancellationToken = default)
     {
+        if (_preserveBackground) return;
         try
         {
             using var request = new HttpRequestMessage(
@@ -2907,6 +2922,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string operationId,
         CancellationToken cancellationToken = default)
     {
+        if (_preserveBackground) return;
         try
         {
             using var request = new HttpRequestMessage(
@@ -2945,6 +2961,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string operationId,
         CancellationToken cancellationToken = default)
     {
+        if (_preserveBackground) return;
         try
         {
             using var request = new HttpRequestMessage(
@@ -3138,20 +3155,26 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         return new ValueTask(disposeTask);
     }
 
-    private async Task DisposeCoreAsync()
+    private async Task DisposeCoreAsync(bool preserveBackground = false)
     {
         if (_disposed)
         {
             return;
         }
 
-        await CancelActiveOperationsForShutdownAsync();
+        if (preserveBackground)
+        {
+            lock (_operationGate) _acceptNewOperations = false;
+            await _operationCreationGate.WaitAsync();
+            _operationCreationGate.Release();
+        }
+        else await CancelActiveOperationsForShutdownAsync();
         _shutdownSource.Cancel();
         await _connectionGate.WaitAsync();
         var completed = false;
         try
         {
-            var shutdownReserved = await ReserveSafeProcessShutdownAsync();
+            var shutdownReserved = !preserveBackground && await ReserveSafeProcessShutdownAsync();
             StopOwnedProcess(shutdownReserved);
             _httpClient.Dispose();
             SetState(ControlPlaneState.Disconnected, "控制面已断开");

@@ -75,6 +75,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         OdbList.ItemsSource = _odbItems;
+        App.Current.Session.Register(this, "odb-postprocessing", ["RootTextBox", "RecursiveCheckBox"], async () =>
+        {
+            await WorkbenchSession.WaitForIdleAsync(() => _discoveryBusy || _postprocessRecoveryBusy, "后处理目录读取或恢复");
+            if (!SaveWorkspace(forClose: true)) throw new IOException("后处理配置未能保存，关闭已取消。");
+        });
         Loaded += OnPageLoaded;
         Unloaded += (_, _) => SaveWorkspace();
         RefreshInteractionState();
@@ -539,9 +544,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         SaveWorkspace();
     }
 
-    private bool SaveWorkspace()
+    private bool SaveWorkspace(bool forClose = false)
     {
-        if (_lastDiscoveryRoot is null || _discoveryBusy || _postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing
+        if (forClose && _lastDiscoveryRoot is not null && _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot)))
+            throw new IOException("原后处理配置无法读取，未覆盖它；请先检查配置后再关闭。");
+        if (_lastDiscoveryRoot is null || _discoveryBusy || (!forClose && (_postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing))
             || _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot))) return true;
         try
         {

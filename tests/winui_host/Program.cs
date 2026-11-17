@@ -13,6 +13,11 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 3 && args[0] == "--close-api")
+    {
+        await CheckCloseApi(args[1], args[2]);
+        return 0;
+    }
     if (args.Length == 4 && args[0] is "--batch-api" or "--batch-recover-api")
     {
         await CheckBatchApi(args[1], args[2], args[3], recover: args[0] == "--batch-recover-api");
@@ -86,11 +91,14 @@ try
     await Check("missing endpoint", "{}", false, HttpStatusCode.NotFound);
     await Check("connection lost", "", false, disconnect: true);
     await Check("reconnect failure", "", false, connectionCleanup: true);
+    await Check("background detach preserves owned backend and active tasks", "", false, detach: true);
+    await ShutdownClientChecks.RunAsync();
     CheckUpgradeContracts();
     CheckMergeRecoveryContracts();
     CheckBatchContracts();
     ControlPlaneLaunchChecks.Run();
-    Console.WriteLine("10 host process lifecycle checks passed.");
+    WorkbenchSessionChecks.Run();
+    Console.WriteLine("11 host process lifecycle checks passed.");
     return 0;
 }
 catch (Exception error)
@@ -101,6 +109,42 @@ catch (Exception error)
 
 static void SetField(ControlPlaneHost host, string name, object value) =>
     typeof(ControlPlaneHost).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, value);
+
+static async Task CheckCloseApi(string descriptorPath, string mode)
+{
+    var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath),
+        new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    var host = new ControlPlaneHost();
+    SetField(host, "_descriptor", descriptor);
+    SetField(host, "_descriptorPath", descriptorPath);
+    try
+    {
+        await host.GetActiveRemoteTransfersAsync();
+        var prepared = await host.PrepareCloseAsync(Guid.NewGuid());
+        if (prepared.State != "prepared" || prepared.PendingRequests != 0) throw new Exception("Unexpected close preparation");
+        if (mode == "abort")
+        {
+            await host.AbortCloseAsync();
+            if (!(bool)typeof(ControlPlaneHost).GetField("_acceptNewOperations", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!)
+                throw new Exception("Cancelling close did not restore client admission");
+            await host.GetLocalQueueRuntimeAsync();
+        }
+        else
+        {
+            if (mode == "stop")
+            {
+                await host.StopForCloseAsync();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                while (!(await host.GetCloseStateAsync(timeout.Token)).SafeToStop) await Task.Delay(50, timeout.Token);
+            }
+            var committed = await host.CommitCloseAsync(mode);
+            if (committed.State != "committed" || committed.Mode != mode || committed.StopBackend != (mode != "background"))
+                throw new Exception("Incorrect close acknowledgement");
+        }
+        Console.WriteLine("Production C# close API passed: " + mode);
+    }
+    finally { await host.DetachForCloseAsync(); }
+}
 
 static async Task CheckBatchApi(string descriptorPath, string fixturePath, string reportPath, bool recover)
 {
@@ -358,7 +402,7 @@ static async Task CheckRegionApi(string descriptorPath, string root, string sour
 }
 
 static async Task Check(string label, string body, bool shouldExit,
-    HttpStatusCode status = HttpStatusCode.OK, bool disconnect = false, bool connectionCleanup = false)
+    HttpStatusCode status = HttpStatusCode.OK, bool disconnect = false, bool connectionCleanup = false, bool detach = false)
 {
     var directory = Path.Combine(Path.GetTempPath(), "abatool-host-test-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(directory);
@@ -392,7 +436,15 @@ static async Task Check(string label, string body, bool shouldExit,
             typeof(ControlPlaneHost).GetMethod("StopOwnedProcess", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(host, [false]);
         }
-        await Task.WhenAll(host.DisposeAsync().AsTask(), host.DisposeAsync().AsTask());
+        if (detach)
+        {
+            foreach (var field in new[] { "_activeOperationIds", "_activeResultIndexOperationIds", "_activeOdbMergeOperationIds",
+                         "_activePostprocessOperationIds", "_activeResultBatchIds" })
+                ((HashSet<string>)typeof(ControlPlaneHost).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(host)!).Add("tracked-active-operation");
+            await Task.WhenAll(host.DetachForCloseAsync().AsTask(), host.DetachForCloseAsync().AsTask());
+        }
+        else await Task.WhenAll(host.DisposeAsync().AsTask(), host.DisposeAsync().AsTask());
         if (shouldExit)
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -402,7 +454,7 @@ static async Task Check(string label, string body, bool shouldExit,
             throw new Exception($"{label}: wrong child lifetime");
         if (File.Exists(descriptorPath) == shouldExit)
             throw new Exception($"{label}: descriptor should follow backend lifetime");
-        if (handler.Calls != (connectionCleanup ? 0 : 1))
+        if (handler.Calls != (connectionCleanup || detach ? 0 : 1))
             throw new Exception($"{label}: duplicate or missing shutdown reservation");
         Console.WriteLine($"PASS {label}");
     }

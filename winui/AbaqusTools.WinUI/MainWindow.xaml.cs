@@ -54,13 +54,10 @@ public sealed partial class MainWindow : Window
         ConfigureTitleBar();
         AppWindow.Changed += OnAppWindowChanged;
         UpdateWindowSizeLimits();
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.Maximize();
-        }
+        RestoreWindowState();
         UpdateTitleBarInsets();
 
-        ShellNavigation.SelectedItem = NewJobItem;
+        SelectRoute(App.Current.Session.State.LastRoute);
         if (ContentFrame.Content is null)
         {
             NavigateTo("new-job");
@@ -160,6 +157,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnResourceTimerTick(object? sender, object e)
     {
+        if (App.Current.Session.IsClosing) return;
         await RefreshLocalResourceNowAsync();
     }
 
@@ -179,7 +177,7 @@ public sealed partial class MainWindow : Window
         {
             await _controlPlane.EnsureReadyAsync();
             await RefreshLocalResourceNowAsync();
-            _resourceTimer.Start();
+            if (!App.Current.Session.IsClosing) _resourceTimer.Start();
         }
         catch (ControlPlaneException exception)
         {
@@ -206,6 +204,9 @@ public sealed partial class MainWindow : Window
 
     private void NavigateTo(string route)
     {
+        if (_shutdownStarted) return;
+        if (route is "odb-postprocessing" or "result-browser" || WorkbenchPages.ContainsKey(route))
+            App.Current.Session.State.LastRoute = route;
         if (route == "odb-postprocessing")
         {
             WindowTitleText.Text = "Abaqus Workbench — ODB 后处理";
@@ -414,9 +415,9 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
-    private void OnExitMenuClicked(object sender, RoutedEventArgs args)
+    private async void OnExitMenuClicked(object sender, RoutedEventArgs args)
     {
-        Close();
+        await RequestCloseAsync();
     }
 
     private void ConfigureTitleBar()
@@ -448,6 +449,7 @@ public sealed partial class MainWindow : Window
         {
             UpdateWindowSizeLimits();
             UpdateTitleBarInsets();
+            RememberRestoredWindowBounds();
         }
     }
 
@@ -581,29 +583,43 @@ public sealed partial class MainWindow : Window
         }
 
         args.Cancel = true;
-        if (_shutdownStarted)
-        {
-            return;
-        }
+        await RequestCloseAsync();
+    }
 
+    private async Task CloseWorkbenchAsync()
+    {
         _shutdownStarted = true;
-        ReportPageStatus("正在安全关闭本地控制面…");
+        SetCloseInteractionEnabled(false);
+        _resourceTimer.Stop();
+        ReportPageStatus("正在保存工作台并检查后台任务…");
         try
         {
-            await App.Current.PendingResultFileOperation;
-            await _controlPlane.DisposeAsync();
+            await App.Current.Session.SaveForCloseAsync(CaptureWindowState());
+            if (!await ConfirmAndCommitCloseAsync()) return;
+            await _controlPlane.DetachForCloseAsync();
             _shutdownComplete = true;
             AppWindow.Closing -= OnAppWindowClosing;
             Close();
         }
         catch (Exception exception)
         {
-            _shutdownStarted = false;
             StartupInfoBar.Severity = InfoBarSeverity.Error;
             StartupInfoBar.Title = "无法安全关闭";
             StartupInfoBar.Message = exception.Message;
             StartupInfoBar.IsOpen = true;
             ReportPageStatus("关闭已取消 · 请处理错误后重试");
+        }
+        finally
+        {
+            if (!_shutdownComplete)
+            {
+                try { await _controlPlane.AbortCloseAsync(); }
+                catch (Exception error) { ReportPageStatus("关闭已取消 · 后台确认暂不可达，准备状态会在一分钟内失效。" + error.Message); }
+                _shutdownStarted = false;
+                App.Current.Session.ResumeAfterCancelledClose();
+                SetCloseInteractionEnabled(true);
+                if (!_windowClosed) _resourceTimer.Start();
+            }
         }
     }
 }

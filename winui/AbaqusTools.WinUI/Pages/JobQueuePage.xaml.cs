@@ -16,6 +16,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private readonly QueueExplorerAdapter _queueExplorerAdapter;
     private bool _busy;
     private bool _runtimeRefreshBusy;
+    private int? _lastRuntimeParallel;
+    private string? _lastRuntimePolicy;
     private string? _pendingFormalSelectionId;
 
     public JobQueuePage()
@@ -31,6 +33,10 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         _runtimeTimer = DispatcherQueue.CreateTimer();
         _runtimeTimer.Interval = TimeSpan.FromSeconds(1.5);
         _runtimeTimer.Tick += OnRuntimeTimerTick;
+        App.Current.Session.Register(this, "job-queue",
+            ["ExternalWorkDirTextBox", "RecursiveScanCheckBox", "SkipRestartNamesCheckBox", "SkipExistingResultsCheckBox",
+             "ExistingResultPolicyComboBox", "ParallelLimitNumberBox"],
+            () => WorkbenchSession.WaitForIdleAsync(() => _busy || _runtimeRefreshBusy, "队列修改"), _runtimeTimer.Stop, _runtimeTimer.Start);
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
@@ -40,6 +46,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         await RefreshAsync();
+        if (App.Current.Session.IsClosing) return;
         await RefreshRuntimeAsync(showError: false);
         _runtimeTimer.Start();
     }
@@ -53,6 +60,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         Microsoft.UI.Dispatching.DispatcherQueueTimer sender,
         object args)
     {
+        if (App.Current.Session.IsClosing) return;
         await RefreshRuntimeAsync(showError: false);
     }
 
@@ -606,8 +614,18 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private void ApplyRuntime(LocalQueueRuntimeSnapshot runtime)
     {
         ApplySnapshot(runtime.Queue);
-        ParallelLimitNumberBox.Value = runtime.MaxParallel;
-        for (var index = 0; index < ExistingResultPolicyComboBox.Items.Count; index++)
+        var drafts = App.Current.Session.State.Pages.GetValueOrDefault("job-queue");
+        // Runtime polling must not replace a setting the user is still editing.
+        if (runtime.Active || (_lastRuntimeParallel is { } previousParallel
+                ? ParallelLimitNumberBox.Text == previousParallel.ToString()
+                : drafts?.ContainsKey("ParallelLimitNumberBox") != true))
+            ParallelLimitNumberBox.Value = runtime.MaxParallel;
+        var updatePolicy = runtime.Active || (_lastRuntimePolicy is { } previousPolicy
+            ? ExistingResultPolicy() == previousPolicy
+            : drafts?.ContainsKey("ExistingResultPolicyComboBox") != true);
+        _lastRuntimeParallel = runtime.MaxParallel;
+        _lastRuntimePolicy = runtime.ExistingResultPolicy;
+        for (var index = 0; updatePolicy && index < ExistingResultPolicyComboBox.Items.Count; index++)
         {
             if (ExistingResultPolicyComboBox.Items[index] is ComboBoxItem item
                 && string.Equals(

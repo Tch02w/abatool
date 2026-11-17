@@ -27,6 +27,9 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             SelectExplorerResource);
         _remoteRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _remoteRefreshTimer.Tick += OnRemoteRefreshTimerTick;
+        App.Current.Session.Register(this, "compute-resources", [],
+            () => WorkbenchSession.WaitForIdleAsync(() => (_busy && string.IsNullOrEmpty(_activeTransferId)) || _backgroundRefreshBusy, "服务器操作"),
+            _remoteRefreshTimer.Stop, _remoteRefreshTimer.Start);
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
@@ -57,7 +60,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             ApplySnapshot(local);
         }
         await LoadRemoteSnapshotAsync();
-        _remoteRefreshTimer.Start();
+        if (!App.Current.Session.IsClosing) _remoteRefreshTimer.Start();
+        await RecoverTransfersAsync();
     }
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
@@ -67,6 +71,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private async void OnRemoteRefreshTimerTick(object? sender, object e)
     {
+        if (App.Current.Session.IsClosing) return;
         if (_busy || _backgroundRefreshBusy || _remoteSnapshot.Connection.Status != "connected")
         {
             return;
@@ -303,35 +308,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
                 source,
                 destination,
                 overwrite);
-            _activeTransferId = operation.OperationId;
-            var terminal = await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
-                operation.OperationId,
-                snapshot =>
-                {
-                    TransferProgressBar.Value = snapshot.Progress.Percent;
-                    TransferStatusText.Text = snapshot.Progress.TotalBytes > 0
-                        ? $"{(direction == "upload" ? "上传" : "下载")} {snapshot.Progress.Percent}% · {snapshot.Progress.CompletedBytes:N0} / {snapshot.Progress.TotalBytes:N0} 字节"
-                        : direction == "upload" ? "正在上传…" : "正在下载…";
-                });
-            CancelTransferButton.IsEnabled = false;
-            if (terminal.Status == "succeeded")
-            {
-                TransferProgressBar.Value = 100;
-                TransferStatusText.Text = direction == "upload" ? "上传完成" : "下载完成";
-                ShowInfo(TransferStatusText.Text, InfoBarSeverity.Success);
-                App.Current.MainWindow.ReportPageStatus(TransferStatusText.Text);
-            }
-            else if (terminal.Status == "cancelled")
-            {
-                TransferStatusText.Text = "文件传输已取消";
-                ShowInfo(TransferStatusText.Text, InfoBarSeverity.Warning);
-            }
-            else
-            {
-                TransferStatusText.Text = terminal.Error?.Message ?? "文件传输失败";
-                ShowError(TransferStatusText.Text);
-            }
-            return terminal;
+            return await ObserveTransferAsync(operation);
         }
         catch (Exception exception)
         {
@@ -339,6 +316,67 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             ShowError(exception.Message);
             return null;
         }
+        finally
+        {
+            _activeTransferId = string.Empty;
+            _busy = false;
+            UpdateButtons();
+        }
+    }
+
+    private async Task<RemoteTransferOperationSnapshot> ObserveTransferAsync(RemoteTransferOperationSnapshot operation)
+    {
+        var direction = operation.Request.Direction;
+        TransferPanel.Visibility = Visibility.Visible;
+        CancelTransferButton.IsEnabled = true;
+        _activeTransferId = operation.OperationId;
+        var terminal = await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
+            operation.OperationId,
+            snapshot =>
+            {
+                TransferProgressBar.Value = snapshot.Progress.Percent;
+                TransferStatusText.Text = snapshot.Progress.TotalBytes > 0
+                    ? $"{(direction == "upload" ? "上传" : "下载")} {snapshot.Progress.Percent}% · {snapshot.Progress.CompletedBytes:N0} / {snapshot.Progress.TotalBytes:N0} 字节"
+                    : direction == "upload" ? "正在上传…" : "正在下载…";
+            });
+        CancelTransferButton.IsEnabled = false;
+        if (terminal.Status == "succeeded")
+        {
+            TransferProgressBar.Value = 100;
+            TransferStatusText.Text = direction == "upload" ? "上传完成" : "下载完成";
+            ShowInfo(TransferStatusText.Text, InfoBarSeverity.Success);
+            App.Current.MainWindow.ReportPageStatus(TransferStatusText.Text);
+        }
+        else if (terminal.Status == "cancelled")
+        {
+            TransferStatusText.Text = "文件传输已取消";
+            ShowInfo(TransferStatusText.Text, InfoBarSeverity.Warning);
+        }
+        else
+        {
+            TransferStatusText.Text = terminal.Error?.Message ?? "文件传输失败";
+            ShowError(TransferStatusText.Text);
+        }
+        return terminal;
+    }
+
+    private async Task RecoverTransfersAsync()
+    {
+        if (_busy || App.Current.Session.IsClosing) return;
+        _busy = true;
+        UpdateButtons();
+        try
+        {
+            while (!App.Current.Session.IsClosing)
+            {
+                var active = await App.Current.ControlPlane.GetActiveRemoteTransfersAsync();
+                var operation = active.Operations.OrderBy(item => item.CreatedAt).FirstOrDefault();
+                if (operation is null) break;
+                await ObserveTransferAsync(operation);
+            }
+        }
+        catch (OperationCanceledException) when (App.Current.Session.IsClosing) { }
+        catch (Exception error) { ShowError("后台传输状态读取失败：" + error.Message); }
         finally
         {
             _activeTransferId = string.Empty;

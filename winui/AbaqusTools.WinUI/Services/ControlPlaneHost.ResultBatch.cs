@@ -84,6 +84,7 @@ public sealed partial class ControlPlaneHost
 
     private async Task BestEffortCancelBatchAsync(ControlPlaneDescriptor descriptor, string operationId, CancellationToken cancellationToken)
     {
+        if (_preserveBackground) return;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post,

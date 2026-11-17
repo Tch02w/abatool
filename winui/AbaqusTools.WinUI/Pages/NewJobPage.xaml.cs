@@ -21,6 +21,12 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         _workspaceExplorerAdapter = new WorkspaceExplorerAdapter(
             () => PickFolderAsync("选择工作目录"),
             ActivateExplorerItemAsync);
+        App.Current.Session.Register(this, "new-job",
+            ["JobNameTextBox", "InputPathTextBox", "OldjobPathTextBox", "FortranPathTextBox",
+             "ExecutionLocationComboBox", "UseSsdCheckBox", "CalculationRootTextBox", "ArchiveRootTextBox",
+             "AbaqusCommandTextBox", "MemoryValueTextBox", "MemoryUnitComboBox", "CpuNumberBox",
+             "PriorityComboBox", "InteractiveCheckBox", "DatacheckCheckBox", "NotifyCheckBox", "MaxParallelNumberBox"],
+            () => WorkbenchSession.WaitForIdleAsync(() => _previewBusy || _submitBusy, "作业提交或检查"));
         Loaded += OnPageLoaded;
     }
 

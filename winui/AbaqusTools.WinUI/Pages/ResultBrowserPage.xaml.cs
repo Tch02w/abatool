@@ -59,6 +59,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         SectionComboBox.SelectedIndex = 0;
         UseCaseComboBox.ItemsSource = new[] { "全部用途" };
         UseCaseComboBox.SelectedIndex = 0;
+        App.Current.Session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
+            async () => { ++_previewRequest; await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); });
         Loaded += OnPageLoaded;
         RefreshInteractionState();
     }

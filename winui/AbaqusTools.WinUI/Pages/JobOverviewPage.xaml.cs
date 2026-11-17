@@ -45,6 +45,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         _refreshTimer = DispatcherQueue.CreateTimer();
         _refreshTimer.Interval = TimeSpan.FromSeconds(1.5);
         _refreshTimer.Tick += OnRefreshTimerTick;
+        App.Current.Session.Register(this, "job-overview", [], pause: _refreshTimer.Stop, resume: _refreshTimer.Start);
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
     }
@@ -73,6 +74,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         Microsoft.UI.Dispatching.DispatcherQueueTimer sender,
         object args)
     {
+        if (App.Current.Session.IsClosing) return;
         await RefreshAsync();
     }
 

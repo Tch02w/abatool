@@ -784,7 +784,7 @@ def test_postprocess_partial_scan_recovery_cannot_overwrite_workspace() -> None:
     )[0]
     assert "_lastDiscoveryRoot = null;" in compatibility
     assert "_lastDiscoveryRoot = request.Root;" not in compatibility
-    save = page.split("private bool SaveWorkspace()", 1)[1].split(
+    save = page.split("private bool SaveWorkspace(bool forClose = false)", 1)[1].split(
         "private OdbPostprocessOutputOptions", 1
     )[0]
     assert "_lastDiscoveryRoot is null" in save

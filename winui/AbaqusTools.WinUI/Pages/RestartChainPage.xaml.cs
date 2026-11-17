@@ -22,6 +22,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
     {
         InitializeComponent();
         _explorerAdapter = new RestartChainExplorerAdapter(RefreshAsync, SelectExplorerNode);
+        App.Current.Session.Register(this, "restart-chain", []);
         Loaded += OnPageLoaded;
     }
 

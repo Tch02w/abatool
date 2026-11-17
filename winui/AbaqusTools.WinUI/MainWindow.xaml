@@ -47,7 +47,7 @@
                     </StackPanel>
                 </Border>
 
-                <MenuBar Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Stretch">
+                <MenuBar x:Name="WindowMenuBar" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Stretch">
                     <MenuBarItem Title="文件(F)">
                         <MenuFlyoutItem Click="OnNewJobMenuClicked" Text="新建作业" />
                         <MenuFlyoutSeparator />

@@ -290,6 +290,26 @@ data: {"schemaVersion":1,"sequence":2,"eventId":"...","occurredAt":"...","aggreg
 
 ## 全受管后台退出预留
 
+这是保留的旧主机路径。原生窗口使用下方的新关闭协议；处于关闭准备或存在已接收 POST 时，本旧接口返回 `safeToStop:false`，不抢占准备状态。
+
+## 可撤销的窗口关闭协议
+
+健康能力为 `controlPlane.shutdown.protocol-v1`。所有端点要求同一实例的 Bearer 鉴权，POST 正文必须有 `schemaVersion:1`，不接受未知字段。响应 `kind` 为 `controlPlane.shutdown`，包含 `requestId/state/safeToStop/pendingRequests/operations/stopBackend`；提交后还包含 `mode`。`operations` 仅提供类型、操作标识、显示名称和状态，不含凭证。
+
+| 请求 | 正文字段（除 schemaVersion） | 行为 |
+|---|---|---|
+| POST `/api/v1/shutdown-requests` | `clientRequestId`：1–128 位字母、数字、下划线、点或连字符 | 建立或续期准备；相同 ID 幂等，其他活跃准备返回 409 |
+| GET `/api/v1/shutdown-requests/{id}` | 无 | 查询并续期准备；已有完成回执则原样返回 |
+| POST `/api/v1/shutdown-requests/{id}/abort` | 无 | 放弃准备并恢复准入；不撤回已经发出的停止 |
+| POST `/api/v1/shutdown-requests/{id}/stop` | 无 | 停止调度并向管理器请求合作停止；不终止归属未知进程 |
+| POST `/api/v1/shutdown-requests/{id}/commit` | `mode`：`idle`、`background` 或 `stop` | background 保留后台；idle/stop 要求所有任务、线程与已接收 POST 都结束后，由后台自行退出 |
+
+准备租约为 60 秒，读取/停止会续期，窗口选择弹窗每 10 秒续期。租约失效返回 `SHUTDOWN_REQUEST_EXPIRED`；不会永久封锁操作。准备时新普通 POST 返回 503 `CONTROL_PLANE_CLOSE_PENDING`，已提交退出时为 `CONTROL_PLANE_SHUTTING_DOWN`。已接收请求由计数保护，仍在执行时停止/提交返回 409 `SHUTDOWN_REQUESTS_BUSY`。活动工作阻止 idle/stop 提交，返回 `SHUTDOWN_WORK_ACTIVE`；未先 stop 而提交 stop 返回 `SHUTDOWN_STOP_NOT_REQUESTED`。回执与不同提交方式冲突返回 `SHUTDOWN_COMMIT_CONFLICT`。
+
+仅保存最近 32 个进程内完成回执，不承诺跨后台重启保存。客户端遇到提交回执丢失，只能查询原实例；不得以断连推断停止成功，或根据旧回执终止替换后台。已提交 idle/stop 后，即使响应连接丢失，后台仍完成清理退出。拒绝正文解析前的请求时，仅限时读取大小受限的已声明正文，避免 Windows 连接重置遮蔽 401/503；不执行被拒请求。协议实现见 [ADR 0009](submitter/adr/0009-reversible-workbench-close.md)。
+
+### 旧接口响应与范围
+
 为兼容旧客户端，继续使用经过鉴权的 `POST /api/v1/odb-upgrade-shutdown-check`。这会在全部空闲时预留退出并拒绝新任务，因此不是普通状态轮询。当前成功响应包含：
 
 ```json

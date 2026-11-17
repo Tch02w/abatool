@@ -4,6 +4,8 @@
 
 Accepted, 2026-11-18. Native close interaction and the full migration shutdown contract remain pending.
 
+The native window path now extends this fence with [ADR 0009](0009-reversible-workbench-close.md). The statements below describe this original fence and the retained legacy disposal path, not the newer window close choices.
+
 ## Problem
 
 The host may terminate its owned backend process tree after receiving an idle ODB merge/upgrade response. That response did not account for local solver execution, queue dispatch, postprocessing, compatibility checks, indexing, SFTP transfers or remote job observation. A terminal operation status can also precede its worker's final persistence or cleanup.

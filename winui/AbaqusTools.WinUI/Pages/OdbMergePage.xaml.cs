@@ -29,6 +29,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         ResultGraphEditor.PlansRequested += OnGraphPlansRequested;
         ResultGraphEditor.GraphChanged += OnResultGraphChanged;
         BatchResultsList.ItemsSource = _batchResults;
+        App.Current.Session.Register(this, "odb-merge",
+            ["MergeModeComboBox", "OriginalOdbTextBox", "RestartOdbTextBox", "OutputOdbTextBox", "IncludeHistoryCheckBox",
+             "CompressResultCheckBox", "CopyOriginalCheckBox", "ResultNamingComboBox", "ConflictPolicyComboBox"],
+            ResultGraphEditor.SaveForCloseAsync);
         Loaded += OnPageLoaded;
         UpdateExplorer();
         RefreshInteractionState();

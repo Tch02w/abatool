@@ -130,6 +130,12 @@ public sealed class RemoteTransferOperationSnapshot
     public bool IsTerminal => Status is "succeeded" or "failed" or "cancelled";
 }
 
+public sealed class RemoteTransferListSnapshot
+{
+    public int SchemaVersion { get; init; }
+    public List<RemoteTransferOperationSnapshot> Operations { get; init; } = [];
+}
+
 public sealed class RemoteTransferOperationRequest
 {
     [JsonPropertyName("clientRequestId")]

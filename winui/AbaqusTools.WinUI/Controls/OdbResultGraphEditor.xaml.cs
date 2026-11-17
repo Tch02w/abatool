@@ -54,6 +54,22 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     public bool HasUnsavedChanges { get; private set; }
 
+    public async Task SaveForCloseAsync()
+    {
+        await WorkbenchSession.WaitForIdleAsync(() => _requestBusy, "结果图读写");
+        if (!HasUnsavedChanges) return;
+        if (_executionBusy || _savedSnapshot is null)
+            throw new InvalidOperationException("结果图仍有未保存内容，请等待任务结束后保存再关闭。");
+        _requestBusy = true;
+        try
+        {
+            var snapshot = await App.Current.ControlPlane.SaveOdbResultGraphAsync(
+                _savedSnapshot.Revision, OutputDirectoryTextBox.Text.Trim(), _nodes.Select(CloneNode).ToArray());
+            ApplySnapshot(snapshot);
+        }
+        finally { _requestBusy = false; RefreshInteractionState(); }
+    }
+
     public void SetExecutionBusy(bool busy)
     {
         _executionBusy = busy;

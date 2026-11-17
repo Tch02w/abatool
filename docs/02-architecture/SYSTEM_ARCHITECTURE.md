@@ -40,7 +40,8 @@ OdbPostprocessingPage → ControlPlaneHost → server.py
 - F013 合并记录在 `modules/control_plane/odb_merge_journal.py`，使用 descriptor 同目录的 SQLite 文件恢复终态和请求身份，非终态显示中断待核对。升级/合并联合退出预留见 [ADR 0006](../submitter/adr/0006-durable-merge-history.md)。
 - F012 批量计划与阶段提交记录由 `modules/control_plane/odb_result_batches.py` 持久管理，WinUI 只提交和观察。批量/合并/升级按固定顺序联合退出预留；后台重启后显式检查再继续，不能重跑不明子任务。见 [ADR 0007](../submitter/adr/0007-durable-result-batches.md)。其他任务的跨后台恢复仍需分别实现与验收。
 - 控制面 descriptor 含 bearer token，只供本机客户端使用，不进入文档、Git 或验收截图。
-- F001 退出进程的安全预留已扩展至全部九类受管后台工作；`shutdown_guard.py` 检查任务终态及线程收尾，本机队列还检查调度活动。新主机要求 `all-workers-v1` 范围标记；旧后台响应或未知状态只允许断开，不允许杀掉后台。范围与未完成的全应用关闭协议见 [ADR 0008](../submitter/adr/0008-all-worker-shutdown-fence.md)。
+- F001 退出保护检查九类任务及线程收尾，底层固定锁顺序见 [ADR 0008](../submitter/adr/0008-all-worker-shutdown-fence.md)。窗口新增可撤销准备/提交/放弃协议，由 `shutdown_protocol.py` 持有 60 秒租约和 POST 准入计数；后台自行执行已确认的退出，客户端不按过期空闲回执杀进程。后台继续时仅分离窗口。原生验收仍待完成，见 [ADR 0009](../submitter/adr/0009-reversible-workbench-close.md)。
+- `WorkbenchSession` 保存八页登记的编辑输入、最近路由和窗口位置；`WorkbenchSessionStore` 原子替换本地草稿，损坏原文件不覆盖。页面轮询不能把草稿当运行事实；凭证不持久化。该草稿机制和保留原后台不等于全任务跨进程恢复。
 
 ## 修改的影响链
 

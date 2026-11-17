@@ -13,7 +13,7 @@
 5. 类 Slurm 目标：软件内统一队列、资源分配、后台常驻调度。现有 `LocalQueueRuntimeManager` 等是起点，不能直接称已实现 Slurm 等价架构；常驻生命周期、持久恢复、资源记账和跨节点调度边界需单独核对/设计。
 6. F001/F002/F023：浏览器、布局、进程生命周期、安全关闭、重连、配置兼容；Release 及目标机器验证。
 
-## 2026-11-18 F013 持久记录与中断恢复（开发与控制面验收通过）
+## 2026-11-18 F013 持久记录、中断恢复与用户可访问候选（原生页面待验收）
 
 上轮完成真实合并、发布候选及推送，是有效进展。本轮周额度初始剩余 73%，继续完整目标。修改前说明方案：先保存任务再启动，恢复历史与请求身份，未确认完成显示中断待核对；不自动重跑外部任务。约束见 [ADR 0006](../../submitter/adr/0006-durable-merge-history.md)。
 
@@ -33,6 +33,14 @@
 功能提交 `7efd7b8bf60319c858b5f919ad3e22337ef6389c` 已推送 origin/main，返回 `21c2727..7efd7b8 main -> main`。该提交构建 `GPTWork/release-win-x64-ws1xh2gg`，71492 退出 0；1645 文件摘要、19 个 worker 和 ZIP CRC 通过。包内诊断 `GPTWork/package-history-probe/bundle-probe-scrzk38x/verification.json`、正式主机独立启动/退出均通过。`GPTWork/frozen-merge-recovery-jka6iogk/verification.json` 证明包内控制面两次冷启动、失败历史恢复和相同请求仅执行一次测试命令；不调用 Abaqus，测试输入和失败工作区核对通过，85388/24795/63339 均已结束。
 
 交付复核发现该 `tempfile` 目录仅构建账户可读，用户账户读取程序文件被拒绝。这是目录权限问题，不是文件缺失，旧目录完整保留。已将发布目录改为唯一 UUID 名称加普通 `mkdir`，继承项目权限；两种账户对 `GPTWork/release-access-check-20261118/readable.txt` 的访问均通过，没有修改任何既有目录权限。下一步从修正后的构建脚本生成新候选，并在用户账户验证最终文件。当前周额度剩余 72%，整体目标继续 active。
+
+### 最终候选与准确续接点
+
+最终候选为 `GPTWork/release-win-x64-c39d9688d751/AbaqusTools`，由干净提交 `2406e8bfb9eb6516a9ce524aaddd186e0c9a05ce` 构建；63568 退出 0。已从用户账户读取并核对全部 1645 个清单文件和 19 个 worker，直接运行包内控制面成功。最终用户账户证据：`GPTWork/frozen-merge-recovery-658jvpc7/verification.json`（两次冷启动/仅一次测试命令/历史恢复/失败清理）、`GPTWork/package-history-user-probe/bundle-probe-l99g1uzi/verification.json`（包内诊断）、`GPTWork/package-history-user-host`（正式主机独立启动/资源和队列 API/安全退出）。67243/98709/94368 均退出 0。部分验收目录仍按测试进程账户私有，读取时须使用相应账户，不更改权限或把拒绝访问认作文件不存在。
+
+同级 `AbaqusTools-win-x64-2406e8b.zip` 为 149480153 字节，SHA256=`7ab56795f62dffe921647417fdf4a552ed1a948309ba14240a2fd0f28fe31bdf`；CRC 和文件清单校核通过，`archive-verification.json` 记录用户账户验证。代码与文档已推送 origin/main，发布访问修正 push 返回 `7efd7b8..2406e8b main -> main`；构建后的最新交接记录另随文档提交同步。没有发布二进制 GitHub Release。
+
+本轮所有自有构建、后台和测试进程已确认结束，没有操作旧原生窗口或用户求解。下一项：F012 完整结果批量计划/执行游标目前仍在前端内存，需继续迁移其执行所有权及跨后台续接，并验证真实多步骤链；同时推进可操作桌面的原生页面、真实 SSH 与目标机器验收。不要重跑已通过的两组真实单步内容核对，也不能把 F013 的单步恢复称作全应用恢复完成。
 
 ## 2026-11-18 F013 合并内容校验（两组真实内容核对通过）
 

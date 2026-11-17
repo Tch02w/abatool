@@ -274,6 +274,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             () =>
             {
                 ScopeProgressRing.IsActive = _scopeBusy;
+                ScopeProgressRing.Visibility = _scopeBusy ? Visibility.Visible : Visibility.Collapsed;
                 RefreshInteractionState();
             });
     }

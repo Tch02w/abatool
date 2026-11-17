@@ -13,6 +13,49 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if ((args.Length == 3 || (args.Length == 5 && args[3] == "--odb")) && args[0] == "--launch-bundle")
+    {
+        Environment.SetEnvironmentVariable("ABAQUS_TOOLS_ROOT", Path.GetFullPath(args[1]));
+        Environment.SetEnvironmentVariable("ABAQUS_TOOLS_PYTHON", null);
+        Environment.SetEnvironmentVariable("PYTHONPATH", null);
+        Environment.SetEnvironmentVariable("PYTHONHOME", null);
+        Environment.SetEnvironmentVariable("ABAQUS_SUBMITTER_DATA_DIR", Path.Combine(Path.GetFullPath(args[2]), "submitter"));
+        Environment.SetEnvironmentVariable("ABAQUS_POSTPROCESSOR_DATA_DIR", Path.Combine(Path.GetFullPath(args[2]), "postprocessor"));
+        await using var host = new ControlPlaneHost();
+        var descriptorPath = Path.Combine(Path.GetFullPath(args[2]), "control-plane.json");
+        SetField(host, "_descriptorPath", descriptorPath);
+        SetField(host, "_launchLockPath", descriptorPath + ".lock");
+        var ready = await host.EnsureReadyAsync();
+        using var child = Process.GetProcessById(ready.Pid);
+        var expected = Path.Combine(Path.GetFullPath(args[1]), "control-plane", ControlPlaneLaunch.BundleExecutable);
+        if (!string.Equals(child.MainModule?.FileName, expected, StringComparison.OrdinalIgnoreCase))
+            throw new Exception("Host launched an unexpected control-plane executable");
+        await host.GetLocalResourceAsync();
+        await host.GetLocalQueueRuntimeAsync();
+        if (args.Length == 5)
+        {
+            var source = Path.GetFullPath(args[4]);
+            var copy = Path.Combine(Path.GetFullPath(args[2]), Path.GetFileName(source));
+            File.Copy(source, copy, overwrite: false);
+            byte[] before;
+            using (var input = File.OpenRead(copy)) before = System.Security.Cryptography.SHA256.HashData(input);
+            var snapshot = await host.StartOdbCompatibilityCheckAsync(Path.GetDirectoryName(copy)!, [copy], true, Guid.NewGuid());
+            Console.WriteLine($"Packaged Abaqus compatibility operation: {snapshot.OperationId}");
+            snapshot = await host.PollOperationUntilTerminalAsync(snapshot);
+            byte[] after;
+            using (var input = File.OpenRead(copy)) after = System.Security.Cryptography.SHA256.HashData(input);
+            var unchanged = before.SequenceEqual(after);
+            await File.WriteAllTextAsync(Path.Combine(Path.GetFullPath(args[2]), "abaqus-verification.json"),
+                JsonSerializer.Serialize(new { snapshot, sourceUnchanged = unchanged, sha256 = Convert.ToHexString(after) }));
+            if (!snapshot.IsSuccessful || snapshot.Results.Count != 1 || snapshot.Results[0].Status != "valid" || !unchanged)
+                throw new Exception("Packaged read-only Abaqus check failed; inspect abaqus-verification.json");
+            Console.WriteLine("Packaged Abaqus worker read-only ODB check passed; SHA256 unchanged.");
+        }
+        await host.DisposeAsync();
+        if (!child.WaitForExit(10000)) throw new Exception("Owned idle bundle did not stop");
+        Console.WriteLine("Bundled host startup, resource/queue APIs, and safe shutdown passed.");
+        return 0;
+    }
     if (args.Length == 6 && args[0] == "--results-api")
     {
         await CheckResultsApi(args[1], args[2], args[3], args[4], args[5]);
@@ -37,6 +80,7 @@ try
     await Check("connection lost", "", false, disconnect: true);
     await Check("reconnect failure", "", false, connectionCleanup: true);
     CheckUpgradeContracts();
+    ControlPlaneLaunchChecks.Run();
     Console.WriteLine("8 host process lifecycle checks passed.");
     return 0;
 }

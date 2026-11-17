@@ -8,6 +8,15 @@
 
 ## 已做工作及证据
 
+### 2026-11-18 · GIF 双模式复核（F020/F022）
+
+用户再次明确要求“帧率相同或时长相同”。本次核对现有源码，确认两种模式、工作区持久化、请求参数及正式合成入口均已实现，无需重复修改。功能索引补上 GIF 参数的 API 测试定位。
+
+- `tests/postprocessor/test_animation.py`、`tests/winui/test_shell_contract.py` 与文档导航共 80 项通过，回执 `GPTWork/gif-options-check-20261118.xml`。`tests/control_plane/test_postprocessing_api.py` 8 项通过，回执 `GPTWork/gif-api-check-20261118.xml`。最初误执行 `pytest tests/control_plane/test_postprocess_contracts.py`，该文件不存在，未执行测试；已改用上述真实文件。
+- `dotnet run --project tests/winui_postprocess/OdbPostprocess.Tests.csproj --no-restore -p:BaseOutputPath=G:/PythonProject/abaqusTool/GPTWork/gif-workspace-check-20261118/` 退出 0，含 GIF 参数兼容、模式/数值保存和旧工作区恢复检查。
+- 重新解码 `GPTWork/gif-timing-s9udw0t8/` 的四份成品，均为 1500×1000，保留 101 / 41 个画面；固定 25 帧/秒分别为 4.04 / 1.64 秒，统一时长均为 4 秒。当前复核回执 `GPTWork/gif-options-recheck-20261118.json`。没有启动求解或重渲染原始模型。
+- 当前业务窗口来自 `GPTWork/winui-migration-20261118/AbaqusTools.WinUI.exe`，句柄 58461048。读取窗口成功，尝试 Ctrl+7 后未观察到页面切换，点击“ODB 后处理”返回 `coordinate input geometry is unavailable`。没有提交后处理任务；模式切换与业务页点击导出仍未验收。测试进程均已退出，业务窗口保留打开。准确续接点：恢复原生按钮定位后检查“输出与计算设置”的两种模式切换与实际提交。
+
 ### 2026-11-17 · GIF 统一帧率与统一时长（F020/F022）
 
 文档导航检查通过 29 项。变更定位在 F020、F022，时长输入和悬停说明在 F025。

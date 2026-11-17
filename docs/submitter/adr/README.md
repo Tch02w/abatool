@@ -12,3 +12,4 @@ Current records:
 - `0002-native-winui-control-plane.md`
 - `0003-page-aware-workbench-explorer.md`
 - `0004-separate-restart-computation-and-result-materialization.md`
+- `0005-self-contained-winui-control-plane.md`

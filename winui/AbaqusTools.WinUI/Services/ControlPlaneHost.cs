@@ -122,8 +122,9 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
             SetState(ControlPlaneState.Starting, "正在启动本地 Python 控制面…");
             effectiveToken.ThrowIfCancellationRequested();
-            var repositoryRoot = FindRepositoryRoot();
-            StartOwnedProcess(repositoryRoot);
+            StartOwnedProcess(ControlPlaneLaunch.Resolve(AppContext.BaseDirectory,
+                Environment.GetEnvironmentVariable("ABAQUS_TOOLS_ROOT"),
+                Environment.GetEnvironmentVariable("ABAQUS_TOOLS_PYTHON")));
 
             var ready = await WaitForReadyDescriptorAsync(TimeSpan.FromSeconds(25), effectiveToken);
             _descriptor = ready;
@@ -2218,7 +2219,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         _lastReadinessDiagnostic = message;
     }
 
-    private void StartOwnedProcess(string repositoryRoot)
+    private void StartOwnedProcess(ControlPlaneLaunch launch)
     {
         if (_ownedProcess is { HasExited: false })
         {
@@ -2234,18 +2235,20 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             _processOutput.Clear();
         }
 
-        var python = ResolvePythonExecutable(repositoryRoot);
         var startInfo = new ProcessStartInfo
         {
-            FileName = python,
-            WorkingDirectory = repositoryRoot,
+            FileName = launch.Executable,
+            WorkingDirectory = launch.Root,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        startInfo.ArgumentList.Add("-m");
-        startInfo.ArgumentList.Add("modules.control_plane");
+        if (!launch.Bundled)
+        {
+            startInfo.ArgumentList.Add("-m");
+            startInfo.ArgumentList.Add("modules.control_plane");
+        }
         startInfo.ArgumentList.Add("--port");
         startInfo.ArgumentList.Add("0");
         startInfo.ArgumentList.Add("--descriptor");
@@ -2343,81 +2346,6 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
             return Environment.NewLine + "控制面输出：" + Environment.NewLine + _processOutput.ToString().Trim();
         }
-    }
-
-    private static string ResolvePythonExecutable(string repositoryRoot)
-    {
-        var configured = Environment.GetEnvironmentVariable("ABAQUS_TOOLS_PYTHON")?.Trim().Trim('"');
-        if (!string.IsNullOrWhiteSpace(configured))
-        {
-            if (Path.IsPathFullyQualified(configured))
-            {
-                if (!File.Exists(configured))
-                {
-                    throw new ControlPlaneException($"ABAQUS_TOOLS_PYTHON 指向的文件不存在：{configured}");
-                }
-
-                return configured;
-            }
-
-            if (configured.Contains(Path.DirectorySeparatorChar) || configured.Contains(Path.AltDirectorySeparatorChar))
-            {
-                var repositoryRelative = Path.GetFullPath(configured, repositoryRoot);
-                if (!File.Exists(repositoryRelative))
-                {
-                    throw new ControlPlaneException($"ABAQUS_TOOLS_PYTHON 指向的文件不存在：{repositoryRelative}");
-                }
-
-                return repositoryRelative;
-            }
-
-            return configured;
-        }
-
-        var virtualEnvironmentPython = Path.Combine(repositoryRoot, ".venv", "Scripts", "python.exe");
-        if (File.Exists(virtualEnvironmentPython))
-        {
-            return virtualEnvironmentPython;
-        }
-
-        throw new ControlPlaneException(
-            "未找到控制面 Python。请设置 ABAQUS_TOOLS_PYTHON，或在仓库根目录创建 .venv\\Scripts\\python.exe。");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var configuredRoot = Environment.GetEnvironmentVariable("ABAQUS_TOOLS_ROOT")?.Trim().Trim('"');
-        if (!string.IsNullOrWhiteSpace(configuredRoot))
-        {
-            var resolvedRoot = Path.GetFullPath(configuredRoot);
-            if (IsRepositoryRoot(resolvedRoot))
-            {
-                return resolvedRoot;
-            }
-
-            throw new ControlPlaneException(
-                $"ABAQUS_TOOLS_ROOT 不是有效的 Abaqus Tools 根目录：{resolvedRoot}");
-        }
-
-        var directory = new DirectoryInfo(Path.GetFullPath(AppContext.BaseDirectory));
-        while (directory is not null)
-        {
-            if (IsRepositoryRoot(directory.FullName))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new ControlPlaneException(
-            "无法从程序安装位置定位 Abaqus Tools 根目录；开发环境可显式设置 ABAQUS_TOOLS_ROOT。");
-    }
-
-    private static bool IsRepositoryRoot(string path)
-    {
-        return File.Exists(Path.Combine(path, "pyproject.toml"))
-            && File.Exists(Path.Combine(path, "modules", "control_plane", "__main__.py"));
     }
 
     private static bool IsValidDescriptor(ControlPlaneDescriptor descriptor)

@@ -40,14 +40,18 @@
                     Grid.Column="2"
                     Margin="0,24,0,0"
                     Click="OnRefreshScopesClicked"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
                     Style="{StaticResource AccentButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <ProgressRing
                             x:Name="ScopeProgressRing"
                             Width="16"
                             Height="16"
+                            Visibility="Collapsed"
+                            Foreground="{Binding Foreground, ElementName=RefreshScopesButton}"
                             IsActive="False" />
-                        <TextBlock Text="读取目录" />
+                        <TextBlock Text="读取目录" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
             </Grid>

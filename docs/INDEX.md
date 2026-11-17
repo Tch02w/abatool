@@ -22,6 +22,7 @@
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
 | 日志选择刷新、16 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
+| Windows 完整目录包、运行诊断和发布限制 | [发布构建](05-development/RELEASE.md) |
 | 哪些验收已通过，证据证明什么 | [验收记录与缺口](06-testing/VALIDATION.md) |
 | 接手时先做什么、目前未完成什么 | [当前状态](08-handoff/CURRENT_STATUS.md) |
 | 任务过程、失败定位、后续动作 | [任务索引](08-handoff/TASK_INDEX.md) |

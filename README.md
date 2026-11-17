@@ -34,6 +34,8 @@ WinUI 客户端只连接 `127.0.0.1` 上的随机端口控制面，使用进程�
 
 如需指定解释器，可设置 `ABAQUS_TOOLS_PYTHON`。只有仓库位于非标准布局时才需要设置 `ABAQUS_TOOLS_ROOT`。
 
+开发者可用 `.\.venv\Scripts\python.exe packaging/build_release.py` 构建携带 .NET、Windows App SDK 和 Python 控制面的 Windows x64 完整目录。使用者需整体解压并运行其中的 `AbaqusTools.WinUI.exe`；目标机器仍需配置自己的 Abaqus。构建、诊断与未完成的发布门槛见 [发布说明](docs/05-development/RELEASE.md)。
+
 ## 兼容入口
 
 迁移验收期间仍保留以下 PySide6 入口，用于行为对照与回滚：

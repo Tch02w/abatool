@@ -50,9 +50,11 @@
 | F023 控制面启动、鉴权、HTTP 路由、操作跟踪 | `modules/control_plane/__main__.py`、`modules/control_plane/server.py`；`ControlPlaneRuntime`；`modules/control_plane/descriptor.py`、`modules/control_plane/contracts.py`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` | `tests/control_plane/test_api.py`、`tests/control_plane/test_descriptor.py`、`tests/winui_host/ControlPlaneHost.Tests.csproj` |
 | F024 PySide6 兼容工作台与旧提取基准 | `main.py`、`modules/workspace.py`、`modules/submitter/main.py`、`modules/postprocessor/app.py`、`modules/postprocessor/batch_window.py`、`modules/postprocessor/main_window.py` | `tests/postprocessor/test_legacy_payload_parity.py`、`tests/postprocessor/test_postprocessor_entrypoint.py`、`tests/submitter/test_module_entrypoint.py` |
 | F025 共用数字输入与参数说明 | `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`、`winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml`；`WorkbenchNumberBoxTemplate`；`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs`；`UpdateExplanation`、`AddToHeader`；`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs`；`ForTopic`；16 处入口分布于 F003/F004/F007/F008/F022，完整清单见 [界面交互说明](UI_INTERACTION.md) | `tests/winui_numberbox/NumberBox.Tests.csproj`、`tests/winui_numberbox/App.xaml.cs`、`tests/winui/test_shell_contract.py`；自身原生窗口 35 项和最新构建通过，业务页视觉/悬停验收待完成 |
+| F026 Windows 完整目录发布 | `packaging/build_release.py`、`packaging/release_inventory.py`、`packaging/control_plane.spec`、`packaging/control_plane_entry.py`、`packaging/bundle_probe.py`；F023 启动选择：`winui/AbaqusTools.WinUI/Services/ControlPlaneLaunch.cs` | `tests/winui_host/ControlPlaneLaunchChecks.cs`；`tests/winui_host/Program.cs` 的 `--launch-bundle`；包内 `--check-bundle`；约定见 [发布构建](../05-development/RELEASE.md) |
 
 ## 跨功能修改提示
 
+- F020/F022 的 GIF 播放方式同时检查 `tests/postprocessor/test_animation.py`（完整源帧及计时）、`tests/control_plane/test_postprocessing_api.py`（`animationDurationSeconds` 可选字段及校验）和 `tests/winui_postprocess/Program.cs`（模式持久化与旧工作区兼容）。
 - CPU 规则变动同时检查 F003/F004/F005/F007；后处理进程并行数不是单作业 CPU 数。
 - F025 的 16 处数字输入已统一为 Inline：右侧并排下/上折线、数值居中、最小宽度 160；同时提供 16 处参数说明。修改时核对 0/空值/容差、上下限、禁用状态和说明口径，详见 [界面交互说明](UI_INTERACTION.md)。
 - 用户已认可预览，但指出实际 WinUI 外观不同；边框、40px 高度、每个按钮 40px 和竖分隔线正在向预览统一，不能把此前控件行为检查当作本次视觉调整验收。说明图标已改为 14px 问号并保留 28px 悬停热区。

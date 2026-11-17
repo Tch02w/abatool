@@ -286,3 +286,14 @@ data: {"schemaVersion":1,"sequence":2,"eventId":"...","occurredAt":"...","aggreg
 ```
 
 事件交付语义为至少一次。客户端必须按单调 `sequence` 去重，REST 响应仍是业务快照真相。
+
+
+## 全受管后台退出预留
+
+为兼容旧客户端，继续使用经过鉴权的 `POST /api/v1/odb-upgrade-shutdown-check`。这会在全部空闲时预留退出并拒绝新任务，因此不是普通状态轮询。当前成功响应包含：
+
+```json
+{"schemaVersion":1,"scope":"all-workers-v1","safeToStop":true,"operations":[]}
+```
+
+检查范围为批量结果、单步合并、升级、本机队列/作业、后处理、兼容性、索引、远端传输和远端作业。任何管理器活动、线程未收尾或持久记录不可确认时拒绝整体预留；返回非空 `operations` 或 `safeToStop:false`，其他管理器仍可使用。运行状态未知时可能直接返回错误，新客户端同样保留后台。新客户端必须校验 `scope`，不能将旧版只覆盖 ODB 的成功响应视为允许结束整个后台。健康能力为 `controlPlane.shutdown.all-workers-v1`。关闭交互、同步命令协调与完整 Prepare/Commit/Abort 不在本接口完成范围，见 [ADR 0008](submitter/adr/0008-all-worker-shutdown-fence.md)。

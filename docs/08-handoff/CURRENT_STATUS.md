@@ -4,11 +4,11 @@
 
 ## 工作区事实
 
-本轮 F001 退出保护已扩展至九类受管后台工作，检查任务及线程收尾；停止调度期间不再发出选中但尚未启动的作业。208 项控制面回归（含 10 项退出专项）、10 项客户端生命周期及 Release 构建通过，尚待新完整包和原生关闭流程。实际双目标 F012 验收使用此前冻结包，43108 已退出 0，两次后台均结束、描述文件已清理；证据 `GPTWork/real-result-batch-750883913dd9/verification.json`，勿重复运行已通过样本。
+本轮 F001 退出保护已扩展至九类受管后台工作，检查任务及线程收尾；停止调度期间不再发出选中但尚未启动的作业。208 项控制面回归（含 10 项退出专项）、10 项客户端生命周期及 Release 构建通过，新完整包的用户账户、冻结后台活动任务保护与主机启动/退出均通过；原生关闭流程待验收。实际双目标 F012 验收使用此前冻结包，43108 已退出 0，两次后台均结束、描述文件已清理；证据 `GPTWork/real-result-batch-750883913dd9/verification.json`，勿重复运行已通过样本。
 
-最新完整目录候选为 `GPTWork/release-win-x64-6cbfd68f63f6/AbaqusTools`（干净来源 `9f5ff64`），含 F012 后台批量恢复。用户账户核对 1647 文件/19 worker、两次冻结后台重启去重、正式主机启动/API/退出及包内诊断通过。原生窗口仍是旧候选，未自动替换。
+最新完整目录候选为 `GPTWork/release-win-x64-b53b0f4ca2b4/AbaqusTools`（干净来源 `aa0420f`），含 F012 批量恢复和 F001 九类受管工作退出保护。用户账户核对 1648 文件/19 worker、冻结任务运行/停止调度/空闲退出保护、正式主机启动/API/退出及包内诊断通过。原生窗口仍是旧候选，未自动替换。此前 `6cbfd68f63f6` 候选保留，是真实双目标验证所用版本。
 
-本轮 F012 功能、测试与 Wiki 已提交 `ef471f8`，尚未推送；自动审批以未明确授权具体远端为由拒绝 `git push origin main`，等待用户确认 `https://github.com/Tch02w/abatool.git` 的 main 分支。以下包与推送记录是上一轮事实。
+本轮 F001 功能、测试和 Wiki 已本地提交 `aa0420f`，此前 F012 为 `ef471f8`，尚未推送；自动审批以未明确授权具体远端为由拒绝 `git push origin main`，等待用户确认 `https://github.com/Tch02w/abatool.git` 的 main 分支。以下包与推送记录是上一轮事实。
 
 2026-11-18 已将合并持久恢复、发布目录访问修正、测试、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，运行功能提交 `7efd7b8`、发布访问修正 `2406e8b`，最近 push 返回 `7efd7b8..2406e8b main -> main`。上轮完整目录与 ZIP 候选在 `GPTWork/release-win-x64-c39d9688d751`，包含此前读取目录按钮修正，尚未包含本轮 F012；上面的新候选已补齐。已从用户账户核对全部文件、包内诊断、两次后台启动恢复及正式主机启动/退出；整体迁移、原生和目标机器验收继续进行，尚未发布正式安装包或二进制 GitHub Release。
 
@@ -47,13 +47,13 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
    F013 两组真实合并证据为 `GPTWork/merge-real-fv8_supj/verification.json`，单步恢复和最终包证据见 TASK-002。无需重跑已通过样本；F012 计划/阶段已迁移至后台，完整控制面最新 208 项通过，真实双目标已验收；待三层连续链及原生操作。
 2. 人工样例截面指派已修复，六组实体实际 Abaqus 解析校核通过；证据 `GPTWork/real-odb-validation/known-region-fumxjvn1/verification.json`，不要重跑已完成排查。
 3. 本次真实恢复证据：`GPTWork/real-odb-validation/region-delivery-zfmk0ni6/verification-resumed-2.json`，三组均成功且源全文件 SHA256 未变。生产源保护为大小/mtime/采样摘要，不称完整文件验证。旧 CSV schema 差异已明确校核并保留失败记录，不需重跑已完成三组。
-4. 最新完整目录候选为 `GPTWork/release-win-x64-6cbfd68f63f6/AbaqusTools/AbaqusTools.WinUI.exe`，包含后处理/GIF、读取按钮修正及 F012/F013 内容校验与持久恢复，已确认用户账户可读取程序和全部包文件。启动前需正常退出旧候选窗口；此前无法通过桌面工具激活旧窗口，新包原生页面未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
+4. 最新完整目录候选为 `GPTWork/release-win-x64-b53b0f4ca2b4/AbaqusTools/AbaqusTools.WinUI.exe`，包含后处理/GIF、读取按钮修正、F012/F013 内容校验与持久恢复及 F001 后台退出保护，已确认用户账户可读取程序和全部包文件。启动前需正常退出旧候选窗口；此前无法通过桌面工具激活旧窗口，新包原生页面未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
 5. 最新数字控件回执 `GPTWork/winui-numberbox-preview-checks/verification-preview-matched.json` 与同名 .exit.txt：35 项通过、exit 0，包含外观几何、主题切换、数值语义、帮助 Header、占位与焦点状态。它不覆盖业务页布局、日志拖选或帮助弹层悬停。参数说明悬停 180ms 打开、按钮/提示区内保持、离开两区 240ms 关闭，保留点击/键盘，无“知道了”；14px 小圆问号保留 28px 热区。用户按 Esc 停止 Computer Use 后已停止 UI 操作，业务页验收未完成；详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 6. 持续同步文档；后续目录清理与剩余迁移保留任务索引，不能挤占当前后处理交付。
 
 ## 运行与等待状态
 
-11 月 18 日上一轮构建、恢复检查和包内诊断均已结束。本轮 F012 完整回归 55644 与构建 22310 已结束，恢复身份专项 50650 也已结束；新包构建 51942、冻结恢复 87835 及主机/依赖检查均已结束，详见 TASK-002。两组真实合并和摘要复核是此前已结束记录。旧候选 `GPTWork/winui-migration-20261118/AbaqusTools.WinUI.exe` 窗口 58461048 此前可读取，但激活连续失败；本轮没有操作该窗口或强制关闭，见 TASK-002。用户运行中的 Python/Abaqus 进程归属不能从进程名称判断，不得据此终止。
+11 月 18 日本轮全部自有任务已结束：真实双目标 43108、控制面回归 2004、Release 40782、打包 38401、冻结退出最终 18362 均退出 0；验收脚本前两次失败及安全清理记录见 TASK-002。此前构建、恢复检查和包内诊断均已结束。本轮 F012 完整回归 55644 与构建 22310 已结束，恢复身份专项 50650 也已结束；新包构建 51942、冻结恢复 87835 及主机/依赖检查均已结束，详见 TASK-002。两组真实合并和摘要复核是此前已结束记录。旧候选 `GPTWork/winui-migration-20261118/AbaqusTools.WinUI.exe` 窗口 58461048 此前可读取，但激活连续失败；本轮没有操作该窗口或强制关闭，见 TASK-002。用户运行中的 Python/Abaqus 进程归属不能从进程名称判断，不得据此终止。
 
 ## 持续交接要求（用户明确要求）
 

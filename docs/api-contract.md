@@ -14,9 +14,9 @@
 
 ### 本机内存观测补充（2026-11-18，F005/F007）
 
-队列条目保留原 `rssBytes`，新增兼容可选字段 `memoryObservationStatus`、`memoryPeakBytes`、`memoryEstimatedBytes`、`memorySampleCount`、`memoryEstimateSource`。旧客户端可忽略，旧响应在新客户端取空字符串/0 默认值。
+队列条目保留原 `runtimeMemoryBytes`（队列持久字段为 `rss_bytes`），新增兼容可选字段 `memoryObservationStatus`、`memoryPeakBytes`、`memoryEstimatedBytes`、`memorySampleCount`、`memoryEstimateSource`。旧客户端可忽略，旧响应在新客户端取空字符串/0 默认值。
 
-`memoryObservationStatus` 为 `observed`（10 秒内且非未来的有效样本）、`waiting`、`unavailable`、`stale`、`ended` 或空字符串（旧记录）。非 observed 状态下旧 `rssBytes` 只供诊断，不应展示为新鲜占用或用于抵扣预留；结束清当前 RSS 并保留本次峰值。`memoryPeakBytes` 是该次执行的有效观测峰值；`memoryEstimatedBytes` 是带安全余量的调度参考。来源为 `observed`、`history`、`reference` 或空字符串；reference 明确指本次后台运行中其他作业的最大估计，不是该模型实测。
+`memoryObservationStatus` 为 `observed`（10 秒内且非未来的有效样本）、`waiting`、`unavailable`、`stale`、`ended` 或空字符串（旧记录）。非 observed 状态下旧 `runtimeMemoryBytes` 只供诊断，不应展示为新鲜占用或用于抵扣预留；结束清当前 RSS 并保留本次峰值。`memoryPeakBytes` 是该次执行的有效观测峰值；`memoryEstimatedBytes` 是带安全余量的调度参考。来源为 `observed`、`history`、`reference` 或空字符串；reference 明确指本次后台运行中其他作业的最大估计，不是该模型实测。
 
 外部刷新即使 RSS 不变也会持久更新时间，内部时间戳不作为新增公开字段。采样失败不构成求解失败；历史保存失败通过 `schedulerMessage` 提示并保留内存重试。队列保存失败仍暂停新派发，不重启求解。身份匹配、采样覆盖及 85% 当前可用内存预算见 [内存说明](03-features/MEMORY_MONITORING.md)。
 

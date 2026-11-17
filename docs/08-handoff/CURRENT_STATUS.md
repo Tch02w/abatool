@@ -4,6 +4,8 @@
 
 ## 工作区事实
 
+2026-11-18 已将本轮源码、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，功能提交为 `7b1f6fc`，push 返回 `6e24ff5..7b1f6fc main -> main`。整体迁移继续验收，发布安装包尚未交付。
+
 用户要求周额度剩余 15% 时暂停并等待确认。通过 Codex 用量工具读取账户周额度，11 月 18 日本轮初始剩余 79%。后续执行需重新读取，达到阈值后调用暂停并停止目标工作。
 
 GIF 新增「统一帧率 / 统一时长」。已对 GJA、GJB 的四份成品核对源帧、时长和分辨率。候选程序在 `GPTWork/winui-gif-timing-20261117`。模式切换的原生交互检查因用户按 Esc 结束，待从业务页完成点击导出。见 [任务记录](ACTIVE_TASKS/TASK-001-postprocessing.md)。

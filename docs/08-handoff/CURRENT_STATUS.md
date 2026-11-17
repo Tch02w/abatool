@@ -4,13 +4,13 @@
 
 ## 工作区事实
 
-2026-11-18 已将本轮源码、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，功能提交为 `7b1f6fc`，push 返回 `6e24ff5..7b1f6fc main -> main`。整体迁移继续验收，发布安装包尚未交付。
+2026-11-18 已将发布构建、按钮修正、README 与 Wiki 推送到 GitHub `Tch02w/abatool` 的 main，功能提交为 `90d6608`，push 返回 `8cdd9ac..90d6608 main -> main`。该干净提交的完整目录与 ZIP 候选在 `GPTWork/release-win-x64-_eok77y5`；整体迁移、原生和目标机器验收继续进行，尚未发布正式安装包或二进制 GitHub Release。
 
-用户要求周额度剩余 15% 时暂停并等待确认。通过 Codex 用量工具读取账户周额度，11 月 18 日本轮初始剩余 79%。后续执行需重新读取，达到阈值后调用暂停并停止目标工作。
+用户要求周额度剩余 15% 时暂停并等待确认。通过 Codex 用量工具读取账户周额度，11 月 18 日最近一次剩余 76%。后续执行需重新读取，达到阈值后调用暂停并停止目标工作。
 
 GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJB 成品：25 帧/秒时为 4.04 / 1.64 秒，统一时长均为 4 秒，全部 1500×1000；88 项相关 Python 检查及 C# 后处理状态检查通过。当前运行候选来自 `GPTWork/winui-migration-20261118`。业务页按钮定位返回 `coordinate input geometry is unavailable`，模式切换和点击导出仍待验收。见 [任务记录](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
-- 项目：`G:\PythonProject\abaqusTool`。本轮起点为已推送的 `main` 提交 `6e24ff5`；本轮色标改动在其上开发。接手先检查 Git 状态。
+- 项目：`G:\PythonProject\abaqusTool`。最新功能提交 `90d6608`，接手仍须检查 Git 状态，不用本文代替当前源码和远端检查。
 - Python 独立 `.venv`，WinUI/.NET 10；原 PySide6 保留。
 - 原始用户模型只读，真实验收基于 GPTWork 副本。没有为通用校核启动求解。
 - CPU 策略是用户指定的软件规则：Abaqus ≤2021 用逻辑线程上限，>2021 用物理核心上限；后处理进程并行上限单独按逻辑线程数，不固定为 4。实现定位 F007，不宣称这是许可证规则。
@@ -38,7 +38,7 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
 1. 用户已明确当前模型没有梁单元。优先实体截面内力和实际钢筋轴力，不把几何为工字钢/钢管当作梁。
 2. 人工样例截面指派已修复，六组实体实际 Abaqus 解析校核通过；证据 `GPTWork/real-odb-validation/known-region-fumxjvn1/verification.json`，不要重跑已完成排查。
 3. 本次真实恢复证据：`GPTWork/real-odb-validation/region-delivery-zfmk0ni6/verification-resumed-2.json`，三组均成功且源全文件 SHA256 未变。生产源保护为大小/mtime/采样摘要，不称完整文件验证。旧 CSV schema 差异已明确校核并保留失败记录，不需重跑已完成三组。
-4. 含分组色标和结果浏览的候选为 `GPTWork/winui-group-legends-20261117/AbaqusTools.WinUI.exe`。结果浏览上一候选在 `GPTWork/winui-results-20261117/`，真实表格回执在 `GPTWork/result-browser-verification-20261117/verification.json`。
+4. 最新完整目录候选为 `GPTWork/release-win-x64-_eok77y5/AbaqusTools/AbaqusTools.WinUI.exe`，包含已验收的后处理/GIF代码与读取按钮修正。启动前需正常退出旧候选窗口；目前无法通过桌面工具激活旧窗口，新包的原生窗口未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
 5. 最新数字控件回执 `GPTWork/winui-numberbox-preview-checks/verification-preview-matched.json` 与同名 .exit.txt：35 项通过、exit 0，包含外观几何、主题切换、数值语义、帮助 Header、占位与焦点状态。它不覆盖业务页布局、日志拖选或帮助弹层悬停。参数说明悬停 180ms 打开、按钮/提示区内保持、离开两区 240ms 关闭，保留点击/键盘，无“知道了”；14px 小圆问号保留 28px 热区。用户按 Esc 停止 Computer Use 后已停止 UI 操作，业务页验收未完成；详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 6. 持续同步文档；后续目录清理与剩余迁移保留任务索引，不能挤占当前后处理交付。
 

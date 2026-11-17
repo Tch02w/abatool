@@ -4,6 +4,10 @@
 
 ## 启动与就绪
 
+### 远端完成确认补充（2026-11-18，F010）
+
+`remote-jobs` 的公开 DTO 结构保持兼容。收到成功文本后仍为 running（取消请求期间 cancelling），phase 说明正在确认，须 launcher/锁已停止且四种输出签名连续 3 次稳定才终结。数据检查不再凭进程连续消失判成功；稳定 5 次无成功证据返回 failed / `REMOTE_JOB_EXIT_UNCONFIRMED`。错误与非请求终止优先于成功，代码分别为 `ABAQUS_REMOTE_ERROR`、`REMOTE_JOB_TERMINATED`；不可读探测继续活动并重置确认。内部探针增加 launcher 创建时间、probe_complete、output_signature、DAT/MSG 尾部；它们不是新增公共请求字段。细节与连接中断/重启限制见 [远端作业说明](03-features/REMOTE_JOBS.md)。
+
 ### 本机调度补充（2026-11-18，F004/F005）
 
 `GET /api/v1/local-queue-runtime` 保留现有结构并增加可选兼容字段 `schedulerMessage`（空字符串表示无调度提示）；`operations[]` 增加 `attemptId`，每次真正分配执行生成新的身份，后台重启观察原作业时保留身份、不重放操作。

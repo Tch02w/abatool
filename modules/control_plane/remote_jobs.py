@@ -14,11 +14,6 @@ from typing import Any
 from uuid import uuid4
 
 from modules.submitter.command import validate_job_name, validate_memory_argument
-from modules.submitter.constants import (
-    COMPLETE_MARKERS,
-    ERROR_MARKERS,
-    TERMINATE_MARKERS,
-)
 from modules.submitter.local_job_execution import RESTART_DEPENDENCY_EXTENSIONS
 from modules.submitter.remote_connection import (
     RemoteConnectionError,
@@ -42,6 +37,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .remote_job_monitoring import RemoteCompletionState, new_tail_lines
 from .remote_servers import RemoteServerService
 from .shutdown_guard import OperationShutdownGuard
 
@@ -248,12 +244,14 @@ class RemoteJobOperation:
     phase: str = "等待远端执行"
     work_directory: str = ""
     process_id: int = 0
+    process_start_ticks: str = ""
     paused: bool = False
     logs: list[str] = field(default_factory=list)
     files: dict[str, str] = field(default_factory=dict)
     error: dict[str, str] | None = None
     event_cursor: int = 0
-    inactive_polls: int = 0
+    completion: RemoteCompletionState = field(default_factory=RemoteCompletionState)
+    log_tails: dict[str, str] = field(default_factory=dict)
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
@@ -413,6 +411,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
         )
         with self._lock:
             operation.process_id = int(start_payload.get("process_id") or 0)
+            operation.process_start_ticks = str(start_payload.get("process_start_ticks") or "")
             operation.status = RUNNING
             operation.phase = "远端 Abaqus 运行中"
             operation.percent = 50
@@ -515,64 +514,25 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                     "work_directory": operation.work_directory,
                     "job_name": operation.request.job_name,
                     "process_id": operation.process_id,
+                    "process_start_ticks": operation.process_start_ticks,
                 },
             )
-            sta_tail = str(snapshot.get("sta_tail") or "")
-            log_tail = str(snapshot.get("log_tail") or "")
-            combined = f"{sta_tail}\n{log_tail}".upper()
             with self._lock:
-                self._merge_log_tail_locked(operation, sta_tail)
-                active = bool(snapshot.get("process_active") or snapshot.get("lock_exists"))
-                if active:
-                    operation.inactive_polls = 0
-                    operation.percent = min(95, max(operation.percent, 55))
-                else:
-                    operation.inactive_polls += 1
-                operation.phase = "已暂停" if operation.paused else "远端 Abaqus 运行中"
+                for source in ("sta", "log", "dat", "msg"):
+                    self._merge_log_tail_locked(operation, str(snapshot.get(source + "_tail") or ""), source)
+                status, phase, error = operation.completion.observe(snapshot,
+                    job_name=operation.request.job_name, datacheck=operation.request.datacheck,
+                    cancelling=operation.cancel_event.is_set(), paused=operation.paused)
+                operation.status = CANCELLING if operation.cancel_event.is_set() and status == RUNNING else status
+                operation.phase = phase
                 operation.updated_at = utc_now_text()
                 operation.version += 1
-
-                if any(marker in combined for marker in COMPLETE_MARKERS):
-                    operation.status = SUCCEEDED
-                    operation.phase = "远端作业完成"
-                    operation.percent = 100
-                    self._touch_locked(operation, "remote.job.succeeded")
+                if status in TERMINAL_STATUSES:
+                    operation.percent = 100 if status == SUCCEEDED else min(operation.percent, 99)
+                    operation.error = {"code": error, "message": phase} if error else None
+                    self._touch_locked(operation, f"remote.job.{status}")
                     return
-                if any(marker in combined for marker in TERMINATE_MARKERS):
-                    operation.status = CANCELLED if operation.cancel_event.is_set() else FAILED
-                    operation.phase = "远端作业已终止"
-                    operation.percent = min(operation.percent, 99)
-                    self._touch_locked(operation, f"remote.job.{operation.status}")
-                    return
-                if any(marker in combined for marker in ERROR_MARKERS):
-                    operation.status = FAILED
-                    operation.phase = "远端作业失败"
-                    operation.error = {
-                        "code": "ABAQUS_REMOTE_ERROR",
-                        "message": "Abaqus 远端输出包含失败标记",
-                    }
-                    self._touch_locked(operation, "remote.job.failed")
-                    return
-                if operation.request.datacheck and operation.inactive_polls >= 3:
-                    operation.status = SUCCEEDED
-                    operation.phase = "远端数据检查完成"
-                    operation.percent = 100
-                    self._touch_locked(operation, "remote.job.succeeded")
-                    return
-                if operation.cancel_event.is_set() and not active and operation.inactive_polls >= 2:
-                    operation.status = CANCELLED
-                    operation.phase = "远端作业已取消"
-                    self._touch_locked(operation, "remote.job.cancelled")
-                    return
-                if not active and operation.inactive_polls >= 5:
-                    operation.status = FAILED
-                    operation.phase = "远端进程结束，未发现成功标记"
-                    operation.error = {
-                        "code": "REMOTE_JOB_EXIT_UNCONFIRMED",
-                        "message": operation.phase,
-                    }
-                    self._touch_locked(operation, "remote.job.failed")
-                    return
+                operation.percent = min(95, max(operation.percent, 55))
             self._stop_event.wait(1)
 
     def _execute_control(self, operation: RemoteJobOperation, action: str) -> None:
@@ -645,11 +605,12 @@ class RemoteJobOperationManager(OperationShutdownGuard):
         del operation.logs[:-MAX_REMOTE_JOB_LOG_LINES]
 
     @classmethod
-    def _merge_log_tail_locked(cls, operation: RemoteJobOperation, tail: str) -> None:
-        for line in tail.splitlines():
-            cleaned = line.strip()
-            if cleaned and (not operation.logs or operation.logs[-1] != cleaned):
-                cls._append_log_locked(operation, cleaned)
+    def _merge_log_tail_locked(cls, operation: RemoteJobOperation, tail: str, source: str = "sta") -> None:
+        if not tail:
+            return  # A transient unreadable tail must not erase the overlap baseline.
+        for line in new_tail_lines(operation.log_tails.get(source, ""), tail):
+            cls._append_log_locked(operation, line)
+        operation.log_tails[source] = tail
 
     @staticmethod
     def _snapshot_locked(operation: RemoteJobOperation) -> dict[str, Any]:
@@ -727,7 +688,9 @@ if ([bool]$config.datacheck) { $arguments += 'datacheck' }
 $quoted=$arguments | ForEach-Object { if ($_ -match '\s') { '"'+($_ -replace '"','\"')+'"' } else { $_ } }
 $command='call "'+([string]$config.abaqus_command -replace '"','""')+'" '+($quoted -join ' ')
 $process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru
-[ordered]@{ process_id=[int]$process.Id } | ConvertTo-Json -Compress
+try { $started=$process.StartTime.ToUniversalTime().Ticks.ToString() }
+catch { if (-not $process.HasExited) { throw }; $started='exited' }
+[ordered]@{ process_id=[int]$process.Id; process_start_ticks=$started } | ConvertTo-Json -Compress
 """
 
 
@@ -735,13 +698,47 @@ def _job_status_script() -> str:
     return r"""
 $job=[string]$config.job_name
 $work=[string]$config.work_directory
-$sta=Join-Path $work ($job+'.sta')
-$log=Join-Path $work ($job+'.log')
-$lck=Join-Path $work ($job+'.lck')
-$active=[bool](Get-Process -Id ([int]$config.process_id) -ErrorAction SilentlyContinue)
-$staTail=if (Test-Path -LiteralPath $sta -PathType Leaf) { (Get-Content -LiteralPath $sta -Tail 80 -ErrorAction SilentlyContinue) -join "`n" } else { '' }
-$logTail=if (Test-Path -LiteralPath $log -PathType Leaf) { (Get-Content -LiteralPath $log -Tail 40 -ErrorAction SilentlyContinue) -join "`n" } else { '' }
-[ordered]@{ process_active=$active; lock_exists=[bool](Test-Path -LiteralPath $lck); sta_tail=$staTail; log_tail=$logTail } | ConvertTo-Json -Compress
+$complete=$true
+$active=$false
+$locked=$false
+$expected=[string]$config.process_start_ticks
+if ($expected -eq 'exited') { }
+elseif (-not $expected -or [int]$config.process_id -le 0) { $complete=$false }
+else {
+    try {
+        $current=Get-Process -Id ([int]$config.process_id) -ErrorAction Stop
+        $active=$current.StartTime.ToUniversalTime().Ticks.ToString() -eq $expected
+    } catch {
+        if ($_.FullyQualifiedErrorId -notlike 'NoProcessFoundForGivenId*') { $complete=$false }
+    }
+}
+try { $directory=Get-Item -LiteralPath $work -ErrorAction Stop; if (-not $directory.PSIsContainer) { $complete=$false } }
+catch { $complete=$false }
+try { $null=Get-Item -LiteralPath (Join-Path $work ($job+'.lck')) -ErrorAction Stop; $locked=$true }
+catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound') { $complete=$false } }
+$tails=@{}
+$signatures=@()
+foreach ($extension in @('sta','log','dat','msg')) {
+    $path=Join-Path $work ($job+'.'+$extension)
+    $tail=''
+    $signature=$extension+':missing'
+    try {
+        $before=Get-Item -LiteralPath $path -ErrorAction Stop
+        $tail=(Get-Content -LiteralPath $path -Tail 80 -ErrorAction Stop) -join "`n"
+        $after=Get-Item -LiteralPath $path -ErrorAction Stop
+        $signature=$extension+':'+$after.Length+':'+$after.LastWriteTimeUtc.Ticks
+        if ($before.Length -ne $after.Length -or $before.LastWriteTimeUtc.Ticks -ne $after.LastWriteTimeUtc.Ticks) { $complete=$false }
+    } catch {
+        if ($_.CategoryInfo.Category -ne 'ObjectNotFound') { $complete=$false }
+        elseif ($null -ne $before) { $complete=$false }
+    }
+    $before=$null
+    $tails[$extension]=$tail
+    $signatures+=$signature
+}
+[ordered]@{ process_active=$active; lock_exists=$locked; probe_complete=$complete;
+    output_signature=($signatures -join '|'); sta_tail=$tails.sta; log_tail=$tails.log;
+    dat_tail=$tails.dat; msg_tail=$tails.msg } | ConvertTo-Json -Compress
 """
 
 

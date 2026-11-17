@@ -6,6 +6,22 @@
 
 ## 接续顺序
 
+### 2026-11-18 F010 完成证据与日志增量（源码通过，新包待验证）
+
+上一轮完成内存观测和冻结包，属于有效进展。本轮先只读观察既有 GJA-13_V40D：主进程 86340（创建时间 1794888177.9505272）及子进程 196820 被识别，三次快照均与独立 psutil 读取的进程树/创建时间一致，观测 RSS 与同一快照求和完全一致；最后 20514975744 字节。回执 `GPTWork/live-solver-memory-045301de9317/verification.json`，脚本 `GPTWork/audit_live_memory_20261118.py`，执行句柄 25063 已结束。扫描首轮 13.43 秒，后两轮 0.258/0.298 秒。未控制或终止用户作业，没有启动求解；这证明单个真实 Standard/SMP 子进程覆盖，不覆盖 MPI、并发资源准入或原生显示。
+
+发现 F010 两处明确误判：数据检查仅凭无进程三轮就成功；完成文字先于错误、活跃进程/锁判断直接终结。改动前已向用户说明新方案：以完成证据和稳定确认共同判断，错误优先、缺证据不成功，并去除重复远端日志。实现详见 [远端作业说明](../../03-features/REMOTE_JOBS.md)。
+
+已实现：launcher 创建时间核对；真实 PowerShell 读取四类日志及文件签名；不可读和活动状态不授权终结；三次稳定确认，五次稳定无成功证据返回未确认失败；错误/终止证据保留；取消继续活动到稳定退出；按来源尾部重叠只追加新增行。公共 DTO 兼容，未改 UI 布局。
+
+验证：`.\.venv\Scripts\python.exe -m pytest tests/control_plane/test_remote_job_monitoring.py tests/control_plane/test_remote_jobs_api.py tests/control_plane/test_remote_servers_api.py tests/control_plane/test_remote_transfers_api.py tests/control_plane/test_shutdown_guard.py tests/control_plane/test_shutdown_protocol.py -q --basetemp=GPTWork/pytest-remote-confirm-final2 --junitxml=GPTWork/remote-confirm-final2-20261118.xml`，**47 项通过，25.88 秒**，日志同名 `.log`。覆盖生产 PowerShell 本机真实文件/PID/创建时间不匹配、缺目录、快速 cmd 启动及稳定成功；只启动隔离 cmd 夹具，无 Abaqus/SSH 求解。Ruff 全部修改 Python 文件通过。
+
+失败保留：`GPTWork/remote-confirm-first-20261118.xml` 为 1 失败/20 通过，测试请求漏必填 cpus/memory，补齐后通过。`GPTWork/remote-confirm-final-20261118.log` 为命令误写不存在 test_workbench_close.py，未运行测试；改用实际 test_shutdown_protocol.py 后通过。所有测试句柄已结束，没有重复启动长任务。
+
+最后审阅发现共享错误词表包含可能出现在警告中的诊断词。新增 DAT/MSG 判断须区分警告与明确失败：数值奇异/零主元/畸变本身不覆盖成功，明确 `***ERROR` 或失败摘要仍优先；泛化 iteration terminated 也不当作业终止。补充三种警告与错误配对回归后，相同六个测试文件 **50 项通过，23.81 秒**，`GPTWork/remote-confirm-final3-20261118.xml`（`--basetemp=GPTWork/pytest-remote-confirm-final3`），句柄 39347 退出 0。Ruff 通过，文档导航 42 项通过。
+
+准确续接点：先文档检查和本地提交，再构建包含 F010 修正的完整目录并检查文件/依赖/正式主机。下一迁移缺口是远端连接丢失后持续跟踪、重连及后台重启持久恢复；当前远端操作仍在内存、SSH 异常使操作失败，不能据此断言求解已停止。真实 SSH、原生八页、三层 ODB 链、MPI/并发高负载及目标机器仍未完成。已有 GitHub 推送自动审批拒绝未解除，不重试推送。
+
 ### 2026-11-18 F005/F007 自有进程内存与历史估计（源码和最终冻结包通过，原生/真实负载待验）
 
 修改前已向用户说明方案：接入按执行身份约束的实际进程采样，以峰值和安全余量辅助资源分配，按输入与执行参数区分历史；多作业共用扫描，未知读数不当零。已实现共享快照、PID/创建时间/子进程核对、首次与最终立即保存和中间 5 秒批量保存、短时峰值保留；外部刷新保留不变数值的时间戳。内存学习复用纯 Python 服务，SQLite 兼容元信息保留历史，队列和概览提示区分当前/峰值/估计来源。资源预算使用当前可用内存的 85%，抵扣活动作业尚未由新鲜 RSS 覆盖的预留。功能、错误和限制见 [内存说明](../../03-features/MEMORY_MONITORING.md)、[ADR 0011](../../submitter/adr/0011-native-memory-observation.md)。

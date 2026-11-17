@@ -15,7 +15,7 @@ from tests.control_plane.test_remote_transfers_api import _connect
 class ActiveRemoteManager(FakeRemoteManager):
     def execute_powershell(self, script: str, *, timeout: float = 30) -> str:
         if "process_active=$active" in script:
-            return '{"process_active":true,"lock_exists":true,"sta_tail":"","log_tail":""}'
+            return '{"process_active":true,"lock_exists":true,"sta_tail":"","log_tail":"","probe_complete":true,"output_signature":"empty"}'
         return super().execute_powershell(script, timeout=timeout)
 
 
@@ -48,7 +48,7 @@ def test_remote_upload_job_runs_to_a_confirmed_terminal_state(tmp_path: Path) ->
         assert created[0] == 202
         operation_id = json_response(created)["operationId"]
 
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 5
         while True:
             response = api_request(runtime, f"/api/v1/remote-jobs/{operation_id}")
             snapshot = json_response(response)

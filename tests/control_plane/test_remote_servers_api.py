@@ -79,11 +79,13 @@ class FakeRemoteManager:
         if "$base=Join-Path" in script:
             return json.dumps({"work_directory": r"D:\Abaqus_Cal\case"})
         if "process_id=[int]$process.Id" in script:
-            return json.dumps({"process_id": 4321})
+            return json.dumps({"process_id": 4321, "process_start_ticks": "1234"})
         if "process_active=$active" in script:
             return json.dumps(
                 {
                     "process_active": False,
+                    "probe_complete": True,
+                    "output_signature": "sta:stable",
                     "lock_exists": False,
                     "sta_tail": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
                     "log_tail": "",

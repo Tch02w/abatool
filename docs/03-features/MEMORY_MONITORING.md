@@ -44,3 +44,5 @@
 - 实际 Windows 进程验证：`.\.venv\Scripts\python.exe packaging/verify_local_memory.py`；冻结包加 `--bundle <AbaqusTools目录>`。程序在 GPTWork 创建 96 MiB Python 测试进程，核对身份/占用/历史、两次启动和退出，不调用 Abaqus 求解，不改原模型。测试失败时保留未确认结束的自有后台并打印 PID，先检查原句柄，不重复启动。
 
 实际回执、失败和未验收范围见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
+2026-11-18 对已运行的 GJA-13_V40D 做只读核对：Standard 主进程及 SMAEqsDirSolverUnsymmetric 子进程均被识别，三个快照 PID/创建时间一致，快照内 RSS 求和与监测输出一致，最后合计 20514975744 字节。未控制作业、未读写 ODB 内容或启动新求解。扫描耗时首轮 13.43 秒、后两轮 0.258/0.298 秒；这是单次环境实测，冷启动延迟仍需关注，不能泛化为全负载性能结论。回执 `GPTWork/live-solver-memory-045301de9317/verification.json`，不代表 MPI/多作业高负载/原生显示验收。

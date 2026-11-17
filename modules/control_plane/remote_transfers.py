@@ -31,6 +31,7 @@ from .contracts import (
 )
 from .events import EventStore
 from .remote_servers import RemoteServerService
+from .shutdown_guard import OperationShutdownGuard
 
 TRANSFER_DIRECTIONS = frozenset({"upload", "download"})
 
@@ -124,8 +125,10 @@ class RemoteTransferOperation:
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
-class RemoteTransferOperationManager:
+class RemoteTransferOperationManager(OperationShutdownGuard):
     """Own a serial SFTP queue for the single verified SSH session."""
+
+    shutdown_kind = 'remote.transfer'
 
     def __init__(self, event_store: EventStore, service: RemoteServerService) -> None:
         self._events = event_store
@@ -139,7 +142,7 @@ class RemoteTransferOperationManager:
 
     def create(self, request: RemoteTransferRequest) -> dict[str, Any]:
         with self._lock:
-            if self._closed:
+            if self._closed or self._shutdown_reserved:
                 raise ApiProblem(
                     503,
                     "CONTROL_PLANE_SHUTTING_DOWN",

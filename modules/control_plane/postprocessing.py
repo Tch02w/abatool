@@ -40,6 +40,7 @@ from .region_extraction import (
     execute_region_extraction,
     finalize_region_extraction,
 )
+from .shutdown_guard import OperationShutdownGuard
 
 SCAN_KIND = "odb.postprocess.scan"
 RUN_KIND = "odb.postprocess.run"
@@ -624,8 +625,10 @@ class PostprocessOperation:
     controller: MultiProcessController = field(default_factory=MultiProcessController, repr=False)
 
 
-class PostprocessOperationManager:
+class PostprocessOperationManager(OperationShutdownGuard):
     """Own cancellable scan and extraction operations for the native UI."""
+
+    shutdown_kind = 'odb.postprocess'
 
     def __init__(
         self,
@@ -671,7 +674,7 @@ class PostprocessOperationManager:
         kind: str,
     ) -> dict[str, Any]:
         with self._lock:
-            if self._closed:
+            if self._closed or self._shutdown_reserved:
                 raise ApiProblem(
                     503,
                     "CONTROL_PLANE_SHUTTING_DOWN",

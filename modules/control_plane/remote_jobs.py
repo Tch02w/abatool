@@ -43,6 +43,7 @@ from .contracts import (
 )
 from .events import EventStore
 from .remote_servers import RemoteServerService
+from .shutdown_guard import OperationShutdownGuard
 
 REMOTE_INPUT_MODES = frozenset({"upload", "existing"})
 REMOTE_JOB_CONTROLS = frozenset({"cancel", "pause", "resume"})
@@ -256,8 +257,10 @@ class RemoteJobOperation:
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
-class RemoteJobOperationManager:
+class RemoteJobOperationManager(OperationShutdownGuard):
     """Create, monitor and cooperatively control remote Abaqus jobs."""
+
+    shutdown_kind = 'remote.job'
 
     def __init__(self, events: EventStore, service: RemoteServerService) -> None:
         self._events = events
@@ -272,7 +275,7 @@ class RemoteJobOperationManager:
 
     def create(self, request: RemoteJobRequest) -> dict[str, Any]:
         with self._lock:
-            if self._closed:
+            if self._closed or self._shutdown_reserved:
                 raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "控制面正在关闭")
             existing_id = self._client_requests.get(request.client_request_id)
             if existing_id is not None:

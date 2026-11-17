@@ -54,6 +54,9 @@
 
 ## 跨功能修改提示
 
+- F001/F005/F009/F010/F014/F021 后台退出联动：`modules/control_plane/shutdown_guard.py` / `OperationShutdownGuard.prepare_shutdown`、`server.py` / `ControlPlaneContext.prepare_odb_shutdown`、`local_queue_runtime.py` / `prepare_shutdown`、`_launch_locked`；测试 `tests/control_plane/test_shutdown_guard.py` 与 `tests/winui_host/Program.cs`。九类工作联合预留和范围标记见 [ADR 0008](../submitter/adr/0008-all-worker-shutdown-fence.md)。
+- F012 真实 HTTP 验收入口为 `tests/winui_host/Program.cs` / `CheckBatchApi`，参数 `--batch-api` / `--batch-recover-api`：同一基础两个重启动目标、请求去重、后台重启历史读取。需要真实 ODB 与隔离控制面；它不操作原生页面，也不证明三层连续重启动链。
+
 - F020/F022 的 GIF 播放方式同时检查 `tests/postprocessor/test_animation.py`（完整源帧及计时）、`tests/control_plane/test_postprocessing_api.py`（`animationDurationSeconds` 可选字段及校验）和 `tests/winui_postprocess/Program.cs`（模式持久化与旧工作区兼容）。
 - CPU 规则变动同时检查 F003/F004/F005/F007；后处理进程并行数不是单作业 CPU 数。
 - F025 的 16 处数字输入已统一为 Inline：右侧并排下/上折线、数值居中、最小宽度 160；同时提供 16 处参数说明。修改时核对 0/空值/容差、上下限、禁用状态和说明口径，详见 [界面交互说明](UI_INTERACTION.md)。

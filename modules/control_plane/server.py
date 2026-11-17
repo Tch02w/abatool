@@ -9,6 +9,7 @@ import os
 import secrets
 import threading
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -99,18 +100,24 @@ class ControlPlaneContext:
     odb_result_batch_manager: OdbResultBatchManager
 
     def prepare_odb_shutdown(self) -> dict[str, Any]:
-        # Reserve all file-mutating managers atomically in a fixed lock order.
-        # A failed check must not leave the other manager permanently reserved.
-        with self.odb_result_batch_manager._lock, self.odb_merge_manager._lock, self.odb_upgrade_manager._lock:
-            batch = self.odb_result_batch_manager.prepare_shutdown(reserve=False)
-            merge = self.odb_merge_manager.prepare_shutdown(reserve=False)
-            upgrade = self.odb_upgrade_manager.prepare_shutdown(reserve=False)
-            safe = batch["safeToStop"] and merge["safeToStop"] and upgrade["safeToStop"]
+        # Retain the v1 route for older clients, but fence every managed worker.
+        # Batch -> merge lock order matches batch child submission. No manager
+        # may be reserved if any other manager still needs this process.
+        managers = (self.odb_result_batch_manager, self.odb_merge_manager,
+                    self.odb_upgrade_manager, self.local_queue_runtime,
+                    self.postprocess_manager, self.operation_manager,
+                    self.result_index_manager, self.remote_transfer_manager,
+                    self.remote_job_manager)
+        with ExitStack() as locks:
+            for manager in managers:
+                locks.enter_context(manager._lock)
+            snapshots = [manager.prepare_shutdown(reserve=False) for manager in managers]
+            safe = all(snapshot["safeToStop"] for snapshot in snapshots)
             if safe:
-                self.odb_result_batch_manager.prepare_shutdown()
-                self.odb_merge_manager.prepare_shutdown()
-                self.odb_upgrade_manager.prepare_shutdown()
-            return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": batch["operations"] + merge["operations"] + upgrade["operations"]}
+                for manager in managers:
+                    manager.prepare_shutdown()
+            return {"schemaVersion": 1, "scope": "all-workers-v1", "safeToStop": safe,
+                    "operations": [item for snapshot in snapshots for item in snapshot["operations"]]}
 
 
 class ControlPlaneHttpServer(ThreadingHTTPServer):
@@ -546,7 +553,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,

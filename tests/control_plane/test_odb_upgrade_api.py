@@ -57,7 +57,7 @@ def test_upgrade_http_lifecycle_and_atomic_shutdown_reservation(tmp_path):
             assert done["status"] == "cancelled" and done["results"][0]["status"] == "upgraded"
             assert len(calls) == 1
             safe = json_response(api_request(runtime, "/api/v1/odb-upgrade-shutdown-check", method="POST"))
-            assert safe == {"schemaVersion": 1, "safeToStop": True, "operations": []}
+            assert safe == {"schemaVersion": 1, "scope": "all-workers-v1", "safeToStop": True, "operations": []}
             assert api_request(runtime, BASE, method="POST", payload=request("later"))[0] == 503
         finally:
             release.set()

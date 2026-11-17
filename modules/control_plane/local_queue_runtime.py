@@ -101,6 +101,7 @@ class LocalQueueRuntimeManager:
         self._wake = threading.Event()
         self._closing = False
         self._active = False
+        self._dispatching = False
         self._stop_requested = False
         self._max_parallel = 1
         self._existing_result_policy = "backup"
@@ -138,6 +139,9 @@ class LocalQueueRuntimeManager:
             }
 
     def control(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            if self._closing:
+                raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "控制面正在关闭，无法控制队列")
         if payload.get("schemaVersion") != SCHEMA_VERSION:
             raise ApiProblem(
                 400,
@@ -193,6 +197,8 @@ class LocalQueueRuntimeManager:
         ) and not any(record.active for record in self._runs.values()):
             raise ApiProblem(409, "NO_PENDING_LOCAL_JOBS", "正式队列中没有可调度作业")
         with self._lock:
+            if self._closing:
+                raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "控制面正在关闭，无法启动队列")
             self._max_parallel = max_parallel
             self._existing_result_policy = str(policy)
             self._active = True
@@ -322,24 +328,29 @@ class LocalQueueRuntimeManager:
                 available = self._max_parallel - sum(
                     record.active for record in self._runs.values()
                 )
+                self._dispatching = active and available > 0
             if not active or available <= 0:
                 continue
 
-            ready_ids = self._refresh_dependencies()
-            for item_id in ready_ids[:available]:
-                self._launch(item_id)
+            try:
+                ready_ids = self._refresh_dependencies()
+                for item_id in ready_ids[:available]:
+                    self._launch(item_id)
 
-            with self._lock:
-                has_active = any(record.active for record in self._runs.values())
-            _candidates, queue_items = self.queue_service.runtime_items()
-            has_pending = any(
-                item.status in {STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY}
-                and not item.held
-                for item in queue_items
-            )
-            if not has_active and not has_pending:
                 with self._lock:
-                    self._active = False
+                    has_active = any(record.active for record in self._runs.values())
+                _candidates, queue_items = self.queue_service.runtime_items()
+                has_pending = any(
+                    item.status in {STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY}
+                    and not item.held
+                    for item in queue_items
+                )
+                if not has_active and not has_pending:
+                    with self._lock:
+                        self._active = False
+            finally:
+                with self._lock:
+                    self._dispatching = False
 
     def _refresh_dependencies(self) -> list[str]:
         ready_ids: list[str] = []
@@ -411,6 +422,13 @@ class LocalQueueRuntimeManager:
         return ""
 
     def _launch(self, item_id: str) -> None:
+        # Keep admission, persisted STARTING and worker registration in one fence.
+        with self._lock:
+            if self._closing or not self._active:
+                return
+            self._launch_locked(item_id)
+
+    def _launch_locked(self, item_id: str) -> None:
         with self._lock:
             existing = self._runs.get(item_id)
             if existing is not None and existing.active:
@@ -555,6 +573,20 @@ class LocalQueueRuntimeManager:
                 return
 
         self.queue_service.runtime_transaction(mutation)
+
+    def prepare_shutdown(self, *, reserve: bool = True) -> dict[str, Any]:
+        with self._lock:
+            active = [dict(record.as_payload(), kind="local.job", operationId=record.item_id)
+                      for record in self._runs.values()
+                      if record.active or (record.thread is not None and record.thread.is_alive())]
+            if self._active or self._dispatching:
+                active.append({"kind": "local.queue", "operationId": "local",
+                               "status": "dispatching"})
+            safe = not active
+            if safe and reserve:
+                self._closing = True
+                self._wake.set()
+            return {"schemaVersion": 1, "safeToStop": safe, "operations": active}
 
     def close(self) -> None:
         with self._lock:

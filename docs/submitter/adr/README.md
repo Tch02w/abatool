@@ -16,3 +16,4 @@ Current records:
 - `0006-durable-merge-history.md`
 
 - [0007-durable-result-batches.md](0007-durable-result-batches.md)
+- [0008-all-worker-shutdown-fence.md](0008-all-worker-shutdown-fence.md)

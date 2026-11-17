@@ -3024,6 +3024,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             var root = document.RootElement;
             return root.TryGetProperty("schemaVersion", out var schema)
                 && schema.TryGetInt32(out var version) && version == 1
+                && root.TryGetProperty("scope", out var scope)
+                && scope.GetString() == "all-workers-v1"
                 && root.TryGetProperty("safeToStop", out var safe)
                 && safe.ValueKind == JsonValueKind.True
                 && root.TryGetProperty("operations", out var operations)
@@ -3033,7 +3035,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         catch (Exception exception) when (exception is HttpRequestException or IOException
             or OperationCanceledException or JsonException or InvalidOperationException)
         {
-            // Unknown state is not proof that it is safe to kill an upgrader.
+            // Unknown or old ODB-only state cannot establish full process safety.
             Debug.WriteLine($"Keeping backend alive: shutdown safety check failed: {exception.Message}");
             return false;
         }
@@ -3068,7 +3070,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         {
             // Keep the descriptor so another window can reattach to the active
             // backend. Disposing this handle does not terminate its process.
-            Debug.WriteLine("Detached from backend without terminating active or unverified upgrade work.");
+            Debug.WriteLine("Detached from backend without terminating active or unverified background work.");
             process.Dispose();
             return;
         }

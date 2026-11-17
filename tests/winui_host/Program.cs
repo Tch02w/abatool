@@ -13,6 +13,11 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 4 && args[0] is "--batch-api" or "--batch-recover-api")
+    {
+        await CheckBatchApi(args[1], args[2], args[3], recover: args[0] == "--batch-recover-api");
+        return 0;
+    }
     if ((args.Length == 3 || (args.Length == 5 && args[3] == "--odb")) && args[0] == "--launch-bundle")
     {
         Environment.SetEnvironmentVariable("ABAQUS_TOOLS_ROOT", Path.GetFullPath(args[1]));
@@ -71,9 +76,11 @@ try
         await CheckUpgradeApi(args[1], args[2], args[3]);
         return 0;
     }
-    await Check("idle reservation", """{"schemaVersion":1,"safeToStop":true,"operations":[]}""", true);
-    await Check("active upgrade", """{"schemaVersion":1,"safeToStop":false,"operations":[{}]}""", false);
-    await Check("contradictory response", """{"schemaVersion":1,"safeToStop":true,"operations":[{}]}""", false);
+    await Check("idle reservation", """{"schemaVersion":1,"scope":"all-workers-v1","safeToStop":true,"operations":[]}""", true);
+    await Check("active background job", """{"schemaVersion":1,"scope":"all-workers-v1","safeToStop":false,"operations":[{"kind":"local.job"}]}""", false);
+    await Check("contradictory response", """{"schemaVersion":1,"scope":"all-workers-v1","safeToStop":true,"operations":[{}]}""", false);
+    await Check("old ODB-only response", """{"schemaVersion":1,"safeToStop":true,"operations":[]}""", false);
+    await Check("invalid scope", """{"schemaVersion":1,"scope":{},"safeToStop":true,"operations":[]}""", false);
     await Check("malformed response", "not json", false);
     await Check("unknown schema", """{"schemaVersion":2,"safeToStop":true,"operations":[]}""", false);
     await Check("missing endpoint", "{}", false, HttpStatusCode.NotFound);
@@ -83,7 +90,7 @@ try
     CheckMergeRecoveryContracts();
     CheckBatchContracts();
     ControlPlaneLaunchChecks.Run();
-    Console.WriteLine("8 host process lifecycle checks passed.");
+    Console.WriteLine("10 host process lifecycle checks passed.");
     return 0;
 }
 catch (Exception error)
@@ -94,6 +101,67 @@ catch (Exception error)
 
 static void SetField(ControlPlaneHost host, string name, object value) =>
     typeof(ControlPlaneHost).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, value);
+
+static async Task CheckBatchApi(string descriptorPath, string fixturePath, string reportPath, bool recover)
+{
+    var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
+    var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath), json)!;
+    var fixture = JsonNode.Parse(await File.ReadAllTextAsync(fixturePath))!;
+    var sources = fixture["sources"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+    if (sources.Length != 3 || sources.Any(p => !File.Exists(p))) throw new Exception("Expected three existing fixture ODBs");
+    var directory = fixture["outputDirectory"]!.GetValue<string>();
+    var requestId = Guid.Parse(fixture["clientRequestId"]!.GetValue<string>());
+    await using var host = new ControlPlaneHost();
+    SetField(host, "_descriptor", descriptor);
+    SetField(host, "_descriptorPath", descriptorPath);
+    var graph = await host.GetOdbResultGraphAsync();
+    string[] targets = ["branch0", "branch1"];
+    if (!recover)
+    {
+        if (graph.Revision != 0 || graph.Nodes.Count != 0) throw new Exception("Use an isolated empty result graph");
+        graph = await host.SaveOdbResultGraphAsync(0, directory,
+            [new() { NodeId = "base", Name = Path.GetFileNameWithoutExtension(sources[0]), OdbPath = sources[0] },
+             new() { NodeId = targets[0], Name = Path.GetFileNameWithoutExtension(sources[1]), ParentNodeId = "base", OdbPath = sources[1] },
+             new() { NodeId = targets[1], Name = Path.GetFileNameWithoutExtension(sources[2]), ParentNodeId = "base", OdbPath = sources[2] }]);
+        var plans = await host.PreviewOdbResultGraphPlansAsync(targets);
+        if (!plans.Valid || plans.Plans.Count != 2 || plans.Plans.Any(p => p.Steps.Count != 1 || p.Steps[0].OriginalOdb != sources[0]))
+            throw new Exception("Branch preview does not match the real ancestry");
+    }
+    if (graph.Revision != 1 || graph.Nodes.Count != 3) throw new Exception("Persisted graph was not restored");
+    var source = new { kind = "graph", revision = graph.Revision, targetNodeIds = targets };
+    var options = new OdbResultBatchOptions { IncludeHistory = true, CompressResult = true, CopyOriginal = false };
+    var snapshot = await host.StartOdbResultBatchAsync(source, options, requestId);
+    var repeat = await host.StartOdbResultBatchAsync(source, options, requestId);
+    if (repeat.OperationId != snapshot.OperationId) throw new Exception("Batch creation was not idempotent");
+    var statePath = Path.Combine(Path.GetDirectoryName(reportPath)!, "current-batch.json");
+    string? previous = null;
+    while (true)
+    {
+        var display = $"{snapshot.Status} {snapshot.CompletedSteps}/{snapshot.TotalSteps} {snapshot.Phase} "
+            + $"{snapshot.CurrentOperation?.Progress.Percent}% {snapshot.CurrentOperation?.Progress.Phase}";
+        if (display != previous)
+        {
+            previous = display;
+            Console.WriteLine(display);
+            await File.WriteAllTextAsync(statePath, JsonSerializer.Serialize(snapshot, json));
+        }
+        if (!snapshot.IsActive) break;
+        await Task.Delay(500);
+        snapshot = await host.GetOdbResultBatchAsync(snapshot.OperationId);
+    }
+    await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(snapshot, json));
+    if (snapshot.Status != "succeeded" || snapshot.Results.Count != 2 || snapshot.CompletedSteps != 2 || snapshot.TotalSteps != 2)
+        throw new Exception("Real batch did not complete both independent targets; inspect the saved report");
+    var history = await host.ListOdbResultBatchesAsync();
+    if (history.Operations.Count != 1 || history.Operations[0].OperationId != snapshot.OperationId)
+        throw new Exception("Batch history is inconsistent");
+    var merges = await host.ListOdbMergeOperationsAsync();
+    if (merges.Operations.Count != 2 || merges.Operations.Any(m => !m.IsSuccessful || m.Result?.ValidationReport is null
+            || m.Request?.OriginalOdb != sources[0] || m.Request.IncludeHistory != true))
+        throw new Exception("Completed branches lost source identity or content-validation receipts");
+    await File.WriteAllTextAsync(Path.ChangeExtension(reportPath, ".merges.json"), JsonSerializer.Serialize(merges, json));
+    Console.WriteLine(recover ? "Production C# client restored the completed batch without new merges." : "Production C# client completed the two-target batch.");
+}
 
 static void CheckBatchContracts()
 {

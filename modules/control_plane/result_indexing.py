@@ -36,6 +36,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .shutdown_guard import OperationShutdownGuard
 
 RESULT_INDEX_OPERATION_KIND = "result.index.build"
 
@@ -179,8 +180,10 @@ class ResultIndexOperation:
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
-class ResultIndexOperationManager:
+class ResultIndexOperationManager(OperationShutdownGuard):
     """Own one serial queue because each time directory has one atomic index."""
+
+    shutdown_kind = 'result.index'
 
     def __init__(
         self,
@@ -200,7 +203,7 @@ class ResultIndexOperationManager:
     def create(self, request: ResultIndexBuildRequest) -> dict[str, Any]:
         validated = validate_result_index_request(request)
         with self._lock:
-            if self._closed:
+            if self._closed or self._shutdown_reserved:
                 raise ApiProblem(
                     503,
                     "CONTROL_PLANE_SHUTTING_DOWN",

@@ -24,6 +24,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .shutdown_guard import OperationShutdownGuard
 
 ABAQUS_COMMAND_ENV = "ABAQUS_TOOLS_ABAQUS_COMMAND"
 ABAQUS_RELEASE_ENV = "ABAQUS_TOOLS_ABAQUS_RELEASE"
@@ -230,8 +231,10 @@ def validate_compatibility_request(
     )
 
 
-class CompatibilityOperationManager:
+class CompatibilityOperationManager(OperationShutdownGuard):
     """Own compatibility operation state, idempotency, workers, and events."""
+
+    shutdown_kind = 'odb.compatibility.check'
 
     def __init__(
         self,
@@ -260,7 +263,7 @@ class CompatibilityOperationManager:
     def create(self, request: OdbCompatibilityCheckRequest) -> dict[str, Any]:
         validated = validate_compatibility_request(request)
         with self._lock:
-            if self._closed:
+            if self._closed or self._shutdown_reserved:
                 raise ApiProblem(
                     503,
                     "CONTROL_PLANE_SHUTTING_DOWN",

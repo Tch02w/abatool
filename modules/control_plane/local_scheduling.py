@@ -169,6 +169,8 @@ class LocalQueueScheduling:
         current = self.core.get(item.job_id)
         if current is None or current.attempt_id != item.attempt_id:
             return False
+        item.scheduler_state = current.state.value
+        item.pending_reason = ""
         if current.state == JobState.COMPLETING and kind == ExecutionEventKind.STARTED:
             return True
         target = {ExecutionEventKind.STARTING: JobState.STARTING, ExecutionEventKind.STARTED: JobState.RUNNING,
@@ -180,7 +182,8 @@ class LocalQueueScheduling:
         if kind == ExecutionEventKind.SUCCEEDED and current.state in {JobState.DISPATCHED, JobState.STARTING}:
             self.core.apply_execution_event(ExecutionEvent(item.job_id, item.attempt_id, ExecutionEventKind.STARTED,
                                                           "执行器已返回完成结果"))
-        self.core.apply_execution_event(ExecutionEvent(item.job_id, item.attempt_id, kind, message))
+        updated = self.core.apply_execution_event(ExecutionEvent(item.job_id, item.attempt_id, kind, message))
+        item.scheduler_state = updated.state.value
         return True
 
     def release_unlaunched(self, allocations):

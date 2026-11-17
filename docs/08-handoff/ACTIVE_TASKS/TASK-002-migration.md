@@ -30,6 +30,14 @@
 
 准确续接点：本轮测试与构建均已结束，首轮失败保留。下一项制作新完整目录并核对冻结后台执行/关闭；当前完整目录仍为上一阶段 `60ea97c39143`，未含本轮统一调度；旧原生窗口未操作。动态内存学习、自有作业持续 RSS、真实 CPU/内存负载、原生业务和真实远程仍待验收。既有“读取目录”居中/加载指示修正和 GIF 两种计时模式已在上一候选，未重复改动；不能把构建和模拟派发当作界面或求解验收。GitHub 仍等待此前具体远端确认。
 
+### 本轮完整包与状态投影修正
+
+代码与文档已本地提交 `39541e2ced173cf89174f0a9a85e8125da4b1052`。首个本轮完整包 `GPTWork/release-win-x64-8e27c8c8cb26/AbaqusTools` 构建 85384 退出 0，干净来源；用户账户逐项核对 **1651 文件/19 worker**。包内诊断 `GPTWork/scheduler-bundle-probe-20261118/bundle-probe-dsej4mos/verification.json`、正式主机启动/API/退出均通过，32620 已退出 0。
+
+冻结后台关闭验证 84238 退出 0，`GPTWork/frozen-close-fd075271b206/verification.json` 确认后台继续/取消保留同一任务，停止后正常退出、连接文件移除、测试命令只执行一次、源测试文件未变。PID 193576 已确认结束。只读核对同目录 `scheduler-verification.json` 确认运行记录、队列存储和 SQLite 的执行身份一致，SQLite 为 CANCELED；但随后发现队列 `scheduler_state` 仍为 DISPATCHED。人类状态已经是“已终止”，问题在持久化调度状态投影。已补充每次执行事件同步该字段的修正及完成/未知状态断言，**32 项调度/运行/退出专项通过**，211.09 秒，34248 退出 0，`GPTWork/scheduler-projection-20261118.xml`。命令：`.\.venv\Scripts\python.exe -m pytest tests/control_plane/test_local_scheduling.py tests/control_plane/test_local_queue_runtime_api.py tests/control_plane/test_shutdown_guard.py -q --basetemp=GPTWork/pytest-scheduler-projection --junitxml=GPTWork/scheduler-projection-20261118.xml`。将重建候选后再验收投影一致性。
+
+辅助检查脚本第一次误把内部 `attempt_id` 当成队列 API 的字段，出现 KeyError；改为读取队列存储后身份检查通过，没有为脚本增加多余 API 字段。首包及失败过程保留。未调用 Abaqus、SSH 或操作原生窗口；周额度最近剩余 61%。
+
 ## 2026-11-18 F001 可撤销关闭、页面草稿与后台继续
 
 修改前已说明改进方案：保存先于关闭决定，提供后台继续/停止并关闭/取消，失败恢复交互；由后台执行已确认退出，避免前端拿旧空闲回执结束整个进程树。实现见 [ADR 0009](../../submitter/adr/0009-reversible-workbench-close.md) 和 [交互说明](../../03-features/UI_INTERACTION.md)。

@@ -66,6 +66,8 @@ def test_priority_and_shared_cpu_budget_control_actual_dispatch(tmp_path):
             wait_until(lambda: not runtime_snapshot(runtime)["active"])
             assert [name for name, _attempt in started] == ["high", "low"]
             assert len({attempt for _name, attempt in started}) == 2
+            assert all(item.scheduler_state == "COMPLETED" for item in
+                       load_joblist_state(path, restore_active_state=False)[1])
             for item in (low, high):
                 stored = runtime.local_queue_runtime._scheduling.core.get(item.job_id)
                 assert stored.state == JobState.COMPLETED
@@ -382,6 +384,7 @@ def test_unknown_executor_outcome_is_not_failure_or_permission_to_stop_backend(t
         wait_until(lambda: not runtime_snapshot(runtime)["active"])
         manager._runs[item.item_id].thread.join(2)
         assert manager._scheduling.core.get(item.job_id).state == JobState.LOST
+        assert load_joblist_state(path, restore_active_state=False)[1][0].scheduler_state == "LOST"
         assert not manager.prepare_shutdown(reserve=False)["safeToStop"]
         assert runtime_snapshot(runtime)["operations"][0]["phase"] == "unknown"
         runtime.job_queue_service.refresh_external_jobs()

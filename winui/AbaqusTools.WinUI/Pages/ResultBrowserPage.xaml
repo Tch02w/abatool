@@ -1,7 +1,8 @@
 <Page
     x:Class="AbaqusTools.WinUI.Pages.ResultBrowserPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
     <Grid Padding="28" RowSpacing="12">
         <Grid.RowDefinitions>
@@ -172,6 +173,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="40" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid Padding="12,0" ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
@@ -234,6 +236,12 @@
                             <FontIcon Glyph="&#xE8A5;" FontSize="28" />
                             <TextBlock x:Name="EmptyResultsText" Text="请选择结果范围" />
                         </StackPanel>
+                        <StackPanel x:Name="RecordPager" Grid.Row="2" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" Margin="8,4" Spacing="8" Visibility="Collapsed">
+                            <TextBlock x:Name="PageRange" VerticalAlignment="Center"/>
+                            <Button x:Name="PreviousPageButton" Content="上一页" Click="OnPreviousPageClicked"/>
+                            <Button x:Name="NextPageButton" Content="下一页" Click="OnNextPageClicked"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -263,6 +271,7 @@
                             <ScrollViewer x:Name="PreviewImageScrollViewer" Visibility="Collapsed" ZoomMode="Enabled">
                                 <Image x:Name="PreviewImage" Stretch="Uniform" />
                             </ScrollViewer>
+                            <controls:ResultPreviewTable x:Name="PreviewTable" Visibility="Collapsed"/>
                         </Grid>
                     </Grid>
                 </Border>

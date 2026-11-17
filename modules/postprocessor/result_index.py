@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .file_attributes import ensure_windows_hidden
+from .result_assets import is_incomplete_output
 
 
 INDEX_FILENAME = "_AbaqusODBPostProcessor_ResultIndex.sqlite3"
@@ -329,7 +330,7 @@ def _iter_files(
         if cancel_event.is_set():
             raise ResultIndexCancelled("索引任务已取消")
         current = stack.pop()
-        if _is_link_or_junction(current):
+        if _is_link_or_junction(current) or is_incomplete_output(current):
             continue
         try:
             entries = list(os.scandir(current))

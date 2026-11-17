@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Text;
 using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
@@ -33,9 +32,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private ResultScopeNode? _selectedScope;
     private string? _activeIndexOperationId;
-    private bool _scopeBusy;
+    private readonly ResultBrowserLoadCoordinator _loads = new();
+    private bool _scopeBusy => _loads.IsRefreshingScopes;
     private bool _recordsBusy;
-    private bool _indexBusy;
+    private ResultRecordsRequest? _appliedQuery;
+    private ResultRecordsResponse? _displayedPage;
+    private bool _indexBusy => _loads.IsIndexing;
     private bool _cancelIndexRequested;
     private bool _updatingFilters;
     private bool _recoveryAttempted;
@@ -78,8 +80,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             RootTextBox.Text = defaultRoot;
         }
 
-        await RecoverActiveIndexOperationAsync();
-        if (Directory.Exists(RootTextBox.Text) && ScopeTree.RootNodes.Count == 0)
+        var recoveredIndex = await RecoverActiveIndexOperationAsync();
+        if (!recoveredIndex
+            && Directory.Exists(RootTextBox.Text) && ScopeTree.RootNodes.Count == 0)
         {
             await RefreshScopesAsync();
         }
@@ -99,37 +102,52 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task RecoverActiveIndexOperationAsync()
+    private async Task<bool> RecoverActiveIndexOperationAsync()
     {
+        var recoveredIndex = false;
+        long? indexRequest = null;
+        var context = _loads.ContextRevision;
+        var requestedRoot = RootTextBox.Text;
         try
         {
             var operations = await App.Current.ControlPlane.ListResultIndexOperationsAsync(
                 activeOnly: true);
+            if (context != _loads.ContextRevision
+                || !string.Equals(requestedRoot, RootTextBox.Text, StringComparison.Ordinal))
+            {
+                // The user has already changed root or started an operation during discovery.
+                return true;
+            }
+
             var snapshot = operations.Operations.FirstOrDefault(
                 operation => !operation.IsTerminal
                     && !string.IsNullOrWhiteSpace(operation.Request.Root)
                     && !string.IsNullOrWhiteSpace(operation.Request.TimeDirectory));
             if (snapshot is null)
             {
-                return;
+                return false;
             }
 
+            recoveredIndex = true;
+            _activeIndexOperationId = snapshot.OperationId;
+            _loads.BeginIndex();
+            indexRequest = _loads.IndexRevision;
+            var owner = indexRequest.Value;
             RootTextBox.Text = snapshot.Request.Root;
             await RefreshScopesAsync(snapshot.Request.TimeDirectory);
-            _activeIndexOperationId = snapshot.OperationId;
-            _indexBusy = true;
             _cancelIndexRequested = string.Equals(
                 snapshot.Status,
                 "cancelling",
                 StringComparison.Ordinal);
-            ApplyIndexSnapshot(snapshot);
+            ApplyIndexSnapshot(snapshot, owner);
             RefreshInteractionState();
 
-            var progress = new Progress<ResultIndexOperationSnapshot>(ApplyIndexSnapshot);
+            var progress = new Progress<ResultIndexOperationSnapshot>(
+                update => ApplyIndexSnapshot(update, owner));
             var finalSnapshot = await App.Current.ControlPlane.PollResultIndexUntilTerminalAsync(
                 snapshot,
                 progress);
-            ApplyIndexSnapshot(finalSnapshot);
+            ApplyIndexSnapshot(finalSnapshot, owner);
             await CompleteIndexOperationAsync(finalSnapshot);
         }
         catch (OperationCanceledException)
@@ -146,8 +164,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         finally
         {
-            ClearIndexBusyState();
+            if (indexRequest is { } owner)
+            {
+                ClearIndexBusyState(owner);
+            }
         }
+
+        return recoveredIndex;
     }
 
     private async void OnBrowseClicked(object sender, RoutedEventArgs e)
@@ -201,63 +224,84 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async Task RefreshScopesAsync(string? selectPath = null)
     {
         var root = RootTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            ShowError("请选择或输入结果根目录。", "无法读取结果目录");
-            return;
-        }
-
-        _scopeBusy = true;
-        ScopeProgressRing.IsActive = true;
         ErrorInfoBar.IsOpen = false;
         WarningInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
         ScopeStatusText.Text = "正在读取目录结构…";
         App.Current.MainWindow.ReportPageStatus("正在读取结果目录结构…");
-        RefreshInteractionState();
-        try
-        {
-            var response = await App.Current.ControlPlane.DiscoverResultScopesAsync(
-                root,
-                ShowInternalCheckBox.IsChecked is true);
-            RootTextBox.Text = response.Root;
-            _scopeNodes = response.Nodes;
-            BuildScopeTree(response.Nodes);
-            UpdateExplorer();
-            ScopeStatusText.Text = $"{response.Count} 个范围节点";
-            if (response.Warnings.Count > 0)
+        await _loads.RefreshScopesAsync(
+            () => string.IsNullOrWhiteSpace(root)
+                ? Task.FromException<ResultScopesResponse>(
+                    new ArgumentException("请选择或输入结果根目录。"))
+                : App.Current.ControlPlane.DiscoverResultScopesAsync(
+                    root,
+                    ShowInternalCheckBox.IsChecked is true),
+            ClearScopesAndResults,
+            response =>
             {
-                ShowWarning(string.Join(Environment.NewLine, response.Warnings), "目录读取有警告");
-            }
+                RootTextBox.Text = response.Root;
+                _scopeNodes = response.Nodes;
+                BuildScopeTree(response.Nodes);
+                UpdateExplorer();
+                ScopeStatusText.Text = $"{response.Count} 个范围节点";
+                if (response.Warnings.Count > 0)
+                {
+                    ShowWarning(string.Join(Environment.NewLine, response.Warnings), "目录读取有警告");
+                }
 
-            var targetPath = string.IsNullOrWhiteSpace(selectPath)
-                ? response.Root
-                : selectPath;
-            if (_treeNodes.TryGetValue(targetPath, out var targetNode))
+                var targetPath = string.IsNullOrWhiteSpace(selectPath)
+                    ? response.Root
+                    : selectPath;
+                if (_treeNodes.TryGetValue(targetPath, out var targetNode)
+                    || _treeNodes.TryGetValue(response.Root, out targetNode))
+                {
+                    _selectedScope = targetNode.Content as ResultScopeNode;
+                    ScopeTree.SelectedNode = targetNode;
+                    ExpandAncestors(targetNode);
+                }
+                App.Current.MainWindow.ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
+            },
+            RefreshSelectedScopeAsync,
+            exception =>
             {
-                ScopeTree.SelectedNode = targetNode;
-                ExpandAncestors(targetNode);
-            }
-            App.Current.MainWindow.ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
-        }
-        catch (ControlPlaneException exception)
-        {
-            ScopeTree.RootNodes.Clear();
-            _treeNodes.Clear();
-            ScopeStatusText.Text = "目录读取失败";
-            ShowError(exception.ToDisplayMessage(), "结果目录读取失败");
-        }
-        catch (Exception exception)
-        {
-            ScopeStatusText.Text = "目录读取失败";
-            ShowError(exception.Message, "结果目录读取失败");
-        }
-        finally
-        {
-            _scopeBusy = false;
-            ScopeProgressRing.IsActive = false;
-            RefreshInteractionState();
-        }
+                ScopeStatusText.Text = "目录读取失败";
+                ShowError(exception is ControlPlaneException controlPlaneException
+                    ? controlPlaneException.ToDisplayMessage()
+                    : exception.Message, "结果目录读取失败");
+            },
+            () =>
+            {
+                ScopeProgressRing.IsActive = _scopeBusy;
+                RefreshInteractionState();
+            });
+    }
+
+    private void ClearScopesAndResults()
+    {
+        _selectedScope = null;
+        _scopeNodes = [];
+        ScopeTree.SelectedNode = null;
+        ScopeTree.RootNodes.Clear();
+        _treeNodes.Clear();
+        ClearResults();
+        UpdateUseCases([], string.Empty);
+    }
+
+    private void ClearResults()
+    {
+        _appliedQuery = null;
+        _displayedPage = null;
+        RecordPager.Visibility = Visibility.Collapsed;
+        _loads.InvalidateRecords();
+        _recordsBusy = false;
+        ResultList.SelectedItem = null;
+        _records.Clear();
+        ResetPreview();
+        IndexInfoBar.IsOpen = false;
+        EmptyResultsPanel.Visibility = Visibility.Visible;
+        EmptyResultsText.Text = "请选择结果范围";
+        ResultStatusText.Text = "尚未读取结果记录";
+        UpdateExplorer();
     }
 
     private void BuildScopeTree(IReadOnlyList<ResultScopeNode> scopes)
@@ -349,6 +393,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void SelectExplorerItem(ExplorerItem item)
     {
+        if (_scopeBusy || _indexBusy)
+        {
+            return;
+        }
+
         if (item.Kind == ExplorerItemKind.ResultScope
             && _treeNodes.TryGetValue(item.Path, out var node))
         {
@@ -397,18 +446,28 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         TreeView sender,
         TreeViewSelectionChangedEventArgs args)
     {
+        // RefreshScopesAsync explicitly loads the selection after releasing its busy state.
+        if (_scopeBusy || _indexBusy)
+        {
+            return;
+        }
+
         _selectedScope = sender.SelectedNode?.Content as ResultScopeNode;
-        _previewRequest++;
-        ResultList.SelectedItem = null;
-        ResetPreview();
+        await RefreshSelectedScopeAsync();
+    }
+
+    private async Task RefreshSelectedScopeAsync()
+    {
+        if (!_loads.CanLoadRecords) return;
+        ClearResults();
         if (_selectedScope is null)
         {
+            RefreshInteractionState();
             return;
         }
 
         if (_selectedScope.Kind is "root" or "group" or "shared_root" or "shared_odb")
         {
-            _records.Clear();
             EmptyResultsPanel.Visibility = Visibility.Visible;
             EmptyResultsText.Text = "请选择时间目录、ODB 或公共数据版本";
             IndexInfoBar.IsOpen = false;
@@ -420,7 +479,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         if (_selectedScope.IndexState == "missing"
             && !string.IsNullOrWhiteSpace(_selectedScope.TimeDirectory))
         {
-            _records.Clear();
             EmptyResultsPanel.Visibility = Visibility.Visible;
             EmptyResultsText.Text = "当前时间目录尚未建立索引";
             IndexInfoBar.Message = _selectedScope.TimeDirectory;
@@ -433,14 +491,38 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         await LoadRecordsAsync();
     }
 
-    private async Task LoadRecordsAsync()
+    private async void OnPreviousPageClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_recordsBusy && _displayedPage is { Offset: > 0 } page)
+            await LoadRecordsAsync(Math.Max(0, page.Offset - page.Limit));
+    }
+
+    private async void OnNextPageClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_recordsBusy && _displayedPage is { HasMore: true } page)
+            await LoadRecordsAsync(page.Offset + page.Records.Count);
+    }
+
+    private async Task LoadRecordsAsync(int? pageOffset = null)
     {
         var scope = _selectedScope;
-        if (scope is null || _scopeBusy || _indexBusy)
+        if (scope is null || !_loads.CanLoadRecords)
         {
             return;
         }
 
+        // Page within the last applied filters, even if an unsubmitted search is in the editor.
+        var query = pageOffset.HasValue ? _appliedQuery : new ResultRecordsRequest
+        {
+            Root = _scopeNodes.FirstOrDefault(node => node.Kind == "root")?.Path ?? RootTextBox.Text,
+            Scope = scope.Path, TimeDirectory = scope.TimeDirectory,
+            Section = (SectionComboBox.SelectedItem as SectionOption)?.Key ?? "all",
+            Query = SearchTextBox.Text,
+            UseCase = UseCaseComboBox.SelectedIndex <= 0 ? "" : UseCaseComboBox.SelectedItem?.ToString() ?? "",
+            IncludeInternal = ShowInternalCheckBox.IsChecked is true,
+        };
+        if (query is null) return;
+        var request = _loads.InvalidateRecords();
         _recordsBusy = true;
         ErrorInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
@@ -448,18 +530,18 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RefreshInteractionState();
         try
         {
-            var section = (SectionComboBox.SelectedItem as SectionOption)?.Key ?? "all";
-            var useCase = UseCaseComboBox.SelectedIndex <= 0
-                ? string.Empty
-                : UseCaseComboBox.SelectedItem?.ToString() ?? string.Empty;
             var response = await App.Current.ControlPlane.GetResultRecordsAsync(
-                RootTextBox.Text,
-                scope.Path,
-                scope.TimeDirectory,
-                section,
-                SearchTextBox.Text,
-                useCase,
-                ShowInternalCheckBox.IsChecked is true);
+                query.Root, query.Scope, query.TimeDirectory, query.Section, query.Query,
+                query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0);
+            if (!_loads.IsCurrentRecordRequest(request))
+            {
+                return;
+            }
+
+            ResultList.SelectedItem = null;
+            ResetPreview();
+            _appliedQuery = query;
+            _displayedPage = response;
             _records.Clear();
             foreach (var record in response.Records)
             {
@@ -467,16 +549,20 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             }
             UpdateExplorer();
 
-            UpdateUseCases(response.UseCases, useCase);
+            UpdateUseCases(response.UseCases, query.UseCase);
             EmptyResultsPanel.Visibility = _records.Count == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             EmptyResultsText.Text = response.FilteredCount == 0
                 ? "当前筛选条件没有结果"
                 : "请选择结果";
-            ResultStatusText.Text = response.HasMore
-                ? $"显示 {_records.Count} / {response.FilteredCount} 个结果，请缩小筛选范围"
-                : $"{response.FilteredCount} 个结果 · {SourceDisplay(response.Source)}";
+            if (response.Offset > 0 && _records.Count == 0)
+                EmptyResultsText.Text = "当前页已无结果，请返回上一页或重新筛选。";
+            PageRange.Text = _records.Count == 0 ? $"共 {response.FilteredCount} 条" :
+                $"第 {response.Offset + 1}–{response.Offset + _records.Count} 条，共 {response.FilteredCount} 条";
+            RecordPager.Visibility = response.Offset > 0 || response.HasMore ? Visibility.Visible : Visibility.Collapsed;
+            ResultStatusText.Text = $"{response.FilteredCount} 个结果 · {SourceDisplay(response.Source)}";
+            if (_records.Count > 0) ResultList.ScrollIntoView(_records[0]);
             ScopeStatusText.Text = scope.IndexStateDisplay.Length > 0
                 ? $"{scope.Name} · {scope.IndexStateDisplay}"
                 : scope.Name;
@@ -484,27 +570,33 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 $"结果浏览 · {response.FilteredCount} 个匹配文件");
         }
         catch (ControlPlaneException exception) when (
-            exception.Code is "RESULT_INDEX_MISSING" or "RESULT_INDEX_INVALID")
+            _loads.IsCurrentRecordRequest(request)
+            && exception.Code is "RESULT_INDEX_MISSING" or "RESULT_INDEX_INVALID")
         {
-            _records.Clear();
+            ClearResults();
             EmptyResultsPanel.Visibility = Visibility.Visible;
             EmptyResultsText.Text = "结果索引不可用";
             IndexInfoBar.Message = exception.ToDisplayMessage();
             IndexInfoBar.IsOpen = true;
             ResultStatusText.Text = "请创建或刷新当前索引";
-        }
-        catch (ControlPlaneException exception)
-        {
-            ShowError(exception.ToDisplayMessage(), "结果记录读取失败");
+            RefreshInteractionState();
         }
         catch (Exception exception)
         {
-            ShowError(exception.Message, "结果记录读取失败");
+            if (_loads.IsCurrentRecordRequest(request))
+            {
+                ResultStatusText.Text = pageOffset.HasValue ? "翻页失败，仍显示原页" : "结果记录读取失败";
+                ShowError(exception is ControlPlaneException problem ? problem.ToDisplayMessage() : exception.Message,
+                    "结果记录读取失败");
+            }
         }
         finally
         {
-            _recordsBusy = false;
-            RefreshInteractionState();
+            if (_loads.IsCurrentRecordRequest(request))
+            {
+                _recordsBusy = false;
+                RefreshInteractionState();
+            }
         }
     }
 
@@ -530,13 +622,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         if (!_updatingFilters && IsLoaded && _selectedScope is not null)
         {
-            await LoadRecordsAsync();
+            await RefreshSelectedScopeAsync();
         }
     }
 
     private async void OnApplyFilterClicked(object sender, RoutedEventArgs e)
     {
-        await LoadRecordsAsync();
+        await RefreshSelectedScopeAsync();
     }
 
     private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
@@ -544,7 +636,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
-            await LoadRecordsAsync();
+            await RefreshSelectedScopeAsync();
         }
     }
 
@@ -558,13 +650,15 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var scope = _selectedScope;
         if (scope is null
             || string.IsNullOrWhiteSpace(scope.TimeDirectory)
-            || _indexBusy)
+            || _scopeBusy || _recordsBusy || _indexBusy)
         {
             ShowWarning("请选择一个时间目录或其中的 ODB。", "无法创建索引");
             return;
         }
 
-        _indexBusy = true;
+        _loads.BeginIndex();
+        var indexRequest = _loads.IndexRevision;
+        ClearResults();
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         IndexInfoBar.IsOpen = false;
@@ -579,12 +673,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 scope.TimeDirectory,
                 Guid.NewGuid());
             _activeIndexOperationId = initial.OperationId;
-            ApplyIndexSnapshot(initial);
-            var progress = new Progress<ResultIndexOperationSnapshot>(ApplyIndexSnapshot);
+            ApplyIndexSnapshot(initial, indexRequest);
+            var progress = new Progress<ResultIndexOperationSnapshot>(
+                update => ApplyIndexSnapshot(update, indexRequest));
             var finalSnapshot = await App.Current.ControlPlane.PollResultIndexUntilTerminalAsync(
                 initial,
                 progress);
-            ApplyIndexSnapshot(finalSnapshot);
+            ApplyIndexSnapshot(finalSnapshot, indexRequest);
             await CompleteIndexOperationAsync(finalSnapshot);
         }
         catch (OperationCanceledException)
@@ -601,17 +696,18 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         finally
         {
-            ClearIndexBusyState();
+            ClearIndexBusyState(indexRequest);
         }
     }
 
-    private void ApplyIndexSnapshot(ResultIndexOperationSnapshot snapshot)
+    private void ApplyIndexSnapshot(ResultIndexOperationSnapshot snapshot, long indexRequest)
     {
-        if (_activeIndexOperationId is not null
+        if (!_indexBusy || !_loads.IsCurrentIndexRequest(indexRequest)
+            || (_activeIndexOperationId is not null
             && !string.Equals(
                 _activeIndexOperationId,
                 snapshot.OperationId,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal)))
         {
             return;
         }
@@ -628,17 +724,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async Task CompleteIndexOperationAsync(ResultIndexOperationSnapshot snapshot)
     {
+        await _loads.CompleteIndexAsync(
+            snapshot.Status,
+            () => RefreshScopesAsync(snapshot.Request.TimeDirectory));
         switch (snapshot.Status)
         {
             case "succeeded":
-                ResultStatusText.Text = snapshot.Metadata.TryGetValue("record_count", out var count)
-                    ? $"索引完成 · {count} 个文件"
-                    : "索引完成";
-                await RefreshScopesAsync(snapshot.Request.TimeDirectory);
-                if (_selectedScope is not null)
-                {
-                    await LoadRecordsAsync();
-                }
+                // The refresh owns its record count or error; do not overwrite it here.
                 break;
             case "cancelled":
                 ResultStatusText.Text = "结果索引已取消，旧索引保持不变";
@@ -655,6 +747,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnCancelIndexClicked(object sender, RoutedEventArgs e)
     {
         var operationId = _activeIndexOperationId;
+        var indexRequest = _loads.IndexRevision;
         if (!_indexBusy
             || string.IsNullOrWhiteSpace(operationId)
             || _cancelIndexRequested)
@@ -669,7 +762,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             var snapshot = await App.Current.ControlPlane.CancelResultIndexOperationAsync(
                 operationId);
-            ApplyIndexSnapshot(snapshot);
+            ApplyIndexSnapshot(snapshot, indexRequest);
         }
         catch (OperationCanceledException)
         {
@@ -677,9 +770,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            _cancelIndexRequested = false;
-            ShowError(exception.Message, "无法取消结果索引");
-            RefreshInteractionState();
+            if (_indexBusy && _loads.IsCurrentIndexRequest(indexRequest))
+            {
+                _cancelIndexRequested = false;
+                ShowError(exception.Message, "无法取消结果索引");
+                RefreshInteractionState();
+            }
         }
     }
 
@@ -710,6 +806,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async Task LoadPreviewAsync(ResultRecordItem record)
     {
         var request = ++_previewRequest;
+        HideTablePreview();
         PreviewTitleText.Text = $"预览 · {record.Name}";
         PreviewImage.Source = null;
         PreviewImageScrollViewer.Visibility = Visibility.Collapsed;
@@ -718,7 +815,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         try
         {
             var preview = await App.Current.ControlPlane.GetResultPreviewAsync(
-                RootTextBox.Text,
+                _appliedQuery?.Root ?? RootTextBox.Text,
                 record.Path);
             if (request != _previewRequest)
             {
@@ -728,7 +825,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             switch (preview.Kind)
             {
                 case "table":
-                    PreviewTextBox.Text = FormatTablePreview(preview);
+                    PreviewTable.Show(preview);
+                    PreviewTextBox.Visibility = Visibility.Collapsed;
+                    PreviewTable.Visibility = Visibility.Visible;
                     break;
                 case "text":
                     PreviewTextBox.Text = preview.Truncated
@@ -775,20 +874,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         PreviewImageScrollViewer.Visibility = Visibility.Visible;
     }
 
-    private static string FormatTablePreview(ResultPreviewResponse preview)
+    private void HideTablePreview()
     {
-        var builder = new StringBuilder();
-        if (preview.Headers.Count > 0)
-        {
-            builder.AppendLine(string.Join('\t', preview.Headers));
-        }
-
-        foreach (var row in preview.Rows)
-        {
-            builder.AppendLine(string.Join('\t', row));
-        }
-
-        return builder.Length == 0 ? "表格为空。" : builder.ToString();
+        PreviewTable.Visibility = Visibility.Collapsed;
+        PreviewTable.Clear();
     }
 
     private async void OnOpenFileClicked(object sender, RoutedEventArgs e)
@@ -940,6 +1029,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void ResetPreview()
     {
+        _previewRequest++;
+        HideTablePreview();
         PreviewTitleText.Text = "预览";
         PreviewImage.Source = null;
         PreviewImageScrollViewer.Visibility = Visibility.Collapsed;
@@ -951,9 +1042,14 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         ExportButton.IsEnabled = false;
     }
 
-    private void ClearIndexBusyState()
+    private void ClearIndexBusyState(long indexRequest)
     {
-        _indexBusy = false;
+        if (!_loads.IsCurrentIndexRequest(indexRequest))
+        {
+            return;
+        }
+
+        _loads.EndIndex();
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         IndexProgressBar.Visibility = Visibility.Collapsed;
@@ -963,6 +1059,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private void RefreshInteractionState()
     {
         var idle = !_scopeBusy && !_recordsBusy && !_indexBusy;
+        PreviousPageButton.IsEnabled = idle && _displayedPage is { Offset: > 0 };
+        NextPageButton.IsEnabled = idle && _displayedPage is { HasMore: true };
         RootTextBox.IsEnabled = idle;
         BrowseButton.IsEnabled = idle;
         RefreshScopesButton.IsEnabled = idle;

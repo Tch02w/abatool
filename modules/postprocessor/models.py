@@ -30,6 +30,7 @@ class OdbScan:
     file_size: int = 0
     mtime_ns: int = 0
     error: str = ""
+    structure_catalog: dict[str, Any] = field(default_factory=dict)
 
     @property
     def assembly_sets(self) -> list[str]:
@@ -51,4 +52,5 @@ class OdbScan:
             file_size=int(payload.get("file_size", 0)),
             mtime_ns=int(payload.get("mtime_ns", 0)),
             error=str(payload.get("error", "")),
+            structure_catalog=dict(payload.get("structure_catalog", {})),
         )

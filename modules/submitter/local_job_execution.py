@@ -28,6 +28,7 @@ from .constants import (
     STATUS_UNKNOWN,
 )
 from .models import QueueItem
+from .cpu_policy import validate_local_cpus
 from .process_scanner import get_psutil_process_snapshot
 from .runtime_evidence import (
     collect_runtime_evidence,
@@ -209,6 +210,7 @@ def _prepare_workspace(item: QueueItem) -> tuple[Path, Path, str]:
 
 
 def _execution_command(item: QueueItem, prepared_inp: Path, oldjob_arg: str) -> str:
+    validate_local_cpus(item.cores, item.abaqus_command)
     options = queue_item_to_options(item, default_cpus=MAX_CPUS)
     options = replace(
         options,
@@ -273,6 +275,7 @@ def execute_local_job(
     """Execute and monitor one queue item until a defensible terminal state."""
 
     _emit(progress, "preparing", "正在准备计算工作目录", 4)
+    validate_local_cpus(item.cores, item.abaqus_command)
     prepared_inp, work_dir, oldjob_arg = _prepare_workspace(item)
     _prepare_existing_results(work_dir, item.job_name, existing_result_policy)
     command = _execution_command(item, prepared_inp, oldjob_arg)

@@ -20,7 +20,6 @@ from modules.submitter.command import (
 )
 from modules.submitter.constants import (
     ACTIVE_STATUSES,
-    MAX_CPUS,
     STATUS_CANCELED,
     STATUS_DATACHECK_FAILED,
     STATUS_FAILED,
@@ -47,6 +46,7 @@ from modules.submitter.queue_store import load_joblist_state, save_joblist_state
 
 from .contracts import SCHEMA_VERSION, ApiProblem
 from .job_drafts import LocalJobDraftPreviewRequest
+from modules.submitter.cpu_policy import validate_local_cpus
 from .job_queues import project_job_queues
 
 LOGGER = logging.getLogger(__name__)
@@ -794,10 +794,10 @@ class JobQueueService:
             item.job_name = _text(payload, "jobName")
         if "cores" in payload:
             cores = _integer(payload, "cores")
-            if not 0 <= cores <= MAX_CPUS:
-                raise ApiProblem(
-                    400, "INVALID_CPUS", f"cores 必须在 0 到 {MAX_CPUS} 之间"
-                )
+            try:
+                validate_local_cpus(cores, item.abaqus_command)
+            except ValueError as exc:
+                raise ApiProblem(400, "INVALID_CPUS", str(exc)) from exc
             item.cores = cores
         if "memory" in payload:
             memory = _text(payload, "memory")
@@ -843,6 +843,12 @@ class JobQueueService:
         if not Path(item.inp_path).is_file():
             item.valid = False
             item.message = "INP 文件不存在"
+            return
+        try:
+            validate_local_cpus(item.cores, item.abaqus_command)
+        except ValueError as exc:
+            item.valid = False
+            item.message = str(exc)
             return
         valid, message = validate_job_name(item.job_name)
         if not valid:

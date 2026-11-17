@@ -18,18 +18,95 @@ def flatten(groups):
 
 
 def count_groups(groups):
-    return len(list(flatten(groups)))
+    return sum(1 for _ in flatten(groups))
 
 
 def bounding_box(nodes):
-    coordinates = [tuple(float(value) for value in node.coordinates) for node in flatten(nodes)]
-    if not coordinates:
+    limits = None
+    for node in flatten(nodes):
+        coordinates = list(node.coordinates)
+        coordinates += [0.0] * (3 - len(coordinates))
+        if limits is None:
+            limits = [[float(value), float(value)] for value in coordinates[:3]]
+        else:
+            for index, value in enumerate(coordinates[:3]):
+                limits[index][0] = min(limits[index][0], float(value))
+                limits[index][1] = max(limits[index][1], float(value))
+    if limits is None:
         return None
-    return {
-        "x": [min(item[0] for item in coordinates), max(item[0] for item in coordinates)],
-        "y": [min(item[1] for item in coordinates), max(item[1] for item in coordinates)],
-        "z": [min(item[2] for item in coordinates), max(item[2] for item in coordinates)],
-    }
+    return dict(zip(("x", "y", "z"), limits))
+
+
+def structure_catalog(odb):
+    """Metadata only: scoped region identities, without materializing field values.
+
+    An ODB exposes assembly instances, not the CAE part repository. Never combine
+    node/element sets with equal names or labels from different instances.
+    Field availability is per frame and does not guarantee data in a given set.
+    """
+    regions = []
+
+    def append_region(scope, instance_name, kind, name, region):
+        element_types = {}
+        element_count = 0
+        if kind != "node_set":
+            for element in flatten(region.elements):
+                element_count += 1
+                key = str(element.type)
+                element_types[key] = element_types.get(key, 0) + 1
+        regions.append({
+            "id": json.dumps([scope, instance_name, kind, name], ensure_ascii=False),
+            "scope": scope,
+            "instance": instance_name,
+            "kind": kind,
+            "name": name,
+            "nodeCount": count_groups(region.nodes) if kind != "element_set" else 0,
+            "elementCount": element_count,
+            "elementTypes": element_types,
+        })
+
+    assembly = odb.rootAssembly
+    for scope, instance_name, owner in [("assembly", "", assembly)] + [
+        ("instance", name, assembly.instances[name]) for name in sorted(assembly.instances.keys())
+    ]:
+        if scope == "instance":
+            append_region(scope, instance_name, "instance", instance_name, owner)
+        for kind, repository in (("node_set", owner.nodeSets), ("element_set", owner.elementSets)):
+            for name in sorted(repository.keys()):
+                append_region(scope, instance_name, kind, name, repository[name])
+
+    steps = []
+    for name in odb.steps.keys():
+        frames = []
+        for index, frame in enumerate(odb.steps[name].frames):
+            fields = []
+            for field_name in sorted(frame.fieldOutputs.keys()):
+                field = frame.fieldOutputs[field_name]
+                fields.append({
+                    "name": field_name,
+                    "components": list(field.componentLabels),
+                    "type": str(field.type),
+                    "positions": sorted(set(str(location.position) for location in field.locations)),
+                })
+            frames.append({"index": index, "value": float(frame.frameValue), "fields": fields})
+        steps.append({"name": name, "frames": frames})
+
+    sections = []
+    for name in sorted(odb.sections.keys()):
+        section = odb.sections[name]
+        item = {"name": name, "type": type(section).__name__, "material": str(getattr(section, "material", ""))}
+        area = getattr(section, "area", None)
+        if area is not None:
+            item["area"] = float(area)
+        sections.append(item)
+    assignments = []
+    for name in sorted(assembly.instances.keys()):
+        for assignment in assembly.instances[name].sectionAssignments:
+            assignments.append({"instance": name, "region": assignment.region.name,
+                                "section": assignment.sectionName})
+    return {"schemaVersion": 1, "regions": regions, "steps": steps,
+            "sections": sections, "sectionAssignments": assignments,
+            "units": "model_defined", "fieldAvailability": "frame_only_not_region_validated"}
 
 
 def inspect_odb(path):
@@ -117,6 +194,7 @@ def inspect_odb(path):
                 "assembly_element_sets": element_names,
                 "set_details": details,
                 "instances": instance_details,
+                "structure_catalog": structure_catalog(odb),
                 "size_bytes": os.path.getsize(path),
             }
         )

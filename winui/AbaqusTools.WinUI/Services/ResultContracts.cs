@@ -224,7 +224,8 @@ internal sealed class ResultPreviewRequest
     public required string Path { get; init; }
 
     [JsonPropertyName("maxRows")]
-    public int MaxRows { get; init; } = 50;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxRows { get; init; }
 }
 
 public sealed class ResultPreviewResponse

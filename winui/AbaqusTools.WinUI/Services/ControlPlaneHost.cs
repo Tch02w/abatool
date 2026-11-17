@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace AbaqusTools.WinUI.Services;
 
-public sealed class ControlPlaneHost : IAsyncDisposable
+public sealed partial class ControlPlaneHost : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -442,7 +442,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
     }
 
     public async Task<LocalResourceSnapshot> GetLocalResourceAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? abaqusCommand = null)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -452,7 +452,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         var response = await SendJsonRequestAsync<LocalResourceSnapshot>(
             descriptor,
             HttpMethod.Get,
-            "/api/v1/local-resources",
+            "/api/v1/local-resources" + (abaqusCommand is null ? "" : "?abaqusCommand=" + Uri.EscapeDataString(abaqusCommand)),
             requestBody: null,
             "本机资源快照",
             effectiveSource.Token);
@@ -1097,9 +1097,18 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         }
     }
 
-    public async Task<OdbPostprocessOperationSnapshot> StartOdbPostprocessAsync(
+    public Task<OdbPostprocessOperationSnapshot> StartOdbPostprocessAsync(
         OdbPostprocessRunCreateRequest request,
         CancellationToken cancellationToken = default)
+        => StartPostprocessRequestAsync(request, "/api/v1/odb-postprocess-operations", cancellationToken);
+
+    public Task<OdbPostprocessOperationSnapshot> StartOdbRegionExtractionAsync(
+        OdbRegionExtractionRequest request,
+        CancellationToken cancellationToken = default)
+        => StartPostprocessRequestAsync(request, "/api/v1/odb-region-extractions", cancellationToken);
+
+    private async Task<OdbPostprocessOperationSnapshot> StartPostprocessRequestAsync(
+        object request, string endpoint, CancellationToken cancellationToken)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -1121,7 +1130,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
             var snapshot = await SendJsonRequestAsync<OdbPostprocessOperationSnapshot>(
                 descriptor,
                 HttpMethod.Post,
-                "/api/v1/odb-postprocess-operations",
+                endpoint,
                 request,
                 "ODB 后处理创建响应",
                 effectiveToken);
@@ -1659,6 +1668,39 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         return response;
     }
 
+    public Task<OdbResultGraphSnapshot> GetOdbResultGraphAsync(
+        CancellationToken cancellationToken = default) =>
+        SendResultGraphRequestAsync<OdbResultGraphSnapshot>(
+            HttpMethod.Get, "/api/v1/odb-result-graph", null, cancellationToken);
+
+    public Task<OdbResultGraphSnapshot> SaveOdbResultGraphAsync(
+        int expectedRevision,
+        string outputDirectory,
+        IReadOnlyList<OdbResultGraphNode> nodes,
+        CancellationToken cancellationToken = default) =>
+        SendResultGraphRequestAsync<OdbResultGraphSnapshot>(
+            HttpMethod.Post, "/api/v1/odb-result-graph-commands",
+            new { SchemaVersion = 1, Action = "save", ExpectedRevision = expectedRevision,
+                OutputDirectory = outputDirectory, Nodes = nodes }, cancellationToken);
+
+    public Task<OdbResultBatchPlan> PreviewOdbResultGraphPlansAsync(
+        IReadOnlyList<string> targetNodeIds,
+        CancellationToken cancellationToken = default) =>
+        SendResultGraphRequestAsync<OdbResultBatchPlan>(
+            HttpMethod.Post, "/api/v1/odb-result-graph-plans",
+            new { SchemaVersion = 1, TargetNodeIds = targetNodeIds }, cancellationToken);
+
+    private async Task<T> SendResultGraphRequestAsync<T>(
+        HttpMethod method, string path, object? body, CancellationToken cancellationToken)
+    {
+        using var source = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, _shutdownSource.Token);
+        source.CancelAfter(TimeSpan.FromSeconds(15));
+        var descriptor = await EnsureReadyAsync(source.Token);
+        return await SendJsonRequestAsync<T>(
+            descriptor, method, path, body, "ODB 结果图", source.Token);
+    }
+
     public async Task<ResultRecordsResponse> GetResultRecordsAsync(
         string root,
         string scope,
@@ -1667,7 +1709,8 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         string query,
         string useCase,
         bool includeInternal,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int offset = 0)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(scope))
         {
@@ -1692,17 +1735,25 @@ public sealed class ControlPlaneHost : IAsyncDisposable
                 Query = query?.Trim() ?? string.Empty,
                 UseCase = useCase?.Trim() ?? string.Empty,
                 IncludeInternal = includeInternal,
+                Offset = offset,
             },
             "结果记录",
             effectiveSource.Token);
         ValidateResultRecordsResponse(response);
+        if (response.Offset != offset || response.Records.Count > response.Limit ||
+            (response.Records.Count > 0 && (long)offset + response.Records.Count > response.FilteredCount) ||
+            response.HasMore != ((long)offset + response.Records.Count < response.FilteredCount) ||
+            (response.HasMore && response.Records.Count != response.Limit))
+        {
+            throw new ControlPlaneException("结果列表分页响应不一致，请重新读取目录。");
+        }
         return response;
     }
 
     public async Task<ResultPreviewResponse> GetResultPreviewAsync(
         string root,
         string path,
-        int maxRows = 50,
+        int? maxRows = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(path))
@@ -1723,7 +1774,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
             {
                 Root = root.Trim(),
                 Path = path.Trim(),
-                MaxRows = Math.Clamp(maxRows, 1, 100),
+                MaxRows = maxRows is int count ? Math.Clamp(count, 1, 100) : null,
             },
             "结果预览",
             effectiveSource.Token);
@@ -2147,6 +2198,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
                 && string.Equals(health.ApiVersion, "v1", StringComparison.Ordinal)
                 && string.Equals(health.Status, "ok", StringComparison.OrdinalIgnoreCase)
                 && health.Capabilities.Contains("jobQueue.scanExternalJobs", StringComparer.Ordinal)
+                && health.Capabilities.Contains("odb.resultGraph", StringComparer.Ordinal)
                 && string.Equals(health.InstanceId, descriptor.InstanceId, StringComparison.Ordinal);
             RecordReadinessProbe(
                 healthy
@@ -2605,7 +2657,7 @@ public sealed class ControlPlaneHost : IAsyncDisposable
                     snapshot.OperationId,
                     expectedOperationId,
                     StringComparison.Ordinal))
-            || snapshot.Kind is not ("odb.postprocess.scan" or "odb.postprocess.run")
+            || snapshot.Kind is not ("odb.postprocess.scan" or "odb.postprocess.run" or "odb.postprocess.region")
             || !OperationStatuses.Contains(snapshot.Status)
             || snapshot.CreatedAt == default
             || snapshot.UpdatedAt == default
@@ -3012,7 +3064,50 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         }
     }
 
-    private void StopOwnedProcess()
+    private async Task<bool> ReserveSafeProcessShutdownAsync()
+    {
+        var descriptor = _descriptor;
+        if (_ownedProcess is null)
+        {
+            return false;
+        }
+        if (_ownedInstanceId is null)
+        {
+            // No ready backend was published to this host during startup.
+            return true;
+        }
+        if (descriptor is null || descriptor.InstanceId != _ownedInstanceId)
+        {
+            return false;
+        }
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                BuildEndpoint(descriptor, "/api/v1/odb-upgrade-shutdown-check"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", descriptor.Token);
+            using var response = await _httpClient.SendAsync(request, timeout.Token);
+            response.EnsureSuccessStatusCode();
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+            var root = document.RootElement;
+            return root.TryGetProperty("schemaVersion", out var schema)
+                && schema.TryGetInt32(out var version) && version == 1
+                && root.TryGetProperty("safeToStop", out var safe)
+                && safe.ValueKind == JsonValueKind.True
+                && root.TryGetProperty("operations", out var operations)
+                && operations.ValueKind == JsonValueKind.Array
+                && operations.GetArrayLength() == 0;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException
+            or OperationCanceledException or JsonException or InvalidOperationException)
+        {
+            // Unknown state is not proof that it is safe to kill an upgrader.
+            Debug.WriteLine($"Keeping backend alive: shutdown safety check failed: {exception.Message}");
+            return false;
+        }
+    }
+
+    private void StopOwnedProcess(bool shutdownReserved = false)
     {
         var process = _ownedProcess;
         _ownedProcess = null;
@@ -3037,6 +3132,14 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         process.OutputDataReceived -= OnProcessOutput;
         process.ErrorDataReceived -= OnProcessOutput;
         process.Exited -= OnOwnedProcessExited;
+        if (ownedInstanceId is not null && !shutdownReserved)
+        {
+            // Keep the descriptor so another window can reattach to the active
+            // backend. Disposing this handle does not terminate its process.
+            Debug.WriteLine("Detached from backend without terminating active or unverified upgrade work.");
+            process.Dispose();
+            return;
+        }
         try
         {
             if (!process.HasExited)
@@ -3114,7 +3217,8 @@ public sealed class ControlPlaneHost : IAsyncDisposable
         var completed = false;
         try
         {
-            StopOwnedProcess();
+            var shutdownReserved = await ReserveSafeProcessShutdownAsync();
+            StopOwnedProcess(shutdownReserved);
             _httpClient.Dispose();
             SetState(ControlPlaneState.Disconnected, "控制面已断开");
             _disposed = true;

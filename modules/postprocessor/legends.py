@@ -32,18 +32,27 @@ def parse_sequence_expression(text: str, available: Iterable[int]) -> list[int]:
     return sorted(selected)
 
 
-def choose_sequences(scan: dict[str, Any], mode: str, expression: str = "") -> list[int]:
+def choose_sequences(
+    scan: dict[str, Any], mode: str, expression: str = "", *, prefracture_override: int = -1
+) -> list[int]:
     catalog = [int(item["SequenceIndex"]) for item in scan["frame_catalog"]]
     if not catalog:
         raise ValueError("所选 Step 范围没有可用帧")
+    if prefracture_override >= 0 and prefracture_override not in catalog:
+        raise ValueError(f"断裂前帧序号不存在：{prefracture_override}")
     if mode == "all":
         return catalog
     if mode == "manual":
         return parse_sequence_expression(expression, catalog)
     if mode == "auto":
         chosen = [catalog[-1]]
-        prefracture = scan.get("auto_detection", {}).get("prefracture_sequence_index")
+        prefracture = (
+            prefracture_override if prefracture_override >= 0
+            else scan.get("auto_detection", {}).get("prefracture_sequence_index")
+        )
         if prefracture is not None:
+            if int(prefracture) not in catalog:
+                raise ValueError(f"自动识别的断裂前帧序号不存在：{prefracture}")
             chosen.append(int(prefracture))
         return sorted(set(chosen))
     raise ValueError(f"未知帧模式：{mode}")

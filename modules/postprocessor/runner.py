@@ -20,6 +20,7 @@ from .config import abaqus_script, save_json
 from .process_runner import *
 from .process_runner import ProcessCancelled, ProcessController, run_process
 from .runner_parallel import MultiProcessController
+from modules.submitter.cpu_policy import logical_cpu_count
 
 
 def _load_json_report(path: Path) -> dict:
@@ -91,11 +92,12 @@ def scan_folder(
         if selected_paths is None
         else [Path(value).resolve() for value in selected_paths]
     )
-    workers = max(1, min(int(parallel_workers), 4))
+    workers = max(1, min(int(parallel_workers), logical_cpu_count()))
     if selected is not None:
         version = str(abaqus_version or abaqus_command)
         scan_snapshot = {
             "scanner": "scan_odb",
+            "structure_catalog_version": 1,
             "schema_version": CACHE_SCHEMA_VERSION,
         }
         config_hash = stable_config_hash(scan_snapshot)
@@ -529,6 +531,7 @@ def upgrade_odb_files(
     release: str = "2025",
     abaqus_version: str = "",
     parallel_workers: int = 1,
+    on_result=None,
 ) -> dict:
     """Upgrade independent ODBs concurrently while retaining ``name-old.odb``."""
 
@@ -552,7 +555,7 @@ def upgrade_odb_files(
             "cancelled_count": 0,
         }
 
-    workers = max(1, min(int(parallel_workers), 4, len(serialized_tasks)))
+    workers = max(1, min(int(parallel_workers), logical_cpu_count(), len(serialized_tasks)))
     work_root = cache_dir / "upgrade_work"
     work_root.mkdir(parents=True, exist_ok=True)
     output_path = cache_dir / "odb_compatibility_upgrade_report.json"
@@ -592,6 +595,8 @@ def upgrade_odb_files(
                 f"ODB_UPGRADE_START|{start_number}|{len(serialized_tasks)}|"
                 f"{source.name}"
             )
+        if controller is not None and controller.stop_requested:
+            return task_index, cancelled_result(task)
         base_result: dict[str, Any] = {
             "source_path": task["source_path"],
             "upgraded_path": task["upgraded_path"],
@@ -707,12 +712,19 @@ def upgrade_odb_files(
                 log(f"CACHE_INVALIDATE_FAILED|{source.name}|{error}")
         return task_index, result
 
+    def process_and_record(index, task):
+        result_index, result = process_one(index, task)
+        # Save each completed receipt before this worker can take its next file.
+        if on_result is not None:
+            on_result(dict(result))
+        return result_index, result
+
     results_by_index: dict[int, dict[str, Any]] = {}
     with ThreadPoolExecutor(
         max_workers=workers, thread_name_prefix="odb-upgrade"
     ) as pool:
         futures = {
-            pool.submit(process_one, index, task): (index, task)
+            pool.submit(process_and_record, index, task): (index, task)
             for index, task in enumerate(serialized_tasks)
         }
         for completed, future in enumerate(as_completed(futures), 1):

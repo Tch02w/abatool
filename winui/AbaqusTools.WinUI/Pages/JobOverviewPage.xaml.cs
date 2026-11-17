@@ -2,6 +2,8 @@ using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -16,10 +18,27 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private LocalQueueRuntimeSnapshot? _runtime;
     private RemoteJobListResponse _remoteJobs = new();
     private bool _loading;
+    private bool _updatingJobSelector;
+    private bool _applyingLogText;
+    private bool _logPointerDown;
+    private long _snapshotRequest;
+    private long _controlRequest;
+    private long _jobViewRevision;
+    private readonly RuntimeLogUpdateState _runtimeLog;
 
     public JobOverviewPage()
     {
         InitializeComponent();
+        _runtimeLog = new RuntimeLogUpdateState(RuntimeLogTextBox.Text);
+        RuntimeLogTextBox.SelectionChanged += OnRuntimeLogSelectionChanged;
+        RuntimeLogTextBox.AddHandler(PointerPressedEvent,
+            new PointerEventHandler(OnRuntimeLogPointerPressed), handledEventsToo: true);
+        RuntimeLogTextBox.AddHandler(PointerReleasedEvent,
+            new PointerEventHandler(OnRuntimeLogPointerFinished), handledEventsToo: true);
+        RuntimeLogTextBox.AddHandler(PointerCanceledEvent,
+            new PointerEventHandler(OnRuntimeLogPointerFinished), handledEventsToo: true);
+        RuntimeLogTextBox.AddHandler(PointerCaptureLostEvent,
+            new PointerEventHandler(OnRuntimeLogPointerFinished), handledEventsToo: true);
         _jobExplorerAdapter = new JobMonitorExplorerAdapter(
             App.Current.ControlPlane,
             SelectExplorerItem);
@@ -35,12 +54,19 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         await RefreshAsync();
-        _refreshTimer.Start();
+        if (IsLoaded)
+        {
+            _refreshTimer.Start();
+        }
     }
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         _refreshTimer.Stop();
+        _snapshotRequest++;
+        _controlRequest++;
+        _jobViewRevision++;
+        _logPointerDown = false;
     }
 
     private async void OnRefreshTimerTick(
@@ -58,12 +84,19 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
 
         _loading = true;
+        var request = ++_snapshotRequest;
         try
         {
-            var selectedKey = _currentEntry?.Key;
             var localTask = App.Current.ControlPlane.GetLocalQueueRuntimeAsync();
             var remoteTask = App.Current.ControlPlane.ListRemoteJobsAsync();
             await Task.WhenAll(localTask, remoteTask);
+            if (!IsLoaded || request != _snapshotRequest)
+            {
+                return;
+            }
+
+            // Read selection after the await: the user may switch jobs while polling.
+            var selectedKey = _currentEntry?.Key;
             _runtime = await localTask;
             _remoteJobs = await remoteTask;
             var snapshot = _runtime.Queue;
@@ -72,14 +105,22 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 .Concat(_remoteJobs.Operations.Select(JobOverviewEntry.FromRemote))
                 .ToArray();
             _jobExplorerAdapter.Update(snapshot, _remoteJobs.Operations);
-            JobSelector.ItemsSource = entries;
-            JobSelector.IsEnabled = entries.Length > 0;
             JobStatsText.Text = FormatStats(snapshot, _remoteJobs.Operations);
             var selected = entries.FirstOrDefault(
                 item => string.Equals(item.Key, selectedKey, StringComparison.Ordinal))
                 ?? entries.FirstOrDefault(item => item.Active)
                 ?? entries.FirstOrDefault();
-            JobSelector.SelectedItem = selected;
+            _updatingJobSelector = true;
+            try
+            {
+                JobSelector.ItemsSource = entries;
+                JobSelector.IsEnabled = entries.Length > 0;
+                JobSelector.SelectedItem = selected;
+            }
+            finally
+            {
+                _updatingJobSelector = false;
+            }
             ApplyJob(selected);
             OverviewMessageText.Text = selected is null
                 ? "本机正式队列和远端会话中尚无作业。"
@@ -87,11 +128,17 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
         catch (ControlPlaneException exception)
         {
-            OverviewMessageText.Text = exception.ToDisplayMessage();
+            if (IsLoaded && request == _snapshotRequest)
+            {
+                OverviewMessageText.Text = exception.ToDisplayMessage();
+            }
         }
         catch (Exception exception)
         {
-            OverviewMessageText.Text = exception.Message;
+            if (IsLoaded && request == _snapshotRequest)
+            {
+                OverviewMessageText.Text = exception.Message;
+            }
         }
         finally
         {
@@ -101,7 +148,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private void OnJobSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_loading)
+        if (!_updatingJobSelector)
         {
             ApplyJob(JobSelector.SelectedItem as JobOverviewEntry);
         }
@@ -127,6 +174,11 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private void ApplyJob(JobOverviewEntry? entry)
     {
+        if (!string.Equals(_currentEntry?.Key, entry?.Key, StringComparison.Ordinal))
+        {
+            _controlRequest++;
+            _jobViewRevision++;
+        }
         _currentEntry = entry;
         var item = entry?.LocalItem;
         var remote = entry?.RemoteOperation;
@@ -145,7 +197,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             InputPathText.Text = "未记录";
             WorkDirectoryText.Text = "尚未分配";
             RestartDependencyText.Text = "无";
-            RuntimeLogTextBox.Text = "选择作业后显示状态与运行信息。";
+            UpdateRuntimeLog(null, "选择作业后显示状态与运行信息。");
             PauseResumeButton.IsEnabled = false;
             TerminateButton.IsEnabled = false;
             SetOutputButtons(null);
@@ -181,7 +233,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         RestartDependencyText.Text = string.IsNullOrWhiteSpace(item.OldjobName)
             ? "无"
             : item.OldjobName;
-        RuntimeLogTextBox.Text = BuildRuntimeLog(item, operation);
+        UpdateRuntimeLog(entry.Key, BuildRuntimeLog(item, operation));
         PauseResumeButton.Content = operation?.Paused is true ? "恢复" : "暂停";
         PauseResumeButton.IsEnabled = operation?.Active is true;
         TerminateButton.IsEnabled = operation?.Active is true;
@@ -215,9 +267,9 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         RestartDependencyText.Text = operation.Request.InputMode == "upload"
             ? "本机文件上传"
             : "服务器现有文件";
-        RuntimeLogTextBox.Text = operation.Logs.Count == 0
+        UpdateRuntimeLog($"remote:{operation.OperationId}", operation.Logs.Count == 0
             ? $"阶段：{operation.Phase}\r\n状态：{operation.Status}"
-            : string.Join("\r\n", operation.Logs);
+            : string.Join("\r\n", operation.Logs));
         PauseResumeButton.Content = operation.Paused ? "恢复" : "暂停";
         PauseResumeButton.IsEnabled = !operation.IsTerminal
             && operation.Status == "running";
@@ -228,20 +280,117 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             $"远端作业 · {operation.Request.JobName} · {RemoteStatusDisplay(operation.Status)}");
     }
 
+    private bool IsInteractingWithRuntimeLog =>
+        _logPointerDown || RuntimeLogTextBox.SelectionLength > 0;
+
+    private void UpdateRuntimeLog(string? jobKey, string text) =>
+        ApplyRuntimeLogUpdate(_runtimeLog.SetSnapshot(jobKey, text, IsInteractingWithRuntimeLog));
+
+    private void OnRuntimeLogSelectionChanged(object sender, RoutedEventArgs args)
+    {
+        if (!_applyingLogText)
+        {
+            FlushRuntimeLogAfterInput();
+        }
+    }
+
+    private void OnRuntimeLogPointerPressed(object sender, PointerRoutedEventArgs args) =>
+        _logPointerDown = true;
+
+    private void OnRuntimeLogPointerFinished(object sender, PointerRoutedEventArgs args)
+    {
+        _logPointerDown = false;
+        FlushRuntimeLogAfterInput();
+    }
+
+    private void FlushRuntimeLogAfterInput()
+    {
+        // Let the current mouse/key action finish before inspecting the final selection.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (IsLoaded && !_applyingLogText)
+            {
+                ApplyRuntimeLogUpdate(_runtimeLog.Flush(IsInteractingWithRuntimeLog));
+            }
+        });
+    }
+
+    private void ApplyRuntimeLogUpdate(RuntimeLogTextUpdate? update)
+    {
+        RuntimeLogUpdateText.Visibility = _runtimeLog.HasPendingText
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (update is null)
+        {
+            return;
+        }
+
+        var scroll = FindLogScrollViewer(RuntimeLogTextBox);
+        var horizontal = scroll?.HorizontalOffset ?? 0;
+        var vertical = scroll?.VerticalOffset ?? 0;
+        var followTail = update.ResetView || (scroll is not null
+            && RuntimeLogUpdateState.ShouldFollowTail(vertical, scroll.ScrollableHeight));
+        var caret = update.ResetView ? update.Text.Length : RuntimeLogTextBox.SelectionStart;
+        _applyingLogText = true;
+        try
+        {
+            // SetSnapshot returns no update for unchanged text or an active selection.
+            RuntimeLogTextBox.Text = update.Text;
+            RuntimeLogTextBox.Select(Math.Min(caret, update.Text.Length), 0);
+            RuntimeLogTextBox.UpdateLayout();
+            scroll?.ChangeView(
+                update.ResetView ? 0 : horizontal,
+                followTail ? scroll.ScrollableHeight : vertical,
+                null,
+                disableAnimation: true);
+        }
+        finally
+        {
+            _applyingLogText = false;
+        }
+    }
+
+    private static ScrollViewer? FindLogScrollViewer(DependencyObject parent)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is ScrollViewer scroll)
+            {
+                return scroll;
+            }
+
+            if (FindLogScrollViewer(child) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
+
     private async void OnPauseResumeClicked(object sender, RoutedEventArgs e)
     {
         if (_currentEntry?.RemoteOperation is { } remote)
         {
+            var selectedKey = _currentEntry.Key;
+            var request = ++_snapshotRequest;
+            var action = ++_controlRequest;
             try
             {
                 var updated = await App.Current.ControlPlane.ControlRemoteJobAsync(
                     remote.OperationId,
                     remote.Paused ? "resume" : "pause");
-                ApplyJob(JobOverviewEntry.FromRemote(updated));
+                if (IsLoaded && request == _snapshotRequest && _currentEntry?.Key == selectedKey)
+                {
+                    ApplyJob(JobOverviewEntry.FromRemote(updated));
+                }
             }
             catch (ControlPlaneException exception)
             {
-                OverviewMessageText.Text = exception.ToDisplayMessage();
+                if (IsLoaded && action == _controlRequest && _currentEntry?.Key == selectedKey)
+                {
+                    OverviewMessageText.Text = exception.ToDisplayMessage();
+                }
             }
             return;
         }
@@ -258,18 +407,29 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             return;
         }
 
+        var localSelectedKey = _currentEntry?.Key;
+        var localRequest = ++_snapshotRequest;
+        var localAction = ++_controlRequest;
         try
         {
-            _runtime = await App.Current.ControlPlane.SetLocalQueueItemsPausedAsync(
+            var runtime = await App.Current.ControlPlane.SetLocalQueueItemsPausedAsync(
                 [currentJob.ItemId],
                 !operation.Paused);
+            if (!IsLoaded || localRequest != _snapshotRequest || _currentEntry?.Key != localSelectedKey)
+            {
+                return;
+            }
+            _runtime = runtime;
             var updated = _runtime.Queue.QueueItems.FirstOrDefault(
                 item => string.Equals(item.ItemId, currentJob.ItemId, StringComparison.Ordinal));
             ApplyJob(updated is null ? null : JobOverviewEntry.FromLocal(updated));
         }
         catch (ControlPlaneException exception)
         {
-            OverviewMessageText.Text = exception.ToDisplayMessage();
+            if (IsLoaded && localAction == _controlRequest && _currentEntry?.Key == localSelectedKey)
+            {
+                OverviewMessageText.Text = exception.ToDisplayMessage();
+            }
         }
     }
 
@@ -277,6 +437,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     {
         var remote = _currentEntry?.RemoteOperation;
         var currentJob = _currentEntry?.LocalItem;
+        var selectedKey = _currentEntry?.Key;
         if (remote is null && currentJob is null)
         {
             return;
@@ -296,6 +457,8 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             return;
         }
 
+        var request = ++_snapshotRequest;
+        var action = ++_controlRequest;
         try
         {
             if (remote is not null)
@@ -303,22 +466,33 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 var updated = await App.Current.ControlPlane.ControlRemoteJobAsync(
                     remote.OperationId,
                     "cancel");
-                ApplyJob(JobOverviewEntry.FromRemote(updated));
+                if (IsLoaded && request == _snapshotRequest && _currentEntry?.Key == selectedKey)
+                {
+                    ApplyJob(JobOverviewEntry.FromRemote(updated));
+                }
                 return;
             }
             if (currentJob is null)
             {
                 return;
             }
-            _runtime = await App.Current.ControlPlane.TerminateLocalQueueItemsAsync(
+            var runtime = await App.Current.ControlPlane.TerminateLocalQueueItemsAsync(
                 [currentJob.ItemId]);
+            if (!IsLoaded || request != _snapshotRequest || _currentEntry?.Key != selectedKey)
+            {
+                return;
+            }
+            _runtime = runtime;
             var updatedLocal = _runtime.Queue.QueueItems.FirstOrDefault(
                 item => string.Equals(item.ItemId, currentJob.ItemId, StringComparison.Ordinal));
             ApplyJob(updatedLocal is null ? null : JobOverviewEntry.FromLocal(updatedLocal));
         }
         catch (ControlPlaneException exception)
         {
-            OverviewMessageText.Text = exception.ToDisplayMessage();
+            if (IsLoaded && action == _controlRequest && _currentEntry?.Key == selectedKey)
+            {
+                OverviewMessageText.Text = exception.ToDisplayMessage();
+            }
         }
     }
 
@@ -374,6 +548,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenDirectoryClicked(object sender, RoutedEventArgs e)
     {
+        var view = _jobViewRevision;
         if (_currentEntry?.RemoteOperation is { } remote)
         {
             var browser = new RemoteFileBrowserDialog(
@@ -396,12 +571,16 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            OverviewMessageText.Text = exception.Message;
+            if (IsLoaded && view == _jobViewRevision)
+            {
+                OverviewMessageText.Text = exception.Message;
+            }
         }
     }
 
     private async void OnOpenOutputFileClicked(object sender, RoutedEventArgs e)
     {
+        var view = _jobViewRevision;
         if (sender is not Button { Tag: string extension })
         {
             return;
@@ -435,12 +614,16 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            OverviewMessageText.Text = exception.Message;
+            if (IsLoaded && view == _jobViewRevision)
+            {
+                OverviewMessageText.Text = exception.Message;
+            }
         }
     }
 
     private async Task DownloadRemoteOutputAsync(string remotePath)
     {
+        var view = _jobViewRevision;
         var extension = Path.GetExtension(remotePath);
         var picker = new FileSavePicker
         {
@@ -469,21 +652,33 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 operation.OperationId,
                 snapshot =>
                 {
-                    RuntimeProgressBar.Value = snapshot.Progress.Percent;
-                    OverviewMessageText.Text = $"正在下载远端输出 · {snapshot.Progress.Percent}%";
+                    if (IsLoaded && view == _jobViewRevision)
+                    {
+                        RuntimeProgressBar.Value = snapshot.Progress.Percent;
+                        OverviewMessageText.Text = $"正在下载远端输出 · {snapshot.Progress.Percent}%";
+                    }
                 });
             if (terminal.Status != "succeeded")
             {
-                OverviewMessageText.Text = terminal.Error?.Message ?? "远端输出下载失败";
+                if (IsLoaded && view == _jobViewRevision)
+                {
+                    OverviewMessageText.Text = terminal.Error?.Message ?? "远端输出下载失败";
+                }
                 return;
             }
-            OverviewMessageText.Text = "远端输出已下载";
+            if (IsLoaded && view == _jobViewRevision)
+            {
+                OverviewMessageText.Text = "远端输出已下载";
+            }
             await Launcher.LaunchFileAsync(
                 await StorageFile.GetFileFromPathAsync(destination.Path));
         }
         catch (Exception exception)
         {
-            OverviewMessageText.Text = exception.Message;
+            if (IsLoaded && view == _jobViewRevision)
+            {
+                OverviewMessageText.Text = exception.Message;
+            }
         }
     }
 

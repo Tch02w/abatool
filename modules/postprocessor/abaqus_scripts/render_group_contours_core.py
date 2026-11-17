@@ -363,7 +363,14 @@ specs = (
 )
 
 
+specs = tuple(spec for spec in specs if not (
+    spec.get("longitudinal") and config.get("reinforcement_mode", "required") == "none"
+))
+
+
 def render(spec):
+    if spec.get("longitudinal") and config.get("reinforcement_mode", "required") == "none":
+        return
     if not spec.get("longitudinal") and not spec.get("set"):
         return
     folder = os.path.join(frame_root, spec["name"])
@@ -444,6 +451,7 @@ else:
 metadata.update(
     {
         "comparison_group": config["comparison_group"],
+        "reinforcement_mode": config.get("reinforcement_mode", "required"),
         "legend_ranges": legend_ranges,
         "contour_sequences": [spec["name"] for spec in specs if spec.get("set") or spec.get("longitudinal")],
         "soil_view_vector": [0.0, 1.0, 0.0],

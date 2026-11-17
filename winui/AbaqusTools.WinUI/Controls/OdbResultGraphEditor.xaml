@@ -1,0 +1,106 @@
+<UserControl
+    x:Class="AbaqusTools.WinUI.Controls.OdbResultGraphEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    HorizontalContentAlignment="Stretch">
+    <Border Style="{StaticResource WorkbenchCardStyle}">
+        <Grid RowSpacing="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="结果合并图" Style="{StaticResource WorkbenchSectionTitleStyle}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="DraftStateText" Text="尚未读取" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="SaveGraphButton" Content="保存" MinWidth="72" HorizontalContentAlignment="Center" Click="OnSaveClicked" />
+                    <Button x:Name="ReloadGraphButton" Content="重新读取" MinWidth="88" HorizontalContentAlignment="Center" Click="OnReloadClicked" />
+                </StackPanel>
+            </Grid>
+            <InfoBar x:Name="GraphInfoBar" Grid.Row="1" IsOpen="False" IsClosable="True" />
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="输出目录" Style="{StaticResource WorkbenchFieldLabelStyle}" />
+                <TextBox x:Name="OutputDirectoryTextBox" Grid.Column="1" PlaceholderText="选择完整结果与中间合并结果的保存目录" TextChanged="OnOutputDirectoryChanged" />
+                <Button x:Name="ChooseOutputButton" Grid.Column="2" Content="浏览…" Width="88" HorizontalContentAlignment="Center" Click="OnChooseOutputClicked" />
+            </Grid>
+            <ScrollViewer Grid.Row="3" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel Orientation="Horizontal" Spacing="6" Padding="0,0,0,3">
+                    <Button x:Name="AddRootButton" Content="添加根节点" Click="OnAddRootClicked" />
+                    <Button x:Name="AddNextButton" Content="添加下一个" Click="OnAddNextClicked" />
+                    <Button x:Name="AddBranchButton" Content="添加分支" Click="OnAddBranchClicked" />
+                    <Button x:Name="RemoveNodeButton" Content="删除节点及后续" Click="OnRemoveNodeClicked" />
+                    <Button x:Name="GenerateSelectedButton" Content="生成所选节点完整结果" Style="{StaticResource AccentButtonStyle}" Click="OnGenerateSelectedClicked" />
+                    <Button x:Name="GenerateLeavesButton" Content="批量生成末端结果" Click="OnGenerateLeavesClicked" />
+                </StackPanel>
+            </ScrollViewer>
+            <Grid Grid.Row="4" ColumnSpacing="12" MinHeight="410">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="220" />
+                    <ColumnDefinition Width="260" />
+                </Grid.ColumnDefinitions>
+                <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                    <Grid>
+                        <ScrollViewer x:Name="GraphScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ZoomMode="Enabled" MinZoomFactor="0.4" MaxZoomFactor="1.5" MaxHeight="560">
+                            <Canvas x:Name="GraphCanvas" MinWidth="220" MinHeight="408" Background="Transparent" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="EmptyGraphPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsHitTestVisible="False" Margin="16">
+                            <FontIcon Glyph="&#xE8D4;" FontSize="30" HorizontalAlignment="Center" />
+                            <TextBlock Text="添加根节点开始组织结果" TextAlignment="Center" TextWrapping="Wrap" />
+                            <TextBlock Text="每个节点对应一个阶段的 ODB，可继续添加节点或分支。" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" MaxHeight="560">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="节点属性" Style="{StaticResource WorkbenchSectionTitleStyle}" />
+                        <TextBlock x:Name="NodeContextText" Text="点击节点查看和编辑；勾选框用于批量选择结果目标。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <ContentControl x:Name="InspectorFields" IsEnabled="False" HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="10">
+                            <TextBox x:Name="NodeNameTextBox" Header="节点名称" PlaceholderText="为当前阶段命名" TextChanged="OnNodeFieldsChanged" />
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="本阶段 ODB" />
+                                <TextBox x:Name="NodeOdbTextBox" PlaceholderText="选择或输入 ODB 路径" TextChanged="OnNodeFieldsChanged" />
+                                <Button x:Name="ChooseNodeOdbButton" Content="选择 ODB…" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Click="OnChooseNodeOdbClicked" />
+                            </StackPanel>
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="关联 INP（可选）" />
+                                <TextBox x:Name="NodeInpTextBox" PlaceholderText="记录对应输入文件" TextChanged="OnNodeFieldsChanged" />
+                                <Button x:Name="ChooseNodeInpButton" Content="选择 INP…" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Click="OnChooseNodeInpClicked" />
+                            </StackPanel>
+                            <TextBlock x:Name="NodeValidationText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        </ContentControl>
+                        <TextBlock Text="生成目标节点的完整结果时，只合并其根节点到当前节点的路径。兄弟分支分别生成；空节点可保存，但不能参与生成。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+            <Grid Grid.Row="5" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="GraphSummaryText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                    <Button Content="−" Width="32" Padding="0" AutomationProperties.Name="缩小结果图" Click="OnZoomOutClicked" />
+                    <Button Content="100%" MinWidth="54" Padding="6,0" AutomationProperties.Name="恢复结果图原始比例" Click="OnResetZoomClicked" />
+                    <Button Content="+" Width="32" Padding="0" AutomationProperties.Name="放大结果图" Click="OnZoomInClicked" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

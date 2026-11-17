@@ -13,6 +13,7 @@ public sealed class OdbFileRow : INotifyPropertyChanged
     private string _postprocessSummary = "读取结构后可配置提取参数";
     private string _comparisonGroup = "对比组 1";
     private bool _hasPostprocessConfiguration;
+    private bool _hasEditedPostprocessJob;
 
     public OdbFileRow(OdbDiscoveryItem item)
     {
@@ -26,6 +27,33 @@ public sealed class OdbFileRow : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public OdbFileRow WithDiscovery(OdbDiscoveryItem item)
+    {
+        if (!string.Equals(System.IO.Path.GetFullPath(Path), System.IO.Path.GetFullPath(item.Path), StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Cannot restore configuration to a different ODB.", nameof(item));
+        var refreshed = new OdbFileRow(item)
+        {
+            ComparisonGroup = ComparisonGroup,
+            PostprocessJob = PostprocessJob?.Clone(),
+            _hasEditedPostprocessJob = _hasEditedPostprocessJob,
+        };
+        if (item.SizeBytes == SizeBytes && item.ModifiedAt == ModifiedAt)
+        {
+            refreshed.ScanDetails = ScanDetails;
+            refreshed.HasPostprocessConfiguration = HasPostprocessConfiguration;
+            refreshed.PostprocessStatusDisplay = PostprocessStatusDisplay;
+            refreshed.PostprocessSummary = PostprocessSummary;
+            refreshed.CompatibilityStatus = CompatibilityStatus;
+            refreshed.CompatibilityStatusDisplay = CompatibilityStatusDisplay;
+            refreshed.CompatibilityMessage = CompatibilityMessage;
+        }
+        else
+        {
+            refreshed.MarkStructureAnalysisIncomplete("ODB 文件已变化，请重新读取结构；已编辑参数仍保留。");
+        }
+        return refreshed;
+    }
 
     public string Path { get; }
 
@@ -136,14 +164,12 @@ public sealed class OdbFileRow : INotifyPropertyChanged
     public void ApplyPostprocessScan(OdbPostprocessScanItem scan)
     {
         ScanDetails = scan;
-        var draft = scan.Suggested.Clone();
+        var draft = _hasEditedPostprocessJob && PostprocessJob is not null
+            ? PostprocessJob.Clone() : scan.Suggested.Clone();
         draft.Path = Path;
         PostprocessJob = draft;
-        HasPostprocessConfiguration = string.IsNullOrWhiteSpace(scan.Error);
-        PostprocessStatusDisplay = HasPostprocessConfiguration ? "已就绪" : "分析失败";
-        PostprocessSummary = HasPostprocessConfiguration
-            ? $"{scan.Steps.Count} 个分析步 · {scan.AssemblyNodeSets.Count + scan.AssemblyElementSets.Count} 个集合 · {scan.FieldOutputs.Count} 个场输出"
-            : scan.Error;
+        RefreshConfigurationState();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PostprocessJob)));
     }
 
     public void MarkPostprocessIncomplete(string status, string message)
@@ -152,14 +178,61 @@ public sealed class OdbFileRow : INotifyPropertyChanged
         PostprocessSummary = message;
     }
 
+    public void MarkStructureAnalysisIncomplete(string message)
+    {
+        ScanDetails = null;
+        HasPostprocessConfiguration = false;
+        MarkPostprocessIncomplete("无结构结果", message);
+    }
+
     public void UpdatePostprocessJob(OdbPostprocessJobDraft draft)
     {
+        draft = draft.Clone();
         draft.Path = Path;
         PostprocessJob = draft;
-        HasPostprocessConfiguration = true;
-        PostprocessStatusDisplay = "已配置";
-        PostprocessSummary = $"{draft.StartStep} → {draft.EndStep} · {FrameModeDisplay(draft.FrameMode)} · 方向 {draft.LoadDirection}";
+        _hasEditedPostprocessJob = true;
+        RefreshConfigurationState();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PostprocessJob)));
+    }
+
+    private void RefreshConfigurationState()
+    {
+        HasPostprocessConfiguration = false;
+        if (ScanDetails is not { } scan || !string.IsNullOrWhiteSpace(scan.Error))
+        {
+            PostprocessStatusDisplay = "分析失败";
+            PostprocessSummary = ScanDetails?.Error ?? "请先读取 ODB 结构";
+            return;
+        }
+        if (PostprocessJob is not { } draft) return;
+        var issues = new List<string>();
+        var steps = scan.Steps.ToList();
+        var start = steps.IndexOf(draft.StartStep);
+        var end = steps.IndexOf(draft.EndStep);
+        if (start < 0 || end < start) issues.Add("请选择有效的起止分析步");
+        if (draft.LoadDirection is not ("1" or "3" or "1+3")) issues.Add("请选择加载方向");
+        if (!scan.AssemblyNodeSets.Contains(draft.LoadSet)) issues.Add("请选择加载节点集");
+        foreach (var (name, label) in new[] {
+            (draft.PileDisplaySet, "桩体显示集合"), (draft.PileConcreteSet, "混凝土集合"),
+            (draft.SoilSet, "土体集合") })
+            if (!scan.AssemblyElementSets.Contains(name)) issues.Add($"请重新选择{label}");
+        if (draft.ReinforcementMode is not ("required" or "none")) issues.Add("请选择纵筋配置");
+        if (draft.ReinforcementMode != "none" && !scan.AssemblyElementSets.Contains(draft.RebarSet))
+            issues.Add("请重新选择纵筋集合");
+        if (draft.PileSteelSet.Length > 0 && !scan.AssemblyElementSets.Contains(draft.PileSteelSet))
+            issues.Add("请重新选择钢构件集合");
+        if (draft.FrameMode is not ("auto" or "all" or "manual")
+            || (draft.FrameMode == "manual" && string.IsNullOrWhiteSpace(draft.ManualSequenceExpression)))
+            issues.Add("请配置提取帧");
+        if (draft.PileType is not ("RC" or "CFST")) issues.Add("请选择桩体类型");
+        if (draft.ReinforcementMode != "none" && string.IsNullOrWhiteSpace(draft.LongitudinalMaterial)) issues.Add("请填写纵筋材料");
+        if (!double.IsFinite(draft.RebarDiameterMm) || draft.RebarDiameterMm < 1 || draft.RebarDiameterMm > 100)
+            issues.Add("纵筋直径应为 1–100 mm");
+        HasPostprocessConfiguration = issues.Count == 0;
+        PostprocessStatusDisplay = HasPostprocessConfiguration ? (_hasEditedPostprocessJob ? "已配置" : "已就绪") : "待配置";
+        PostprocessSummary = HasPostprocessConfiguration
+            ? $"{draft.StartStep} → {draft.EndStep} · {FrameModeDisplay(draft.FrameMode)} · 方向 {draft.LoadDirection}"
+            : string.Join("；", issues);
     }
 
     public void MarkProcessing(string status, string message)

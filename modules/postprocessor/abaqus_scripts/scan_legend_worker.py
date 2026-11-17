@@ -25,9 +25,9 @@ source = source.replace(
     '                    "soil": soil_name, "rebar": "rebar"}\n',
 )
 source = source.replace(
-    '    for spec, variable, region_key, refinement, position, soil_section in SPECS:\n'
+    '    for spec, variable, region_key, refinement, position, soil_section in active_specs(config):\n'
     '        set_group(viewport, region_names[region_key], rebar_labels)\n',
-    '    for spec, variable, region_key, refinement, position, soil_section in SPECS:\n'
+    '    for spec, variable, region_key, refinement, position, soil_section in active_specs(config):\n'
     '        region_name = region_names[region_key]\n'
     '        if not region_name:\n'
     '            continue\n'

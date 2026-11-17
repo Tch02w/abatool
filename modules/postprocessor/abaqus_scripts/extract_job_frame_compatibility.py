@@ -36,14 +36,14 @@ source = source.replace(
 )
 
 source = source.replace(
-    'rebar_region = assembly.elementSets[rebar_set_name]\n',
+    'rebar_region = assembly.elementSets[rebar_set_name] if reinforcement_enabled else None\n',
     'write_csv(\n'
     '    os.path.join(data_dir, "selected_timeline_alignment.csv"),\n'
     '    timeline_headers,\n'
     '    [{name: item[name] for name in timeline_headers} for item in selected_timeline],\n'
     ')\n'
     'timeline = selected_timeline\n\n'
-    'rebar_region = assembly.elementSets[rebar_set_name]\n',
+    'rebar_region = assembly.elementSets[rebar_set_name] if reinforcement_enabled else None\n',
 )
 
 source = source.replace(

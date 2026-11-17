@@ -12,6 +12,8 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     private bool _previewBusy;
     private bool _submitBusy;
     private int _lastExecutionIndex;
+    private int _localCpuLimit = 1;
+    private int _cpuPolicyRequest;
 
     public NewJobPage()
     {
@@ -27,6 +29,18 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     private bool IsRemote => ExecutionLocationComboBox.SelectedIndex is 1 or 2;
 
     private bool UsesRemoteExistingFiles => ExecutionLocationComboBox.SelectedIndex == 2;
+
+    private void OnResourceGridSizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (ResourceSecondaryFields is null) return;
+        // Two equal field columns at normal widths; stack before labels squeeze the inputs.
+        var stacked = args.NewSize.Width < 720;
+        ResourceSecondColumn.Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        ResourceGrid.ColumnSpacing = stacked ? 0 : 28;
+        ResourceGrid.RowSpacing = stacked ? 12 : 0;
+        Grid.SetColumn(ResourceSecondaryFields, stacked ? 0 : 1);
+        Grid.SetRow(ResourceSecondaryFields, stacked ? 1 : 0);
+    }
 
     public void LoadInputPath(string path)
     {
@@ -44,8 +58,40 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        await RefreshCpuLimitAsync();
         await RefreshRemoteStatusAsync();
         ApplyExecutionMode();
+    }
+
+    private async void OnAbaqusCommandLostFocus(object sender, RoutedEventArgs e)
+        => await RefreshCpuLimitAsync();
+
+    private async Task RefreshCpuLimitAsync()
+    {
+        var request = ++_cpuPolicyRequest;
+        try
+        {
+            var resource = await App.Current.ControlPlane.GetLocalResourceAsync(
+                abaqusCommand: AbaqusCommandTextBox.Text.Trim());
+            if (request != _cpuPolicyRequest) return;
+            _localCpuLimit = Math.Max(1, resource.JobCpuLimit);
+            if (!IsRemote)
+            {
+                CpuNumberBox.Maximum = _localCpuLimit;
+                ToolTipService.SetToolTip(CpuNumberBox,
+                    $"CPU 上限：{_localCpuLimit}；{resource.JobCpuPolicyNote}。0 表示使用 Abaqus 默认值。");
+            }
+        }
+        catch (Exception)
+        {
+            if (request != _cpuPolicyRequest) return;
+            _localCpuLimit = 1;
+            if (!IsRemote)
+            {
+                CpuNumberBox.Maximum = 1;
+                ToolTipService.SetToolTip(CpuNumberBox, "未取得 CPU 上限，暂按 1；请检查控制面连接或重新进入页面。");
+            }
+        }
     }
 
     private async void OnChooseInputClicked(object sender, RoutedEventArgs e)
@@ -401,6 +447,8 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     private void ApplyExecutionMode()
     {
         var remote = IsRemote;
+        // Remote submissions are validated against the server, not this PC.
+        CpuNumberBox.Maximum = remote ? int.MaxValue : _localCpuLimit;
         var existing = UsesRemoteExistingFiles;
         InputPathTextBox.PlaceholderText = existing
             ? "选择服务器允许目录中的 INP 文件"

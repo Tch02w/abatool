@@ -370,7 +370,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
         var item = selected[0];
         var jobNameBox = new TextBox { Header = "作业名称", Text = item.JobName };
-        var coresBox = new NumberBox
+        var coresBox = new Controls.WorkbenchNumberBox
         {
             Header = "Core（0 表示未指定）",
             Minimum = 0,
@@ -383,7 +383,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             Header = "内存（例如 80%、4096MB、8GB）",
             Text = item.Memory,
         };
-        var priorityBox = new NumberBox
+        var priorityBox = new Controls.WorkbenchNumberBox
         {
             Header = "优先级",
             Minimum = -10000,
@@ -391,6 +391,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
             Value = item.Priority,
         };
+        Controls.ParameterHelpButton.AddToHeader(coresBox, "cpu");
+        Controls.ParameterHelpButton.AddToHeader(priorityBox, "queue-priority");
         var oldjobBox = new TextBox
         {
             Header = "Restart 前置 ODB",

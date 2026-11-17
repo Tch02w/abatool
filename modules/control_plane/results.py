@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import csv
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from xml.etree.ElementTree import ParseError
+from zipfile import BadZipFile
 
 from modules.postprocessor.naming import natural_sort_key
 from modules.postprocessor.result_assets import (
@@ -421,12 +424,13 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
         "sizeBytes": path.stat().st_size,
     }
     try:
-        if suffix == ".csv":
-            headers, rows = read_csv_preview(path, max_rows)
-            return base | {"kind": "table", "headers": headers, "rows": rows}
-        if suffix == ".xlsx":
-            headers, rows = read_xlsx_preview(path, max_rows)
-            return base | {"kind": "table", "headers": headers, "rows": rows}
+        if suffix in {".csv", ".xlsx"}:
+            reader = read_csv_preview if suffix == ".csv" else read_xlsx_preview
+            headers, rows = reader(path, max_rows + 1)
+            return base | {
+                "kind": "table", "headers": headers, "rows": rows[:max_rows],
+                "truncated": len(rows) > max_rows,
+            }
         if suffix in TEXT_SUFFIXES:
             with path.open("rb") as stream:
                 content = stream.read(MAX_TEXT_PREVIEW_BYTES + 1)
@@ -439,7 +443,7 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
             "kind": "unsupported",
             "message": "该文件类型不支持内嵌预览，可使用打开或定位操作。",
         }
-    except (OSError, ValueError, IndexError) as exc:
+    except (OSError, ValueError, IndexError, KeyError, BadZipFile, ParseError, csv.Error) as exc:
         raise ApiProblem(
             422,
             "RESULT_PREVIEW_FAILED",

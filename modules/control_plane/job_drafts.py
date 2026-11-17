@@ -13,7 +13,7 @@ from modules.submitter.command import (
     derive_oldjob_name,
     validate_options,
 )
-from modules.submitter.constants import MAX_CPUS
+from modules.submitter.cpu_policy import validate_local_cpus
 from modules.submitter.job_draft import LocalJobDraft
 
 from .contracts import SCHEMA_VERSION, ApiProblem
@@ -101,12 +101,10 @@ class LocalJobDraftPreviewRequest:
             return value
 
         cpus = integer("cpus", 0)
-        if cpus < 0 or cpus > MAX_CPUS:
-            raise ApiProblem(
-                400,
-                "INVALID_CPUS",
-                f"cpus 必须在 0 到 {MAX_CPUS} 之间",
-            )
+        try:
+            validate_local_cpus(cpus, text("abaqusCommand", "abaqus"))
+        except ValueError as exc:
+            raise ApiProblem(400, "INVALID_CPUS", str(exc)) from exc
         max_parallel = integer("maxParallel", 1)
         if not 1 <= max_parallel <= 999:
             raise ApiProblem(

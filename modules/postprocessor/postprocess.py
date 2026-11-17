@@ -23,13 +23,16 @@ def build_pile_force_moment(output_dir: Path) -> tuple[Path | None, Path | None]
     axial_path = output_dir/"freebody"/"pile_total_axial_force_time_aligned.csv"
     rebar_path = output_dir/"rebar"/"rebar_element_stress_force_timehistory.csv"
     metadata_path = output_dir/"rebar"/"rebar_metadata.json"
-    if not axial_path.exists() or not rebar_path.exists() or not metadata_path.exists(): return None, None
+    if not axial_path.exists() or not metadata_path.exists(): return None, None
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    unreinforced = metadata.get("reinforcement_mode") == "none"
+    if not rebar_path.exists() and not unreinforced: return None, None
     axial_rows = read_csv(axial_path)
     if not axial_rows: return None, None
     target_sequences = {int(float(row["SequenceIndex"])) for row in axial_rows}
     by_level: dict[int, dict[float, list[float]]] = defaultdict(dict)
-    with rebar_path.open("r", encoding="utf-8-sig", newline="") as stream:
-        for row in csv.DictReader(stream):
+    if not unreinforced:
+        for row in read_csv(rebar_path):
             sequence = int(float(row["SequenceIndex"]))
             if sequence not in target_sequences: continue
             z = round(float(row["CentroidZ_mm"]), 8); x = float(row["CentroidX_mm"]); y = float(row["CentroidY_mm"])
@@ -38,18 +41,21 @@ def build_pile_force_moment(output_dir: Path) -> tuple[Path | None, Path | None]
             current[0] += tension_force
             current[1] += y*tension_force
             current[2] += -x*tension_force
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8")); z_min, z_max = map(float, metadata["rebar_z_extent_mm"])
+    z_min, z_max = (0.0, 0.0) if unreinforced else map(float, metadata["rebar_z_extent_mm"])
     points_by_sequence = {sequence: [(z, values[0], values[1], values[2]) for z, values in sorted(levels.items())]
                           for sequence, levels in by_level.items()}
 
     corrected_axial, combined = [], []
     for source in axial_rows:
         sequence = int(float(source["SequenceIndex"])); elevation = float(source["Elevation_mm"])
-        interpolated_tension, rebar_mx, rebar_my, rule = interpolate_components(
-            points_by_sequence[sequence], elevation, z_min, z_max
-        )
+        if unreinforced:
+            interpolated_tension, rebar_mx, rebar_my, rule = 0.0, 0.0, 0.0, "not_applicable_unreinforced"
+        else:
+            interpolated_tension, rebar_mx, rebar_my, rule = interpolate_components(
+                points_by_sequence[sequence], elevation, z_min, z_max
+            )
         section_force = source.get("RebarAxial_Section_TensionPositive_N", "")
-        use_section_force = str(source.get("RebarMethod", "")).lower() == "element_cut" and section_force != ""
+        use_section_force = not unreinforced and str(source.get("RebarMethod", "")).lower() == "element_cut" and section_force != ""
         rebar_tension = float(section_force) if use_section_force else interpolated_tension
         concrete_tension = float(source["Fz_N"])
         total_tension = concrete_tension + rebar_tension
@@ -78,6 +84,15 @@ def build_pile_force_moment(output_dir: Path) -> tuple[Path | None, Path | None]
             "PileTotalBendingMoment_Mx_Nmm": total_mx, "PileTotalBendingMoment_My_Nmm": total_my,
             "PileTotalBendingMoment_Resultant_Nmm": math.hypot(total_mx, total_my),
             "BendingMomentInterpolationRule": rule})
+        if unreinforced:
+            # The worker's FreeBody can already include the casing. It is not
+            # a separate rebar contribution and must not be added a second time.
+            for result_row in (axial, row):
+                result_row["ReinforcementMode"] = "none"
+                result_row["FreeBodyComposition"] = metadata.get("freebody_composition", "unspecified")
+                result_row["RebarMethod"] = "not_applicable_unreinforced"
+                result_row["RebarAxial_Section_TensionPositive_N"] = 0.0
+                result_row["RebarAxial_Section_CompressionPositive_N"] = 0.0
         combined.append(row)
     write_csv(axial_path, corrected_axial)
     target = output_dir/"freebody"/"pile_total_force_moment_time_aligned.csv"; write_csv(target, combined)

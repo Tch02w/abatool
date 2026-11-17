@@ -23,6 +23,7 @@ from modules.postprocessor.postprocess_execution import (
 )
 from modules.postprocessor.process_runner import ProcessCancelled
 from modules.postprocessor.runner_parallel import MultiProcessController
+from modules.submitter.cpu_policy import logical_cpu_count
 
 from .compatibility import ABAQUS_COMMAND_ENV, ABAQUS_RELEASE_ENV
 from .contracts import (
@@ -32,6 +33,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .region_extraction import REGION_KIND, RegionExtractionRequest, execute_region_extraction, finalize_region_extraction
 
 SCAN_KIND = "odb.postprocess.scan"
 RUN_KIND = "odb.postprocess.run"
@@ -291,7 +293,7 @@ class PostprocessScanRequest:
             root=root,
             paths=_resolve_paths(root, payload.get("paths")),
             parallel_workers=_integer(
-                payload, "parallelWorkers", minimum=1, maximum=4
+                payload, "parallelWorkers", minimum=1, maximum=logical_cpu_count()
             ),
             force_rescan=_flag(payload, "forceRescan"),
         )
@@ -441,7 +443,7 @@ class PostprocessRunRequest:
             abaqus_command=abaqus_command,
             root=root,
             parallel_workers=_integer(
-                payload, "parallelWorkers", minimum=1, maximum=4
+                payload, "parallelWorkers", minimum=1, maximum=logical_cpu_count()
             ),
             force_rescan=_flag(payload, "forceRescan"),
             full_timehistory_freebody=_flag(payload, "fullTimehistoryFreebody"),
@@ -482,11 +484,15 @@ def _parse_job(root: Path, raw: Any, index: int) -> PostprocessJob:
         "pileSteelSet",
         "soilSet",
         "rebarSet",
+        "reinforcementMode",
         "longitudinalMaterial",
         "rebarDiameterMm",
         "prefractureSequenceIndex",
     }
-    _validate_fields(raw, allowed, required=allowed, check_schema=False)
+    _validate_fields(raw, allowed, required=allowed - {"reinforcementMode"}, check_schema=False)
+    reinforcement_mode = raw.get("reinforcementMode", "required")
+    if reinforcement_mode not in ("required", "none"):
+        raise ApiProblem(400, "INVALID_REINFORCEMENT_MODE", "reinforcementMode 必须是 required 或 none")
     frame_mode = _text(raw, "frameMode")
     if frame_mode not in FRAME_MODES:
         raise ApiProblem(400, "INVALID_FRAME_MODE", "frameMode 不受支持")
@@ -522,8 +528,9 @@ def _parse_job(root: Path, raw: Any, index: int) -> PostprocessJob:
         pile_concrete_set=_text(raw, "pileConcreteSet"),
         pile_steel_set=_text(raw, "pileSteelSet", allow_empty=True),
         soil_set=_text(raw, "soilSet"),
-        rebar_set=_text(raw, "rebarSet"),
-        longitudinal_material=_text(raw, "longitudinalMaterial"),
+        reinforcement_mode=reinforcement_mode,
+        rebar_set=_text(raw, "rebarSet", allow_empty=reinforcement_mode == "none"),
+        longitudinal_material=_text(raw, "longitudinalMaterial", allow_empty=reinforcement_mode == "none"),
         rebar_diameter_mm=_number(
             raw, "rebarDiameterMm", minimum=1.0, maximum=100.0
         ),
@@ -587,7 +594,7 @@ def _parse_group(
 
 @dataclass
 class PostprocessOperation:
-    request: PostprocessScanRequest | PostprocessRunRequest
+    request: PostprocessScanRequest | PostprocessRunRequest | RegionExtractionRequest
     kind: str
     operation_id: str = field(default_factory=lambda: uuid4().hex)
     attempt_id: str = field(default_factory=lambda: uuid4().hex)
@@ -640,9 +647,14 @@ class PostprocessOperationManager:
     def create_run(self, request: PostprocessRunRequest) -> dict[str, Any]:
         return self._create(request, RUN_KIND)
 
+    def create_region(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        command, _release, _defaults = self._settings_provider()
+        request = RegionExtractionRequest.from_payload(payload, command)
+        return self._create(request, REGION_KIND)
+
     def _create(
         self,
-        request: PostprocessScanRequest | PostprocessRunRequest,
+        request: PostprocessScanRequest | PostprocessRunRequest | RegionExtractionRequest,
         kind: str,
     ) -> dict[str, Any]:
         with self._lock:
@@ -735,7 +747,14 @@ class PostprocessOperationManager:
                 self._transition_locked(operation, "starting", f"{operation.kind}.starting")
                 self._transition_locked(operation, "running", f"{operation.kind}.running")
 
-            if isinstance(operation.request, PostprocessScanRequest):
+            if isinstance(operation.request, RegionExtractionRequest):
+                result = execute_region_extraction(
+                    operation.request,
+                    lambda percent, phase: self._on_progress(operation_id, percent, phase),
+                    lambda message: self._on_log(operation_id, message),
+                    operation.controller,
+                )
+            elif isinstance(operation.request, PostprocessScanRequest):
                 result = self._scan_runner(
                     operation.request,
                     lambda percent, phase: self._on_progress(operation_id, percent, phase),
@@ -754,6 +773,8 @@ class PostprocessOperationManager:
                 if operation.controller.cancel_requested or operation.status == "cancelling":
                     self._finish_cancelled_locked(operation)
                     return
+                if isinstance(operation.request, RegionExtractionRequest):
+                    finalize_region_extraction(operation.request, result)
                 operation.percent = 100
                 operation.phase = (
                     "ODB 结构读取完成" if operation.kind == SCAN_KIND else "ODB 后处理完成"
@@ -771,7 +792,9 @@ class PostprocessOperationManager:
                 operation = self._operations.get(operation_id)
                 if operation is None or operation.status in TERMINAL_STATUSES:
                     return
-                if operation.controller.cancel_requested or operation.status == "cancelling":
+                # Worker failure also cancels the shared controller to stop siblings.
+                # Only an explicit operation cancellation should hide that failure.
+                if operation.status == "cancelling":
                     self._finish_cancelled_locked(operation)
                     return
                 operation.phase = "ODB 结构读取失败" if operation.kind == SCAN_KIND else "ODB 后处理失败"

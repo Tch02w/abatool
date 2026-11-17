@@ -26,7 +26,7 @@ winui/AbaqusTools.WinUI/
 ├── MainWindow.xaml(.cs)           原生壳层、导航、菜单、状态与关闭
 ├── Controls/                      通用工作台控件
 ├── Explorer/                      浏览器模型、稳定接口与页面适配器
-├── Pages/                         八个完整业务页面
+├── Pages/                         八个业务页面（完整验收状态见交接记录）
 ├── Models/                        页面模型
 └── Services/                      控制面宿主和版本化 DTO
 

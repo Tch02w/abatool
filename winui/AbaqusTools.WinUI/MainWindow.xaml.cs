@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using System.Runtime.InteropServices;
+using Windows.Graphics;
 
 namespace AbaqusTools.WinUI;
 
@@ -28,6 +30,11 @@ public sealed partial class MainWindow : Window
     private bool _resourceRefreshBusy;
     private bool _shutdownStarted;
     private bool _shutdownComplete;
+    private bool _windowClosed;
+    private bool _updatingSizeLimits;
+    private double _restoredFrameWidthDip;
+    private double _restoredFrameHeightDip;
+    private XamlRoot? _sizeLimitXamlRoot;
 
     public LocalResourceSnapshot? LatestLocalResource { get; private set; }
 
@@ -45,6 +52,8 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnAppWindowClosing;
         Title = "Abaqus Tools — WinUI 3";
         ConfigureTitleBar();
+        AppWindow.Changed += OnAppWindowChanged;
+        UpdateWindowSizeLimits();
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.Maximize();
@@ -156,6 +165,16 @@ public sealed partial class MainWindow : Window
 
     private async void OnRootLoaded(object sender, RoutedEventArgs e)
     {
+        if (Content.XamlRoot is { } xamlRoot && _sizeLimitXamlRoot != xamlRoot)
+        {
+            if (_sizeLimitXamlRoot is not null)
+            {
+                _sizeLimitXamlRoot.Changed -= OnWindowXamlRootChanged;
+            }
+            _sizeLimitXamlRoot = xamlRoot;
+            _sizeLimitXamlRoot.Changed += OnWindowXamlRootChanged;
+        }
+        UpdateWindowSizeLimits();
         try
         {
             await _controlPlane.EnsureReadyAsync();
@@ -418,9 +437,89 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        TitleBarLeftInsetColumn.Width = new GridLength(AppWindow.TitleBar.LeftInset);
-        TitleBarRightInsetColumn.Width = new GridLength(AppWindow.TitleBar.RightInset);
+        var scale = GetWindowScale();
+        TitleBarLeftInsetColumn.Width = new GridLength(AppWindow.TitleBar.LeftInset / scale);
+        TitleBarRightInsetColumn.Width = new GridLength(AppWindow.TitleBar.RightInset / scale);
     }
+
+    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidPositionChange || args.DidSizeChange || args.DidPresenterChange)
+        {
+            UpdateWindowSizeLimits();
+            UpdateTitleBarInsets();
+        }
+    }
+
+    private void OnWindowXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        UpdateWindowSizeLimits();
+        UpdateTitleBarInsets();
+    }
+
+    private double GetWindowScale()
+    {
+        // The HWND's DPI is valid before XamlRoot is loaded and changes when crossing monitors.
+        var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        return dpi > 0 ? dpi / 96d : Content.XamlRoot?.RasterizationScale ?? 1d;
+    }
+
+    private void UpdateWindowSizeLimits()
+    {
+        if (_windowClosed || _updatingSizeLimits
+            || AppWindow.Presenter is not OverlappedPresenter presenter)
+        {
+            return;
+        }
+        var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+        if (display is null || display.WorkArea.Width <= 0 || display.WorkArea.Height <= 0)
+        {
+            return;
+        }
+
+        _updatingSizeLimits = true;
+        try
+        {
+            var scale = GetWindowScale();
+            if (presenter.State == OverlappedPresenterState.Restored
+                && AppWindow.ClientSize.Width > 0 && AppWindow.ClientSize.Height > 0)
+            {
+                // Measure the real restored nonclient area after custom title-bar setup.
+                // Maximized/minimized geometry must never replace this restored-frame measurement.
+                _restoredFrameWidthDip = Math.Max(0, AppWindow.Size.Width - AppWindow.ClientSize.Width) / scale;
+                _restoredFrameHeightDip = Math.Max(0, AppWindow.Size.Height - AppWindow.ClientSize.Height) / scale;
+            }
+            var navigationHeight = Math.Max(WindowLayoutConstraints.DefaultNavigationHeight,
+                ShellNavigation.ActualHeight - ContentFrame.ActualHeight);
+            var minimum = WindowLayoutConstraints.MinimumOuterSize(scale,
+                _restoredFrameWidthDip, _restoredFrameHeightDip,
+                display.WorkArea.Width, display.WorkArea.Height, navigationHeight);
+            if (presenter.PreferredMinimumWidth != minimum.Width)
+            {
+                presenter.PreferredMinimumWidth = minimum.Width;
+            }
+            if (presenter.PreferredMinimumHeight != minimum.Height)
+            {
+                presenter.PreferredMinimumHeight = minimum.Height;
+            }
+            if (presenter.State == OverlappedPresenterState.Restored)
+            {
+                var clamped = WindowLayoutConstraints.ClampToMinimum(
+                    AppWindow.Size.Width, AppWindow.Size.Height, minimum);
+                if (clamped.Width != AppWindow.Size.Width || clamped.Height != AppWindow.Size.Height)
+                {
+                    AppWindow.Resize(new SizeInt32(clamped.Width, clamped.Height));
+                }
+            }
+        }
+        finally
+        {
+            _updatingSizeLimits = false;
+        }
+    }
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern uint GetDpiForWindow(IntPtr window);
 
     private void OnControlPlaneStateChanged(object? sender, ControlPlaneStateChangedEventArgs args)
     {
@@ -460,6 +559,13 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        _windowClosed = true;
+        AppWindow.Changed -= OnAppWindowChanged;
+        if (_sizeLimitXamlRoot is not null)
+        {
+            _sizeLimitXamlRoot.Changed -= OnWindowXamlRootChanged;
+            _sizeLimitXamlRoot = null;
+        }
         _resourceTimer.Stop();
         _resourceTimer.Tick -= OnResourceTimerTick;
         Closed -= OnWindowClosed;

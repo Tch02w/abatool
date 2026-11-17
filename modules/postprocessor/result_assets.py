@@ -22,8 +22,14 @@ RESULT_LAYOUT_VERSION = 3
 SHARED_DATA_ROOT_NAME = "ODB数据"
 ASSET_MANIFEST_NAME = "_odb_data_manifest.json"
 GROUP_MEMBER_MANIFEST_NAME = "_group_member_manifest.json"
+INCOMPLETE_OUTPUT_MARKER = "_postprocess_incomplete.json"
 NUMERIC_DIRECTORIES = ("data", "History_Output", "rebar", "freebody", "plots")
 NUMERIC_FILES = ("metadata.json", "summary.xlsx")
+
+
+def is_incomplete_output(path: Path) -> bool:
+    """Recognize new incomplete outputs without hiding unmarked legacy results."""
+    return any((parent / INCOMPLETE_OUTPUT_MARKER).is_file() for parent in (path, *path.parents))
 
 
 def safe_result_name(value: str) -> str:

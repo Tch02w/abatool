@@ -176,16 +176,15 @@ def test_axial_plot_labels_the_selected_rebar_method(
             pass
 
     class FakeFigure:
+        def clear(self):
+            pass
+
         def savefig(self, target, **_kwargs):
             target.touch()
 
     monkeypatch.setattr(
-        "modules.postprocessor.postprocess_core.plt.subplots",
-        lambda **_kwargs: (FakeFigure(), FakeAxes()),
-    )
-    monkeypatch.setattr(
-        "modules.postprocessor.postprocess_core.plt.close",
-        lambda _figure: None,
+        "modules.postprocessor.postprocess_core._file_plot",
+        lambda *_args: (FakeFigure(), FakeAxes()),
     )
 
     assert plot_pile_axial(tmp_path).exists()
@@ -255,6 +254,9 @@ def test_axial_plot_never_connects_status_sequence_groups_and_prefers_last(
             pass
 
     class FakeFigure:
+        def clear(self):
+            pass
+
         def __init__(self, axes):
             self.axes = axes
             self.target = None
@@ -263,19 +265,15 @@ def test_axial_plot_never_connects_status_sequence_groups_and_prefers_last(
             self.target = target
             target.touch()
 
-    def fake_subplots(**_kwargs):
+    def fake_subplots(*_args):
         axes = FakeAxes()
         figure = FakeFigure(axes)
         figures.append(figure)
         return figure, axes
 
     monkeypatch.setattr(
-        "modules.postprocessor.postprocess_core.plt.subplots",
+        "modules.postprocessor.postprocess_core._file_plot",
         fake_subplots,
-    )
-    monkeypatch.setattr(
-        "modules.postprocessor.postprocess_core.plt.close",
-        lambda _figure: None,
     )
 
     canonical = plot_pile_axial(tmp_path)

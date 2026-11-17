@@ -46,6 +46,9 @@ from .job_drafts import preview_local_job_draft
 from .job_queue_commands import JobQueueService
 from .local_queue_runtime import LocalJobRunner, LocalQueueRuntimeManager
 from .odb_merge_drafts import preview_odb_merge_draft
+from .odb_upgrade_drafts import preview_odb_upgrade
+from .odb_upgrade_operations import OdbUpgradeOperationManager
+from .odb_result_graphs import OdbResultGraphService
 from .odb_merge_operations import (
     OdbMergeOperationManager,
     OdbMergeOperationRequest,
@@ -84,12 +87,14 @@ class ControlPlaneContext:
     operation_manager: CompatibilityOperationManager
     result_index_manager: ResultIndexOperationManager
     odb_merge_manager: OdbMergeOperationManager
+    odb_upgrade_manager: OdbUpgradeOperationManager
     postprocess_manager: PostprocessOperationManager
     job_queue_service: JobQueueService
     local_queue_runtime: LocalQueueRuntimeManager
     remote_server_service: RemoteServerService
     remote_transfer_manager: RemoteTransferOperationManager
     remote_job_manager: RemoteJobOperationManager
+    odb_result_graph_service: OdbResultGraphService
 
 
 class ControlPlaneHttpServer(ThreadingHTTPServer):
@@ -143,8 +148,23 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/odb-postprocess-operations":
                 self._handle_list_postprocess_operations(target.query, trace_id)
                 return
-            if target.path == "/api/v1/local-resources" and not target.query:
-                self._send_json(HTTPStatus.OK, capture_local_resource(), trace_id)
+            if target.path == "/api/v1/odb-upgrade-operations":
+                active_only = self._parse_active_only(target.query, "ODB 升级任务")
+                self._send_json(HTTPStatus.OK, {
+                    "schemaVersion": SCHEMA_VERSION,
+                    "operations": self.context.odb_upgrade_manager.list_snapshots(active_only=active_only),
+                }, trace_id)
+                return
+            upgrade_id = self._upgrade_id_from_path(target.path)
+            if upgrade_id is not None and not target.query:
+                self._send_json(HTTPStatus.OK, self.context.odb_upgrade_manager.get(upgrade_id), trace_id)
+                return
+            if target.path == "/api/v1/local-resources":
+                query = parse_qs(target.query)
+                if set(query) - {"abaqusCommand"} or len(query.get("abaqusCommand", [])) > 1:
+                    raise ApiProblem(400, "INVALID_QUERY", "无效的本机资源查询")
+                command = query.get("abaqusCommand", [""])[0]
+                self._send_json(HTTPStatus.OK, capture_local_resource(command), trace_id)
                 return
             if target.path == "/api/v1/job-queues" and not target.query:
                 self._send_json(
@@ -213,6 +233,9 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/restart-chains" and not target.query:
                 self._send_json(HTTPStatus.OK, read_restart_chains(), trace_id)
+                return
+            if target.path == "/api/v1/odb-result-graph" and not target.query:
+                self._send_json(HTTPStatus.OK, self.context.odb_result_graph_service.snapshot(), trace_id)
                 return
             result_index_id = self._result_index_id_from_get_path(target.path)
             if result_index_id is not None and not target.query:
@@ -307,10 +330,38 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/odb-merge-draft-previews" and not target.query:
                 self._handle_odb_merge_draft_preview(trace_id)
                 return
+            if target.path == "/api/v1/odb-upgrade-previews" and not target.query:
+                self._send_json(HTTPStatus.OK, preview_odb_upgrade(self._read_json_object()), trace_id)
+                return
+            if target.path == "/api/v1/odb-upgrade-operations" and not target.query:
+                self._send_json(HTTPStatus.ACCEPTED,
+                    self.context.odb_upgrade_manager.create(self._read_json_object()), trace_id)
+                return
+            if target.path == "/api/v1/odb-upgrade-shutdown-check" and not target.query:
+                self._send_json(HTTPStatus.OK, self.context.odb_upgrade_manager.prepare_shutdown(), trace_id)
+                return
+            upgrade_id = self._upgrade_id_from_path(target.path, cancel=True)
+            if upgrade_id is not None and not target.query:
+                self._send_json(HTTPStatus.ACCEPTED, self.context.odb_upgrade_manager.cancel(upgrade_id), trace_id)
+                return
             if target.path == "/api/v1/restart-result-plans" and not target.query:
                 self._send_json(
                     HTTPStatus.OK,
                     build_restart_result_plan(self._read_json_object()),
+                    trace_id,
+                )
+                return
+            if target.path == "/api/v1/odb-result-graph-commands" and not target.query:
+                self._send_json(
+                    HTTPStatus.OK,
+                    self.context.odb_result_graph_service.command(self._read_json_object()),
+                    trace_id,
+                )
+                return
+            if target.path == "/api/v1/odb-result-graph-plans" and not target.query:
+                self._send_json(
+                    HTTPStatus.OK,
+                    self.context.odb_result_graph_service.plans(self._read_json_object()),
                     trace_id,
                 )
                 return
@@ -322,6 +373,13 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     HTTPStatus.ACCEPTED,
                     self.context.postprocess_manager.create_scan(request),
+                    trace_id,
+                )
+                return
+            if target.path == "/api/v1/odb-region-extractions" and not target.query:
+                self._send_json(
+                    HTTPStatus.ACCEPTED,
+                    self.context.postprocess_manager.create_region(self._read_json_object()),
                     trace_id,
                 )
                 return
@@ -421,6 +479,18 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         except ApiProblem as problem:
             self._send_problem(problem, trace_id)
 
+    @staticmethod
+    def _upgrade_id_from_path(path: str, *, cancel: bool = False) -> str | None:
+        prefix = "/api/v1/odb-upgrade-operations/"
+        if not path.startswith(prefix):
+            return None
+        tail = path[len(prefix):]
+        if cancel:
+            if not tail.endswith("/cancel"):
+                return None
+            tail = tail[:-len("/cancel")]
+        return tail if tail and "/" not in tail else None
+
     def _require_authorization(self) -> None:
         value = self.headers.get("Authorization", "")
         scheme, separator, supplied_token = value.partition(" ")
@@ -443,7 +513,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs"],
+            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.upgrade.safe-v1", "odb.upgrade.history-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -1018,6 +1088,7 @@ class ControlPlaneRuntime:
         ) = None,
         result_index_builder: ResultIndexBuilder | None = None,
         odb_merge_runner: OdbMergeRunner | None = None,
+        odb_upgrade_runner=None,
         odb_merge_command_provider: Callable[[], str] | None = None,
         postprocess_scan_runner: PostprocessScanRunner | None = None,
         postprocess_run_runner: PostprocessRunRunner | None = None,
@@ -1029,6 +1100,7 @@ class ControlPlaneRuntime:
         external_job_scanner=None,
         external_monitor_interval: float = 5.0,
         server_profiles_path: str | Path | None = None,
+        odb_result_graph_path: str | Path | None = None,
         remote_manager: RemoteManager | None = None,
     ) -> None:
         if not 0 <= int(port) <= 65535:
@@ -1070,6 +1142,11 @@ class ControlPlaneRuntime:
         odb_merge_manager = OdbMergeOperationManager(
             event_history,
             **odb_merge_kwargs,
+        )
+        odb_upgrade_manager = OdbUpgradeOperationManager(
+            journal_path=self.descriptor_path.with_name('odb-upgrade-history.json'),
+            event_store=event_history,
+            **({"runner": odb_upgrade_runner} if odb_upgrade_runner is not None else {}),
         )
         postprocess_kwargs: dict[str, Any] = {}
         if postprocess_scan_runner is not None:
@@ -1114,12 +1191,14 @@ class ControlPlaneRuntime:
             operation_manager=operation_manager,
             result_index_manager=result_index_manager,
             odb_merge_manager=odb_merge_manager,
+            odb_upgrade_manager=odb_upgrade_manager,
             postprocess_manager=postprocess_manager,
             job_queue_service=job_queue_service,
             local_queue_runtime=local_queue_runtime,
             remote_server_service=remote_server_service,
             remote_transfer_manager=remote_transfer_manager,
             remote_job_manager=remote_job_manager,
+            odb_result_graph_service=OdbResultGraphService(odb_result_graph_path),
         )
         try:
             self.httpd = ControlPlaneHttpServer((LOOPBACK_HOST, int(port)), context)
@@ -1133,6 +1212,7 @@ class ControlPlaneRuntime:
             operation_manager.close()
             result_index_manager.close()
             odb_merge_manager.close()
+            odb_upgrade_manager.close()
             raise
         actual_host, actual_port = self.httpd.server_address[:2]
         self.host = str(actual_host)
@@ -1161,6 +1241,7 @@ class ControlPlaneRuntime:
             operation_manager.close()
             result_index_manager.close()
             odb_merge_manager.close()
+            odb_upgrade_manager.close()
             raise
 
     @property
@@ -1178,6 +1259,10 @@ class ControlPlaneRuntime:
     @property
     def odb_merge_manager(self) -> OdbMergeOperationManager:
         return self.httpd.context.odb_merge_manager
+
+    @property
+    def odb_upgrade_manager(self) -> OdbUpgradeOperationManager:
+        return self.httpd.context.odb_upgrade_manager
 
     @property
     def job_queue_service(self) -> JobQueueService:
@@ -1227,6 +1312,7 @@ class ControlPlaneRuntime:
             self.operation_manager.close()
             self.result_index_manager.close()
             self.odb_merge_manager.close()
+            self.odb_upgrade_manager.close()
             remove_descriptor_if_owned(self.descriptor_path, self.instance_id)
 
 

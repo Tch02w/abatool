@@ -40,7 +40,10 @@
                 </Grid>
                 <Grid Grid.Row="4" Margin="0,4,0,0">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="STA / MSG / DAT 运行日志" />
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="STA / MSG / DAT 运行日志" />
+                        <TextBlock x:Name="RuntimeLogUpdateText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="有新日志，取消文字选择后显示" Visibility="Collapsed" />
+                    </StackPanel>
                     <TextBox x:Name="RuntimeLogTextBox" Grid.Row="1" Margin="0,8,0,0" AcceptsReturn="True" FontFamily="Consolas" IsReadOnly="True" Text="选择作业后显示实时运行日志。" TextWrapping="NoWrap" />
                 </Grid>
             </Grid>

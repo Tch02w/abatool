@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbResultBatchRunner.cs" Link="OdbResultBatchRunner.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/RestartResultPlanContracts.cs" Link="RestartResultPlanContracts.cs" />
+  </ItemGroup>
+</Project>

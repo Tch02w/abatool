@@ -92,6 +92,15 @@ def test_result_scopes_records_filters_and_previews_are_qt_free(tmp_path: Path) 
         assert preview["kind"] == "table"
         assert preview["headers"] == ["Time", "RF3"]
         assert preview["rows"] == [["0", "0"]]
+        assert preview["truncated"] is True
+        exact = json_response(_post(runtime, "/api/v1/result-previews", {
+            "root": str(root), "path": str(odb / "data" / "load_point_raw.csv"), "maxRows": 2,
+        }))
+        assert exact["rows"] == [["0", "0"], ["1", "10"]] and exact["truncated"] is False
+        broken = odb / "damaged.xlsx"
+        broken.write_bytes(b"invalid workbook")
+        failed = _post(runtime, "/api/v1/result-previews", {"root": str(root), "path": str(broken)})
+        assert failed[0] == 422 and json_response(failed)["error"]["code"] == "RESULT_PREVIEW_FAILED"
 
         text_preview = json_response(
             _post(

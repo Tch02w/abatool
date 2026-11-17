@@ -14,6 +14,7 @@ from modules.postprocessor.config import load_defaults
 from modules.submitter.app_paths import JOBLIST_PATH
 from modules.submitter.app_settings import load_app_settings
 from modules.submitter.constants import ACTIVE_STATUSES
+from modules.submitter.cpu_policy import local_cpu_policy
 
 from .contracts import SCHEMA_VERSION
 
@@ -64,7 +65,7 @@ def _queue_snapshot() -> tuple[list[str], int, int]:
     return active_jobs, waiting_jobs, total_jobs
 
 
-def capture_local_resource() -> dict[str, Any]:
+def capture_local_resource(command: str = "") -> dict[str, Any]:
     global _CPU_PERCENT_INITIALIZED
     memory = psutil.virtual_memory()
     logical_cpus = psutil.cpu_count(logical=True) or 1
@@ -76,6 +77,7 @@ def capture_local_resource() -> dict[str, Any]:
     active_jobs, waiting_jobs, total_jobs = _queue_snapshot()
     abaqus_command, abaqus_release, abaqus_available = _abaqus_snapshot()
     return {
+        **local_cpu_policy(command),
         "schemaVersion": SCHEMA_VERSION,
         "capturedAt": datetime.now(UTC)
         .isoformat(timespec="milliseconds")

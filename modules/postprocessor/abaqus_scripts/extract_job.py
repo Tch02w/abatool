@@ -103,13 +103,17 @@ load_set_name = config["load_set"]
 pile_display_set_name = config["pile_display_set"]
 concrete_set_name = config["pile_concrete_set"]
 soil_set_name = config["soil_set"]
-rebar_set_name = config["rebar_set"]
+reinforcement_mode = config.get("reinforcement_mode", "required")
+if reinforcement_mode not in ("required", "none"):
+    raise RuntimeError("Unsupported reinforcement_mode: {0}".format(reinforcement_mode))
+reinforcement_enabled = reinforcement_mode == "required"
+rebar_set_name = config.get("rebar_set", "")
 longitudinal_material_name = str(
     config.get("longitudinal_material", "HRB400")
 ).strip()
-if not longitudinal_material_name:
+if reinforcement_enabled and not longitudinal_material_name:
     raise RuntimeError("longitudinal_material must not be blank")
-bar_diameter_mm = float(config["rebar_diameter_mm"])
+bar_diameter_mm = float(config["rebar_diameter_mm"]) if reinforcement_enabled else 0.0
 bar_area_mm2 = math.pi * bar_diameter_mm ** 2 / 4.0
 orientation_threshold = float(settings["longitudinal_orientation_threshold"])
 cut_count = int(settings["axial_cut_count"])
@@ -429,7 +433,7 @@ def region_elements(region):
             yield instance_name, element
 
 
-rebar_region = assembly.elementSets[rebar_set_name]
+rebar_region = assembly.elementSets[rebar_set_name] if reinforcement_enabled else None
 node_maps = {}
 element_geometry = {}
 parent = {}
@@ -494,7 +498,7 @@ def union(first, second):
         parent[root_second] = root_first
 
 
-for instance_name, element in region_elements(rebar_region):
+for instance_name, element in (region_elements(rebar_region) if reinforcement_enabled else ()):
     if not instance_name or not element.type.upper().startswith("T3D2"):
         continue
     key = (instance_name, element.label)
@@ -553,7 +557,7 @@ for instance_name, element in region_elements(rebar_region):
         "equivalent_diameter_mm": math.sqrt(4.0 * float(section_area) / math.pi),
     }
 
-if not element_geometry:
+if reinforcement_enabled and not element_geometry:
     raise RuntimeError(
         "No longitudinal T3D2 elements with material {0} were found in {1}".format(
             longitudinal_material_name, rebar_set_name
@@ -597,8 +601,8 @@ for item in element_geometry.values():
     instance_nodes = node_maps[item["instance"]]
     for _instance_name, node_label in item["nodes"]:
         rebar_node_z.append(instance_nodes[node_label][2])
-rebar_z_min = min(rebar_node_z)
-rebar_z_max = max(rebar_node_z)
+rebar_z_min = min(rebar_node_z) if reinforcement_enabled else 0.0
+rebar_z_max = max(rebar_node_z) if reinforcement_enabled else 0.0
 detected_rebar_count = len(component_list)
 effective_expected_rebar_count = (
     configured_expected_rebar_count
@@ -657,7 +661,7 @@ def merge_rebar_node_coordinates(reference, coordinate_values, displacement_valu
 def nodal_vector_values(frame, variable_name):
     """Read one nodal vector field for the configured rebar region."""
 
-    if variable_name not in frame.fieldOutputs:
+    if not reinforcement_enabled or variable_name not in frame.fieldOutputs:
         return {}
     try:
         subset = frame.fieldOutputs[variable_name].getSubset(
@@ -798,7 +802,7 @@ with open(rebar_detailed_path, "w", newline="", encoding="utf-8-sig") as stream:
         current_nodes, coordinate_source, coordinate_source_counts = (
             current_rebar_node_coordinates(frame)
         )
-        if "S" in frame.fieldOutputs:
+        if reinforcement_enabled and "S" in frame.fieldOutputs:
             subset = frame.fieldOutputs["S"].getSubset(region=rebar_region, position=INTEGRATION_POINT)
             for value in subset.values:
                 key = (value.instance.name, value.elementLabel)
@@ -884,7 +888,9 @@ for item in element_geometry.values():
 with open(os.path.join(rebar_dir, "rebar_metadata.json"), "w", encoding="utf-8") as stream:
     json.dump(
         {
-            "method": rebar_method,
+            "reinforcement_mode": reinforcement_mode,
+            "freebody_composition": "concrete_and_casing" if config.get("pile_type") == "CFST" and config.get("pile_steel_set") else "concrete",
+            "method": rebar_method if reinforcement_enabled else "not_applicable_unreinforced",
             # Compatibility aliases retained for existing cache/result readers.
             "legacy_method": REBAR_INTERPOLATION_METHOD,
             "element_cut_rule": REBAR_SECTION_RULE,
@@ -991,6 +997,8 @@ session.freeBodyReportOptions.setValues(
 
 
 def interpolate_rebar(sequence, elevation):
+    if not reinforcement_enabled:
+        return 0.0, "not_applicable_unreinforced"
     if elevation < rebar_z_min or elevation > rebar_z_max:
         return 0.0, "outside_rebar_extent_zero"
     points = rebar_force_by_sequence[sequence]
@@ -1301,6 +1309,8 @@ def set_static_limits(spec):
 
 
 def render(spec):
+    if spec.get("longitudinal") and not reinforcement_enabled:
+        return
     folder = os.path.join(frame_root, spec["name"])
     os.makedirs(folder, exist_ok=True)
     if spec.get("longitudinal"):
@@ -1396,6 +1406,7 @@ metadata = {
     "load_set": load_set_name,
     "load_direction": str(config.get("load_direction", "")),
     "pile_type": config["pile_type"],
+    "reinforcement_mode": reinforcement_mode,
     "pile_display_set": pile_display_set_name,
     "pile_concrete_set": concrete_set_name,
     "pile_steel_set": config.get("pile_steel_set", ""),

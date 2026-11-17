@@ -7,10 +7,11 @@ import os
 import posixpath
 import zipfile
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from xml.etree import ElementTree
 
-from .result_assets import ASSET_MANIFEST_NAME, resolve_group_member_asset
+from .result_assets import ASSET_MANIFEST_NAME, INCOMPLETE_OUTPUT_MARKER, is_incomplete_output, resolve_group_member_asset
 
 VARIABLE_LABELS = {
     "PILE_U_MAG": "桩身位移大小",
@@ -27,6 +28,7 @@ VARIABLE_LABELS = {
 }
 
 FILE_DESCRIPTIONS = {
+    "region_values.csv": ("所选对象内力", "按实例、单元、积分点和帧保存；单位沿用模型，方法和面积约定见 convention 列与 manifest.json"),
     "summary.xlsx": ("综合汇总", "推荐入口：可直接在 Excel 中查看主要数据表"),
     "timeline_alignment.csv": ("荷载与位移", "Step、帧号、增量与总时间的对照表"),
     "load_point_raw.csv": ("荷载与位移", "加载点的原始荷载和位移全过程"),
@@ -89,6 +91,7 @@ FILE_DESCRIPTIONS = {
 
 RECOMMENDED_NAMES = {
     "summary.xlsx",
+    "region_values.csv",
     "load_point_raw.csv",
     "load_resistance_processed.csv",
     "load_resistance_sharing.png",
@@ -188,13 +191,14 @@ def classify_result(path: Path) -> ResultRecord:
 
 
 def collect_result_records(scope: Path) -> list[ResultRecord]:
-    if not scope.is_dir():
+    if not scope.is_dir() or is_incomplete_output(scope):
         return []
-    records = [
-        classify_result(path)
-        for path in scope.rglob("*")
-        if path.is_file()
-    ]
+    records = []
+    for directory, children, files in os.walk(scope):
+        if INCOMPLETE_OUTPUT_MARKER in files:
+            children.clear()
+            continue
+        records.extend(classify_result(Path(directory) / name) for name in files)
     return sorted(
         records,
         key=lambda record: (
@@ -325,11 +329,7 @@ def read_csv_preview(
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.reader(stream)
         header = next(reader, [])
-        rows = []
-        for row_index, row in enumerate(reader):
-            if row_index >= max_rows:
-                break
-            rows.append([str(value) for value in row])
+        rows = list(islice(reader, max_rows))
     return [str(value) for value in header], rows
 
 
@@ -400,36 +400,35 @@ def read_xlsx_preview(
                     )
                     break
 
-        worksheet = ElementTree.fromstring(archive.read(sheet_path))
         preview_cells: list[dict[int, str]] = []
         maximum_column = 0
-        dimension = worksheet.find(f"{{{main_ns}}}dimension")
-        if dimension is not None:
-            final_reference = dimension.attrib.get("ref", "A1").split(":")[-1]
-            maximum_column = _excel_column_index(final_reference)
-        for row_node in worksheet.findall(
-            f".//{{{main_ns}}}sheetData/{{{main_ns}}}row"
-        ):
-            if len(preview_cells) >= max_rows:
-                break
-            values: dict[int, str] = {}
-            for cell in row_node.findall(f"{{{main_ns}}}c"):
-                column = _excel_column_index(cell.attrib.get("r", "A1"))
-                maximum_column = max(maximum_column, column)
-                value_node = cell.find(f"{{{main_ns}}}v")
-                cell_type = cell.attrib.get("t", "")
-                if cell_type == "inlineStr":
-                    value = "".join(
-                        node.text or ""
-                        for node in cell.iter()
-                        if node.tag == f"{{{main_ns}}}t"
-                    )
-                else:
-                    value = "" if value_node is None else value_node.text or ""
-                    if cell_type == "s" and value:
+        with archive.open(sheet_path) as stream:
+            for _, node in ElementTree.iterparse(stream, events=("end",)):
+                if node.tag == f"{{{main_ns}}}dimension":
+                    maximum_column = _excel_column_index(node.get("ref", "A1").split(":")[-1])
+                if node.tag != f"{{{main_ns}}}row":
+                    continue
+                # Excel omits empty rows from sheetData. Preserve their worksheet positions.
+                row_number = int(node.get("r", len(preview_cells) + 1))
+                preview_cells.extend({} for _ in range(len(preview_cells), min(row_number - 1, max_rows)))
+                if len(preview_cells) >= max_rows:
+                    break
+                values: dict[int, str] = {}
+                column = -1
+                for cell in node.findall(f"{{{main_ns}}}c"):
+                    reference = cell.get("r")
+                    column = _excel_column_index(reference) if reference else column + 1
+                    maximum_column = max(maximum_column, column)
+                    value = cell.findtext(f"{{{main_ns}}}v") or ""
+                    if cell.get("t") == "inlineStr":
+                        value = "".join(t.text or "" for t in cell.iter(f"{{{main_ns}}}t"))
+                    elif cell.get("t") == "s" and value:
                         value = shared_strings[int(value)]
-                values[column] = value
-            preview_cells.append(values)
+                    values[column] = value
+                preview_cells.append(values)
+                node.clear()
+                if len(preview_cells) >= max_rows:
+                    break
     column_count = maximum_column + 1
     headers = [_excel_column_name(index) for index in range(column_count)]
     preview_rows = [

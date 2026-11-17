@@ -52,6 +52,21 @@ def test_auto_selects_prefracture_and_last():
     assert choose_sequences(catalog([0, 1, 2, 3], prefracture=2), "auto") == [2, 3]
 
 
+def test_auto_rejects_detection_not_present_in_catalog():
+    with pytest.raises(ValueError, match="断裂前帧.*不存在"):
+        choose_sequences(catalog([0, 1, 3], prefracture=2), "auto")
+
+
+def test_explicit_prefracture_overrides_stale_detection():
+    assert choose_sequences(catalog([0, 1, 3], prefracture=99), "auto", prefracture_override=1) == [1, 3]
+
+
+@pytest.mark.parametrize("mode", ["auto", "all", "manual"])
+def test_explicit_prefracture_must_exist(mode):
+    with pytest.raises(ValueError, match="断裂前帧.*不存在"):
+        choose_sequences(catalog([0, 1, 3]), mode, "0", prefracture_override=2)
+
+
 def test_group_range_uses_only_selected_frames_and_isolated_groups():
     jobs = [
         {"comparison_group": "A", "selected_sequence_indices": [0],

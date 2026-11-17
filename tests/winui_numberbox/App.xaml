@@ -1,0 +1,14 @@
+<Application
+    x:Class="NumberBoxControlChecks.TestApp"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:AbaqusTools.WinUI.Controls">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+            <controls:WorkbenchNumberBox x:Key="NumericTypeRegistration" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

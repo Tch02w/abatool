@@ -24,15 +24,27 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     public OdbMergePage()
     {
         InitializeComponent();
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         _explorerAdapter = new OdbMergeExplorerAdapter(SelectExplorerItem);
+        ResultGraphEditor.PlansRequested += OnGraphPlansRequested;
+        ResultGraphEditor.GraphChanged += OnResultGraphChanged;
+        BatchResultsList.ItemsSource = _batchResults;
         Loaded += OnPageLoaded;
         UpdateExplorer();
+        RefreshInteractionState();
     }
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
     public void LoadMaterializationPlan(RestartResultPlan plan)
     {
+        if (_batchBusy || _operationBusy || _previewBusy)
+        {
+            ShowPlanState("合并正在运行", "当前操作结束后再加载其他计划。", InfoBarSeverity.Warning);
+            return;
+        }
+        MergeModeComboBox.SelectedIndex = 0;
+        _batchPlan = null;
         _materializationPlan = plan;
         MaterializationPlanCard.Visibility = Visibility.Visible;
         MaterializationTargetText.Text =
@@ -70,8 +82,9 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             var active = await App.Current.ControlPlane.ListOdbMergeOperationsAsync(
                 activeOnly: true);
             var snapshot = active.Operations.FirstOrDefault();
-            if (snapshot is not null)
+            if (snapshot is not null && _materializationPlan is null && _batchPlan is null)
             {
+                MergeModeComboBox.SelectedIndex = 1;
                 RestoreDraft(snapshot.Request);
                 SetOperationBusy(true);
                 await ObserveOperationAsync(snapshot);
@@ -191,7 +204,13 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        if (_materializationPlan is not null)
+        if (MergeModeComboBox.SelectedIndex == 0)
+        {
+            ShowPlanState("在结果图中选择目标", "勾选节点后生成计划，或批量生成所有末端节点的计划。", InfoBarSeverity.Informational);
+            return;
+        }
+
+        if (_batchPlan is not null || _materializationPlan is not null)
         {
             await ExecuteMaterializationPlanAsync();
             return;
@@ -261,6 +280,25 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private async void OnStopClicked(object sender, RoutedEventArgs e)
     {
+        if (_batchBusy)
+        {
+            _batchCancellation?.Cancel();
+            _cancelRequested = true;
+            MergePlanSummaryText.Text = "正在停止整批合并，后续步骤不会启动。";
+            RefreshInteractionState();
+            if (!string.IsNullOrWhiteSpace(_activeOperationId))
+            {
+                try
+                {
+                    await App.Current.ControlPlane.CancelOdbMergeOperationAsync(_activeOperationId);
+                }
+                catch (Exception exception)
+                {
+                    ShowPlanState("停止请求未确认", exception.Message + "；等待当前步骤结束，后续步骤保持停止。", InfoBarSeverity.Warning);
+                }
+            }
+            return;
+        }
         var operationId = _activeOperationId;
         if (!_operationBusy || string.IsNullOrWhiteSpace(operationId) || _cancelRequested)
         {
@@ -300,7 +338,8 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     {
         _activeOperationId = initial.OperationId;
         _lastOperationVersion = -1;
-        _cancelRequested = string.Equals(initial.Status, "cancelling", StringComparison.Ordinal);
+        _cancelRequested = _batchCancellation?.IsCancellationRequested is true
+            || string.Equals(initial.Status, "cancelling", StringComparison.Ordinal);
         ApplyOperationSnapshot(initial);
         try
         {
@@ -319,104 +358,15 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         {
             _activeOperationId = null;
             _lastOperationVersion = -1;
-            _cancelRequested = false;
-            SetOperationBusy(false);
-        }
-    }
-
-    private async Task ExecuteMaterializationPlanAsync()
-    {
-        var plan = _materializationPlan;
-        if (plan is null || !plan.Valid || plan.Steps.Count == 0)
-        {
-            return;
-        }
-
-        _previewBusy = true;
-        RefreshInteractionState();
-        MergeOperationLogTextBox.Text = string.Empty;
-        MergeLogExpander.IsExpanded = true;
-        var currentFullResult = plan.Steps[0].OriginalOdb;
-        try
-        {
-            for (var index = 0; index < plan.Steps.Count; index++)
+            if (!_batchBusy)
             {
-                var step = plan.Steps[index];
-                ApplyMaterializationStep(step, currentFullResult);
-                MergePlanSummaryText.Text =
-                    $"正在检查完整结果步骤 {index + 1}/{plan.Steps.Count}：{step.JobName}";
-                var preview = await PreviewDraftAsync();
-                ApplyDraftPreview(preview);
-                if (!preview.Valid)
-                {
-                    throw new ControlPlaneException(preview.ValidationMessage);
-                }
-                if (preview.WillOverwrite && !await ConfirmOverwriteAsync(preview.NormalizedOutputOdb))
-                {
-                    ShowPlanState("已取消完整结果生成", "没有修改任何源 ODB。", InfoBarSeverity.Warning);
-                    return;
-                }
-
-                _previewBusy = false;
-                SetOperationBusy(true);
-                MergePlanSummaryText.Text =
-                    $"正在生成完整结果 {index + 1}/{plan.Steps.Count}：{step.JobName}";
-                var initial = await App.Current.ControlPlane.StartOdbMergeAsync(
-                    currentFullResult,
-                    step.RestartOdb,
-                    preview.NormalizedOutputOdb,
-                    IncludeHistoryCheckBox.IsChecked is true,
-                    CompressResultCheckBox.IsChecked is true,
-                    CopyOriginalCheckBox.IsChecked is true,
-                    ConflictPolicyComboBox.SelectedIndex == 1 ? "overwrite" : "auto_number",
-                    Guid.NewGuid());
-                var completed = await ObserveOperationAsync(initial, applyCompletion: false);
-                if (string.Equals(completed.Status, "cancelled", StringComparison.Ordinal))
-                {
-                    throw new OperationCanceledException("完整结果生成已取消。");
-                }
-                if (!completed.IsSuccessful || completed.Result is null)
-                {
-                    throw new ControlPlaneException(
-                        completed.Error?.Message ?? $"步骤 {index + 1} 未成功完成。");
-                }
-                currentFullResult = completed.Result.OutputOdb;
-                _previewBusy = true;
+                _cancelRequested = false;
             }
-
-            _lastResultPath = currentFullResult;
-            MergeResultText.Text =
-                $"目标节点：{plan.TargetJobName}\n完整结果：{currentFullResult}\n"
-                + $"已完成 {plan.Steps.Count} 个受保护合并步骤。";
-            OpenResultButton.IsEnabled = File.Exists(_lastResultPath);
-            RevealResultButton.IsEnabled = Directory.Exists(Path.GetDirectoryName(_lastResultPath));
-            MergeProgressBar.Value = 100;
-            ShowPlanState(
-                "完整计算结果已生成",
-                "最终 ODB 已通过每一步的 Abaqus 只读验证；兄弟分支未参与。",
-                InfoBarSeverity.Success);
-            App.Current.MainWindow.ReportPageStatus($"{plan.TargetJobName} 的完整结果已生成");
-            UpdateExplorer();
-        }
-        catch (OperationCanceledException)
-        {
-            ShowPlanState("完整结果生成已停止", "未修改任何源 ODB。", InfoBarSeverity.Warning);
-        }
-        catch (ControlPlaneException exception)
-        {
-            ShowPlanState("完整结果生成失败", exception.ToDisplayMessage(), InfoBarSeverity.Error);
-        }
-        catch (Exception exception)
-        {
-            ShowPlanState("完整结果生成失败", exception.Message, InfoBarSeverity.Error);
-        }
-        finally
-        {
-            _previewBusy = false;
             SetOperationBusy(false);
-            RefreshInteractionState();
         }
     }
+
+    private Task ExecuteMaterializationPlanAsync() => ExecuteResultBatchAsync();
 
     private void ApplyMaterializationStep(RestartResultStep step, string originalOdb)
     {
@@ -431,11 +381,12 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     {
         DetachMaterializationPlan();
         InvalidatePlan();
-        MergePlanSummaryText.Text = "已切换为手工单次 ODB 合并。";
+        MergePlanSummaryText.Text = "已清除当前执行计划。";
     }
 
     private void DetachMaterializationPlan()
     {
+        _batchPlan = null;
         _materializationPlan = null;
         MaterializationPlanCard.Visibility = Visibility.Collapsed;
         MaterializationAncestryList.ItemsSource = null;
@@ -445,6 +396,11 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void UpdateExplorer()
     {
+        if (MergeModeComboBox.SelectedIndex == 0 && ResultGraphEditor.Snapshot is not null)
+        {
+            UpdateResultGraphExplorer();
+            return;
+        }
         var sources = new List<ExplorerItem>();
         if (!string.IsNullOrWhiteSpace(OriginalOdbTextBox.Text))
         {
@@ -493,6 +449,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void SelectExplorerItem(ExplorerItem item)
     {
+        if (item.Kind == ExplorerItemKind.MergeSource && !string.IsNullOrWhiteSpace(item.EntityId))
+        {
+            ResultGraphEditor.SelectNode(item.EntityId);
+        }
         if (item.Kind == ExplorerItemKind.MergeResult && File.Exists(item.Path))
         {
             _lastResultPath = item.Path;
@@ -515,9 +475,11 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
         _lastOperationVersion = snapshot.Version;
         _activeOperationId ??= snapshot.OperationId;
-        MergeProgressBar.IsIndeterminate = snapshot.Status is "queued" or "starting"
+        MergeProgressBar.IsIndeterminate = !_batchBusy && snapshot.Status is "queued" or "starting"
             && snapshot.Progress.Percent == 0;
-        MergeProgressBar.Value = snapshot.Progress.Percent;
+        MergeProgressBar.Value = _batchBusy && _batchTotalSteps > 0
+            ? 100.0 * (_batchCompletedSteps + snapshot.Progress.Percent / 100.0) / _batchTotalSteps
+            : snapshot.Progress.Percent;
         MergePlanSummaryText.Text = string.IsNullOrWhiteSpace(snapshot.Progress.Phase)
             ? $"ODB 合并状态：{snapshot.Status}"
             : snapshot.Progress.Phase;
@@ -601,7 +563,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task<OdbMergeDraftPreviewResponse> PreviewDraftAsync()
+    private async Task<OdbMergeDraftPreviewResponse> PreviewDraftAsync(CancellationToken cancellationToken = default)
     {
         return await App.Current.ControlPlane.PreviewOdbMergeDraftAsync(
             OriginalOdbTextBox.Text,
@@ -610,7 +572,8 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             IncludeHistoryCheckBox.IsChecked is true,
             CompressResultCheckBox.IsChecked is true,
             CopyOriginalCheckBox.IsChecked is true,
-            ConflictPolicyComboBox.SelectedIndex == 1 ? "overwrite" : "auto_number");
+            _batchBusy ? "auto_number" : ConflictPolicyComboBox.SelectedIndex == 1 ? "overwrite" : "auto_number",
+            cancellationToken);
     }
 
     private void ApplyDraftPreview(OdbMergeDraftPreviewResponse preview)
@@ -641,7 +604,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             + $"命令：{preview.Command}";
         MergeStepsList.ItemsSource = preview.ExecutionSteps;
         MergePlanExpander.IsExpanded = true;
-        MergeProgressBar.Value = 25;
+        if (!_batchBusy)
+        {
+            MergeProgressBar.Value = 25;
+        }
         ShowPlanState("安全合并计划已生成", preview.ValidationMessage, InfoBarSeverity.Success);
         App.Current.MainWindow.ReportPageStatus("ODB 合并计划检查通过");
         RefreshInteractionState();
@@ -749,7 +715,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
-        var editingEnabled = !_previewBusy && !_operationBusy;
+        var editingEnabled = !_previewBusy && !_operationBusy && !_batchBusy;
+        MergeModeComboBox.IsEnabled = editingEnabled;
+        ResultGraphEditor.SetExecutionBusy(!editingEnabled);
+        ClearMaterializationButton.IsEnabled = editingEnabled;
         ChooseOriginalButton.IsEnabled = editingEnabled;
         ChooseRestartButton.IsEnabled = editingEnabled;
         ChooseOutputButton.IsEnabled = editingEnabled;
@@ -759,9 +728,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         CopyOriginalCheckBox.IsEnabled = editingEnabled;
         ResultNamingComboBox.IsEnabled = editingEnabled;
         ConflictPolicyComboBox.IsEnabled = editingEnabled;
-        PreviewButton.IsEnabled = editingEnabled;
-        ExecuteButton.IsEnabled = editingEnabled && _planReady;
-        StopButton.IsEnabled = _operationBusy && !_cancelRequested;
+        PreviewButton.IsEnabled = editingEnabled && MergeModeComboBox.SelectedIndex == 1;
+        ExecuteButton.IsEnabled = editingEnabled && _planReady
+            && (MergeModeComboBox.SelectedIndex == 1 || _materializationPlan is not null || _batchPlan is not null);
+        StopButton.IsEnabled = (_operationBusy || _batchBusy) && !_cancelRequested;
     }
 
     private void ShowPlanError(string message)

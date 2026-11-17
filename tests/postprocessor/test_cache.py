@@ -109,6 +109,11 @@ def test_initial_scan_cache_is_reused_after_odb_rename(
 
     monkeypatch.setattr(runner_module, "run_process", fake_run_process)
     cache = folder / "cache"
+    # Metadata written before the scoped catalog existed must not suppress a new scan.
+    old_snapshot = {"scanner": "scan_odb", "schema_version": CACHE_SCHEMA_VERSION}
+    save_json_cache(cache, "initial", source, quick_odb_fingerprint(source), "2025|abaqus",
+                    {"path": str(source), "steps": ["Outdated"]},
+                    config_hash=stable_config_hash(old_snapshot), config_snapshot=old_snapshot)
     first = runner_module.scan_folder(
         "abaqus",
         folder,
@@ -323,6 +328,31 @@ def test_upgrade_invalidates_old_initial_cache_and_caches_new_compatibility(
     )
     assert cached is not None
     assert cached["status"] == "valid"
+
+
+def test_upgrade_receipt_checkpoint_precedes_next_file(tmp_path, monkeypatch):
+    sources = [tmp_path / name for name in ('first.odb', 'second.odb')]
+    for source in sources:
+        source.write_bytes(b'test only')
+    calls, receipts = [], []
+    controller = runner_module.UpgradeBatchController()
+    def fake_run(arguments, _cwd, log=None, controller=None):
+        request = Path(arguments[arguments.index('--request') + 1])
+        output = Path(arguments[arguments.index('--output') + 1])
+        task = runner_module._load_json_report(request)['tasks'][0]
+        calls.append(task['source_path'])
+        runner_module.save_json(output, {'results': [dict(task, status='upgraded')]})
+    def checkpoint(result):
+        receipts.append(result)
+        # Simulate a durable-receipt write error: finish this file, skip the next.
+        controller.cancel()
+    monkeypatch.setattr(runner_module, 'run_process', fake_run)
+    result = runner_module.upgrade_odb_files('abaqus',
+        [(source, source.with_name(source.stem + '-old.odb')) for source in sources],
+        tmp_path / 'cache', controller=controller, parallel_workers=1, on_result=checkpoint)
+    assert calls == [str(sources[0])]
+    assert [receipt['status'] for receipt in receipts] == ['upgraded', 'cancelled']
+    assert result['results'] == receipts
 
 
 def test_parallel_upgrade_cancel_stops_pending_but_finishes_active(

@@ -39,12 +39,14 @@ from .legends import (
     aggregate_group_ranges,
     choose_sequences,
 )
-from .models import OdbScan, choose_name
+from .models import OdbScan, normalized_name
 from .naming import natural_sort_key, parse_odb_name
 from .paths import batch_temp_dir, result_root_for_odb, scan_cache_dir
 from .postprocess import finalize_numeric_output, finalize_render_output
+from .preflight import job_scan_issues
 from .process_runner import ProcessCancelled
 from .result_assets import (
+    INCOMPLETE_OUTPUT_MARKER,
     RESULT_LAYOUT_VERSION,
     copy_numeric_payload,
     numeric_asset_dir,
@@ -89,6 +91,7 @@ class PostprocessJob:
     longitudinal_material: str = "HRB400"
     rebar_diameter_mm: float = 32.0
     prefracture_sequence_index: int = -1
+    reinforcement_mode: str = "required"
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,19 @@ class PostprocessPlan:
     )
 
 
+def choose_role_set(candidates: list[str], preferred: str, fallback: str = "") -> str:
+    """Suggest only an unambiguous configured role; never guess by set order."""
+    for requested in (preferred, fallback):
+        if not requested:
+            continue
+        matches = [name for name in candidates if normalized_name(name) == normalized_name(requested)]
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            return ""
+    return ""
+
+
 def suggested_job_from_scan(scan_payload: Mapping[str, Any], defaults: Mapping[str, Any]) -> dict[str, Any]:
     """Build safe, editable defaults from one Abaqus structure scan."""
 
@@ -144,6 +160,7 @@ def suggested_job_from_scan(scan_payload: Mapping[str, Any], defaults: Mapping[s
         "fieldOutputs": list(scan.field_outputs),
         "historyOutputDetails": list(scan.history_output_details),
         "setDetails": dict(scan.set_details),
+        "structureCatalog": dict(scan.structure_catalog),
         "contentFingerprint": scan.content_fingerprint,
         "suggested": {
             "startStep": useful_steps[0] if useful_steps else (scan.steps[0] if scan.steps else ""),
@@ -152,29 +169,30 @@ def suggested_job_from_scan(scan_payload: Mapping[str, Any], defaults: Mapping[s
             "manualSequenceExpression": "",
             "loadDirection": direction,
             "loadDirectionSource": "filename" if direction else "manual_required",
-            "loadSet": choose_name(
+            "loadSet": choose_role_set(
                 scan.assembly_node_sets,
                 str(defaults.get("default_load_set", "SET-LOAD")),
             ),
             "pileType": "RC",
-            "pileDisplaySet": choose_name(
+            "pileDisplaySet": choose_role_set(
                 scan.assembly_element_sets,
                 str(defaults.get("default_pile_set", "SET-PILE")),
             ),
-            "pileConcreteSet": choose_name(
+            "pileConcreteSet": choose_role_set(
                 scan.assembly_element_sets,
                 str(defaults.get("default_concrete_set", "SET-PILE_CON")),
             ),
-            "pileSteelSet": choose_name(
+            "pileSteelSet": choose_role_set(
                 scan.assembly_element_sets,
                 str(defaults.get("default_cf_steel_set", "SETPILESTEEL")),
-                "",
+                str(defaults.get("default_steel_component_set", "SET-KEY")),
             ),
-            "soilSet": choose_name(
+            "soilSet": choose_role_set(
                 scan.assembly_element_sets,
                 str(defaults.get("default_soil_set", "SET-SOIL_CUT")),
+                str(defaults.get("default_soil_fallback_set", "SET-SOIL-FULL")),
             ),
-            "rebarSet": choose_name(
+            "rebarSet": choose_role_set(
                 scan.assembly_element_sets,
                 str(defaults.get("default_rebar_set", "SET-REBAR")),
             ),
@@ -280,6 +298,7 @@ def _job_payload(
         "pile_steel_set": job.pile_steel_set,
         "soil_set": job.soil_set,
         "rebar_set": job.rebar_set,
+        **({"reinforcement_mode": job.reinforcement_mode} if job.reinforcement_mode != "required" else {}),
         "longitudinal_material": job.longitudinal_material,
         "rebar_diameter_mm": job.rebar_diameter_mm,
         "prefracture_sequence_index": job.prefracture_sequence_index,
@@ -333,6 +352,27 @@ def execute_postprocess_plan(
     groups = tuple(group for group in plan.groups if group.members)
     if not groups:
         raise ValueError("后处理计划中没有包含 ODB 的对比组")
+    if controller.cancel_requested:
+        raise ProcessCancelled("Process cancelled by user")
+    if progress:
+        progress(0, "正在校验所有 ODB 的分析步与提取集合")
+    scans = scan_folder(
+        plan.options.abaqus_command, plan.options.root, scan_cache_dir(plan.options.root),
+        log, controller, selected_paths=tuple(plan.jobs),
+        parallel_workers=plan.options.parallel_workers,
+        force_rescan=plan.options.force_rescan,
+        abaqus_version=abaqus_cache_version(dict(plan.options.settings)),
+    )
+    if scans.get("cancelled") or controller.cancel_requested:
+        raise ProcessCancelled("ODB preflight cancelled")
+    by_path = {Path(item["path"]).resolve(): item for item in scans.get("odbs", [])}
+    issues = []
+    for path, job in plan.jobs.items():
+        scan = by_path.get(path.resolve())
+        errors = ["未返回 ODB 结构，请重新读取"] if scan is None else job_scan_issues(job, scan)
+        issues.extend(f"{path.name}：{error}" for error in errors)
+    if issues:
+        raise ValueError("后处理预检查未通过：\n" + "\n".join(issues))
     finalizer_lock = threading.Lock()
     outputs: list[str] = []
     group_results: list[dict[str, Any]] = []
@@ -391,6 +431,9 @@ def _execute_group(
     finalizer_lock: threading.Lock,
 ) -> list[str]:
     members = tuple(Path(path).resolve() for path in group.members)
+    # Same-named ODBs in different source directories share this scratch root.
+    # A batch-local ordinal isolates both config and report writes per input.
+    prescan_names = {path: f"{index:04d}_{safe_folder_name(path.stem)}" for index, path in enumerate(members)}
     workers = min(plan.options.parallel_workers, max(1, len(members)))
     cache_root = scan_cache_dir(plan.options.root)
     group_batch_id = f"{plan.batch_id}_{group_index + 1:02d}"
@@ -424,7 +467,7 @@ def _execute_group(
         if range_scan is not None:
             tagged(path, f"命中预扫描缓存：{fingerprint[:12]}/{config_hash[:12]}")
         else:
-            scan_dir = scratch_root / "prescan" / safe_folder_name(path.stem)
+            scan_dir = scratch_root / "prescan" / prescan_names[path]
             payload["output_dir"] = str(scan_dir)
             payload["comparison_group"] = "范围预扫描"
             config_path = scan_dir / "job_config.json"
@@ -447,14 +490,13 @@ def _execute_group(
                 config_hash=config_hash,
                 config_snapshot=snapshot,
             )
+        override = int(payload["prefracture_sequence_index"])
         indices = choose_sequences(
             range_scan,
             payload["frame_mode"],
             payload["manual_sequence_expression"],
+            prefracture_override=override,
         )
-        override = int(payload["prefracture_sequence_index"])
-        if payload["frame_mode"] == "auto" and override >= 0:
-            indices = sorted({indices[-1], override})
         detected = range_scan.get("auto_detection", {}).get(
             "prefracture_sequence_index"
         )
@@ -513,6 +555,7 @@ def _execute_group(
             {
                 group.group_id: {
                     "name": group.name,
+                    "members": [str(path) for path in members],
                     "ranges": group_ranges,
                     "animation_ranges": animation_ranges,
                 }
@@ -631,6 +674,9 @@ def _execute_group(
 
         payload["source_output_dir"] = str(shared_data_dir)
         payload["render_outputs"] = True
+        check_cancelled()
+        pending_marker = output_dir / INCOMPLETE_OUTPUT_MARKER
+        save_json(pending_marker, {"status": "incomplete", "odb_path": str(path), "batch_id": group_batch_id})
         save_json(config_path, payload)
         tagged(path, f"按对比组重渲染云图与动画；组={group.name}")
         render_group_contours(
@@ -640,6 +686,7 @@ def _execute_group(
             controller,
         )
         settings = payload["settings"]
+        check_cancelled()
         with finalizer_lock:
             finalize_render_output(
                 output_dir,
@@ -651,6 +698,7 @@ def _execute_group(
                     settings.get("export_transparent_background_png", True)
                 ),
             )
+        check_cancelled()
         write_group_member_manifest(
             output_dir,
             asset_dir=shared_data_dir,
@@ -659,18 +707,20 @@ def _execute_group(
             content_fingerprint=fingerprint,
             numeric_config_hash=numeric_hash,
         )
+        check_cancelled()
+        pending_marker.unlink()
         if log:
             log(f"INDEX_INCREMENTAL|{output_dir}")
         tagged(path, f"完成组输出：{output_dir}")
         return str(output_dir)
 
-    outputs: list[str] = []
+    outputs_by_path: dict[Path, str] = {}
     progress(48, f"对比组 {group.name} · 开始提取与渲染")
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="odb-extract") as pool:
         futures = {pool.submit(extract_one, path): path for path in members}
         for done, future in enumerate(as_completed(futures), 1):
             try:
-                outputs.append(future.result())
+                outputs_by_path[futures[future]] = future.result()
             except Exception:
                 controller.cancel()
                 raise
@@ -680,7 +730,8 @@ def _execute_group(
                 f"对比组 {group.name} · 提取 {done}/{len(members)} · {path.name}",
             )
     check_cancelled()
-    return sorted(outputs, key=natural_sort_key)
+    # Worker completion order and filename sorting must not replace the user's order.
+    return [outputs_by_path[path] for path in members]
 
 
 __all__ = [

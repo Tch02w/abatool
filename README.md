@@ -4,6 +4,8 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 ## 功能
 
+以下是功能范围，不代表全部迁移验收已经完成。当前后处理可运行核心与剩余缺口见 [交接状态](docs/08-handoff/CURRENT_STATUS.md)；后续开发先从 [功能定位索引](docs/03-features/FUNCTION_INDEX.md) 找到代码与测试。
+
 - 新建本机或远程作业，校验路径和资源参数并预览实际 Abaqus 命令。
 - 扫描候选 INP、管理正式队列、限制并行数、暂停/恢复/终止和恢复运行状态。
 - 查看作业日志与 STA/MSG/DAT，管理本机和远端计算资源及文件传输。
@@ -65,6 +67,10 @@ dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 
 
 ## 文档
 
+- [文档与交接总入口](docs/INDEX.md)
+- [智能体持续维护规则](AGENTS.md)：每完成一个功能同步完成对应文档更新。
+- [功能 → 代码 → 测试索引](docs/03-features/FUNCTION_INDEX.md)
+- [当前状态与准确续接点](docs/08-handoff/CURRENT_STATUS.md)
 - [RepoWiki](docs/repowiki/README.md)
 - [整体架构](docs/architecture.md)
 - [控制面 API 契约](docs/api-contract.md)

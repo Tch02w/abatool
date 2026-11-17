@@ -530,14 +530,15 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             Text = existing?.Host ?? string.Empty,
             PlaceholderText = "192.168.1.20",
         };
-        var portBox = new NumberBox
+        var portBox = new Controls.WorkbenchNumberBox
         {
             Header = "SSH 端口",
             Minimum = 1,
             Maximum = 65535,
             Value = existing?.Port ?? 22,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
         };
+        Controls.ParameterHelpButton.AddToHeader(portBox, "ssh-port");
         var usernameBox = new TextBox
         {
             Header = "用户名",
@@ -608,7 +609,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         panel.Children.Add(profileNameBox);
         var endpointGrid = new Grid { ColumnSpacing = 10 };
         endpointGrid.ColumnDefinitions.Add(new ColumnDefinition());
-        endpointGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        endpointGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
         endpointGrid.Children.Add(hostBox);
         Grid.SetColumn(portBox, 1);
         endpointGrid.Children.Add(portBox);

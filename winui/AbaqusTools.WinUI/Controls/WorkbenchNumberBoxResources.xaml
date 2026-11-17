@@ -1,0 +1,211 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="WorkbenchNumberBackground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="#202020" />
+            <SolidColorBrush x:Key="WorkbenchNumberLine" Color="#D2D2D2" />
+            <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="#626262" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#EEEEEE" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#E3E3E3" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="WorkbenchNumberBackground" Color="#323232" />
+            <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="#F3F3F3" />
+            <SolidColorBrush x:Key="WorkbenchNumberLine" Color="#595959" />
+            <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="#BDBDBD" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#454545" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#505050" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="WorkbenchNumberBackground" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberLine" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="{ThemeResource SystemColorButtonFaceColor}" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- InputBox remains a native TextBox. Its single text column has no delete-button
+         or popup reservation, so changing focus never shifts the centered value. -->
+    <Style x:Key="WorkbenchNumberInputStyle" TargetType="TextBox">
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{ThemeResource WorkbenchNumberForeground}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Grid Background="Transparent" Control.IsTemplateFocusTarget="True">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver" />
+                                <VisualState x:Name="Focused">
+                                    <VisualState.Setters>
+                                        <Setter Target="FocusLine.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="ContentElement.Opacity" Value="0.35" />
+                                        <Setter Target="PlaceholderTextContentPresenter.Opacity" Value="0.35" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ScrollViewer x:Name="ContentElement"
+                            Padding="{TemplateBinding Padding}" VerticalAlignment="Center"
+                            HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Hidden"
+                            VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Hidden"
+                            ZoomMode="Disabled" IsTabStop="False"
+                            Foreground="{TemplateBinding Foreground}"
+                            AutomationProperties.AccessibilityView="Raw" />
+                        <TextBlock x:Name="PlaceholderTextContentPresenter"
+                            Text="{TemplateBinding PlaceholderText}" TextAlignment="Center"
+                            Padding="{TemplateBinding Padding}" VerticalAlignment="Center"
+                            Foreground="{ThemeResource WorkbenchNumberBottomLine}"
+                            IsHitTestVisible="False" />
+                        <Border x:Name="FocusLine" Height="2" VerticalAlignment="Bottom"
+                            Background="{ThemeResource SystemControlHighlightAccentBrush}"
+                            IsHitTestVisible="False" Opacity="0" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="WorkbenchNumberSpinStyle" TargetType="RepeatButton">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="MinWidth" Value="40" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border x:Name="ButtonChrome" Background="{TemplateBinding Background}"
+                        BorderBrush="{ThemeResource WorkbenchNumberLine}" BorderThickness="1,0,0,0"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="HoverFill.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="PressedFill.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="GlyphContent.Opacity" Value="0.35" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Grid>
+                            <Border x:Name="HoverFill" Background="{ThemeResource WorkbenchNumberHover}"
+                                CornerRadius="{TemplateBinding CornerRadius}" Opacity="0" />
+                            <Border x:Name="PressedFill" Background="{ThemeResource WorkbenchNumberPressed}"
+                                CornerRadius="{TemplateBinding CornerRadius}" Opacity="0" />
+                            <ContentPresenter x:Name="GlyphContent" Content="{TemplateBinding Content}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- These names and enabled states are the NumberBox SDK contract: the SDK
+         attaches its own input, keyboard, validation and repeat-button handlers. -->
+    <ControlTemplate x:Key="WorkbenchNumberBoxTemplate" TargetType="NumberBox">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="40" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Target="HeaderContentPresenter.Opacity" Value="0.55" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+                <VisualStateGroup x:Name="SpinButtonStates">
+                    <VisualState x:Name="SpinButtonsVisible" />
+                </VisualStateGroup>
+                <VisualStateGroup x:Name="UpSpinButtonEnabledStates">
+                    <VisualState x:Name="UpSpinButtonEnabled" />
+                    <VisualState x:Name="UpSpinButtonDisabled">
+                        <VisualState.Setters>
+                            <Setter Target="UpSpinButton.IsEnabled" Value="False" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+                <VisualStateGroup x:Name="DownSpinButtonEnabledStates">
+                    <VisualState x:Name="DownSpinButtonEnabled" />
+                    <VisualState x:Name="DownSpinButtonDisabled">
+                        <VisualState.Setters>
+                            <Setter Target="DownSpinButton.IsEnabled" Value="False" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <ContentPresenter x:Name="HeaderContentPresenter"
+                Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"
+                Margin="0,0,0,7" FontWeight="Normal" FontSize="{TemplateBinding FontSize}"
+                Foreground="{ThemeResource TextControlHeaderForeground}" TextWrapping="Wrap"
+                Visibility="Collapsed" />
+            <Grid x:Name="NumberFrame" Grid.Row="1" Background="{ThemeResource WorkbenchNumberBackground}"
+                BorderBrush="{ThemeResource WorkbenchNumberLine}" BorderThickness="1" CornerRadius="5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="InputBox" Style="{StaticResource WorkbenchNumberInputStyle}"
+                    InputScope="{TemplateBinding InputScope}" PlaceholderText="{TemplateBinding PlaceholderText}"
+                    SelectionFlyout="{TemplateBinding SelectionFlyout}"
+                    SelectionHighlightColor="{TemplateBinding SelectionHighlightColor}"
+                    TextReadingOrder="{TemplateBinding TextReadingOrder}"
+                    PreventKeyboardDisplayOnProgrammaticFocus="{TemplateBinding PreventKeyboardDisplayOnProgrammaticFocus}"
+                    FontSize="{TemplateBinding FontSize}" FontFamily="{TemplateBinding FontFamily}"
+                    FontWeight="{TemplateBinding FontWeight}" />
+                <RepeatButton x:Name="DownSpinButton" Grid.Column="1" CornerRadius="0"
+                    Style="{StaticResource WorkbenchNumberSpinStyle}" AutomationProperties.Name="减少"
+                    ToolTipService.ToolTip="减少">
+                    <Polyline x:Name="DownChevron" Points="1,1 7,7 13,1" Width="14" Height="8"
+                        Stroke="{ThemeResource WorkbenchNumberForeground}" StrokeThickness="1.5"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                </RepeatButton>
+                <RepeatButton x:Name="UpSpinButton" Grid.Column="2" CornerRadius="0,4,4,0"
+                    Style="{StaticResource WorkbenchNumberSpinStyle}" AutomationProperties.Name="增加"
+                    ToolTipService.ToolTip="增加">
+                    <Polyline x:Name="UpChevron" Points="1,7 7,1 13,7" Width="14" Height="8"
+                        Stroke="{ThemeResource WorkbenchNumberForeground}" StrokeThickness="1.5"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                </RepeatButton>
+            </Grid>
+            <Border Grid.Row="1" BorderBrush="{ThemeResource WorkbenchNumberBottomLine}"
+                BorderThickness="0,0,0,1" CornerRadius="5" IsHitTestVisible="False" />
+            <ContentPresenter x:Name="DescriptionPresenter" Grid.Row="2"
+                Content="{TemplateBinding Description}"
+                Foreground="{ThemeResource SystemControlDescriptionTextForegroundBrush}"
+                AutomationProperties.AccessibilityView="Raw" />
+        </Grid>
+    </ControlTemplate>
+</ResourceDictionary>

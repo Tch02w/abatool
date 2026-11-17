@@ -104,6 +104,28 @@ def ring_coverage(frame, concrete_region, centroids, z_min, z_max, threshold, z_
     return max([len(items)/float(angle_bins) for items in occupied.values()] or [0.0])
 
 
+def longitudinal_data(config, assembly):
+    """Absence is explicit; a missing configured reinforcement set is an error."""
+    mode = config.get("reinforcement_mode", "required")
+    if mode not in ("required", "none"):
+        raise RuntimeError("Unsupported reinforcement_mode: {0}".format(mode))
+    if mode == "none":
+        return {}, {}
+    material = str(config.get("longitudinal_material", "HRB400")).strip()
+    threshold = float(config["settings"]["longitudinal_orientation_threshold"])
+    labels, centroids = element_data(
+        assembly, assembly.elementSets[config["rebar_set"]], material, threshold
+    )
+    if not centroids:
+        raise RuntimeError("No filtered longitudinal reinforcement found")
+    return labels, centroids
+
+
+def active_specs(config):
+    return tuple(spec for spec in SPECS
+                 if config.get("reinforcement_mode", "required") != "none" or spec[2] != "rebar")
+
+
 def scan(config):
     odb = session.openOdb(name=os.path.abspath(config["odb_path"]), readOnly=True)
     viewport = session.Viewport(name="Legend Limit Scanner", origin=(0, 0), width=160, height=110)
@@ -113,9 +135,7 @@ def scan(config):
     _pile_labels, concrete_centroids = element_data(assembly, concrete_region)
     z_values = [point[2] for point in concrete_centroids.values()]; z_min, z_max = min(z_values), max(z_values)
     material = str(config.get("longitudinal_material", "HRB400")).strip()
-    threshold = float(config["settings"]["longitudinal_orientation_threshold"])
-    rebar_labels, rebar_centroids = element_data(assembly, assembly.elementSets[config["rebar_set"]], material, threshold)
-    if not rebar_centroids: raise RuntimeError("No filtered longitudinal reinforcement found")
+    rebar_labels, rebar_centroids = longitudinal_data(config, assembly)
 
     names = list(odb.steps.keys()); start = names.index(config["start_step"]); end = names.index(config["end_step"])
     time_offsets, running = {}, 0.0
@@ -133,7 +153,7 @@ def scan(config):
 
     region_names = {"pile": config["pile_display_set"], "concrete": concrete_name,
                     "soil": soil_name, "rebar": "rebar"}
-    for spec, variable, region_key, refinement, position, soil_section in SPECS:
+    for spec, variable, region_key, refinement, position, soil_section in active_specs(config):
         set_group(viewport, region_names[region_key], rebar_labels)
         if soil_section:
             cut_name = "FAST_XZ_" + spec
@@ -167,6 +187,7 @@ def scan(config):
         if item["FractureCandidate"] and first_fracture is None: first_fracture = item["SequenceIndex"]
     before = None if first_fracture in (None, 0) else first_fracture-1
     result = {"odb_path": os.path.abspath(config["odb_path"]), "comparison_group": config.get("comparison_group", ""),
+        "reinforcement_mode": config.get("reinforcement_mode", "required"),
         "longitudinal_material": material, "longitudinal_element_count": len(rebar_centroids),
         "range_method": "Abaqus contourOptions.autoMinValue/autoMaxValue on active display group",
         "frame_catalog": catalog, "auto_detection": {"method": "DAMAGET threshold plus angular coverage by depth bin",

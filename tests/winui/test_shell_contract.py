@@ -3,6 +3,24 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+
+def test_inline_numeric_inputs_preserve_hardware_limits_and_decimal_tolerance():
+    import xml.etree.ElementTree as ET
+    root = Path(__file__).resolve().parents[2] / "winui" / "AbaqusTools.WinUI"
+    page = ET.parse(root / "Pages" / "OdbPostprocessingPage.xaml")
+    name = '{http://schemas.microsoft.com/winfx/2006/xaml}Name'
+    controls = {node.get(name): node for node in page.iter() if node.get(name)}
+    for field in ('ParallelWorkers', 'ExpectedRebarCount', 'AnimationFps', 'ImageWidth', 'ImageHeight', 'RebarTolerance'):
+        assert controls[field + 'NumberBox'].tag.endswith('}WorkbenchNumberBox')
+        assert controls[field + 'NumberBox'].get('SpinButtonPlacementMode') == 'Inline'
+    assert controls['ParallelWorkersNumberBox'].get('Maximum') != '4'
+    code = (root / 'Pages' / 'OdbPostprocessingPage.xaml.cs').read_text(encoding='utf-8')
+    assert 'ParallelWorkersNumberBox.Maximum = resource.LogicalCpus' in code
+    assert 'new Controls.PlainDecimalFormatter()' in code
+    job_code = (root / 'Pages' / 'NewJobPage.xaml.cs').read_text(encoding='utf-8')
+    assert 'resource.JobCpuLimit' in job_code
+    assert 'abaqusCommand: AbaqusCommandTextBox.Text.Trim()' in job_code
+
 ROOT = Path(__file__).resolve().parents[2]
 WINUI_ROOT = ROOT / "winui" / "AbaqusTools.WinUI"
 XAML_NAMESPACE = {"xaml": "http://schemas.microsoft.com/winfx/2006/xaml/presentation"}
@@ -10,8 +28,46 @@ XAML_NAME = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
 XAML_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
 
 
+def test_postprocess_invalid_editor_input_keeps_dialog_open() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    editor = page.split("private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync", 1)[1]
+    handler = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("if (await dialog.ShowAsync()", 1)[0]
+    assert "string.IsNullOrWhiteSpace(manualFrames.Text)" in handler
+    assert "double.IsFinite(diameter.Value)" in handler
+    assert "double.IsFinite(prefracture.Value)" in handler
+    assert "Math.Truncate(prefracture.Value)" in handler
+    assert "args.Cancel = error.Length > 0" in handler
+    assert "validationMessage.Text = error" in handler
+
+
 def _named_element(root: ET.Element, name: str) -> ET.Element:
     return next(element for element in root.iter() if element.attrib.get(XAML_NAME) == name)
+
+
+def test_native_upgrade_entry_confirmation_and_recovery_wiring() -> None:
+    root = ET.parse(WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").getroot()
+    for name, handler in [
+        ("UpgradeButton", "OnUpgradeClicked"),
+        ("RecoverUpgradeButton", "OnRecoverUpgradeClicked"),
+        ("CancelUpgradeButton", "OnCancelUpgradeClicked"),
+    ]:
+        assert _named_element(root, name).attrib["Click"] == handler
+    assert _named_element(root, "UpgradeDetailsTextBox").attrib["IsReadOnly"] == "True"
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.Upgrade.cs").read_text(encoding="utf-8")
+    shell = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    assert "DefaultButton = ContentDialogButton.Close" in page
+    assert "if (!await ConfirmUpgradeAsync(preview)) return;" in page
+    assert page.count("_pendingUpgradeRequestId = Guid.NewGuid()") == 1
+    assert "if (snapshot is null && _pendingUpgradePreview is not null && showHistory)" in page
+    assert "MarkStructureAnalysisIncomplete" in page
+    assert "UpgradeBlocksEditing" in shell
+    assert "RecoverUpgradeAsync(showHistory: false)" in shell
+    assert 'ChooseUpgradeHistoryAsync(list.Operations)' in page
+    assert 'item.Error?.Code == "UPGRADE_INTERRUPTED"' in page
+    assert 'return showHistory || wasActive;' in page
+    assert 'ListOdbUpgradeOperationsAsync(activeOnly: true)' in page
+    assert 'snapshot.PersistenceWarning' in page
+    assert 'selectedRows.All(row => row.CompatibilityStatus == "upgrade_required")' in shell
 
 
 def test_native_shell_keeps_the_eight_page_information_architecture() -> None:
@@ -284,6 +340,9 @@ def test_reported_workbench_layout_regressions_stay_fixed() -> None:
         XAML_NAMESPACE,
     )
     assert {item.attrib["MinWidth"] for item in navigation_items} == {"118"}
+    assert _named_element(shell_root, "ShellNavigation").attrib["KeyboardAcceleratorPlacementMode"] == "Hidden"
+    shortcuts = shell_root.findall(".//xaml:NavigationView.KeyboardAccelerators/xaml:KeyboardAccelerator", XAML_NAMESPACE)
+    assert {item.attrib["Key"] for item in shortcuts} == {"Number7", "Number8"}
 
     output_settings = _named_element(odb_root, "OutputSettingsExpander")
     assert output_settings.attrib["HorizontalAlignment"] == "Stretch"
@@ -300,13 +359,9 @@ def test_reported_workbench_layout_regressions_stay_fixed() -> None:
     resource_grid = _named_element(new_job_root, "ResourceGrid")
     resource_columns = resource_grid.find("xaml:Grid.ColumnDefinitions", XAML_NAMESPACE)
     assert resource_columns is not None
-    assert [column.attrib["Width"] for column in resource_columns] == [
-        "92",
-        "420",
-        "76",
-        "180",
-        "*",
-    ]
+    assert [column.attrib["Width"] for column in resource_columns] == ["*", "*"]
+    assert resource_grid.attrib["SizeChanged"] == "OnResourceGridSizeChanged"
+    assert _named_element(new_job_root, "PriorityComboBox").attrib["HorizontalAlignment"] == "Stretch"
 
     command_preview = _named_element(new_job_root, "CommandPreviewExpander")
     assert command_preview.attrib["HorizontalAlignment"] == "Stretch"
@@ -546,22 +601,32 @@ def test_workbench_explorer_collapses_empty_subtitle_for_single_line_groups() ->
     assert "Visibility.Collapsed" in converter
 
 
-def test_narrow_parallel_limit_number_boxes_use_compact_spin_buttons() -> None:
-    queue_xaml = (WINUI_ROOT / "Pages" / "JobQueuePage.xaml").read_text(
-        encoding="utf-8"
-    )
-    new_job_xaml = (WINUI_ROOT / "Pages" / "NewJobPage.xaml").read_text(
-        encoding="utf-8"
-    )
+def test_parallel_limit_inputs_have_space_for_permanent_buttons() -> None:
+    for page, name in (("JobQueuePage.xaml", "ParallelLimitNumberBox"),
+                       ("NewJobPage.xaml", "MaxParallelNumberBox"),
+                       ("OdbPostprocessingPage.xaml", "ParallelWorkersNumberBox")):
+        control = _named_element(ET.parse(WINUI_ROOT / "Pages" / page).getroot(), name)
+        assert control.tag.endswith('}WorkbenchNumberBox')
+        assert control.get("SpinButtonPlacementMode") == "Inline"
+        assert float(control.get("Width", "0")) >= 160
 
-    assert (
-        'x:Name="ParallelLimitNumberBox" Width="100" Minimum="1" Maximum="999" '
-        'SpinButtonPlacementMode="Compact"'
-    ) in queue_xaml
-    assert (
-        'x:Name="MaxParallelNumberBox" Width="110" Minimum="1" '
-        'SpinButtonPlacementMode="Compact"'
-    ) in new_job_xaml
+
+def test_all_numeric_fields_use_the_same_permanent_button_control() -> None:
+    import re
+    xaml_fields = []
+    dynamic_count = 0
+    for page in (WINUI_ROOT / "Pages").glob("*.xaml"):
+        xaml_fields.extend(node for node in ET.parse(page).iter()
+                           if node.tag.endswith("}WorkbenchNumberBox"))
+        assert not any(node.tag.endswith("}NumberBox") for node in ET.parse(page).iter())
+    for page in (WINUI_ROOT / "Pages").glob("*.cs"):
+        source = page.read_text(encoding="utf-8")
+        dynamic_count += len(re.findall(r"new Controls\.WorkbenchNumberBox\b", source))
+        assert "new NumberBox" not in source
+        assert "NumberBoxSpinButtonPlacementMode.Compact" not in source
+        assert "NumberBoxSpinButtonPlacementMode.Hidden" not in source
+    assert len(xaml_fields) == 9 and dynamic_count == 6
+    assert all(node.get("SpinButtonPlacementMode") == "Inline" for node in xaml_fields)
 
 
 def test_job_queue_restores_external_local_job_scan_controls() -> None:
@@ -684,6 +749,40 @@ def test_restart_result_materialization_is_separate_from_the_job_graph() -> None
     assert "ExecuteMaterializationPlanAsync" in merge_page
     assert 'x:Name="MaterializationPlanCard"' in merge_xaml
     assert 'x:Name="MaterializationStepsList"' in merge_xaml
+
+
+def test_postprocess_partial_scan_recovery_cannot_overwrite_workspace() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    recovery = page.split("private void RestoreRowsFromPostprocessRequest(", 1)[1].split(
+        "private async Task RecoverActiveCompatibilityOperationAsync", 1
+    )[0]
+    # Recovery contains only the scan request's subset, not a complete discovery.
+    # Null keeps SaveWorkspace guarded and makes the next discovery load disk state.
+    assert "_lastDiscoveryRoot = null;" in recovery
+    assert "_lastDiscoveryRoot = request.Root;" not in recovery
+    compatibility = page.split("private void RestoreRowsFromOperationRequest(", 1)[1].split(
+        "private static OdbDiscoveryItem CreateRecoveryDiscoveryItem", 1
+    )[0]
+    assert "_lastDiscoveryRoot = null;" in compatibility
+    assert "_lastDiscoveryRoot = request.Root;" not in compatibility
+    save = page.split("private bool SaveWorkspace()", 1)[1].split(
+        "private OdbPostprocessOutputOptions", 1
+    )[0]
+    assert "_lastDiscoveryRoot is null" in save
+
+
+def test_postprocess_execution_uses_isolated_group_identity() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    assert "OdbComparisonGroups.ForExecution(rows)" in page
+    assert "Standalone = group.Standalone" in page
+    assert "!group.Standalone && _legendOverridesByGroup.TryGetValue" in page
+    assert "OdbComparisonGroups.OrderMembers(group.Members," in page
+    assert "GroupMemberOrder = _groupMemberOrder.ToDictionary" in page
+    xaml = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").read_text(encoding="utf-8")
+    assert 'Click="OnGroupOrderClicked"' in xaml
+    assert 'Click="OnManageGroupsClicked"' in xaml
+    assert "OdbComparisonGroups.ChangeGroup(_odbItems, oldName," in page
+    assert "ManageGroupsButton.IsEnabled = GroupOrderButton.IsEnabled" in page
 
 
 def test_odb_merge_page_uses_native_pickers_and_safe_plan_preview() -> None:

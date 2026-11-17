@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from modules.postprocessor.process_runner import ProcessCancelled
 from tests.control_plane.test_api import (
     api_request,
@@ -218,7 +220,29 @@ def test_postprocess_run_preserves_group_plan_and_reports_outputs(tmp_path: Path
         ]
 
 
-def test_postprocess_cancel_is_cooperative(tmp_path: Path) -> None:
+def test_explicit_no_rebar_mode_reaches_execution_plan(tmp_path):
+    odb = tmp_path / "plain.odb"
+    odb.write_bytes(b"fixture")
+    captured = []
+    def runner(plan, progress, log, controller):
+        captured.append(plan.jobs[odb.resolve()])
+        return {"outputCount": 0, "outputs": [], "groups": [], "resultRoots": []}
+    with running_control_plane(tmp_path, postprocess_run_runner=runner, postprocess_settings_provider=_settings) as runtime:
+        payload = _run_payload(tmp_path, odb)
+        payload["jobs"][0].update(reinforcementMode="none", rebarSet="", longitudinalMaterial="")
+        response = api_request(runtime, "/api/v1/odb-postprocess-operations", method="POST", payload=payload)
+        assert response[0] == 202
+        assert _wait(runtime, json_response(response)["operationId"])["status"] == "succeeded"
+        assert captured[0].reinforcement_mode == "none" and captured[0].rebar_set == ""
+        payload["clientRequestId"] = "invalid-mode"
+        payload["jobs"][0]["reinforcementMode"] = "guess"
+        response = api_request(runtime, "/api/v1/odb-postprocess-operations", method="POST", payload=payload)
+        assert response[0] == 400
+        assert json_response(response)["error"]["code"] == "INVALID_REINFORCEMENT_MODE"
+
+
+@pytest.mark.parametrize("cancel_error", [ProcessCancelled, RuntimeError])
+def test_postprocess_cancel_is_cooperative(tmp_path: Path, cancel_error) -> None:
     root = tmp_path / "odbs"
     root.mkdir()
     odb = root / "case.odb"
@@ -231,7 +255,7 @@ def test_postprocess_cancel_is_cooperative(tmp_path: Path) -> None:
         deadline = time.monotonic() + 5
         while not controller.cancel_requested and time.monotonic() < deadline:
             time.sleep(0.01)
-        raise ProcessCancelled("cancelled by test")
+        raise cancel_error("cancelled by test")
 
     with running_control_plane(
         tmp_path,
@@ -256,6 +280,50 @@ def test_postprocess_cancel_is_cooperative(tmp_path: Path) -> None:
         final = _wait(runtime, accepted["operationId"])
         assert final["status"] == "cancelled"
         assert final["error"] is None
+
+
+def test_prescan_failure_is_not_hidden_by_sibling_cleanup(tmp_path: Path, monkeypatch) -> None:
+    from modules.postprocessor import postprocess_execution as execution
+
+    root = tmp_path / "odbs"
+    root.mkdir()
+    odb = root / "case.odb"
+    odb.write_bytes(b"odb")
+    controllers = []
+
+    def fail_prescan(*args, **kwargs):
+        raise ValueError("所选分析步没有可用帧")
+
+    monkeypatch.setattr(execution, "scan_field_ranges", fail_prescan)
+    monkeypatch.setattr(execution, "scan_folder", lambda *args, **kwargs: {"odbs": [{
+        "path": str(odb), "steps": ["Load-1", "Load-2"],
+        "assembly_node_sets": ["SET-LOAD"],
+        "assembly_element_sets": ["SET-PILE", "SET-PILE_CON", "SET-SOIL_CUT", "SET-REBAR"],
+    }]})
+    monkeypatch.setattr(execution, "batch_temp_dir", lambda batch: tmp_path / "scratch" / batch)
+    monkeypatch.setattr(execution, "scan_cache_dir", lambda root: tmp_path / "cache")
+
+    def runner(plan, progress, log, controller):
+        controllers.append(controller)
+        return execution.execute_postprocess_plan(plan, progress, log, controller)
+
+    with running_control_plane(
+        tmp_path,
+        postprocess_run_runner=runner,
+        postprocess_settings_provider=_settings,
+    ) as runtime:
+        response = api_request(
+            runtime, "/api/v1/odb-postprocess-operations",
+            method="POST", payload=_run_payload(root, odb),
+        )
+        assert response[0] == 202
+        final = _wait(runtime, json_response(response)["operationId"])
+        # The real parallel pipeline stops siblings after a worker fails.
+        assert controllers[0].cancel_requested
+        assert final["status"] == "failed"
+        assert final["error"]["message"] == "所选分析步没有可用帧"
+        assert final["error"]["code"] == "ODB_POSTPROCESS_FAILED"
+        assert final["result"] is None
 
 
 def test_postprocess_rejects_path_escape_and_invalid_manual_frames(tmp_path: Path) -> None:

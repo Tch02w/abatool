@@ -119,6 +119,9 @@ public sealed class OdbPostprocessJobDraft
     [JsonPropertyName("rebarSet")]
     public string RebarSet { get; set; } = string.Empty;
 
+    [JsonPropertyName("reinforcementMode")]
+    public string ReinforcementMode { get; set; } = "required";
+
     [JsonPropertyName("longitudinalMaterial")]
     public string LongitudinalMaterial { get; set; } = "HRB400";
 
@@ -315,6 +318,9 @@ public sealed class OdbPostprocessScanItem
 
     [JsonPropertyName("setDetails")]
     public JsonElement SetDetails { get; init; }
+
+    [JsonPropertyName("structureCatalog")]
+    public OdbStructureCatalog StructureCatalog { get; init; } = new();
 
     [JsonPropertyName("contentFingerprint")]
     public string ContentFingerprint { get; init; } = string.Empty;

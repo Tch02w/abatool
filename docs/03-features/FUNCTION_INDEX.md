@@ -1,0 +1,61 @@
+# 功能定位索引
+
+核对日期：2026-10-28。路径均相对仓库根目录；编号固定，不随排序更改。下表核实了入口文件及列出的符号；**代码存在不代表功能已完整验收**。各项当前状态见 [当前状态](../08-handoff/CURRENT_STATUS.md)，证据见 [验收记录](../06-testing/VALIDATION.md)。
+
+接到任务后先按功能编号打开本行文件和测试，不必遍历整个仓库。页面的 `.xaml` 负责布局，同名 `.xaml.cs` 负责交互；下面优先列交互文件。
+
+## 壳层、提交、调度、远程
+
+| ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |
+|---|---|---|---|
+| F001 壳层、标题栏、导航、关闭 | `winui/AbaqusTools.WinUI/MainWindow.xaml.cs`；[窗口与提示说明](UI_INTERACTION.md) | `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs`；`ControlPlaneHost`；`winui/AbaqusTools.WinUI/Services/WindowLayoutConstraints.cs`；`MinimumOuterSize`、`ClampToMinimum` | `tests/winui/test_shell_contract.py`、`tests/winui_layout/WindowLayout.Tests.csproj` |
+| F002 页面感知通用浏览器 | `winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs` | `winui/AbaqusTools.WinUI/Explorer/WorkbenchExplorerModels.cs`；`IWorkbenchExplorerPage`、`IWorkbenchExplorerAdapter`；`winui/AbaqusTools.WinUI/Explorer/WorkbenchExplorerAdapters.cs` | `tests/winui/test_shell_contract.py` |
+| F003 新建作业、命令预览 | `winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs` | `modules/control_plane/job_drafts.py`；`preview_local_job_draft`；`modules/submitter/job_draft.py`、`modules/submitter/command.py` | `tests/control_plane/test_job_drafts_api.py`、`tests/submitter/test_job_draft.py` |
+| F004 候选/正式队列、编辑、勾选、排序 | `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` | `modules/control_plane/job_queue_commands.py`；`JobQueueService`；`modules/control_plane/job_queues.py`；`read_job_queues` | `tests/control_plane/test_job_queue_commands_api.py`、`tests/control_plane/test_job_queues_api.py` |
+| F005 本地运行、资源分配、状态监控 | `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs`；[日志阅读说明](UI_INTERACTION.md) | `modules/control_plane/local_queue_runtime.py`；`LocalQueueRuntimeManager`；`modules/submitter/local_job_execution.py`；`execute_local_job`；`modules/submitter/queue_scheduler.py`；`winui/AbaqusTools.WinUI/Services/RuntimeLogUpdateState.cs`；`SetSnapshot`、`Flush` | `tests/control_plane/test_local_queue_runtime_api.py`、`tests/submitter/test_local_job_execution.py`、`tests/winui_logs/RuntimeLog.Tests.csproj` |
+| F006 发现外部运行作业并纳管 | `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` | `modules/submitter/external_job_scan_core.py`；`scan_external_jobs`、`merge_external_scan_results`；`modules/submitter/process_observation.py` | `tests/control_plane/test_job_queue_commands_api.py`、`tests/submitter/test_process_observation.py` |
+| F007 本机资源与版本相关 CPU 上限 | `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs`、`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs` | `modules/control_plane/resources.py`；`capture_local_resource`；`modules/submitter/cpu_policy.py`；`local_cpu_policy`、`validate_local_cpus` | `tests/control_plane/test_cpu_policy.py`、`tests/control_plane/test_resources_api.py` |
+| F008 服务器、连接、指纹、资源刷新 | `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` | `modules/control_plane/remote_servers.py`；`RemoteServerService`；`modules/submitter/remote_connection.py` | `tests/control_plane/test_remote_servers_api.py`、`tests/submitter/test_remote_connection.py` |
+| F009 远端浏览与传输 | `winui/AbaqusTools.WinUI/Pages/RemoteFileBrowserDialog.cs` | `modules/control_plane/remote_transfers.py`；`RemoteTransferOperationManager` | `tests/control_plane/test_remote_transfers_api.py` |
+| F010 远端作业预览、提交和状态 | `winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs` | `modules/control_plane/remote_jobs.py`；`preview_remote_job`、`RemoteJobOperationManager` | `tests/control_plane/test_remote_jobs_api.py` |
+
+## 重启动与结果合并（不同模型，不混用）
+
+| ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |
+|---|---|---|---|
+| F011 计算重启动链、依赖检查 | `winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml.cs` | `modules/control_plane/restart_chains.py`；`read_restart_chains`；`modules/submitter/restart_dependency.py` | `tests/control_plane/test_restart_chains_api.py`、`tests/submitter/test_restart_dependency.py` |
+| F012 独立结果节点图、目标完整结果计划 | `winui/AbaqusTools.WinUI/Pages/OdbMergePage.ResultGraph.cs`、`winui/AbaqusTools.WinUI/Controls/OdbResultGraphEditor.xaml.cs` | `modules/control_plane/odb_result_graphs.py`；`OdbResultGraphService`；`modules/control_plane/restart_result_plans.py`；`winui/AbaqusTools.WinUI/Services/OdbResultBatchRunner.cs` | `tests/control_plane/test_odb_result_graphs_api.py`、`tests/control_plane/test_restart_result_plans_api.py`、`tests/winui_batch/OdbResultBatchRunner.Tests.csproj` |
+| F013 手工/链式执行的单步安全合并 | `winui/AbaqusTools.WinUI/Pages/OdbMergePage.xaml.cs` | `modules/control_plane/odb_merge_drafts.py`、`modules/control_plane/odb_merge_operations.py`；`OdbMergeOperationManager`；`modules/submitter/odb_merge_core.py`、`modules/submitter/odb_merge_execution.py`；`execute_odb_merge` | `tests/control_plane/test_odb_merge_operations_api.py`、`tests/submitter/test_odb_merge_execution.py` |
+
+## 后处理与结果浏览
+
+共同页面：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs`。详细输入输出、算法和影响链见 [后处理说明](POSTPROCESSING.md)。
+
+| ID / 功能 | 入口和业务文件 / 定位符号 | 首选测试 |
+|---|---|---|
+| F014 发现 ODB、兼容性检查 | `modules/control_plane/discovery.py`；`discover_odb_files`；`modules/control_plane/compatibility.py`；`CompatibilityOperationManager`；`modules/postprocessor/runner.py`；`check_odb_compatibility` | `tests/control_plane/test_discovery.py`、`tests/control_plane/test_compatibility_api.py` |
+| F015 ODB 升级、确认、恢复 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Upgrade.cs`；`modules/control_plane/odb_upgrade_drafts.py`、`modules/control_plane/odb_upgrade_execution.py`、`modules/control_plane/odb_upgrade_operations.py`；`OdbUpgradeOperationManager`；`modules/control_plane/odb_upgrade_journal.py`；`UpgradeJournal` | `tests/control_plane/test_odb_upgrade_api.py`、`tests/control_plane/test_odb_upgrade_recovery.py` |
+| F016 实例/集合/帧/输出结构目录 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.StructureBrowser.cs`；`OnStructureBrowserClicked`；`modules/postprocessor/abaqus_scripts/scan_odb_core.py`；`structure_catalog`、`inspect_odb`；`modules/postprocessor/models.py`；`OdbScan`；`winui/AbaqusTools.WinUI/Services/OdbStructureContracts.cs` | `tests/postprocessor/test_structure_catalog.py`、`tests/postprocessor/test_scan_defaults.py` |
+| F017 原 GJA/GJB 基础分组提取 | `modules/control_plane/postprocessing.py`；`PostprocessOperationManager`；`modules/postprocessor/postprocess_execution.py`；`execute_postprocess_plan`；`modules/postprocessor/preflight.py`；`job_scan_issues`；`modules/postprocessor/abaqus_scripts/extract_job.py`；`modules/postprocessor/postprocess_core.py`、`modules/postprocessor/rebar_section.py` | `tests/postprocessor/test_legacy_payload_parity.py`、`tests/postprocessor/test_preflight.py`、`tests/postprocessor/test_unreinforced_moment.py`、`tests/control_plane/test_postprocessing_api.py` |
+| F018 通用钢筋轴力 / 梁保存分量 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.StructureBrowser.cs`；`RunRegionExtractionAsync`；`winui/AbaqusTools.WinUI/Services/OdbRegionExtractionMethods.cs`；`Evaluate`；`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Recovery.cs`、`winui/AbaqusTools.WinUI/Services/OdbPostprocessRecoveryState.cs`；`modules/control_plane/region_extraction.py`；`RegionExtractionRequest`、`execute_region_extraction`、`finalize_region_extraction`；`modules/postprocessor/abaqus_scripts/extract_region.py`；`main`；`modules/postprocessor/abaqus_scripts/region_extract_core.py`；`extract_rows`、`source_identity`、`require_source_identity` | `tests/postprocessor/test_region_extraction.py`、`tests/postprocessor/test_region_worker.py`、`tests/control_plane/test_region_extraction_api.py`、`tests/winui_host/test_region_api.py`、`tests/winui_postprocess/OdbRegionExtractionMethodsChecks.cs`、`tests/winui_postprocess/OdbPostprocessRecoveryChecks.cs` |
+| F019 选定实体集合/实例截面力与弯矩 | 与 F018 同一 UI/API；`modules/postprocessor/abaqus_scripts/region_solid_core.py`；`extract_solid_rows`、`region_leaf`；`modules/postprocessor/abaqus_scripts/solid_section_math.py`；`section_config`、`force_moment_components` | `tests/postprocessor/test_solid_sections.py`、`tests/control_plane/test_region_extraction_api.py`、`tests/postprocessor/test_region_acceptance_harness.py`；真实 Abaqus 已知数值入口 `tests/abaqus/verify_region_fixture.py`（六组实体校核通过，边界见验收记录） |
+| F020 图例、云图、动画及图表整理 | `modules/postprocessor/legends.py`、`modules/postprocessor/result_assets.py`、`modules/postprocessor/postprocess.py`；`modules/postprocessor/abaqus_scripts/scan_legend_limits.py`、`modules/postprocessor/abaqus_scripts/render_group_contours.py`、`modules/postprocessor/abaqus_scripts/render_group_contours_core.py` | `tests/postprocessor/test_legends.py`、`tests/postprocessor/test_animation.py`、`tests/postprocessor/test_background_plotting.py`、`tests/postprocessor/test_result_assets.py` |
+| F021 结果目录、索引、筛选与预览 | `winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.xaml.cs`（RefreshSelectedScopeAsync、LoadRecordsAsync）；`winui/AbaqusTools.WinUI/Services/ResultBrowserLoadCoordinator.cs`（RefreshScopesAsync、CompleteIndexAsync）；`winui/AbaqusTools.WinUI/Controls/ResultPreviewTable.xaml.cs`、`winui/AbaqusTools.WinUI/Services/ResultTablePreview.cs`（列切换与 ToClipboardText）；`modules/control_plane/results.py`（discover_result_scopes、list_result_records、preview_result）；`modules/control_plane/result_indexing.py`（ResultIndexOperationManager）；`modules/postprocessor/result_catalog.py`（collect_result_records、read_xlsx_preview）；`modules/postprocessor/result_index.py`（build_result_index） | `tests/control_plane/test_results_api.py`、`tests/control_plane/test_result_index_api.py`、`tests/postprocessor/test_incomplete_output.py`、`tests/winui_results/ResultBrowser.Tests.csproj`、`tests/winui_host/test_results_api.py` |
+| F022 分组、参数、工作区恢复与缓存 | `winui/AbaqusTools.WinUI/Models/OdbFileRow.cs`；`winui/AbaqusTools.WinUI/Services/OdbComparisonGroups.cs`、`winui/AbaqusTools.WinUI/Services/OdbDiscoveryReconciler.cs`、`winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs`；`modules/postprocessor/cache.py` | `tests/winui_postprocess/OdbPostprocess.Tests.csproj`、`tests/postprocessor/test_cache.py`、`tests/postprocessor/test_parallel_prescan.py` |
+
+## 横切基础与旧版对照
+
+| ID / 功能 | 入口和实现 / 符号 | 首选测试 |
+|---|---|---|
+| F023 控制面启动、鉴权、HTTP 路由、操作跟踪 | `modules/control_plane/__main__.py`、`modules/control_plane/server.py`；`ControlPlaneRuntime`；`modules/control_plane/descriptor.py`、`modules/control_plane/contracts.py`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` | `tests/control_plane/test_api.py`、`tests/control_plane/test_descriptor.py`、`tests/winui_host/ControlPlaneHost.Tests.csproj` |
+| F024 PySide6 兼容工作台与旧提取基准 | `main.py`、`modules/workspace.py`、`modules/submitter/main.py`、`modules/postprocessor/app.py`、`modules/postprocessor/batch_window.py`、`modules/postprocessor/main_window.py` | `tests/postprocessor/test_legacy_payload_parity.py`、`tests/postprocessor/test_postprocessor_entrypoint.py`、`tests/submitter/test_module_entrypoint.py` |
+| F025 共用数字输入与参数说明 | `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`、`winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml`；`WorkbenchNumberBoxTemplate`；`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs`；`UpdateExplanation`、`AddToHeader`；`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs`；`ForTopic`；15 处入口分布于 F003/F004/F007/F008/F022，完整清单见 [界面交互说明](UI_INTERACTION.md) | `tests/winui_numberbox/NumberBox.Tests.csproj`、`tests/winui_numberbox/App.xaml.cs`、`tests/winui/test_shell_contract.py`；自身原生窗口 35 项和最新构建通过，业务页视觉/悬停验收待完成 |
+
+## 跨功能修改提示
+
+- CPU 规则变动同时检查 F003/F004/F005/F007；后处理进程并行数不是单作业 CPU 数。
+- F025 的 15 处数字输入已统一为 Inline：右侧并排下/上折线、数值居中、最小宽度 160；同时提供 15 处参数说明。修改时核对 0/空值/容差、上下限、禁用状态和说明口径，详见 [界面交互说明](UI_INTERACTION.md)。
+- 用户已认可预览，但指出实际 WinUI 外观不同；边框、40px 高度、每个按钮 40px 和竖分隔线正在向预览统一，不能把此前控件行为检查当作本次视觉调整验收。说明图标已改为 14px 问号并保留 28px 悬停热区。
+- 列表刷新/勾选/浏览器选择检查 F002/F004/F022，不仅调整 XAML。
+- 通用提取字段改动检查 F016/F018/F019/F021 及 C# DTO；当前源文件只读保护不能移除。
+- 新增/更名/移动文件或功能时，按 [持续维护工作流](../05-development/WORKFLOW.md) 更新本表及对应测试。

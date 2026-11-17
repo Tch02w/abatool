@@ -22,6 +22,15 @@ public sealed class LocalResourceSnapshot
     [JsonPropertyName("logicalCpus")]
     public int LogicalCpus { get; init; }
 
+    [JsonPropertyName("physicalCpus")]
+    public int PhysicalCpus { get; init; }
+
+    [JsonPropertyName("jobCpuLimit")]
+    public int JobCpuLimit { get; init; }
+
+    [JsonPropertyName("jobCpuPolicyNote")]
+    public string JobCpuPolicyNote { get; init; } = string.Empty;
+
     [JsonPropertyName("busyCpus")]
     public int BusyCpus { get; init; }
 

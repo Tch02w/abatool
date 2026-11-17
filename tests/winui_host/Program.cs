@@ -1,0 +1,268 @@
+using System.Diagnostics;
+using System.Net;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using AbaqusTools.WinUI.Services;
+
+if (args.Contains("--wait-child"))
+{
+    await Task.Delay(Timeout.Infinite);
+    return 0;
+}
+
+try
+{
+    if (args.Length == 6 && args[0] == "--results-api")
+    {
+        await CheckResultsApi(args[1], args[2], args[3], args[4], args[5]);
+        return 0;
+    }
+    if (args.Length == 4 && args[0] == "--region-api")
+    {
+        await CheckRegionApi(args[1], args[2], args[3]);
+        return 0;
+    }
+    if (args.Length == 4 && args[0] == "--upgrade-api")
+    {
+        await CheckUpgradeApi(args[1], args[2], args[3]);
+        return 0;
+    }
+    await Check("idle reservation", """{"schemaVersion":1,"safeToStop":true,"operations":[]}""", true);
+    await Check("active upgrade", """{"schemaVersion":1,"safeToStop":false,"operations":[{}]}""", false);
+    await Check("contradictory response", """{"schemaVersion":1,"safeToStop":true,"operations":[{}]}""", false);
+    await Check("malformed response", "not json", false);
+    await Check("unknown schema", """{"schemaVersion":2,"safeToStop":true,"operations":[]}""", false);
+    await Check("missing endpoint", "{}", false, HttpStatusCode.NotFound);
+    await Check("connection lost", "", false, disconnect: true);
+    await Check("reconnect failure", "", false, connectionCleanup: true);
+    CheckUpgradeContracts();
+    Console.WriteLine("8 host process lifecycle checks passed.");
+    return 0;
+}
+catch (Exception error)
+{
+    Console.Error.WriteLine(error);
+    return 1;
+}
+
+static void SetField(ControlPlaneHost host, string name, object value) =>
+    typeof(ControlPlaneHost).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, value);
+
+static void CheckUpgradeContracts()
+{
+    var root = Path.GetFullPath(Path.GetTempPath());
+    var source = Path.Combine(root, "model.odb");
+    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+    var preview = new OdbUpgradePreview
+    {
+        SchemaVersion = 1, Root = root, TargetRelease = "2025",
+        RequiresCompatibilityCheck = true, RequiresConfirmation = true,
+        SourcePolicy = "backup-original-before-validated-replacement",
+        CancellationPolicy = "finish-active-file-then-stop",
+        Entries = [new OdbUpgradeEntry { SourcePath = source, UpgradedPath = source,
+            BackupPath = Path.Combine(root, "model-old.odb"), TemporaryPath = Path.Combine(root, "model-upgrading.odb"),
+            SourceSizeBytes = 123, SourceMtimeNs = 1_798_000_000_123_456_789L }],
+    };
+    var snapshot = new OdbUpgradeOperationSnapshot
+    {
+        SchemaVersion = 1, Kind = "odb.upgrade", OperationId = "test-operation", Status = "succeeded", Version = 3,
+        Preview = preview, Results = [new OdbUpgradeResult { SourcePath = source, Status = "upgraded" }],
+        Progress = new OdbUpgradeProgress { Completed = 1, Total = 1 },
+    };
+    var json = JsonSerializer.SerializeToNode(snapshot, options)!;
+    var roundtrip = json.Deserialize<OdbUpgradeOperationSnapshot>(options)!;
+    OdbUpgradeContractValidation.Validate(roundtrip, "test-operation");
+    if (roundtrip.Preview.Entries[0].SourceMtimeNs != preview.Entries[0].SourceMtimeNs)
+        throw new Exception("Native client rounded nanosecond fingerprint");
+    Action<JsonNode>[] corruptions = [
+        node => node["preview"]!["requiresConfirmation"] = false,
+        node => node["preview"]!["entries"]![0]!["backupPath"] = source,
+        node => node["preview"]!["entries"] = new JsonArray(),
+        node => node["status"] = "unknown",
+        node => node["results"] = new JsonArray(),
+        node => node["results"]![0]!["source_path"] = Path.Combine(root, "unexpected.odb"),
+        node => node["progress"]!["completed"] = 2,
+        node => node["progress"] = null,
+    ];
+    foreach (var corrupt in corruptions)
+    {
+        var changed = json.DeepClone();
+        corrupt(changed);
+        try { OdbUpgradeContractValidation.Validate(changed.Deserialize<OdbUpgradeOperationSnapshot>(options)!); }
+        catch (ControlPlaneException) { continue; }
+        throw new Exception("Unsafe upgrade response was accepted");
+    }
+    Console.WriteLine("9 upgrade contract checks passed.");
+}
+
+static async Task CheckUpgradeApi(string descriptorPath, string root, string source)
+{
+    var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath),
+        new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    await using var host = new ControlPlaneHost();
+    SetField(host, "_descriptor", descriptor);
+    SetField(host, "_descriptorPath", descriptorPath);
+    var preview = await host.PreviewOdbUpgradeAsync(root, [source]);
+    if (preview.Entries.Count != 1 || preview.Entries[0].SourcePath != source)
+        throw new Exception("Native preview paths differ from server paths");
+    var key = Guid.NewGuid();
+    var initial = await host.StartOdbUpgradeAsync(preview, key);
+    var again = await host.StartOdbUpgradeAsync(preview, key);
+    if (again.OperationId != initial.OperationId) throw new Exception("Native client duplicated an upgrade");
+    var active = await host.ListOdbUpgradeOperationsAsync(activeOnly: true);
+    if (active.Operations.Count != 1) throw new Exception("Active upgrade recovery failed");
+    var snapshot = await host.GetOdbUpgradeOperationAsync(initial.OperationId);
+    await host.CancelOdbUpgradeOperationAsync(snapshot.OperationId);
+    var final = await host.PollOdbUpgradeUntilTerminalAsync(snapshot);
+    if (final.Status != "cancelled" || final.Results.Count != 1
+        || final.Results[0].SourcePath != source || final.Results[0].BackupPath != preview.Entries[0].BackupPath
+        || final.Progress.Completed != 1 || final.Results[0].Status != "upgraded")
+        throw new Exception("Native client lost the safely completed file receipt");
+    var history = await host.ListOdbUpgradeOperationsAsync();
+    if (history.Operations.Single().OperationId != final.OperationId)
+        throw new Exception("Native upgrade history failed");
+    Console.WriteLine("Native HTTP upgrade workflow passed (simulated file upgrader).");
+}
+
+static async Task CheckResultsApi(string descriptorPath, string root, string batch, string csvPath, string xlsxPath)
+{
+    var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath),
+        new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    await using var host = new ControlPlaneHost();
+    SetField(host, "_descriptor", descriptor);
+    SetField(host, "_descriptorPath", descriptorPath);
+    Task<ResultRecordsResponse> Page(int offset, string query = "") =>
+        host.GetResultRecordsAsync(root, batch, batch, "all", query, "", false, offset: offset);
+    var first = await Page(0);
+    if (!first.HasMore || first.Records.Count != 500) throw new Exception("Expected a full first page with more results");
+    var second = await Page(first.Records.Count);
+    var back = await Page(0);
+    var firstPaths = first.Records.Select(r => r.Path).ToArray();
+    if (second.Records.Count == 0 || second.HasMore || second.FilteredCount != first.FilteredCount ||
+        second.Offset + second.Records.Count != first.FilteredCount ||
+        firstPaths.Intersect(second.Records.Select(r => r.Path), StringComparer.OrdinalIgnoreCase).Any() ||
+        !back.Records.Select(r => r.Path).SequenceEqual(firstPaths))
+        throw new Exception("Page offsets, order or records changed between reads");
+    var last = second.Records[^1];
+    var filtered = await Page(0, last.Name);
+    if (!filtered.Records.Any(r => r.Path == last.Path)) throw new Exception("Filtered page lost selected file");
+    var csv = await host.GetResultPreviewAsync(root, csvPath);
+    var limited = await host.GetResultPreviewAsync(root, csvPath, 2);
+    var xlsx = await host.GetResultPreviewAsync(root, xlsxPath);
+    if (new[] { csv, limited, xlsx }.Any(p => p.Kind != "table")) throw new Exception("Table preview missing");
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        firstPage = first.Records.Count, secondPage = second.Records.Count, total = first.FilteredCount,
+        filtered = filtered.FilteredCount, csv, limited, xlsx,
+    }));
+}
+
+static async Task CheckRegionApi(string descriptorPath, string root, string source)
+{
+    var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath),
+        new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    await using var host = new ControlPlaneHost();
+    SetField(host, "_descriptor", descriptor);
+    SetField(host, "_descriptorPath", descriptorPath);
+    var request = new OdbRegionExtractionRequest
+    {
+        Root = root, Path = source, Method = "truss_reference_area", AcknowledgeReferenceArea = true,
+        ReferenceAreaOverride = null,
+        Region = new() { ["scope"] = "instance", ["instance"] = "钢筋-1", ["kind"] = "instance", ["name"] = "钢筋-1" },
+        Frames = [new() { Step = "Load", Index = 1 }],
+    };
+    var initial = await host.StartOdbRegionExtractionAsync(request);
+    var again = await host.StartOdbRegionExtractionAsync(request);
+    if (initial.OperationId != again.OperationId) throw new Exception("Region request duplicated");
+    var final = await host.PollOdbPostprocessUntilTerminalAsync(initial);
+    if (final.Kind != "odb.postprocess.region" || final.Status != "succeeded" || final.Result?.OutputCount != 1)
+        throw new Exception("Native region extraction result invalid: " + final.Error?.Message);
+    var solid = await host.StartOdbRegionExtractionAsync(new OdbRegionExtractionRequest
+    {
+        Root = root, Path = source, Method = "solid_section",
+        Region = new() { ["scope"] = "assembly", ["instance"] = "", ["kind"] = "element_set", ["name"] = "混凝土" },
+        Frames = [new() { Step = "Load", Index = 1 }],
+        Section = new() { Origin = [0, 0, 0], Normal = [0, 0, 2], Offsets = [10, 20],
+            MomentReference = "point", MomentPoint = [1, 2, 3] },
+    });
+    var solidFinal = await host.PollOdbPostprocessUntilTerminalAsync(solid);
+    if (solidFinal.Status != "succeeded") throw new Exception("Native solid DTO failed: " + solidFinal.Error?.Message);
+    Console.WriteLine("Native HTTP region extraction workflow passed (simulated worker).");
+}
+
+static async Task Check(string label, string body, bool shouldExit,
+    HttpStatusCode status = HttpStatusCode.OK, bool disconnect = false, bool connectionCleanup = false)
+{
+    var directory = Path.Combine(Path.GetTempPath(), "abatool-host-test-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var descriptorPath = Path.Combine(directory, "control-plane.json");
+    using var child = Process.Start(new ProcessStartInfo("dotnet")
+    {
+        ArgumentList = { Assembly.GetExecutingAssembly().Location, "--wait-child" },
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    }) ?? throw new Exception("Unable to create test child");
+    var handler = new ShutdownResponseHandler(body, status, disconnect);
+    var host = new ControlPlaneHost();
+    var originalClient = (HttpClient)typeof(ControlPlaneHost)
+        .GetField("_httpClient", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
+    originalClient.Dispose();
+    SetField(host, "_httpClient", new HttpClient(handler));
+    SetField(host, "_descriptorPath", descriptorPath);
+    SetField(host, "_ownedProcess", Process.GetProcessById(child.Id));
+    SetField(host, "_ownedInstanceId", "owned-test-instance");
+    SetField(host, "_descriptor", new ControlPlaneDescriptor
+    {
+        SchemaVersion = 1, ApiVersion = "v1", InstanceId = "owned-test-instance", Pid = child.Id,
+        Host = "127.0.0.1", Port = 12345, BaseUrl = "http://127.0.0.1:12345", Token = "test-token",
+    });
+    await File.WriteAllTextAsync(descriptorPath,
+        $$"""{"schemaVersion":1,"instanceId":"owned-test-instance","pid":{{child.Id}}}""");
+    try
+    {
+        if (connectionCleanup)
+        {
+            typeof(ControlPlaneHost).GetMethod("StopOwnedProcess", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(host, [false]);
+        }
+        await Task.WhenAll(host.DisposeAsync().AsTask(), host.DisposeAsync().AsTask());
+        if (shouldExit)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await child.WaitForExitAsync(deadline.Token);
+        }
+        if (child.HasExited != shouldExit)
+            throw new Exception($"{label}: wrong child lifetime");
+        if (File.Exists(descriptorPath) == shouldExit)
+            throw new Exception($"{label}: descriptor should follow backend lifetime");
+        if (handler.Calls != (connectionCleanup ? 0 : 1))
+            throw new Exception($"{label}: duplicate or missing shutdown reservation");
+        Console.WriteLine($"PASS {label}");
+    }
+    finally
+    {
+        // Only terminate the helper created by this test, never a real backend.
+        if (!child.HasExited) child.Kill(entireProcessTree: true);
+        await child.WaitForExitAsync();
+        await host.DisposeAsync();
+        File.Delete(descriptorPath);
+        Directory.Delete(directory);
+    }
+}
+
+sealed class ShutdownResponseHandler(string body, HttpStatusCode status, bool disconnect) : HttpMessageHandler
+{
+    public int Calls { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        Calls++;
+        if (request.Method != HttpMethod.Post
+            || request.RequestUri?.AbsolutePath != "/api/v1/odb-upgrade-shutdown-check"
+            || request.Headers.Authorization?.ToString() != "Bearer test-token")
+            throw new Exception("Unexpected shutdown request");
+        if (disconnect) throw new HttpRequestException("Simulated lost connection");
+        return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+    }
+}

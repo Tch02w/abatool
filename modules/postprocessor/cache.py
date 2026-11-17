@@ -157,6 +157,7 @@ def _load_json_mapping(path: Path) -> dict[str, Any] | None:
 def _csv_contract_error(
     path: Path,
     required_columns: tuple[str, ...],
+    *, allow_empty: bool = False,
 ) -> str | None:
     if not path.is_file() or path.stat().st_size <= 0:
         return f"缺少或为空：{path}"
@@ -170,12 +171,12 @@ def _csv_contract_error(
             first_row = next(reader, None)
     except (OSError, UnicodeError, csv.Error) as error:
         return f"{path} 无法读取：{error}"
-    if first_row is None:
+    if first_row is None and not allow_empty:
         return f"没有数值记录：{path}"
     return None
 
 
-def _diagnostic_values_error(path: Path) -> str | None:
+def _diagnostic_values_error(path: Path, *, unreinforced: bool = False) -> str | None:
     force_columns = (
         "RebarAxial_Section_TensionPositive_N",
         "RebarAxial_Section_CompressionPositive_N",
@@ -191,7 +192,15 @@ def _diagnostic_values_error(path: Path) -> str | None:
         with path.open("r", encoding="utf-8-sig", newline="") as stream:
             for row_number, row in enumerate(csv.DictReader(stream), 2):
                 method = str(row.get("RebarMethod", "")).strip().casefold()
-                if method not in {"element_cut", "legacy_interpolation"}:
+                methods = {"element_cut", "legacy_interpolation"}
+                if unreinforced:
+                    methods.add("not_applicable_unreinforced")
+                    try:
+                        if any(float(row.get(name, "")) != 0 for name in force_columns + crossing_columns):
+                            return f"{path}:{row_number} 无纵筋模型含非零纵筋结果"
+                    except (ValueError, TypeError):
+                        return f"{path}:{row_number} 无纵筋结果不完整"
+                if method not in methods:
                     return f"{path}:{row_number} 的 RebarMethod 无效"
                 missing_forces = [
                     name
@@ -248,16 +257,19 @@ def numeric_payload_validation_errors(root: Path | str) -> list[str]:
 
     payload_root = Path(root)
     errors: list[str] = []
+    rebar_metadata = _load_json_mapping(payload_root / "rebar" / "rebar_metadata.json")
+    unreinforced = bool(rebar_metadata and rebar_metadata.get("reinforcement_mode") == "none"
+                        and rebar_metadata.get("longitudinal_element_count") == 0)
     for relative, columns in NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS.items():
         path = payload_root / Path(relative)
         try:
-            error = _csv_contract_error(path, columns)
+            error = _csv_contract_error(path, columns, allow_empty=unreinforced and relative.startswith("rebar/"))
         except OSError as exc:
             error = f"{path} 无法读取：{exc}"
         if error:
             errors.append(error)
         elif relative.startswith("freebody/"):
-            diagnostic_error = _diagnostic_values_error(path)
+            diagnostic_error = _diagnostic_values_error(path, unreinforced=unreinforced)
             if diagnostic_error:
                 errors.append(diagnostic_error)
 
@@ -452,6 +464,7 @@ def numeric_config_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         "pile_steel_set",
         "soil_set",
         "rebar_set",
+        "reinforcement_mode",
         "longitudinal_material",
         "rebar_diameter_mm",
         "prefracture_sequence_index",
@@ -487,6 +500,7 @@ def prescan_config_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         "pile_steel_set",
         "soil_set",
         "rebar_set",
+        "reinforcement_mode",
         "longitudinal_material",
     )
     settings = payload.get("settings", {})

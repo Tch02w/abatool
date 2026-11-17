@@ -8,12 +8,20 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 import numpy as np
 import xlsxwriter
 from PIL import Image
 
 from .file_attributes import hide_internal_result_json_files
+
+
+def _file_plot(figsize):
+    """Export without GUI managers or changing the caller's Matplotlib backend."""
+    figure = Figure(figsize=figsize, constrained_layout=True)
+    FigureCanvasAgg(figure)
+    return figure, figure.subplots()
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -199,7 +207,7 @@ def _preferred_axial_group(
 def _axial_rebar_method(rows: list[dict[str, str]]) -> str:
     for row in rows:
         method = str(row.get("RebarMethod", "")).strip().casefold()
-        if method in ("element_cut", "legacy_interpolation"):
+        if method in ("element_cut", "legacy_interpolation", "not_applicable_unreinforced"):
             return method
     return ""
 
@@ -245,7 +253,7 @@ def _plot_pile_axial_profile(
         "legacy_interpolation": "legacy interpolation",
     }.get(method, "unspecified")
 
-    fig, ax = plt.subplots(figsize=(7.6, 8.0), constrained_layout=True)
+    fig, ax = _file_plot((7.6, 8.0))
     ax.plot(concrete, depth, label="Concrete/pipe FreeBody")
     if section is not None:
         section_role = "active" if method == "element_cut" else "comparison"
@@ -269,7 +277,7 @@ def _plot_pile_axial_profile(
     )
     ax.legend()
     fig.savefig(target, dpi=180)
-    plt.close(fig)
+    fig.clear()
 
 
 def _axial_group_plot_path(
@@ -324,13 +332,13 @@ def plot_pile_bending(output_dir: Path) -> list[Path]:
         rebar = [float(row["RebarBendingMoment_Interpolated_My_Nmm"])/1.0e6 for row in rows]
         total = [float(row["PileTotalBendingMoment_My_Nmm"])/1.0e6 for row in rows]
         target = plot_dir/f"pile_bending_moment_My_depth_SEQ{sequence:04d}.png"
-        fig, ax = plt.subplots(figsize=(7.6, 8.0), constrained_layout=True)
+        fig, ax = _file_plot((7.6, 8.0))
         ax.plot(concrete, depth, label="Concrete/pipe My"); ax.plot(rebar, depth, label="Rebar My")
         ax.plot(total, depth, label="Pile total My", linewidth=2.4); ax.axvline(0, color="black", linewidth=0.8)
         ax.axhline(0, color="black", linewidth=0.8); ax.invert_yaxis(); ax.grid(True, alpha=0.25)
         ax.set_xlabel("Bending moment My about global 2-axis (kN·m)"); ax.set_ylabel("Depth from ground (m)")
         ax.set_title(f"Sequence {sequence}: lateral load in global 1 uses My"); ax.legend()
-        fig.savefig(target, dpi=180); plt.close(fig); targets.append(target)
+        fig.savefig(target, dpi=180); fig.clear(); targets.append(target)
     return targets
 
 
@@ -650,7 +658,7 @@ def plot_load_resistance(output_dir: Path) -> Path | None:
     ]
     history_output_dir.mkdir(parents=True, exist_ok=True)
     target = history_output_dir / "load_resistance_sharing.png"
-    fig, ax = plt.subplots(figsize=(8.6, 6.2), constrained_layout=True)
+    fig, ax = _file_plot((8.6, 6.2))
     for column, label in (
         ("PileTopReaction_kN", "Pile-top reaction"),
         ("RootKeyTotalBearing_kN", "Root-key total"),
@@ -669,7 +677,7 @@ def plot_load_resistance(output_dir: Path) -> Path | None:
     ax.set_ylabel("Resistance (kN)")
     ax.legend()
     fig.savefig(target, dpi=180)
-    plt.close(fig)
+    fig.clear()
     return target
 
 
@@ -687,12 +695,17 @@ def _selected_axial_rebar_method(output_dir: Path) -> str:
     if rebar_metadata_path.exists():
         rebar_metadata = json.loads(rebar_metadata_path.read_text(encoding="utf-8"))
         method = str(rebar_metadata.get("method", "")).strip().casefold()
-        if method in ("element_cut", "legacy_interpolation"):
+        if method in ("element_cut", "legacy_interpolation", "not_applicable_unreinforced"):
             return method
     return ""
 
 
 def _pile_axial_method_summary(method: str) -> str:
+    if method == "not_applicable_unreinforced":
+        return (
+            "Unreinforced model: configured concrete/pipe FreeBody resultant; "
+            "no T3D2 reinforcement contribution is added; compression positive"
+        )
     if method == "element_cut":
         return (
             "RebarMethod=element_cut: concrete/pipe FreeBody + element-cut T3D2 "

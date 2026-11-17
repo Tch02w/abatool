@@ -60,6 +60,8 @@ class OdbMergeResult:
     original_backup: Path
     restart_backup: Path
     command: str
+    validation_report: Path | None = None
+    empty_frame_steps: tuple[str, ...] = ()
 
 
 class OdbMergeError(RuntimeError):
@@ -192,7 +194,15 @@ def build_merge_plan(request: OdbMergeRequest) -> OdbMergePlan:
         restartjoin_arguments.append("compressresult")
     if request.copy_original:
         restartjoin_arguments.append("copyoriginal")
-    validation_arguments = ("python", validation_script.name, restartjoin_output.name)
+    validation_arguments = (
+        "python",
+        validation_script.name,
+        staged_original.name,
+        staged_restart.name,
+        restartjoin_output.name,
+        "1" if request.include_history else "0",
+        "merge_validation.json",
+    )
     return OdbMergePlan(
         request=request,
         staging_dir=staging_dir,

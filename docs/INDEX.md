@@ -20,6 +20,7 @@
 | 系统分层、数据流、模块边界 | [系统架构导航](02-architecture/SYSTEM_ARCHITECTURE.md) |
 | 每个功能在哪些文件、该测什么 | [功能索引](03-features/FUNCTION_INDEX.md) |
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
+| ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |
 | 日志选择刷新、16 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
 | Windows 完整目录包、运行诊断和发布限制 | [发布构建](05-development/RELEASE.md) |

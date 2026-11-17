@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+from modules.postprocessor.config import abaqus_script
 from modules.postprocessor.process_runner import (
     ProcessCancelled,
     ProcessController,
@@ -24,21 +26,16 @@ from .odb_merge_core import (
 ProgressCallback = Callable[[int, str], None]
 LogCallback = Callable[[str], None]
 
-_VALIDATION_SCRIPT = """\
-from __future__ import print_function
-import sys
-from odbAccess import openOdb
 
-odb = openOdb(path=sys.argv[1], readOnly=True)
-try:
-    if len(odb.steps) == 0:
-        raise RuntimeError("ODB contains no steps")
-    if not any(len(step.frames) > 0 for step in odb.steps.values()):
-        raise RuntimeError("ODB contains no frames")
-    print("ABASUB_ODB_VALIDATION_OK")
-finally:
-    odb.close()
-"""
+def _identity(path: Path) -> tuple[int, int, int, int, int]:
+    state = path.stat()
+    return (
+        state.st_dev,
+        state.st_ino,
+        state.st_size,
+        state.st_mtime_ns,
+        state.st_ctime_ns,
+    )
 
 
 def execute_odb_merge(
@@ -52,6 +49,14 @@ def execute_odb_merge(
     effective_controller = controller or ProcessController()
     plan = build_merge_plan(request)
     published: list[Path] = []
+    source_identities = {
+        path: _identity(path)
+        for path in (plan.request.original_odb, plan.request.restart_odb)
+    }
+    validation_file = plan.staging_dir / "merge_validation.json"
+    published_validation = plan.request.output_odb.with_suffix(
+        "." + plan.staging_dir.name.rsplit("-", 1)[-1] + ".merge-validation.json"
+    )
 
     def report(percent: int, phase: str) -> None:
         if progress is not None:
@@ -60,6 +65,11 @@ def execute_odb_merge(
     def check_cancelled() -> None:
         if effective_controller.cancel_requested:
             raise ProcessCancelled("ODB merge cancelled by user")
+
+    def check_sources() -> None:
+        for path, identity in source_identities.items():
+            if _identity(path) != identity:
+                raise OdbMergeError(f"合并期间源 ODB 发生变化，结果未发布：{path}")
 
     def copy_file(source: Path, destination: Path) -> None:
         check_cancelled()
@@ -110,7 +120,8 @@ def execute_odb_merge(
         copy_file(plan.staged_original_backup, plan.working_odb)
 
         check_cancelled()
-        plan.validation_script.write_text(_VALIDATION_SCRIPT, encoding="utf-8")
+        check_sources()
+        shutil.copyfile(abaqus_script("validate_odb_merge.py"), plan.validation_script)
         report(60, "正在执行 Abaqus restartjoin…")
         if log is not None:
             log(f"命令：{plan.command_preview()}")
@@ -121,15 +132,55 @@ def execute_odb_merge(
         ):
             raise OdbMergeError("restartjoin 未生成有效的非空 ODB。")
 
-        report(82, "正在使用 Abaqus 只读打开并验证结果…")
+        report(82, "正在逐分析步核对帧、场输出和历史数据…")
         validation_output = run(plan.validation_arguments)
         if "ABASUB_ODB_VALIDATION_OK" not in validation_output:
             raise OdbMergeError("Abaqus 未返回 ODB 只读验证成功标记。")
+        try:
+            validation = json.loads(validation_file.read_text(encoding="utf-8"))
+            expected_paths = {
+                "originalPath": plan.staged_original_backup,
+                "restartPath": plan.staged_restart_backup,
+                "joinedPath": plan.restartjoin_output_odb,
+            }
+            if (
+                validation.get("schemaVersion") != 1
+                or validation.get("status") != "verified"
+                or validation.get("includeHistory") is not plan.request.include_history
+                or not validation.get("steps")
+                or any(
+                    Path(validation.get(key, "")).resolve() != value.resolve()
+                    for key, value in expected_paths.items()
+                )
+            ):
+                raise ValueError("验证回执与本次合并输入不符")
+        except (OSError, ValueError, TypeError, AttributeError) as error:
+            raise OdbMergeError(f"合并内容校验未生成有效回执：{error}") from error
 
+        empty_frame_steps = tuple(
+            step["name"] for step in validation["steps"] if step["frames"] == 0
+        )
+        if empty_frame_steps and log is not None:
+            log(
+                "以下分析步没有结果帧，已按源文件保留；合并成功不表示计算完成："
+                + "、".join(empty_frame_steps)
+            )
         check_cancelled()
-        report(92, "正在原子发布安全副本和合并结果…")
+        check_sources()
+        validation.update(
+            originalPath=str(plan.request.original_odb),
+            restartPath=str(plan.request.restart_odb),
+            joinedPath=str(plan.request.output_odb),
+            originalBackup=str(plan.original_backup),
+            restartBackup=str(plan.restart_backup),
+        )
+        validation_file.write_text(
+            json.dumps(validation, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        report(92, "正在保存安全副本并发布合并结果…")
         publish(plan.staged_original_backup, plan.original_backup)
         publish(plan.staged_restart_backup, plan.restart_backup)
+        publish(validation_file, published_validation)
         publish(
             plan.restartjoin_output_odb,
             plan.request.output_odb,
@@ -141,6 +192,8 @@ def execute_odb_merge(
             original_backup=plan.original_backup,
             restart_backup=plan.restart_backup,
             command=plan.command_preview(),
+            validation_report=published_validation,
+            empty_frame_steps=empty_frame_steps,
         )
     except BaseException:
         # Backups are new files selected by the planner. If publication fails

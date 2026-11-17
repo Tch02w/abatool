@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+
+from modules.control_plane.contracts import ApiProblem
+from modules.control_plane.events import EventStore
+from modules.control_plane.odb_merge_operations import (
+    OdbMergeOperationManager,
+    OdbMergeOperationRequest,
+)
 from modules.postprocessor.process_runner import ProcessCancelled
 from modules.submitter.odb_merge_core import OdbMergeResult
 from tests.control_plane.test_api import (
@@ -189,3 +198,118 @@ def test_odb_merge_operation_reports_runner_failure(tmp_path: Path) -> None:
         failed = _wait(runtime, accepted["operationId"], {"failed"})
         assert failed["error"]["code"] == "ODB_MERGE_FAILED"
         assert failed["error"]["message"] == "Abaqus license unavailable"
+
+
+def test_late_cancel_keeps_published_result_and_receipt(tmp_path):
+    original, restart, output = (
+        tmp_path / name for name in ("base.odb", "restart.odb", "joined.odb")
+    )
+    original.write_bytes(b"original")
+    restart.write_bytes(b"restart")
+    committed, release = threading.Event(), threading.Event()
+    receipt = tmp_path / "validation.json"
+
+    def runner(request, *args):
+        output.write_bytes(b"committed")
+        receipt.write_text("verified")
+        committed.set()
+        assert release.wait(5)
+        return OdbMergeResult(output, original, restart, "command", receipt, ("Future",))
+
+    with running_control_plane(
+        tmp_path, odb_merge_runner=runner, odb_merge_command_provider=lambda: "abaqus"
+    ) as runtime:
+        try:
+            accepted = json_response(
+                api_request(
+                    runtime,
+                    "/api/v1/odb-merge-operations",
+                    method="POST",
+                    payload=_request_payload(original, restart, output),
+                )
+            )
+            assert committed.wait(5)
+            api_request(
+                runtime,
+                f"/api/v1/odb-merge-operations/{accepted['operationId']}/cancel",
+                method="POST",
+            )
+        finally:
+            release.set()
+        succeeded = _wait(runtime, accepted["operationId"], {"succeeded"})
+        assert succeeded["result"]["validationReport"] == str(receipt)
+        assert "1 个分析步无结果帧" in succeeded["progress"]["phase"]
+        assert output.read_bytes() == b"committed"
+
+
+def test_concurrent_request_id_conflict_is_not_misreported_as_repeat(tmp_path):
+    original, restart = tmp_path / "base.odb", tmp_path / "restart.odb"
+    original.write_bytes(b"base")
+    restart.write_bytes(b"restart")
+    barrier = threading.Barrier(2)
+
+    def command():
+        barrier.wait(timeout=5)
+        return "abaqus"
+
+    manager = OdbMergeOperationManager(
+        EventStore(),
+        command_provider=command,
+        runner=lambda request, *args: OdbMergeResult(
+            request.output_odb, original, restart, "test"
+        ),
+    )
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(
+                    manager.create,
+                    OdbMergeOperationRequest.from_payload(
+                        _request_payload(
+                            original, restart, tmp_path / f"result-{index}.odb"
+                        )
+                    ),
+                )
+                for index in range(2)
+            ]
+            responses, errors = [], []
+            for future in futures:
+                try:
+                    responses.append(future.result(timeout=10))
+                except ApiProblem as error:
+                    errors.append(error)
+        assert len(responses) == len(errors) == 1
+        assert errors[0].code == "IDEMPOTENCY_CONFLICT"
+        assert len(manager.list_snapshots()) == 1
+    finally:
+        manager.close()
+
+
+def test_close_during_validation_prevents_admission(tmp_path):
+    original, restart = tmp_path / "base.odb", tmp_path / "restart.odb"
+    original.write_bytes(b"base")
+    restart.write_bytes(b"restart")
+    checking, release = threading.Event(), threading.Event()
+
+    def command():
+        checking.set()
+        assert release.wait(5)
+        return "abaqus"
+
+    manager = OdbMergeOperationManager(EventStore(), command_provider=command)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            manager.create,
+            OdbMergeOperationRequest.from_payload(
+                _request_payload(original, restart, tmp_path / "joined.odb")
+            ),
+        )
+        try:
+            assert checking.wait(5)
+            manager.close()
+        finally:
+            release.set()
+        with pytest.raises(ApiProblem) as caught:
+            future.result(timeout=10)
+    assert caught.value.code == "CONTROL_PLANE_SHUTTING_DOWN"
+    assert manager.list_snapshots() == []

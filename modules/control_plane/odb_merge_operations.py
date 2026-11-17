@@ -132,9 +132,8 @@ class OdbMergeOperationRequest:
             return value
 
         client_request_id = text("clientRequestId")
-        if (
-            len(client_request_id) > MAX_CLIENT_REQUEST_ID_LENGTH
-            or any(ord(character) < 32 for character in client_request_id)
+        if len(client_request_id) > MAX_CLIENT_REQUEST_ID_LENGTH or any(
+            ord(character) < 32 for character in client_request_id
         ):
             raise ApiProblem(
                 400,
@@ -205,7 +204,9 @@ class OdbMergeOperationManager:
         self._operations: dict[str, OdbMergeOperation] = {}
         self._client_requests: dict[str, str] = {}
         self._futures: dict[str, Future[None]] = {}
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="odb-merge")
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="odb-merge"
+        )
         self._closed = False
 
     def create(self, request: OdbMergeOperationRequest) -> dict[str, Any]:
@@ -259,15 +260,32 @@ class OdbMergeOperationManager:
         )
         with self._lock:
             # A concurrent repeat may have been admitted while paths were checked.
+            if self._closed:
+                raise ApiProblem(
+                    503,
+                    "CONTROL_PLANE_SHUTTING_DOWN",
+                    "控制面正在关闭，无法创建 ODB 合并操作",
+                    retryable=True,
+                )
             existing_id = self._client_requests.get(request.client_request_id)
             if existing_id is not None:
-                return self._snapshot_locked(self._operations[existing_id])
+                existing = self._operations[existing_id]
+                if existing.request.signature != request.signature:
+                    raise ApiProblem(
+                        409,
+                        "IDEMPOTENCY_CONFLICT",
+                        "clientRequestId 已用于不同的 ODB 合并请求",
+                        details={"operationId": existing.operation_id},
+                    )
+                return self._snapshot_locked(existing)
             operation = OdbMergeOperation(validated)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id
             self._emit_locked(operation, "odb.merge.queued")
             try:
-                future = self._executor.submit(self._run_operation, operation.operation_id)
+                future = self._executor.submit(
+                    self._run_operation, operation.operation_id
+                )
             except RuntimeError as exc:
                 self._operations.pop(operation.operation_id, None)
                 self._client_requests.pop(request.client_request_id, None)
@@ -342,17 +360,20 @@ class OdbMergeOperationManager:
             )
             with self._lock:
                 operation = self._require_locked(operation_id)
-                if operation.controller.cancel_requested or operation.status == CANCELLING:
-                    self._finish_cancelled_locked(operation)
-                    return
+                # A returned result has already passed validation and publication.
+                # Late cancellation cannot relabel a committed output as cancelled.
                 operation.percent = 100
                 operation.phase = "ODB 合并与只读验证完成"
+                if result.empty_frame_steps:
+                    operation.phase += f"；{len(result.empty_frame_steps)} 个分析步无结果帧，请核对计算状态"
                 operation.result = {
                     "outputOdb": str(result.output_odb),
                     "originalBackup": str(result.original_backup),
                     "restartBackup": str(result.restart_backup),
                     "command": result.command,
                 }
+                if result.validation_report is not None:
+                    operation.result["validationReport"] = str(result.validation_report)
                 operation.error = None
                 self._transition_locked(operation, SUCCEEDED, "odb.merge.succeeded")
         except ProcessCancelled:
@@ -365,7 +386,10 @@ class OdbMergeOperationManager:
                 operation = self._operations.get(operation_id)
                 if operation is None or operation.status in TERMINAL_STATUSES:
                     return
-                if operation.controller.cancel_requested or operation.status == CANCELLING:
+                if (
+                    operation.controller.cancel_requested
+                    or operation.status == CANCELLING
+                ):
                     self._finish_cancelled_locked(operation)
                     return
                 operation.phase = "ODB 合并失败"

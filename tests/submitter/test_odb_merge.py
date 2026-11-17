@@ -11,6 +11,7 @@ from modules.submitter.odb_merge import (
     build_merge_plan,
     normalize_joined_output,
 )
+from tests.submitter.test_odb_merge_execution import write_validation_receipt
 
 
 class OdbMergePlanTests(unittest.TestCase):
@@ -78,7 +79,7 @@ class OdbMergePlanTests(unittest.TestCase):
                 plan.staging_dir / f"Restart_{plan.working_odb.name}",
             )
             self.assertEqual(
-                plan.validation_arguments[-1],
+                plan.validation_arguments[4],
                 plan.restartjoin_output_odb.name,
             )
 
@@ -150,6 +151,7 @@ class OdbMergePlanTests(unittest.TestCase):
                 else:
                     self.assertEqual(arguments[1], "python")
                     self.assertIsNotNone(log)
+                    write_validation_receipt(arguments, cwd)
                     log("ABASUB_ODB_VALIDATION_OK")
 
             with mock.patch(
@@ -206,6 +208,7 @@ class OdbMergePlanTests(unittest.TestCase):
                 else:
                     self.assertEqual(arguments[1], "python")
                     self.assertIsNotNone(log)
+                    write_validation_receipt(arguments, cwd)
                     log("ABASUB_ODB_VALIDATION_OK")
 
             with mock.patch(

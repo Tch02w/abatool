@@ -51,3 +51,7 @@
 它在 GPTWork 创建独立用户数据和微小测试文件，使用固定返回失败的测试命令，实际启动/退出两次包内控制面，核对 SQLite 历史、重启去重、失败清理和退出预留；不调用 Abaqus、不访问真实模型。输出 `frozen-merge-recovery-*/verification.json`，不在报告中保存鉴权令牌。它不能代替真实 Abaqus 运行中断或原生页面验收。
 
 实现依据：[PyInstaller 相对资源定位](https://pyinstaller.org/en/stable/runtime-information.html)、[Windows App SDK 自包含部署](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/self-contained-deploy/deploy-self-contained-apps)。Windows App SDK 自包含仍需另行启用 .NET 自包含，且发布文件必须整体分发。
+
+## 11 月 18 日批量恢复候选
+
+最新本地目录为 `GPTWork/release-win-x64-6cbfd68f63f6/AbaqusTools`，来源干净提交 `9f5ff64`，含 F012 后台批量计划与恢复。用户账户完成 1647 文件/19 worker 核对、两次冻结后台启动去重、正式主机启动/API/退出及包内诊断。回执与准确边界见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。本轮尚无新 ZIP、二进制 GitHub Release 或无开发环境目标机器验收；源码推送被自动审批拦截，等待具体远端授权。旧窗口需正常退出后才可使用新目录，不能强制终止用户正在运行的任务。

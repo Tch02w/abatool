@@ -32,7 +32,11 @@ UI 保留已选结果，避免每次轮询重建结果列表和不可变计划�
 
 最终完整控制面回归 **198 passed / 245.36 秒**，`GPTWork/control-batch-regression-20261118.xml`，句柄 55644 已退出 0；文档/壳层契约 **74 passed**，最新 C# 主机检查全部通过。随后收紧恢复子任务时的冻结配置身份校验，最新批量与单步恢复专项 **33 passed / 309.26 秒**，`GPTWork/result-batches-final-20261118.xml`，句柄 50650 已退出 0；覆盖 18 项批量和 15 项单步恢复。Ruff 全部通过。以上计数包含重叠用例，不累加成独立用例总数。功能、测试和 Wiki 已本地提交 `ef471f8`。尝试 `git push origin main` 被自动审批拒绝，命令未执行；理由为当前可信授权没有明确指名 `https://github.com/Tch02w/abatool.git`，推送仍待用户确认具体远端。
 
-准确续接点：本轮所有构建与测试已结束；本地功能提交 `ef471f8` 已完成，等待具体 GitHub 远端推送授权。可独立继续更新冻结候选并做批量包内验证，继续真实多阶段和原生流程。原生窗口 58461048 仍来自旧候选 `GPTWork/winui-migration-20261118`；本轮重新选择窗口并两次截图均返回 `window capture timed out: timed out waiting on channel`，没有点击、关闭或启动第二个窗口。真实多阶段工程 ODB、原生恢复/继续/停止交互、新冻结包和无开发环境目标机器仍待验收。既有两组 F013 真实内容校验无需重跑。整体迁移目标继续进行。
+本轮最终目录候选为 `GPTWork/release-win-x64-6cbfd68f63f6/AbaqusTools`，来自干净提交 `9f5ff6447a93189a99718ed94cb0c6304620ff60`，构建 51942 已退出 0。用户账户核对全部 **1647 文件 / 19 worker**，回执 `GPTWork/release-win-x64-6cbfd68f63f6/inventory-verification.json`。本轮没有新建 ZIP，也未发布二进制 Release。
+
+包内实际恢复证据为 `GPTWork/frozen-batch-recovery-001fad0945b9/verification.json`：2 次冻结后台启动、2 个计划阶段、仅准入 1 个子合并、测试命令只执行 1 次；首阶段失败后不启动后续阶段，重新提交相同批次返回原任务。源测试文件未变、失败隔离工作区已清理、联合退出预留通过，未启动 Abaqus。复现辅助脚本 `GPTWork/verify_frozen_result_batch_20261118.py`，运行句柄 87835 已退出 0；生成的认证 descriptor 已清除。正式 C# 主机在 `GPTWork/package-batch-user-host-20261118` 完成随包启动、资源/队列 API 及安全退出。用户账户包内诊断 `GPTWork/package-batch-probe-20261118/bundle-probe-cn1yv381/verification.json` 通过 GIF/Agg/工作簿/SSH 加密/Qt-free/defaults/worker 检查。这些都是本地隔离测试，不代表原生交互或真实多阶段模型验收。
+
+准确续接点：本轮所有构建与测试已结束；本地功能提交 `ef471f8` 已完成，等待具体 GitHub 远端推送授权。本轮目录候选与冻结恢复验证已完成，继续真实多阶段和原生流程。原生窗口 58461048 仍来自旧候选 `GPTWork/winui-migration-20261118`；本轮重新选择窗口并两次截图均返回 `window capture timed out: timed out waiting on channel`，没有点击、关闭或启动第二个窗口。真实多阶段工程 ODB、原生恢复/继续/停止交互和无开发环境目标机器仍待验收。既有两组 F013 真实内容校验无需重跑。整体迁移目标继续进行。
 
 ## 2026-11-18 F013 持久记录、中断恢复与用户可访问候选（原生页面待验收）
 

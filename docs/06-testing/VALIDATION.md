@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F010 最终候选 **`GPTWork/release-win-x64-b2bb97c3929a/AbaqusTools`**（干净 `11ee6ff`）已通过用户账户 1654 文件/19 worker、包内依赖和正式主机启动/API/退出；所有本轮测试/构建已结束。回执见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。下段源码阶段“新包待验证”已由此回执补齐，真实 SSH/原生/持久恢复的缺口仍在。
+
 11 月 18 日本轮 F010 修复数据检查无输出误成功、完成文本提前终结，以及重复追加远端日志；区分 DAT/MSG 警告诊断与明确错误。最终远端/服务器/传输/关闭相关 **50 项通过**，`GPTWork/remote-confirm-final3-20261118.xml`，包括实际本机执行生产 PowerShell 启动/探测脚本，未连接 SSH 或调用求解。F005/F007 对已运行 GJA-13_V40D 的三个只读快照覆盖主进程和真实求解子进程，回执 `GPTWork/live-solver-memory-045301de9317/verification.json`；首轮扫描 13.43 秒冷启动延迟仍需关注。新 F010 完整包待验证，迁移远端恢复和真实场景仍有缺口，见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 11 月 18 日 F005/F007 内存观测与历史已实现，314 项扩展回归通过；末次外部刷新时间戳、首样本立即保存和 85% 预算修改后 45 项专项通过。C# 新增 6 项显示检查及已有主机检查通过，Release 0 警告/0 错误，文档导航 41 项通过。源码实际 96 MiB helper 两次后台启动、历史恢复、明确重新排队和正常退出通过；首样本延迟的失败已修正并保留。最终完整包 `GPTWork/release-win-x64-5a09eb59688b/AbaqusTools`（干净 `a4e8212`）已从用户账户核对 1653 文件/19 worker、依赖、正式主机及冻结内存验证；双启动和历史回执 `GPTWork/local-memory-live-aafe45770a9f/verification.json`。本轮自有进程已结束，未调用 Abaqus 求解。原生悬停及真实 Abaqus/MPI 高负载未验收，详见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下包记录属于上一阶段。

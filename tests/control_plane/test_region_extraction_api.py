@@ -1,24 +1,36 @@
 import json
-from pathlib import Path
 import threading
+from pathlib import Path
 
 import pytest
 
 from modules.control_plane.contracts import ApiProblem
-from modules.control_plane.region_extraction import RegionExtractionRequest, execute_region_extraction, finalize_region_extraction
-from modules.postprocessor.result_catalog import collect_result_records, classify_result, result_section
+from modules.control_plane.region_extraction import (
+    RegionExtractionRequest,
+    execute_region_extraction,
+    finalize_region_extraction,
+)
+from modules.postprocessor.result_catalog import (
+    classify_result,
+    collect_result_records,
+    result_section,
+)
 from modules.postprocessor.result_index import build_result_index, load_result_index
-from tests.control_plane.test_api import api_request, json_response, running_control_plane
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
 from tests.control_plane.test_postprocessing_api import _settings, _wait
 
 
 def payload(root):
     path = root / "sample.odb"
     path.write_bytes(b"original")
-    return dict(schemaVersion=1, clientRequestId="region-test", root=str(root), path=str(path),
-                region=dict(scope="instance", instance="A", kind="instance", name="A"),
-                method="truss_reference_area", acknowledgeReferenceArea=True,
-                referenceAreaOverride=10., frames=[dict(step="Load", index=0)])
+    return {"schemaVersion": 1, "clientRequestId": "region-test", "root": str(root), "path": str(path),
+                "region": {"scope": "instance", "instance": "A", "kind": "instance", "name": "A"},
+                "method": "truss_reference_area", "acknowledgeReferenceArea": True,
+                "referenceAreaOverride": 10., "frames": [{"step": "Load", "index": 0}]}
 
 
 def successful_worker(arguments, cwd, log, controller):
@@ -179,7 +191,7 @@ def test_http_route_idempotency_and_existing_operation_tracking(tmp_path, monkey
     def run(request, progress, log, controller):
         calls.append(request)
         assert json.loads(request.extraction_json)["region"]["instance"] == "A"
-        return dict(outputCount=1, outputs=[str(tmp_path / "verified")], resultRoots=[str(tmp_path)])
+        return {"outputCount": 1, "outputs": [str(tmp_path / "verified")], "resultRoots": [str(tmp_path)]}
     monkeypatch.setattr(postprocessing, "execute_region_extraction", run)
     monkeypatch.setattr(postprocessing, "finalize_region_extraction", lambda *args: None)
     request = payload(tmp_path)
@@ -216,7 +228,7 @@ def test_solid_section_request_normalizes_normal_and_requires_cut_definition(tmp
     request["referenceAreaOverride"] = None
     with pytest.raises(ApiProblem, match="Section requires"):
         RegionExtractionRequest.from_payload(request, "abaqus")
-    request["section"] = dict(origin=[0, 0, 0], normal=[0, 0, 2], offsets=[10000], momentReference="centroid", momentPoint=None)
+    request["section"] = {"origin": [0, 0, 0], "normal": [0, 0, 2], "offsets": [10000], "momentReference": "centroid", "momentPoint": None}
     parsed = RegionExtractionRequest.from_payload(request, "abaqus")
     assert json.loads(parsed.extraction_json)["section"]["normal"] == [0., 0., 1.]
     request["method"] = "beam_sections"

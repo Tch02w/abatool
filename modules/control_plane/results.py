@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import csv
+from collections import Counter
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -291,7 +292,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         records = [
             _record_from_index(time_directory, row)
             for row in loaded.records
-            if (time_directory / str(row["relative_path"])).is_relative_to(scope)
+            if scope == time_directory or (time_directory / str(row["relative_path"])).is_relative_to(scope)
         ]
         records.extend(collect_shared_asset_records(scope))
         metadata = loaded.metadata
@@ -368,10 +369,10 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         )
     page = filtered[offset : offset + limit]
     use_cases = sorted({record.use_case for record in records}, key=str.casefold)
-    section_counts = {
-        key: sum(record_matches_section(record, key) for record in records)
-        for key, _label in SECTION_TABS
-    }
+    primary_counts = Counter(result_section(record) for record in records)
+    section_counts = {key: primary_counts[key] for key, _label in SECTION_TABS}
+    section_counts["common"] = sum(record.recommended for record in records)
+    section_counts["all"] = len(records)
     return {
         "schemaVersion": SCHEMA_VERSION,
         "root": str(root),

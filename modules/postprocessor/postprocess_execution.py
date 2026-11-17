@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .cache import (
     NUMERIC_PIPELINE_VERSION,
@@ -37,6 +38,7 @@ from .file_attributes import ensure_windows_hidden
 from .legends import (
     aggregate_group_animation_ranges,
     aggregate_group_ranges,
+    member_legend_coverage,
     choose_sequences,
 )
 from .models import OdbScan, normalized_name
@@ -674,6 +676,10 @@ def _execute_group(
 
         payload["source_output_dir"] = str(shared_data_dir)
         payload["render_outputs"] = True
+        payload["require_fixed_legends"] = not group.standalone
+        if not group.standalone:
+            payload["legend_scan_sequences"] = member_legend_coverage(prepared[path]["range_scan"])
+        payload["render_request_id"] = uuid4().hex
         check_cancelled()
         pending_marker = output_dir / INCOMPLETE_OUTPUT_MARKER
         save_json(pending_marker, {"status": "incomplete", "odb_path": str(path), "batch_id": group_batch_id})
@@ -688,9 +694,10 @@ def _execute_group(
         settings = payload["settings"]
         check_cancelled()
         with finalizer_lock:
-            finalize_render_output(
+            manifest = finalize_render_output(
                 output_dir,
                 int(settings.get("animation_fps", 5)),
+                duration_seconds=settings.get("animation_duration_seconds"),
                 export_white_background_png=bool(
                     settings.get("export_white_background_png", True)
                 ),
@@ -698,6 +705,10 @@ def _execute_group(
                     settings.get("export_transparent_background_png", True)
                 ),
             )
+        if manifest:
+            timings = manifest["animation_timing"]["fields"].values()
+            for frames, seconds in sorted({(item["source_frames"], item["seconds"]) for item in timings}):
+                tagged(path, f"GIF · {frames} 个源帧 · {seconds:g} 秒/轮 · 平均 {frames / seconds:.2f} 帧/秒")
         check_cancelled()
         write_group_member_manifest(
             output_dir,

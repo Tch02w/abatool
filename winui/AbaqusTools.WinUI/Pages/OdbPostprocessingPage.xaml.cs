@@ -20,19 +20,19 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IReadOnlyDictionary<string, OdbLegendOverride>> _legendOverridesByGroup =
         new(StringComparer.OrdinalIgnoreCase);
-    private static readonly string[] LegendFieldNames =
+    private static readonly (string Field, string Label)[] LegendFields =
     [
-        "PILE_U_MAG",
-        "PILE_CON_S_MISES",
-        "PILE_STEEL_S_MISES",
-        "PILE_CON_DAMAGET",
-        "PILE_CON_DAMAGEC",
-        "SOIL_PEEQ_XZ",
-        "SOIL_PEMAG_XZ",
-        "SOIL_S33_XZ",
-        "SOIL_S_MISES_XZ",
-        "REBAR_LONG_S_MISES_UNDEFORMED",
-        "REBAR_LONG_S11_UNDEFORMED",
+        ("PILE_U_MAG", "桩身位移大小"),
+        ("PILE_CON_S_MISES", "桩身混凝土 Mises 应力"),
+        ("PILE_STEEL_S_MISES", "钢管 / 型钢 Mises 应力"),
+        ("PILE_CON_DAMAGET", "桩身混凝土拉伸损伤"),
+        ("PILE_CON_DAMAGEC", "桩身混凝土压缩损伤"),
+        ("SOIL_PEEQ_XZ", "土体等效塑性应变（XZ 切片）"),
+        ("SOIL_PEMAG_XZ", "土体塑性应变大小（XZ 切片）"),
+        ("SOIL_S33_XZ", "土体竖向应力 S33（XZ 切片）"),
+        ("SOIL_S_MISES_XZ", "土体 Mises 应力（XZ 切片）"),
+        ("REBAR_LONG_S_MISES_UNDEFORMED", "纵筋 Mises 应力（未变形）"),
+        ("REBAR_LONG_S11_UNDEFORMED", "纵筋轴向应力 S11（未变形）"),
     ];
 
     private bool _discoveryBusy;
@@ -64,6 +64,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         RebarToleranceNumberBox.SmallChange = 0.0001d;
         Controls.ParameterHelpButton.AddToHeader(ExpectedRebarCountNumberBox, "rebar-count");
         Controls.ParameterHelpButton.AddToHeader(AnimationFpsNumberBox, "animation-fps");
+        AnimationDurationNumberBox.NumberFormatter = new Controls.PlainDecimalFormatter();
+        Controls.ParameterHelpButton.AddToHeader(AnimationDurationNumberBox, "animation-duration");
         Controls.ParameterHelpButton.AddToHeader(ImageWidthNumberBox, "image-size");
         Controls.ParameterHelpButton.AddToHeader(ImageHeightNumberBox, "image-size");
         Controls.ParameterHelpButton.AddToHeader(RebarToleranceNumberBox, "rebar-tolerance");
@@ -572,7 +574,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         ImageUnit = SelectedTag(ImageUnitComboBox, "px"),
         ImageWidth = (int)Math.Round(ImageWidthNumberBox.Value),
         ImageHeight = (int)Math.Round(ImageHeightNumberBox.Value),
-        AnimationFps = (int)Math.Round(AnimationFpsNumberBox.Value),
+        AnimationFps = DurationMode && double.IsNaN(AnimationFpsNumberBox.Value) ? 25 : (int)Math.Round(AnimationFpsNumberBox.Value),
+        AnimationTimingMode = DurationMode ? "duration" : "fps",
+        AnimationDurationSeconds = !DurationMode && double.IsNaN(AnimationDurationNumberBox.Value) ? 4 : AnimationDurationNumberBox.Value,
         RebarTolerance = RebarToleranceNumberBox.Value,
         WhiteBackground = WhiteBackgroundCheckBox.IsChecked is true,
         TransparentBackground = TransparentBackgroundCheckBox.IsChecked is true,
@@ -589,6 +593,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         ImageWidthNumberBox.Value = options.ImageWidth;
         ImageHeightNumberBox.Value = options.ImageHeight;
         AnimationFpsNumberBox.Value = options.AnimationFps;
+        AnimationDurationNumberBox.Value = options.AnimationDurationSeconds;
+        AnimationTimingModeComboBox.SelectedIndex = options.AnimationTimingMode == "duration" ? 1 : 0;
         RebarToleranceNumberBox.Value = Math.Round(options.RebarTolerance, 10);
         WhiteBackgroundCheckBox.IsChecked = options.WhiteBackground;
         TransparentBackgroundCheckBox.IsChecked = options.TransparentBackground;
@@ -752,7 +758,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
 
         _legendOverridesByGroup.TryGetValue(groupName, out var existing);
-        var rows = new List<(string Field, CheckBox Manual, TextBox Minimum, TextBox Maximum)>();
+        var rows = new List<(string Field, string Label, CheckBox Manual, TextBox Minimum, TextBox Maximum)>();
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 6 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -767,12 +773,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             grid.Children.Add(text);
         }
         var rowIndex = 1;
-        foreach (var field in LegendFieldNames)
+        foreach (var (field, displayName) in LegendFields)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             OdbLegendOverride? rule = null;
             var enabled = existing is not null && existing.TryGetValue(field, out rule);
-            var label = new TextBlock { Text = field, VerticalAlignment = VerticalAlignment.Center };
+            var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            label.Children.Add(new TextBlock { Text = displayName, TextWrapping = TextWrapping.Wrap });
+            label.Children.Add(new TextBlock { Text = field, FontSize = 11, Opacity = 0.72, TextWrapping = TextWrapping.Wrap });
             var manual = new CheckBox { IsChecked = enabled, VerticalAlignment = VerticalAlignment.Center };
             var minimum = new TextBox
             {
@@ -799,33 +807,58 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             grid.Children.Add(manual);
             grid.Children.Add(minimum);
             grid.Children.Add(maximum);
-            rows.Add((field, manual, minimum, maximum));
+            rows.Add((field, displayName, manual, minimum, maximum));
             rowIndex++;
         }
 
         var content = new StackPanel { Spacing = 10 };
         content.Children.Add(new TextBlock
         {
-            Text = "自动模式按本组全部 ODB 汇总。仅在需要跨批次固定色标时启用手动范围。",
+            Text = "静态云图按组内选定帧统一色标，动画按完整时程统一。手动上下限同时用于两者。",
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.72,
         });
+        var validation = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
         content.Children.Add(grid);
+        var editor = new Grid { MaxHeight = 620, RowSpacing = 6 };
+        editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        editor.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        editor.Children.Add(validation);
+        var scroller = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetRow(scroller, 1);
+        editor.Children.Add(scroller);
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = $"图例范围 · {groupName}",
-            Content = new ScrollViewer
-            {
-                MaxHeight = 620,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = content,
-            },
+            Content = editor,
             PrimaryButtonText = "保存范围",
             SecondaryButtonText = "全部恢复自动",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
+        };
+        var values = new Dictionary<string, OdbLegendOverride>(StringComparer.Ordinal);
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            values.Clear();
+            foreach (var row in rows.Where(row => row.Manual.IsChecked is true))
+            {
+                var validMin = OdbComparisonGroups.TryParseLegendBound(row.Minimum.Text, out var minimum);
+                var validMax = OdbComparisonGroups.TryParseLegendBound(row.Maximum.Text, out var maximum);
+                if (!validMin || !validMax || maximum <= minimum)
+                {
+                    args.Cancel = true;
+                    var input = !validMin ? row.Minimum : row.Maximum;
+                    validation.Text = !validMin || !validMax
+                        ? $"{row.Label}的{(!validMin ? "最小值" : "最大值")}须为 −1×10³⁰ 至 1×10³⁰ 之间的有限数。"
+                        : $"{row.Label}的最大值必须大于最小值。";
+                    validation.Visibility = Visibility.Visible;
+                    input.Focus(FocusState.Programmatic);
+                    input.SelectAll();
+                    return;
+                }
+                values[row.Field] = new OdbLegendOverride { Minimum = minimum, Maximum = maximum };
+            }
         };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.None)
@@ -840,24 +873,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        var values = new Dictionary<string, OdbLegendOverride>(StringComparer.Ordinal);
-        foreach (var row in rows.Where(row => row.Manual.IsChecked is true))
-        {
-            if (!double.TryParse(row.Minimum.Text, out var minimum)
-                || !double.TryParse(row.Maximum.Text, out var maximum)
-                || !double.IsFinite(minimum)
-                || !double.IsFinite(maximum)
-                || maximum <= minimum)
-            {
-                ShowWarning($"{row.Field} 的上下限必须是有效数字，且最大值大于最小值。", "图例范围无效");
-                return;
-            }
-            values[row.Field] = new OdbLegendOverride
-            {
-                Minimum = minimum,
-                Maximum = maximum,
-            };
-        }
         _legendOverridesByGroup[groupName] = values;
         SaveWorkspace();
         ShowWarning($"已保存“{groupName}”的 {values.Count} 个手动图例范围。", "图例设置已更新");
@@ -1141,6 +1156,18 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return;
         }
 
+        if (DurationMode && (!double.IsFinite(AnimationDurationNumberBox.Value) || AnimationDurationNumberBox.Value < 0.01))
+        {
+            ShowWarning("请填写至少 0.01 秒的 GIF 单轮时长。", "输出设置无效");
+            return;
+        }
+        if (!DurationMode && (!double.IsFinite(AnimationFpsNumberBox.Value)
+            || AnimationFpsNumberBox.Value != Math.Round(AnimationFpsNumberBox.Value)))
+        {
+            ShowWarning("请填写 1 至 60 之间的整数帧率。", "输出设置无效");
+            return;
+        }
+        var timing = CaptureOutputOptions();
         var groups = OdbComparisonGroups.ForExecution(rows)
             .Select((group, index) => new OdbPostprocessGroupDraft
             {
@@ -1169,7 +1196,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ImageHeight = (int)Math.Round(ImageHeightNumberBox.Value),
             ExportWhiteBackgroundPng = WhiteBackgroundCheckBox.IsChecked is true,
             ExportTransparentBackgroundPng = TransparentBackgroundCheckBox.IsChecked is true,
-            AnimationFps = (int)Math.Round(AnimationFpsNumberBox.Value),
+            AnimationFps = timing.AnimationFps,
+            AnimationDurationSeconds = DurationMode ? timing.AnimationDurationSeconds : null,
             RebarCutToleranceMm = RebarToleranceNumberBox.Value,
             Jobs = rows.Select(row => row.PostprocessJob!.Clone()).ToArray(),
             Groups = groups,
@@ -1386,6 +1414,15 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         (comboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? fallback;
 
     private static string[] ParseGroupNames(string value) => OdbComparisonGroups.ParseNames(value);
+
+    private bool DurationMode => AnimationTimingModeComboBox.SelectedIndex == 1;
+
+    private void OnAnimationTimingModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AnimationFpsNumberBox is null || AnimationDurationNumberBox is null) return;
+        AnimationFpsNumberBox.Visibility = DurationMode ? Visibility.Collapsed : Visibility.Visible;
+        AnimationDurationNumberBox.Visibility = DurationMode ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private void OnImageUnitChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1749,6 +1786,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         ImageWidthNumberBox.IsEnabled = idle;
         ImageHeightNumberBox.IsEnabled = idle;
         AnimationFpsNumberBox.IsEnabled = idle;
+        AnimationTimingModeComboBox.IsEnabled = idle;
+        AnimationDurationNumberBox.IsEnabled = idle;
         RebarToleranceNumberBox.IsEnabled = idle;
         WhiteBackgroundCheckBox.IsEnabled = idle;
         TransparentBackgroundCheckBox.IsEnabled = idle;

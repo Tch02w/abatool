@@ -111,18 +111,33 @@ def render_group_contours(
     log: LogCallback | None = None,
     controller: MultiProcessController | None = None,
 ) -> None:
-    run_process(
-        [
-            abaqus_command,
-            "cae",
-            f"noGUI={abaqus_script('render_group_contours.py')}",
-            "--",
-            str(job_config_path),
-        ],
-        job_config_path.parent,
-        log,
-        controller,
-    )
+    config = json.loads(job_config_path.read_text(encoding="utf-8"))
+    request_id = config.get("render_request_id")
+    command = [abaqus_command, "cae", f"noGUI={abaqus_script('render_group_contours.py')}",
+               "--", str(job_config_path)]
+    process_error = None
+    try:
+        run_process(command, job_config_path.parent, log, controller)
+    except ProcessCancelled:
+        raise
+    except RuntimeError as exc:
+        if not request_id:
+            raise
+        process_error = exc
+    if not request_id:
+        return
+    # Some CAE versions exit zero after a script error. Require this invocation's receipt.
+    try:
+        metadata = json.loads((Path(config["output_dir"]) / "metadata.json").read_text(encoding="utf-8"))
+        receipt = metadata["group_render_receipt"]
+        if receipt["request_id"] != request_id:
+            raise ValueError("渲染回执不属于本次请求")
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise RuntimeError(f"{config['odb_path']} 未返回本次有效的出图回执：{process_error or exc}") from exc
+    if receipt.get("status") != "succeeded":
+        raise RuntimeError(receipt.get("error") or "云图渲染失败，请检查渲染日志")
+    if process_error:
+        raise process_error
 
 
 __all__ = [

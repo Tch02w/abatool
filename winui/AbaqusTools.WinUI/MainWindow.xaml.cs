@@ -590,6 +590,7 @@ public sealed partial class MainWindow : Window
         ReportPageStatus("正在安全关闭本地控制面…");
         try
         {
+            await App.Current.PendingResultFileOperation;
             await _controlPlane.DisposeAsync();
             _shutdownComplete = true;
             AppWindow.Closing -= OnAppWindowClosing;

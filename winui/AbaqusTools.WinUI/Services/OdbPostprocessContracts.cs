@@ -66,7 +66,11 @@ public sealed class OdbPostprocessRunCreateRequest
     public bool ExportTransparentBackgroundPng { get; init; } = true;
 
     [JsonPropertyName("animationFps")]
-    public int AnimationFps { get; init; } = 5;
+    public int AnimationFps { get; init; } = 25;
+
+    [JsonPropertyName("animationDurationSeconds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? AnimationDurationSeconds { get; init; }
 
     [JsonPropertyName("rebarCutToleranceMm")]
     public double RebarCutToleranceMm { get; init; } = 0.0001;

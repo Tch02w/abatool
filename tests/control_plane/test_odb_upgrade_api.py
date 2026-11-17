@@ -1,9 +1,12 @@
 import threading
 import time
 
-from tests.control_plane.test_api import api_request, json_response, running_control_plane
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
 from tests.control_plane.test_odb_upgrade_operations import request
-
 
 BASE = "/api/v1/odb-upgrade-operations"
 

@@ -6,6 +6,9 @@ public sealed record OdbExecutionGroup(string Name, IReadOnlyList<OdbFileRow> Me
 
 public static class OdbComparisonGroups
 {
+    internal static bool TryParseLegendBound(string text, out double value) =>
+        double.TryParse(text, out value) && double.IsFinite(value) && Math.Abs(value) <= 1e30;
+
     public static void ChangeGroup(IEnumerable<OdbFileRow> rows, string oldName, string? newName,
         IDictionary<string, IReadOnlyDictionary<string, OdbLegendOverride>> legends,
         IDictionary<string, List<string>> orders)

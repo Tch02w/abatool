@@ -65,6 +65,10 @@ def test_native_worker_payload_matches_legacy(tmp_path, monkeypatch, pile_type, 
         for label, module in (("legacy", batch_window), ("native", postprocess_execution)):
             def record(stage, config_path, label=label):
                 payload = json.loads(config_path.read_text(encoding="utf-8"))
+                if label == "native" and stage == "render":
+                    assert payload.pop("require_fixed_legends") is True
+                    assert payload.pop("legend_scan_sequences") == {"PILE_U_MAG": list(range(5))}
+                    assert len(payload.pop("render_request_id")) == 32
                 normalized = {key: value for key, value in payload.items() if key not in ("output_dir", "source_output_dir")}
                 traces[label].append((stage, normalized))
                 return Path(payload["output_dir"])

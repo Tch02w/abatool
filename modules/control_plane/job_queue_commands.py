@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from modules.submitter.app_paths import JOBLIST_PATH
 from modules.submitter.command import (
@@ -31,6 +31,7 @@ from modules.submitter.constants import (
     STATUS_WAITING_DEPENDENCY,
     TERMINAL_STATUSES,
 )
+from modules.submitter.cpu_policy import validate_local_cpus
 from modules.submitter.external_job_scan_core import (
     collect_known_external_jobs,
     merge_external_scan_results,
@@ -46,7 +47,6 @@ from modules.submitter.queue_store import load_joblist_state, save_joblist_state
 
 from .contracts import SCHEMA_VERSION, ApiProblem
 from .job_drafts import LocalJobDraftPreviewRequest
-from modules.submitter.cpu_policy import validate_local_cpus
 from .job_queues import project_job_queues
 
 LOGGER = logging.getLogger(__name__)

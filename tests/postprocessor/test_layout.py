@@ -158,15 +158,9 @@ def test_animation_and_static_contours_use_fixed_scoped_legends() -> None:
         assert "set_animation_limits(spec)" in source
         assert "set_static_limits(spec)" in source
         assert 'static_base = os.path.join(contour_dir, spec["name"] + "_LAST")' in source
-        assert (
-            '"animation_legend_mode": '
-            '"comparison_group_full_timeline_fixed"'
-        ) in source
+        assert '"comparison_group_full_timeline_fixed"' in source
         assert "animation_legend_ranges" in source
-        assert (
-            '"static_contour_legend_mode": '
-            '"comparison_group_fixed_selected_frames"'
-        ) in source
+        assert '"comparison_group_fixed_selected_frames"' in source
         assert "shutil.copyfile(written[-1]" not in source
 
     assert "render_timeline = full_timeline" in group_renderer

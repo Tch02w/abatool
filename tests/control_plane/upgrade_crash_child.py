@@ -1,6 +1,6 @@
 """Disposable crash-test process: no Abaqus invocation or model writes."""
-import sys
 import os
+import sys
 import threading
 from pathlib import Path
 

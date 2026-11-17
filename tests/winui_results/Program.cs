@@ -18,6 +18,7 @@ try
     await NonTerminalIndexCannotRefreshAsync();
     RecordRequestsAreInvalidated();
     CheckTablePreview();
+    CheckRecyclePaths();
     Console.WriteLine("10 result-browser asynchronous lifecycle checks and table preview checks passed");
 }
 catch (Exception exception)
@@ -29,6 +30,35 @@ catch (Exception exception)
 static void Check(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+static void CheckRecyclePaths()
+{
+    var root = Path.Combine(Path.GetTempPath(), "result-recycle-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    var export = Path.Combine(root, "curve.csv");
+    var model = Path.Combine(root, "source.odb");
+    File.WriteAllText(export, "time,force");
+    File.WriteAllText(model, "fixture");
+    try
+    {
+        Check(ResultFileRecycle.ValidatePath(root, export) == export, "Export should be accepted");
+        foreach (var path in new[] { model, root, Path.Combine(root, "..", "outside.csv"), Path.Combine(root, "missing.csv") })
+        {
+            var rejected = false;
+            try { ResultFileRecycle.ValidatePath(root, path); }
+            catch (IOException) { rejected = true; }
+            Check(rejected, $"Unsafe recycle path accepted: {path}");
+        }
+        Check(File.Exists(export) && File.Exists(model), "Path validation changed source files");
+        Console.WriteLine("6 result recycle path checks passed");
+    }
+    finally
+    {
+        File.Delete(export);
+        File.Delete(model);
+        Directory.Delete(root);
+    }
 }
 
 static TaskCompletionSource<string> PendingDiscovery() =>

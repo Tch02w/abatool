@@ -6,7 +6,9 @@ import math
 import re
 import shutil
 from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
@@ -94,19 +96,56 @@ def count_render_pngs(output_dir: Path, folder_names: tuple[str, ...]) -> int:
     )
 
 
-def build_gifs(output_dir: Path, fps: int = 5) -> dict[str, int]:
-    frame_root = output_dir / "frames"; animation_dir = output_dir / "animations"
-    animation_dir.mkdir(parents=True, exist_ok=True); counts = {}
-    if not frame_root.exists(): return counts
+def _gif_total_ticks(count: int, fps: int, duration_seconds: float | None) -> int:
+    if duration_seconds is None:
+        if not 1 <= fps <= 100:
+            raise ValueError("GIF 帧率必须在 1 到 100 帧/秒之间")
+        return (200 * count + fps) // (2 * fps)
+    if not math.isfinite(duration_seconds) or duration_seconds <= 0:
+        raise ValueError("GIF 单轮时长必须是有限正数")
+    ticks = int((Decimal(str(duration_seconds)) * 100).to_integral_value(rounding=ROUND_HALF_UP))
+    if not count <= ticks <= 65535 * count:
+        raise ValueError(f"{count} 个源帧的 GIF 单轮时长需在 {count / 100:.2f} 至 {65535 * count / 100:.2f} 秒之间")
+    return ticks
+
+
+def build_gifs(output_dir: Path, fps: int = 5, *, duration_seconds: float | None = None) -> dict[str, int]:
+    frame_root = output_dir / "frames"
+    animation_dir = output_dir / "animations"
+    animation_dir.mkdir(parents=True, exist_ok=True)
+    counts = {}
+    if not frame_root.exists():
+        return counts
     for folder in sorted(path for path in frame_root.iterdir() if path.is_dir()):
         paths = sorted(folder.glob("*.png"))
-        if not paths: continue
+        count = len(paths)
+        if not count:
+            continue
+        try:
+            ticks = _gif_total_ticks(count, fps, duration_seconds)
+        except ValueError as error:
+            raise ValueError(f"{folder.name}：{error}") from error
+        # Round cumulative frame boundaries so errors never accumulate over a loop.
+        if duration_seconds is None:
+            boundaries = [(200 * i + fps) // (2 * fps) for i in range(count + 1)]
+        else:
+            boundaries = [(i * ticks + count // 2) // count for i in range(count + 1)]
+        delays = [10 * (end - start) for start, end in zip(boundaries, boundaries[1:])]
         images = []
-        for path in paths:
-            with Image.open(path) as source: images.append(source.convert("P", palette=Image.Palette.ADAPTIVE, colors=256))
-        images[0].save(animation_dir / f"{folder.name}.gif", save_all=True, append_images=images[1:],
-                       duration=round(1000/fps), loop=0, disposal=2, optimize=False)
-        counts[folder.name] = len(images)
+        with NamedTemporaryFile(dir=animation_dir, suffix=".gif", delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+        try:
+            for path in paths:
+                with Image.open(path) as source:
+                    images.append(source.convert("P", palette=Image.Palette.ADAPTIVE, colors=256))
+            images[0].save(temporary_path, save_all=True, append_images=images[1:],
+                           duration=delays, loop=0, disposal=2, optimize=False)
+            temporary_path.replace(animation_dir / f"{folder.name}.gif")
+        finally:
+            for image in images:
+                image.close()
+            temporary_path.unlink(missing_ok=True)
+        counts[folder.name] = count
     return counts
 
 
@@ -783,6 +822,7 @@ def finalize_render_output(
     output_dir: Path,
     fps: int = 5,
     *,
+    duration_seconds: float | None = None,
     export_white_background_png: bool = True,
     export_transparent_background_png: bool = True,
 ) -> dict:
@@ -798,7 +838,11 @@ def finalize_render_output(
         remove_render_png_directories(
             output_dir, ("frames_transparent", "contours_transparent")
         )
-    animations = build_gifs(output_dir, fps)
+    animations = build_gifs(output_dir, fps, duration_seconds=duration_seconds)
+    timing = {}
+    for field, count in animations.items():
+        ticks = _gif_total_ticks(count, fps, duration_seconds)
+        timing[field] = {"source_frames": count, "seconds": ticks / 100, "average_fps": count * 100 / ticks}
     if not export_white_background_png:
         remove_render_png_directories(output_dir, ("frames", "contours"))
     manifest = {"white_png_count": white_png_count if export_white_background_png else 0,
@@ -806,7 +850,10 @@ def finalize_render_output(
         "original_pngs_preserved": bool(export_white_background_png),
         "export_white_background_png": bool(export_white_background_png),
         "export_transparent_background_png": bool(export_transparent_background_png),
-        "animations": animations}
+        "animations": animations,
+        "animation_timing": {"mode": "fps" if duration_seconds is None else "duration",
+                             "target_fps": fps if duration_seconds is None else None,
+                             "target_seconds": duration_seconds, "fields": timing}}
     (output_dir/"render_postprocess_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     hide_internal_result_json_files(output_dir)
     return manifest
@@ -816,12 +863,14 @@ def finalize_output(
     output_dir: Path,
     fps: int = 5,
     *,
+    duration_seconds: float | None = None,
     export_white_background_png: bool = True,
     export_transparent_background_png: bool = True,
 ) -> dict:
     manifest = {**finalize_numeric_output(output_dir), **finalize_render_output(
         output_dir,
         fps,
+        duration_seconds=duration_seconds,
         export_white_background_png=export_white_background_png,
         export_transparent_background_png=export_transparent_background_png,
     )}

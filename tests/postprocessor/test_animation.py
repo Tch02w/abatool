@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from modules.postprocessor.postprocess_core import (
@@ -23,6 +24,52 @@ def test_build_gif_contains_every_rendered_frame(tmp_path: Path) -> None:
     with Image.open(target) as animation:
         assert animation.n_frames == 3
         assert animation.info["duration"] == 200
+
+
+@pytest.mark.parametrize(("fps", "duration", "expected"), [
+    (30, None, {10: 330, 41: 1370}),
+    (60, None, {10: 170, 41: 680}),
+    (25, 4.0, {10: 4000, 41: 4000}),
+    (25, 1.125, {10: 1130, 41: 1130}),
+])
+def test_gif_loop_timing_and_retained_frames(tmp_path, fps, duration, expected):
+    for count in expected:
+        frames = tmp_path / "frames" / str(count)
+        frames.mkdir(parents=True)
+        for index in range(count):
+            Image.new("RGB", (8, 8), (index, 0, 0)).save(frames / f"{index:04}.png")
+    manifest = finalize_render_output(tmp_path, fps, duration_seconds=duration, export_transparent_background_png=False)
+    timing = manifest["animation_timing"]
+    assert timing["mode"] == ("fps" if duration is None else "duration")
+    for count, total_ms in expected.items():
+        with Image.open(tmp_path / "animations" / f"{count}.gif") as gif:
+            assert gif.n_frames == count
+            delays = []
+            for index in range(count):
+                gif.seek(index)
+                assert gif.convert("RGB").getpixel((0, 0)) == (index, 0, 0)
+                delays.append(gif.info["duration"])
+            assert sum(delays) == total_ms and min(delays) >= 10
+            assert max(delays) - min(delays) <= 10
+        assert timing["fields"][str(count)]["seconds"] == total_ms / 1000
+
+
+def test_duplicate_frames_preserve_time_and_infeasible_target_preserves_last_gif(tmp_path):
+    frames = tmp_path / "frames" / "MISES"
+    frames.mkdir(parents=True)
+    for index, color in enumerate(("red", "red", "blue")):
+        Image.new("RGB", (8, 8), color).save(frames / f"{index}.png")
+    build_gifs(tmp_path, duration_seconds=1.23)
+    target = tmp_path / "animations" / "MISES.gif"
+    before = target.read_bytes()
+    with Image.open(target) as gif:
+        assert gif.n_frames == 2
+        assert gif.info["duration"] == 820
+        gif.seek(1)
+        assert gif.info["duration"] == 410
+    with pytest.raises(ValueError, match="MISES.*3 个源帧.*0.03"):
+        build_gifs(tmp_path, duration_seconds=0.02)
+    assert target.read_bytes() == before
 
 
 def test_transparent_copy_does_not_modify_original_png(tmp_path: Path) -> None:

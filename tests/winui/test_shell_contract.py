@@ -28,6 +28,15 @@ XAML_NAME = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
 XAML_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
 
 
+def test_postprocess_legend_errors_keep_the_dialog_and_draft() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    editor = page.split("private async void OnLegendClicked", 1)[1].split("private async void OnManageGroupsClicked", 1)[0]
+    handler, after = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("await dialog.ShowAsync()", 1)
+    assert "maximum <= minimum" in handler and "args.Cancel = true" in handler
+    assert "input.Focus(FocusState.Programmatic)" in handler and "SaveWorkspace()" not in handler
+    assert "_legendOverridesByGroup[groupName] = values" in after
+
+
 def test_postprocess_invalid_editor_input_keeps_dialog_open() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
     editor = page.split("private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync", 1)[1]
@@ -625,8 +634,18 @@ def test_all_numeric_fields_use_the_same_permanent_button_control() -> None:
         assert "new NumberBox" not in source
         assert "NumberBoxSpinButtonPlacementMode.Compact" not in source
         assert "NumberBoxSpinButtonPlacementMode.Hidden" not in source
-    assert len(xaml_fields) == 9 and dynamic_count == 6
+    assert len(xaml_fields) == 10 and dynamic_count == 6
     assert all(node.get("SpinButtonPlacementMode") == "Inline" for node in xaml_fields)
+
+
+def test_gif_timing_controls_expose_two_modes_and_the_active_value():
+    root = ET.parse(WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").getroot()
+    mode = _named_element(root, "AnimationTimingModeComboBox")
+    assert [item.get("Tag") for item in mode] == ["fps", "duration"]
+    assert mode.get("SelectionChanged") == "OnAnimationTimingModeChanged"
+    assert _named_element(root, "AnimationFpsNumberBox").get("Value") == "25"
+    duration = _named_element(root, "AnimationDurationNumberBox")
+    assert duration.get("Value") == "4" and duration.get("Visibility") == "Collapsed"
 
 
 def test_job_queue_restores_external_local_job_scan_controls() -> None:

@@ -19,6 +19,8 @@ dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 
 
 ## 生成物与本地状态
 
+pytest 默认收集 tests，生成目录保留在 GPTWork。2026-11-18 的全量基线通过 648 项及 9 子检查，随后控制面/WinUI 修改后复核通过 195 项。详细命令、日志与尚未验证的发布要求见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
 不提交 `.venv`、IDE 配置、`bin/obj`、Python 缓存、测试临时目录、ODB/求解器输出、应用数据库或日志。用户配置和队列保存在应用数据目录，不应复制进仓库。
 
 ## 发布前检查

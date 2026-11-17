@@ -165,7 +165,7 @@ class OdbResultGraphService:
             ) from exc
         try:
             if not isinstance(payload, dict):
-                raise ValueError("not an object")
+                raise ValueError("not an object")  # noqa: TRY004 - persisted JSON uses value-error recovery
             _validate_request(
                 payload, {"schemaVersion", "revision", "outputDirectory", "nodes"}
             )

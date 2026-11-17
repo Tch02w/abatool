@@ -4,12 +4,23 @@ import pytest
 
 from modules.control_plane.contracts import ApiProblem
 from modules.control_plane.job_drafts import LocalJobDraftPreviewRequest
-from modules.control_plane.postprocessing import PostprocessScanRequest, PostprocessRunRequest
+from modules.control_plane.postprocessing import (
+    PostprocessRunRequest,
+    PostprocessScanRequest,
+)
 from modules.submitter.cpu_policy import local_cpu_policy
-from modules.submitter.local_job_execution import execute_local_job, LocalJobProcessController, _execution_command
+from modules.submitter.local_job_execution import (
+    LocalJobProcessController,
+    _execution_command,
+    execute_local_job,
+)
 from modules.submitter.models import QueueItem
-from tests.control_plane.test_postprocessing_api import _scan_payload, _run_payload
-from tests.control_plane.test_api import api_request, json_response, running_control_plane
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
+from tests.control_plane.test_postprocessing_api import _run_payload, _scan_payload
 
 
 @pytest.mark.parametrize('release,limit', [('2020', 32), ('2021', 32), ('2022', 16), ('2024', 16), ('2025', 16)])
@@ -17,7 +28,7 @@ def test_local_draft_cpu_boundary(monkeypatch, release, limit):
     monkeypatch.setattr('psutil.cpu_count', lambda logical=True: 32 if logical else 16)
     monkeypatch.setattr('modules.submitter.app_settings.load_app_settings', lambda: {
         'abaqus_command': 'abaqus', 'local_abaqus_release': release})
-    monkeypatch.setattr('modules.postprocessor.config.load_defaults', lambda: {})
+    monkeypatch.setattr('modules.postprocessor.config.load_defaults', dict)
     payload = {'schemaVersion': 1, 'abaqusCommand': 'abaqus', 'cpus': limit}
     assert LocalJobDraftPreviewRequest.from_payload(payload).draft.cpus == limit
     with pytest.raises(ApiProblem, match='cpus'):
@@ -47,7 +58,7 @@ def test_policy_fallbacks(monkeypatch, release, physical, limit):
 def test_launcher_version_and_resource_endpoint(tmp_path, monkeypatch):
     monkeypatch.setattr('psutil.cpu_count', lambda logical=True: 32 if logical else 16)
     monkeypatch.setattr('modules.submitter.app_settings.load_app_settings', lambda: {'local_abaqus_release': '2025'})
-    monkeypatch.setattr('modules.postprocessor.config.load_defaults', lambda: {})
+    monkeypatch.setattr('modules.postprocessor.config.load_defaults', dict)
     with running_control_plane(tmp_path) as runtime:
         response = api_request(runtime, '/api/v1/local-resources?abaqusCommand=abq2021.bat')
         assert response[0] == 200

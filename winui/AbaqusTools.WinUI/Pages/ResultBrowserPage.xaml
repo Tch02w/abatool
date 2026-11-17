@@ -311,18 +311,16 @@
                         Click="OnRevealFileClicked"
                         Content="打开所在文件夹"
                         IsEnabled="False" />
-                    <Button
-                        x:Name="CopyPathButton"
-                        Grid.Column="4"
-                        Click="OnCopyPathClicked"
-                        Content="复制路径"
-                        IsEnabled="False" />
-                    <Button
-                        x:Name="ExportButton"
-                        Grid.Column="5"
-                        Click="OnExportClicked"
-                        Content="导出所选"
-                        IsEnabled="False" />
+                    <DropDownButton Grid.Column="4" Content="更多">
+                        <DropDownButton.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem x:Name="CopyPathButton" Text="复制路径" Click="OnCopyPathClicked" IsEnabled="False" />
+                                <MenuFlyoutItem x:Name="ExportButton" Text="导出所选" Click="OnExportClicked" IsEnabled="False" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem x:Name="RecycleButton" Text="移到回收站" Click="OnRecycleClicked" IsEnabled="False" />
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
                 </Grid>
             </Grid>
         </Grid>

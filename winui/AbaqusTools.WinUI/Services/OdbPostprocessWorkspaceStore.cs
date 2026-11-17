@@ -22,7 +22,9 @@ public sealed class OdbPostprocessOutputOptions
     public string ImageUnit { get; set; } = "px";
     public int ImageWidth { get; set; } = 1500;
     public int ImageHeight { get; set; } = 1000;
-    public int AnimationFps { get; set; } = 5;
+    public int AnimationFps { get; set; } = 25;
+    public string AnimationTimingMode { get; set; } = "fps";
+    public double AnimationDurationSeconds { get; set; } = 4;
     public double RebarTolerance { get; set; } = 0.0001;
     public bool WhiteBackground { get; set; } = true;
     public bool TransparentBackground { get; set; } = true;
@@ -36,7 +38,9 @@ public sealed class OdbPostprocessOutputOptions
             || RebarMethod is not ("element_cut" or "legacy_interpolation")
             || ImageUnit is not ("px" or "mm")
             || ImageWidth < min || ImageWidth > max || ImageHeight < min || ImageHeight > max
-            || AnimationFps is < 1 or > 60 || !double.IsFinite(RebarTolerance)
+            || AnimationFps is < 1 or > 60 || AnimationTimingMode is not ("fps" or "duration")
+            || !double.IsFinite(AnimationDurationSeconds) || AnimationDurationSeconds < 0.01
+            || !double.IsFinite(RebarTolerance)
             || RebarTolerance < 0 || RebarTolerance > 100)
             throw new InvalidDataException("后处理输出设置无效。");
     }

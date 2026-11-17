@@ -3,6 +3,7 @@ import threading
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from modules.postprocessor import postprocess_execution as execution
 from modules.postprocessor.runner_parallel import MultiProcessController
@@ -16,7 +17,8 @@ def test_group_results_preserve_requested_order_after_parallel_completion(tmp_pa
     plan = execution.PostprocessPlan(
         jobs={path: execution.PostprocessJob(path=path, start_step="Load", end_step="Load") for path in paths},
         groups=(group,), options=execution.PostprocessOptions(
-            "abaqus", tmp_path, 2, True, False, "element_cut", 0, {}), batch_id="ordered",
+            "abaqus", tmp_path, 2, True, False, "element_cut", 0,
+            {"animation_duration_seconds": 4, "export_transparent_background_png": False}), batch_id="ordered",
     )
     monkeypatch.setattr(execution, "batch_temp_dir", lambda batch: tmp_path / "scratch" / batch)
     monkeypatch.setattr(execution, "scan_field_ranges", lambda *a: {
@@ -27,17 +29,29 @@ def test_group_results_preserve_requested_order_after_parallel_completion(tmp_pa
 
     def render(command, config_path, *args):
         payload = json.loads(config_path.read_text(encoding="utf-8"))
+        frames = Path(payload["output_dir"]) / "frames" / "PILE_U_MAG"
+        frames.mkdir(parents=True)
+        count = 3 if Path(payload["odb_path"]) == paths[0] else 7
+        for index in range(count):
+            Image.new("RGB", (8, 8), (index, 0, 0)).save(frames / f"{index}.png")
         if Path(payload["odb_path"]) == paths[0]:
             assert second_done.wait(5)
         else:
             second_done.set()
 
     monkeypatch.setattr(execution, "render_group_contours", render)
-    monkeypatch.setattr(execution, "finalize_render_output", lambda *a, **kw: None)
     monkeypatch.setattr(execution, "write_group_member_manifest", lambda *a, **kw: None)
     outputs = execution._execute_group(plan, group, 0, lambda *a: None, None,
                                        MultiProcessController(), threading.Lock())
     assert [Path(output).name for output in outputs] == [path.stem for path in paths]
+    for output, count in zip(outputs, (3, 7)):
+        with Image.open(Path(output) / "animations" / "PILE_U_MAG.gif") as gif:
+            assert gif.n_frames == count
+            total = 0
+            for index in range(count):
+                gif.seek(index)
+                total += gif.info["duration"]
+            assert total == 4000
     records = list(tmp_path.rglob("comparison_group_legends.json"))
     assert records
     for record in records:

@@ -39,7 +39,7 @@ class UpgradeJournal:
             raise ValueError('升级记录版本无效')
         records = payload.get('operations')
         if not isinstance(records, list):
-            raise ValueError('升级记录列表无效')
+            raise ValueError('升级记录列表无效')  # noqa: TRY004 - journal corruption uses a uniform ValueError contract
         ids, requests = set(), set()
         for item in records:
             self._validate(item)
@@ -64,7 +64,7 @@ class UpgradeJournal:
             raise ValueError('升级记录状态无效')
         preview, progress = item.get('preview'), item.get('progress')
         if not isinstance(preview, dict) or not isinstance(progress, dict):
-            raise ValueError('升级记录预览或进度无效')
+            raise ValueError('升级记录预览或进度无效')  # noqa: TRY004 - same persisted-data validation contract
         entries = preview.get('entries')
         if not isinstance(entries, list) or not entries or any(
             not isinstance(entry, dict) or not isinstance(entry.get('sourcePath'), str) or not entry['sourcePath']
@@ -81,7 +81,7 @@ class UpgradeJournal:
         returned = set()
         for receipt in item['results']:
             if not isinstance(receipt.get('source_path'), str) or not isinstance(receipt.get('status'), str):
-                raise ValueError('升级记录回执字段无效')
+                raise ValueError('升级记录回执字段无效')  # noqa: TRY004 - same persisted-data validation contract
             key = os.path.normcase(str(Path(receipt['source_path']).resolve()))
             if key not in expected or key in returned:
                 raise ValueError('升级记录回执含其他文件或重复文件')

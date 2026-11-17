@@ -6,6 +6,12 @@ static void Check(bool condition, string message)
     if (!condition) throw new InvalidOperationException(message);
 }
 
+foreach (var input in new[] { "-1E30", "1E30", "0", "-143" })
+    Check(OdbComparisonGroups.TryParseLegendBound(input, out _), "Expected finite legend bound " + input);
+foreach (var input in new[] { "", "NaN", "Infinity", "-2E30", "1E31", "value" })
+    Check(!OdbComparisonGroups.TryParseLegendBound(input, out _), "Unexpected legend bound " + input);
+Console.WriteLine("10 legend editor numeric checks passed");
+
 static OdbPostprocessScanItem Scan(string error = "", bool removePile = false) => new()
 {
     Path = "case.odb", Error = error, Steps = ["Load"], AssemblyNodeSets = ["LoadSet"],
@@ -177,7 +183,8 @@ try
         Legends = new() { ["A"] = new() },
         GroupMemberOrder = new() { ["A"] = [sameNameB.Path, sameNameA.Path] },
         Output = new() { ImageUnit = "mm", ImageWidth = 200, ImageHeight = 150,
-            AnimationFps = 12, WhiteBackground = false, FullTimehistory = true, ParallelWorkers = 32 },
+            AnimationFps = 12, AnimationTimingMode = "duration", AnimationDurationSeconds = 3.25,
+            WhiteBackground = false, FullTimehistory = true, ParallelWorkers = 32 },
     });
     var loaded = new OdbPostprocessWorkspaceStore(stateDirectory).Load(root)!;
     Check(loaded.GroupMemberOrder["A"].SequenceEqual(new[] { sameNameB.Path, sameNameA.Path }),
@@ -185,6 +192,7 @@ try
     Console.WriteLine("1 group ordering persistence check passed");
     Check(loaded.Output.ImageUnit == "mm" && loaded.Output.ImageWidth == 200
         && loaded.Output.ImageHeight == 150 && loaded.Output.AnimationFps == 12
+        && loaded.Output.AnimationTimingMode == "duration" && loaded.Output.AnimationDurationSeconds == 3.25
         && !loaded.Output.WhiteBackground && loaded.Output.FullTimehistory && loaded.Output.ParallelWorkers == 32,
         "Restart lost output settings");
     var invalidOutputRejected = false;
@@ -214,8 +222,19 @@ try
     Check(store.Load(root)!.Output.ImageWidth == 1500,
         "Legacy workspace without output settings failed to load defaults");
     Console.WriteLine("1 legacy output settings compatibility check passed");
+    Check(store.Load(root)!.Output.AnimationFps == 25, "New workspace should start at 25 fps");
+    File.WriteAllText(stateFile, """{"Version":1,"Output":{"AnimationFps":5}}""");
+    Check(store.Load(root)!.Output is { AnimationFps: 5, AnimationTimingMode: "fps" },
+        "Existing workspace should retain its saved frame rate");
+    var fpsJson = System.Text.Json.JsonSerializer.Serialize(new OdbPostprocessRunCreateRequest());
+    var durationJson = System.Text.Json.JsonSerializer.Serialize(new OdbPostprocessRunCreateRequest { AnimationDurationSeconds = 4.25 });
+    Check(!fpsJson.Contains("animationDurationSeconds") && durationJson.Contains("\"animationDurationSeconds\":4.25"),
+        "Only duration mode should send a target duration");
+    Console.WriteLine("3 GIF timing compatibility checks passed");
     foreach (var invalidJson in new[]
     {
+        """{"Output":{"AnimationTimingMode":"other"}}""",
+        """{"Output":{"AnimationDurationSeconds":0}}""",
         "{\"Rows\":[null]}",
         "{\"Rows\":[{\"Path\":\"case.odb\",\"Draft\":{\"pileSteelSet\":null}}]}",
         "{\"Legends\":{\"A\":null}}",
@@ -234,7 +253,7 @@ try
     try { store.Save(root, new() { Rows = [new() { Path = "case.odb" }, new() { Path = "CASE.odb" }] }); }
     catch (InvalidDataException) { rejected = true; }
     Check(rejected && File.ReadAllText(stateFile) == protectedContent, "Invalid save overwrote previous state");
-    Console.WriteLine("6 invalid workspace protection checks passed");
+    Console.WriteLine("8 invalid workspace protection checks passed");
 }
 finally
 {

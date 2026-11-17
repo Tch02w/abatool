@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -33,7 +34,12 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
-from .region_extraction import REGION_KIND, RegionExtractionRequest, execute_region_extraction, finalize_region_extraction
+from .region_extraction import (
+    REGION_KIND,
+    RegionExtractionRequest,
+    execute_region_extraction,
+    finalize_region_extraction,
+)
 
 SCAN_KIND = "odb.postprocess.scan"
 RUN_KIND = "odb.postprocess.run"
@@ -358,11 +364,12 @@ class PostprocessRunRequest:
             "exportWhiteBackgroundPng",
             "exportTransparentBackgroundPng",
             "animationFps",
+            "animationDurationSeconds",
             "rebarCutToleranceMm",
             "jobs",
             "groups",
         }
-        _validate_fields(payload, allowed)
+        _validate_fields(payload, allowed, required=allowed - {"animationDurationSeconds"})
         root = _resolve_root(_text(payload, "root"))
         settings = dict(defaults)
         image_unit = _text(payload, "imageSizeUnit")
@@ -397,6 +404,12 @@ class PostprocessRunRequest:
                 ),
             }
         )
+        if "animationDurationSeconds" in payload:
+            settings["animation_duration_seconds"] = _number(
+                payload, "animationDurationSeconds", minimum=0.01, maximum=sys.float_info.max
+            )
+        else:
+            settings.pop("animation_duration_seconds", None)
         if not settings["export_white_background_png"] and not settings[
             "export_transparent_background_png"
         ]:

@@ -16,6 +16,7 @@ public partial class App : Application
     public static new App Current => (App)Application.Current;
 
     public ControlPlaneHost ControlPlane { get; }
+    public Task PendingResultFileOperation { get; set; } = Task.CompletedTask;
 
     public MainWindow MainWindow => _mainWindow
         ?? throw new InvalidOperationException("主窗口尚未创建。");

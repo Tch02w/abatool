@@ -25,6 +25,8 @@ Start-Process .\winui\AbaqusTools.WinUI\bin\Debug\net10.0-windows10.0.26100.0\wi
 
 ## 验证命令
 
+pytest 默认只收集 `tests` 内的检查，忽略 GPTWork、虚拟环境和构建输出。指定验收范围时仍可传入明确的测试路径。
+
 文档链接和代码路径：
 
 ```powershell

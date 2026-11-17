@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from math import isfinite
 from typing import Any
 
 
@@ -58,6 +59,25 @@ def choose_sequences(
     raise ValueError(f"未知帧模式：{mode}")
 
 
+def _frame_ranges(frame: dict[str, Any]):
+    for field, limits in frame.get("ranges", {}).items():
+        try:
+            low, high = float(limits["min"]), float(limits["max"])
+        except (TypeError, ValueError, KeyError, OverflowError):
+            continue
+        if isfinite(low) and isfinite(high) and low <= high:
+            yield field, low, high
+
+
+def member_legend_coverage(scan: dict[str, Any]) -> dict[str, list[int]]:
+    """Sequences that actually contributed usable bounds, for this ODB only."""
+    sequences: dict[str, list[int]] = {}
+    for frame in scan["frame_catalog"]:
+        for field, _, _ in _frame_ranges(frame):
+            sequences.setdefault(field, []).append(int(frame["SequenceIndex"]))
+    return sequences
+
+
 def aggregate_group_ranges(jobs: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, Any]]]:
     """Build per-comparison-group limits from only the selected frames.
 
@@ -73,10 +93,10 @@ def aggregate_group_ranges(jobs: list[dict[str, Any]]) -> dict[str, dict[str, di
         for frame in job["range_scan"]["frame_catalog"]:
             if int(frame["SequenceIndex"]) not in selected:
                 continue
-            for spec, limits in frame.get("ranges", {}).items():
+            for spec, low, high in _frame_ranges(frame):
                 current = group_ranges.setdefault(spec, [float("inf"), float("-inf")])
-                current[0] = min(current[0], float(limits["min"]))
-                current[1] = max(current[1], float(limits["max"]))
+                current[0] = min(current[0], low)
+                current[1] = max(current[1], high)
 
     plans: dict[str, dict[str, dict[str, Any]]] = {}
     for group, fields in observed.items():
@@ -153,12 +173,12 @@ def aggregate_group_animation_ranges(
         group = str(job["comparison_group"]).strip() or "默认组"
         group_ranges = observed.setdefault(group, {})
         for frame in job["range_scan"].get("frame_catalog", []):
-            for spec, limits in frame.get("ranges", {}).items():
+            for spec, low, high in _frame_ranges(frame):
                 current = group_ranges.setdefault(
                     str(spec), [float("inf"), float("-inf")]
                 )
-                current[0] = min(current[0], float(limits["min"]))
-                current[1] = max(current[1], float(limits["max"]))
+                current[0] = min(current[0], low)
+                current[1] = max(current[1], high)
 
     plans: dict[str, dict[str, dict[str, Any]]] = {}
     for group, fields in observed.items():

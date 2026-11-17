@@ -16,6 +16,8 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 ## 原生工作台
 
+首次使用请按 [使用手册](docs/repowiki/user-guide.md)操作。当前版本支持分组统一云图范围、GIF 统一帧率或统一时长、结果列表分页和表格预览；结果清理位于「更多 → 移到回收站」。
+
 要求：Windows、.NET 10 SDK，以及仓库根目录的 Python 3.14 `.venv`。
 
 ```powershell
@@ -59,13 +61,15 @@ docs/                      架构、协议、ADR 与 RepoWiki
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check modules\control_plane tests\control_plane tests\winui
-.\.venv\Scripts\python.exe -m pytest -q --basetemp .\.pytest-tmp
+.\.venv\Scripts\python.exe -m pytest -q --basetemp GPTWork/pytest-full
 dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 --no-restore
 ```
 
 虚拟环境、IDE 配置、测试临时目录、`bin/obj`、ODB 和求解器输出均不提交。应用配置、队列、SSH 非敏感配置和运行数据库位于用户应用数据目录，不写入源码树。
 
 ## 文档
+
+- [软件使用手册](docs/repowiki/user-guide.md)
 
 - [文档与交接总入口](docs/INDEX.md)
 - [智能体持续维护规则](AGENTS.md)：每完成一个功能同步完成对应文档更新。

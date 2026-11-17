@@ -30,4 +30,14 @@ for marker in (
 ):
     if marker not in source:
         raise RuntimeError("Group renderer v2 patch failed: {0}".format(marker))
-exec(compile(source, base_path, "exec"), globals(), globals())
+try:
+    exec(compile(source, base_path, "exec"), globals(), globals())
+except Exception as error:
+    if globals().get("config", {}).get("render_request_id"):
+        # The member directory remains marked incomplete by the control plane.
+        import json
+        with open(os.path.join(config["output_dir"], "metadata.json"), "w", encoding="utf-8") as stream:
+            json.dump({"group_render_receipt": {
+                "request_id": config["render_request_id"], "status": "failed", "error": str(error),
+            }}, stream, ensure_ascii=False)
+    raise

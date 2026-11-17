@@ -5,11 +5,12 @@ import copy
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from uuid import uuid4
 from pathlib import Path
+from uuid import uuid4
 
 from modules.postprocessor.process_runner import ProcessCancelled
 from modules.postprocessor.runner import UpgradeBatchController
+
 from .contracts import ApiProblem, utc_now_text
 from .odb_upgrade_execution import execute_confirmed_upgrade
 from .odb_upgrade_journal import UpgradeJournal
@@ -195,7 +196,7 @@ class OdbUpgradeOperationManager:
         def record_result(result):
             if not isinstance(result, dict) or not isinstance(result.get('source_path'), str):
                 controller.cancel()
-                raise ValueError('升级器返回了无效的逐文件回执')
+                raise ValueError('升级器返回了无效的逐文件回执')  # noqa: TRY004 - malformed worker output is an operation failure
             key = os.path.normcase(str(Path(result['source_path']).resolve()))
             if key not in expected or not isinstance(result.get('status'), str):
                 controller.cancel()
@@ -235,7 +236,7 @@ class OdbUpgradeOperationManager:
                     self._touch(item, "succeeded")
         except ProcessCancelled:
             with self._lock: self._touch(item, "cancelled")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - worker boundary persists failures for UI recovery
             with self._lock:
                 item["error"] = {"code": "UPGRADE_FAILED", "message": str(exc)[:2000]}
                 self._touch(item, "failed")

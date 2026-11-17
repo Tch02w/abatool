@@ -15,11 +15,12 @@
 | 要回答的问题 | 唯一主入口 |
 |---|---|
 | 项目是什么、怎样启动 | [README](../README.md) |
+| 八个页面怎样操作、遇到问题怎么办 | [完整使用手册](repowiki/user-guide.md) |
 | 智能体必须遵守什么、完成后更新什么 | [AGENTS](../AGENTS.md) |
 | 系统分层、数据流、模块边界 | [系统架构导航](02-architecture/SYSTEM_ARCHITECTURE.md) |
 | 每个功能在哪些文件、该测什么 | [功能索引](03-features/FUNCTION_INDEX.md) |
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
-| 日志选择刷新、15 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |
+| 日志选择刷新、16 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
 | 哪些验收已通过，证据证明什么 | [验收记录与缺口](06-testing/VALIDATION.md) |
 | 接手时先做什么、目前未完成什么 | [当前状态](08-handoff/CURRENT_STATUS.md) |
@@ -28,7 +29,7 @@
 
 ## 保留的参考文档
 
-11 月 17 日候选增加结果列表翻页和 CSV、Excel 单元格预览。操作步骤见 [后处理说明](03-features/POSTPROCESSING.md)，实际文件核对见 [验收记录](06-testing/VALIDATION.md)。数字输入、日志选区、参数说明与窗口布局的历史验收见 [TASK-004](08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+11 月 17 日候选包含结果列表翻页、CSV / Excel 预览和分组色标校验。图例窗口可按中文物理量填写上下限并就地纠错。操作步骤见[后处理说明](03-features/POSTPROCESSING.md)，现有两模型实际出图和异常路径见[验收记录](06-testing/VALIDATION.md)。数字输入、日志选区、参数说明与窗口布局的历史验收见 [TASK-004](08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 
 - [RepoWiki](repowiki/README.md)：提交器、原生界面、开发概述。
 - [整体架构](architecture.md)：既有分层说明。

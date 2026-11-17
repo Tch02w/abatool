@@ -35,6 +35,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private readonly ResultBrowserLoadCoordinator _loads = new();
     private bool _scopeBusy => _loads.IsRefreshingScopes;
     private bool _recordsBusy;
+    private bool _recycleBusy;
     private ResultRecordsRequest? _appliedQuery;
     private ResultRecordsResponse? _displayedPage;
     private bool _indexBusy => _loads.IsIndexing;
@@ -49,7 +50,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         InitializeComponent();
         _explorerAdapter = new ResultExplorerAdapter(
-            () => RefreshScopesAsync(_selectedScope?.Path),
+            () => _recycleBusy ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
             SelectExplorerItem,
             ActivateExplorerItemAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
@@ -90,6 +91,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     public async Task SetResultRootAsync(string root)
     {
+        if (_recycleBusy) throw new InvalidOperationException("请等待当前结果清理结束。");
         if (string.IsNullOrWhiteSpace(root))
         {
             throw new ArgumentException("结果根目录不能为空。", nameof(root));
@@ -393,7 +395,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void SelectExplorerItem(ExplorerItem item)
     {
-        if (_scopeBusy || _indexBusy)
+        if (_scopeBusy || _indexBusy || _recycleBusy)
         {
             return;
         }
@@ -421,6 +423,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async Task ActivateExplorerItemAsync(ExplorerItem item)
     {
+        if (_recycleBusy) return;
         SelectExplorerItem(item);
         if (item.Kind == ExplorerItemKind.ResultRecord
             && _records.FirstOrDefault(candidate => string.Equals(
@@ -781,6 +784,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnResultSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_recycleBusy) return;
         var selected = SelectedRecords();
         var hasFiles = selected.Any(record => !record.Internal && !record.IsDirectory);
         var primary = selected.FirstOrDefault();
@@ -789,6 +793,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RevealFileButton.IsEnabled = selected.Count > 0;
         CopyPathButton.IsEnabled = selected.Count > 0;
         ExportButton.IsEnabled = hasFiles;
+        RecycleButton.IsEnabled = hasFiles && selected.All(record =>
+            !record.Internal && !record.IsDirectory && ResultFileRecycle.IsExport(record.Path));
         if (primaryIsFile && primary is not null)
         {
             await LoadPreviewAsync(primary);
@@ -942,6 +948,69 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         ResultStatusText.Text = $"已复制 {records.Count} 个路径";
     }
 
+    private async void OnRecycleClicked(object sender, RoutedEventArgs e)
+    {
+        if (_recycleBusy || _recordsBusy || _scopeBusy || _indexBusy) return;
+        var records = SelectedRecords().ToArray();
+        if (records.Length == 0 || records.Any(record => record.Internal || record.IsDirectory
+            || !ResultFileRecycle.IsExport(record.Path))) return;
+        var root = RootTextBox.Text;
+        var message = $"将所选 {records.Length} 个导出文件移到系统回收站。公共数据文件可能被多个对比组引用。\n\n"
+            + string.Join("\n", records.Take(8).Select(record => record.Path));
+        if (records.Length > 8) message += $"\n另有 {records.Length - 8} 个文件";
+        var confirm = new ContentDialog
+        {
+            XamlRoot = XamlRoot, Title = "清理所选结果", Content = message,
+            PrimaryButtonText = "移到回收站", CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        _recycleBusy = true;
+        RefreshInteractionState();
+        try
+        {
+            if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+            ResetPreview();
+            var operation = RecycleSelectedAsync(root, records);
+            App.Current.PendingResultFileOperation = operation;
+            await operation;
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception.Message, "结果清理失败");
+        }
+        finally
+        {
+            App.Current.PendingResultFileOperation = Task.CompletedTask;
+            _recycleBusy = false;
+            RefreshInteractionState();
+        }
+    }
+
+    private async Task RecycleSelectedAsync(string root, ResultRecordItem[] records)
+    {
+        var completed = 0;
+        string? failure = null;
+        try
+        {
+            foreach (var record in records)
+            {
+                ResultStatusText.Text = $"正在清理 {completed + 1}/{records.Length} · {record.Name}";
+                await Task.Run(() => ResultFileRecycle.Recycle(root, record.Path));
+                completed++;
+            }
+        }
+        catch (OperationCanceledException) { failure = "清理已取消"; }
+        catch (Exception exception) { failure = exception.Message; }
+        if (completed > 0)
+        {
+            // Rebuild even after a partial failure so removed files cannot remain selected.
+            if (!string.IsNullOrWhiteSpace(_selectedScope?.TimeDirectory)) await BuildIndexAsync();
+            else await RefreshSelectedScopeAsync();
+        }
+        ResultStatusText.Text = $"已清理 {completed}/{records.Length} 个文件";
+        if (failure is not null) ShowWarning(failure, $"已清理 {completed} 个，剩余 {records.Length - completed} 个");
+    }
+
     private async void OnExportClicked(object sender, RoutedEventArgs e)
     {
         var records = SelectedRecords()
@@ -1040,6 +1109,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RevealFileButton.IsEnabled = false;
         CopyPathButton.IsEnabled = false;
         ExportButton.IsEnabled = false;
+        RecycleButton.IsEnabled = false;
     }
 
     private void ClearIndexBusyState(long indexRequest)
@@ -1058,7 +1128,15 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
-        var idle = !_scopeBusy && !_recordsBusy && !_indexBusy;
+        var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !_recycleBusy;
+        ResultList.IsEnabled = idle;
+        var selected = SelectedRecords();
+        OpenFileButton.IsEnabled = idle && selected.FirstOrDefault() is { Internal: false, IsDirectory: false };
+        RevealFileButton.IsEnabled = idle && selected.Count > 0;
+        CopyPathButton.IsEnabled = idle && selected.Count > 0;
+        ExportButton.IsEnabled = idle && selected.Any(record => !record.Internal && !record.IsDirectory);
+        RecycleButton.IsEnabled = idle && selected.Count > 0 && selected.All(record =>
+            !record.Internal && !record.IsDirectory && ResultFileRecycle.IsExport(record.Path));
         PreviousPageButton.IsEnabled = idle && _displayedPage is { Offset: > 0 };
         NextPageButton.IsEnabled = idle && _displayedPage is { HasMore: true };
         RootTextBox.IsEnabled = idle;

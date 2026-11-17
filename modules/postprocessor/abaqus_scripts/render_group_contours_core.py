@@ -8,6 +8,7 @@ import visualization
 import displayGroupOdbToolset as dgo
 import csv
 import json
+import math
 import os
 import sys
 import traceback
@@ -184,6 +185,9 @@ session.graphicsOptions.setValues(
 session.printOptions.setValues(
     rendition=COLOR, vpDecorations=OFF, vpBackground=ON, compass=OFF
 )
+if config.get("require_fixed_legends"):
+    # Per-image palette reduction can change the printed legend colors across models.
+    session.printOptions.setValues(reduceColors=OFF)
 session.pngOptions.setValues(imageSize=image_size_setting)
 viewport.viewportAnnotationOptions.setValues(
     triad=OFF, legend=ON, title=OFF, state=OFF, annotations=OFF, compass=OFF
@@ -225,92 +229,69 @@ def primary_variable(variable, refinement):
         )
 
 
-def set_static_limits(spec):
-    limits = legend_ranges.get(spec["name"], {})
+applied_legends = {"static": {}, "animation": {}}
+scanned_sequences = {name: set(indices) for name, indices in config.get("legend_scan_sequences", {}).items()}
+
+
+def check_member_scan(spec, item, ranges, kind):
+    name = spec["name"]
+    rule = ranges.get(name)
+    if not config.get("require_fixed_legends") or not rule or rule.get("source") == "comparison_group_manual_override":
+        return
+    if int(item["SequenceIndex"]) not in scanned_sequences.get(name, ()):
+        raise ValueError("组 {0}，模型 {1}，变量 {2}（{3}），序号 {4} 有场输出，但未参与组色标计算。请强制重扫或填写手动上下限。".format(
+            config["comparison_group"], os.path.basename(odb_path), name, kind, item["SequenceIndex"]))
+
+
+def apply_limits(spec, ranges, kind):
+    name = spec["name"]
+    limits = ranges.get(name)
+    context = "组 {0}，模型 {1}，变量 {2}（{3}）".format(
+        config["comparison_group"], os.path.basename(odb_path), name,
+        "静态云图" if kind == "static" else "动画")
+    options = viewport.odbDisplay.contourOptions
     if spec["variable"] in ("DAMAGET", "DAMAGEC"):
-        maximum = max(float(limits.get("max", 0.0)), 1.0e-12)
-        viewport.odbDisplay.contourOptions.setValues(
-            contourType=BANDED,
-            contourStyle=DISCRETE,
-            numIntervals=10,
-            intervalType=UNIFORM,
-            spectrum=damage_spectrum_name,
-            contourEdges=OFF,
-            minAutoCompute=OFF,
-            minValue=float(limits.get("min", 0.0)),
-            maxAutoCompute=OFF,
-            maxValue=maximum,
-            outsideLimitsMode=SPECIFY,
-            outsideLimitsBelowColor="#F2F2F2",
-            outsideLimitsAboveColor="#FF0000",
-        )
-    elif limits:
-        viewport.odbDisplay.contourOptions.setValues(
-            contourType=BANDED,
-            contourStyle=CONTINUOUS,
-            numIntervals=12,
-            intervalType=UNIFORM,
-            spectrum="Rainbow",
-            contourEdges=OFF,
-            minAutoCompute=OFF,
-            minValue=float(limits["min"]),
-            maxAutoCompute=OFF,
-            maxValue=float(limits["max"]),
-            outsideLimitsMode=SPECTRUM,
-        )
+        style = dict(contourStyle=DISCRETE, numIntervals=10, spectrum=damage_spectrum_name,
+                     outsideLimitsMode=SPECIFY, outsideLimitsBelowColor="#F2F2F2", outsideLimitsAboveColor="#FF0000")
     else:
-        viewport.odbDisplay.contourOptions.setValues(
-            contourType=BANDED,
-            contourStyle=CONTINUOUS,
-            numIntervals=12,
-            intervalType=UNIFORM,
-            spectrum="Rainbow",
-            contourEdges=OFF,
-            minAutoCompute=ON,
-            maxAutoCompute=ON,
-            outsideLimitsMode=SPECTRUM,
-        )
+        style = dict(contourStyle=CONTINUOUS, numIntervals=12, spectrum="Rainbow", outsideLimitsMode=SPECTRUM)
+    if limits is None:
+        if config.get("require_fixed_legends"):
+            raise ValueError(context + "缺少组色标。请强制重扫范围，或在“图例范围”中填写手动上下限。")
+        options.setValues(contourType=BANDED, intervalType=UNIFORM, contourEdges=OFF,
+                          minAutoCompute=ON, maxAutoCompute=ON, **style)
+        applied_legends[kind][name] = {"mode": "auto"}
+        return
+    try:
+        minimum, maximum = float(limits["min"]), float(limits["max"])
+        if not (math.isfinite(minimum) and math.isfinite(maximum) and minimum < maximum):
+            raise ValueError("range")
+    except (TypeError, KeyError, ValueError, OverflowError):
+        raise ValueError(context + "的色标上下限无效。请重新预扫描或修正手动范围。")
+    options.setValues(contourType=BANDED, intervalType=UNIFORM, contourEdges=OFF,
+                      minAutoCompute=OFF, minValue=minimum, maxAutoCompute=OFF, maxValue=maximum, **style)
+    actual_min, actual_max = float(options.minValue), float(options.maxValue)
+    if not (math.isclose(actual_min, minimum, rel_tol=1e-6) and math.isclose(actual_max, maximum, rel_tol=1e-6)):
+        raise ValueError(context + "的视口色标与设定值不一致。")
+    applied_legends[kind][name] = {"mode": "fixed", "min": actual_min, "max": actual_max}
+
+
+def set_static_limits(spec):
+    apply_limits(spec, legend_ranges, "static")
 
 
 def set_animation_limits(spec):
-    """Use the comparison group's fixed range for the complete animation."""
+    apply_limits(spec, animation_legend_ranges, "animation")
 
-    limits = animation_legend_ranges.get(spec["name"], {})
-    if spec["variable"] in ("DAMAGET", "DAMAGEC") and limits:
-        viewport.odbDisplay.contourOptions.setValues(
-            contourType=BANDED,
-            contourStyle=DISCRETE,
-            numIntervals=10,
-            intervalType=UNIFORM,
-            spectrum=damage_spectrum_name,
-            contourEdges=OFF,
-            minAutoCompute=OFF,
-            minValue=float(limits["min"]),
-            maxAutoCompute=OFF,
-            maxValue=float(limits["max"]),
-            outsideLimitsMode=SPECIFY,
-            outsideLimitsBelowColor="#F2F2F2",
-            outsideLimitsAboveColor="#FF0000",
-        )
-    elif limits:
-        viewport.odbDisplay.contourOptions.setValues(
-            contourType=BANDED,
-            contourStyle=CONTINUOUS,
-            numIntervals=12,
-            intervalType=UNIFORM,
-            spectrum="Rainbow",
-            contourEdges=OFF,
-            minAutoCompute=OFF,
-            minValue=float(limits["min"]),
-            maxAutoCompute=OFF,
-            maxValue=float(limits["max"]),
-            outsideLimitsMode=SPECTRUM,
-        )
-    else:
-        viewport.odbDisplay.contourOptions.setValues(
-            minAutoCompute=ON,
-            maxAutoCompute=ON,
-        )
+
+def legend_mode(kind, fixed_mode):
+    entries = applied_legends[kind]
+    if not entries:
+        return "not_rendered"
+    modes = {entry["mode"] for entry in entries.values()}
+    if modes == {"fixed"}:
+        return fixed_mode
+    return "auto" if modes == {"auto"} else "mixed_fixed_and_auto"
 
 
 def set_soil_view():
@@ -390,11 +371,7 @@ def render(spec):
             viewVector=tuple(float(value) for value in settings["camera_view_vector"]),
             cameraUpVector=tuple(float(value) for value in settings["camera_up_vector"]),
         )
-    primary_variable(spec["variable"], spec.get("refinement"))
     state = (CONTOURS_ON_UNDEF,) if spec.get("undeformed") else (CONTOURS_ON_DEF,)
-    viewport.odbDisplay.display.setValues(plotState=state)
-    set_static_limits(spec)
-    viewport.view.fitView()
     written = []
     render_timeline = full_timeline
     for animation_index, item in enumerate(render_timeline):
@@ -404,6 +381,11 @@ def render(spec):
         if spec["variable"] not in frame.fieldOutputs:
             continue
         viewport.odbDisplay.setFrame(step=step_index, frame=frame_index)
+        if not written:
+            primary_variable(spec["variable"], spec.get("refinement"))
+            viewport.odbDisplay.display.setValues(plotState=state)
+            viewport.view.fitView()
+        check_member_scan(spec, item, animation_legend_ranges, "动画")
         set_animation_limits(spec)
         base = os.path.join(
             folder,
@@ -413,8 +395,12 @@ def render(spec):
         )
         try:
             session.printToFile(fileName=base, format=PNG, canvasObjects=(viewport,))
+            if config.get("render_request_id") and not os.path.getsize(base + ".png"):
+                raise IOError("Empty frame image")
             written.append(base + ".png")
         except Exception:
+            if config.get("render_request_id"):
+                raise
             log("RENDER FAILED {0} {1}\n{2}".format(
                 spec["name"], animation_index, traceback.format_exc()
             ))
@@ -424,6 +410,7 @@ def render(spec):
     static_frame = list(odb.steps.values())[step_index].frames[frame_index]
     if spec["variable"] in static_frame.fieldOutputs:
         viewport.odbDisplay.setFrame(step=step_index, frame=frame_index)
+        check_member_scan(spec, static_item, legend_ranges, "静态云图")
         set_static_limits(spec)
         static_base = os.path.join(contour_dir, spec["name"] + "_LAST")
         try:
@@ -432,7 +419,11 @@ def render(spec):
                 format=PNG,
                 canvasObjects=(viewport,),
             )
+            if config.get("render_request_id") and not os.path.getsize(static_base + ".png"):
+                raise IOError("Empty static contour image")
         except Exception:
+            if config.get("render_request_id"):
+                raise
             log("STATIC RENDER FAILED {0}\n{1}".format(
                 spec["name"], traceback.format_exc()
             ))
@@ -442,6 +433,8 @@ def render(spec):
 for spec in specs:
     render(spec)
 
+if config.get("render_request_id") and not (applied_legends["static"] or applied_legends["animation"]):
+    raise RuntimeError("当前模型和帧均无可绘制的场输出：" + odb_path)
 metadata_path = os.path.join(output_dir, "metadata.json")
 if os.path.isfile(metadata_path):
     with open(metadata_path, "r", encoding="utf-8") as stream:
@@ -453,19 +446,22 @@ metadata.update(
         "comparison_group": config["comparison_group"],
         "reinforcement_mode": config.get("reinforcement_mode", "required"),
         "legend_ranges": legend_ranges,
-        "contour_sequences": [spec["name"] for spec in specs if spec.get("set") or spec.get("longitudinal")],
+        "contour_sequences": [spec["name"] for spec in specs if spec["name"] in applied_legends["animation"]],
         "soil_view_vector": [0.0, 1.0, 0.0],
         "soil_camera_up_vector": [0.0, 0.0, 1.0],
         "numeric_cache_source": source_output_dir,
         "render_viewport_mm": list(render_viewport_mm),
         "image_size_unit": image_size_unit,
         "requested_image_size": [image_width, image_height],
-        "animation_legend_mode": "comparison_group_full_timeline_fixed",
+        "animation_legend_mode": legend_mode("animation", "comparison_group_full_timeline_fixed"),
         "animation_legend_ranges": animation_legend_ranges,
-        "static_contour_legend_mode": "comparison_group_fixed_selected_frames",
+        "static_contour_legend_mode": legend_mode("static", "comparison_group_fixed_selected_frames"),
     }
 )
+odb.close()
+metadata["applied_legend_ranges"] = applied_legends
+if config.get("render_request_id"):
+    metadata["group_render_receipt"] = {"request_id": config["render_request_id"], "status": "succeeded"}
 with open(metadata_path, "w", encoding="utf-8") as stream:
     json.dump(metadata, stream, ensure_ascii=False, indent=2)
-odb.close()
 log("GROUP RENDER COMPLETE")

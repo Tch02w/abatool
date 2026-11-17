@@ -4,7 +4,10 @@ import time
 import pytest
 
 from modules.control_plane.contracts import ApiProblem
-from modules.control_plane.odb_upgrade_operations import OdbUpgradeOperationManager, TERMINAL
+from modules.control_plane.odb_upgrade_operations import (
+    TERMINAL,
+    OdbUpgradeOperationManager,
+)
 
 
 def request(key="one"):

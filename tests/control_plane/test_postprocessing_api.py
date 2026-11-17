@@ -170,7 +170,8 @@ def test_postprocess_scan_is_async_idempotent_and_returns_editable_defaults(
         assert len(calls) == 1
 
 
-def test_postprocess_run_preserves_group_plan_and_reports_outputs(tmp_path: Path) -> None:
+@pytest.mark.parametrize("duration", [None, 3.25])
+def test_postprocess_run_preserves_group_plan_and_reports_outputs(tmp_path: Path, duration) -> None:
     root = tmp_path / "odbs"
     root.mkdir()
     odb = root / "case.odb"
@@ -180,6 +181,8 @@ def test_postprocess_run_preserves_group_plan_and_reports_outputs(tmp_path: Path
     def runner(plan, progress, log, controller):
         calls.append(plan)
         assert plan.groups[0].name == "对比组 A"
+        assert plan.options.settings["animation_fps"] == 5
+        assert plan.options.settings.get("animation_duration_seconds") == duration
         assert plan.jobs[odb.resolve()].load_set == "SET-LOAD"
         assert not controller.cancel_requested
         progress(80, "正在渲染云图")
@@ -197,12 +200,15 @@ def test_postprocess_run_preserves_group_plan_and_reports_outputs(tmp_path: Path
         postprocess_run_runner=runner,
         postprocess_settings_provider=_settings,
     ) as runtime:
+        payload = _run_payload(root, odb)
+        if duration is not None:
+            payload["animationDurationSeconds"] = duration
         accepted = json_response(
             api_request(
                 runtime,
                 "/api/v1/odb-postprocess-operations",
                 method="POST",
-                payload=_run_payload(root, odb),
+                payload=payload,
             )
         )
         final = _wait(runtime, accepted["operationId"])
@@ -348,6 +354,12 @@ def test_postprocess_rejects_path_escape_and_invalid_manual_frames(tmp_path: Pat
         assert json_response(escaped)["error"]["code"] == "PATH_OUTSIDE_ROOT"
 
         invalid = _run_payload(root, inside)
+        response = api_request(
+            runtime, "/api/v1/odb-postprocess-operations", method="POST",
+            payload={**invalid, "animationDurationSeconds": 0},
+        )
+        assert response[0] == 400
+        assert json_response(response)["error"]["details"]["field"] == "animationDurationSeconds"
         invalid["jobs"][0]["frameMode"] = "manual"
         invalid["jobs"][0]["manualSequenceExpression"] = ""
         response = api_request(

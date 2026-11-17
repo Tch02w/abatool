@@ -13,8 +13,11 @@ from typing import Any
 from modules.postprocessor.paths import scan_cache_dir
 from modules.postprocessor.process_runner import ProcessCancelled
 from modules.postprocessor.runner import (
-    UpgradeBatchController, check_odb_compatibility, upgrade_odb_files,
+    UpgradeBatchController,
+    check_odb_compatibility,
+    upgrade_odb_files,
 )
+
 from .compatibility import load_compatibility_settings
 from .contracts import ApiProblem
 from .odb_upgrade_drafts import preview_odb_upgrade

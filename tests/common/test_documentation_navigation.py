@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = [ROOT / "AGENTS.md", ROOT / "README.md", ROOT / "docs/INDEX.md"]
-for directory in ("02-architecture", "03-features", "05-development", "06-testing", "08-handoff"):
+for directory in ("02-architecture", "03-features", "05-development", "06-testing", "08-handoff", "repowiki"):
     DOCS.extend(sorted((ROOT / "docs" / directory).rglob("*.md")))
 
 

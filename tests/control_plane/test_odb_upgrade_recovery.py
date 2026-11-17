@@ -149,7 +149,12 @@ def test_malformed_journal_preserves_bytes_and_blocks_submissions(tmp_path, corr
 
 
 def test_http_history_survives_actual_runtime_recreation(tmp_path):
-    from tests.control_plane.test_api import running_control_plane, api_request, json_response, sse_data
+    from tests.control_plane.test_api import (
+        api_request,
+        json_response,
+        running_control_plane,
+        sse_data,
+    )
     from tests.control_plane.test_odb_upgrade_api import BASE, terminal
     calls = []
     def runner(*args, **kwargs):
@@ -178,8 +183,9 @@ def test_actual_process_crash_preserves_completed_receipt_without_reexecution(tm
     import subprocess
     import sys
     import time
-    import psutil
     from pathlib import Path
+
+    import psutil
     journal = tmp_path / 'crash-history.json'
     child = subprocess.Popen([sys.executable, '-m', 'tests.control_plane.upgrade_crash_child', str(journal)],
         cwd=Path(__file__).resolve().parents[2], stdout=subprocess.PIPE, stderr=subprocess.PIPE,

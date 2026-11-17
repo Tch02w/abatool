@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from modules.postprocessor.runner import upgrade_backup_path, upgrade_temporary_path
+
 from .compatibility import load_compatibility_settings, validate_compatibility_request
 from .contracts import SCHEMA_VERSION, ApiProblem, OdbCompatibilityCheckRequest
 

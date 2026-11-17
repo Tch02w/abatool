@@ -2,9 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from modules.control_plane.odb_upgrade_drafts import preview_odb_upgrade
 from modules.control_plane.contracts import ApiProblem
-from tests.control_plane.test_api import api_request, json_response, running_control_plane
+from modules.control_plane.odb_upgrade_drafts import preview_odb_upgrade
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
 
 
 def setup_source(tmp_path, monkeypatch):

@@ -1,11 +1,17 @@
 # 验收记录与已知缺口
 
-核对日期：2026-11-17（本轮为 F021）。历史测试数不与本次测试累计相加。GPTWork 是本地忽略目录，新机器不会随 Git 自动获得其中的样本和报告。
+核对日期：2026-11-17（F020 分组出图及 F021 结果浏览）。历史测试数不与本次测试累计相加。GPTWork 是本地忽略目录，新机器不会随 Git 自动获得其中的样本和报告。
 
 ## 当前证据矩阵
 
 | 功能 | 可定位证据 | 已证明 | 尚未证明 |
 |---|---|---|---|
+| 全项目自动化基线（11-18） | `GPTWork/migration-tests-20261118.xml` | 648 测试和 9 子检查通过，测试发现范围固定为 tests | 八页全部原生交互、真实 SSH 和无开发环境发布 |
+| F021 查询性能（11-18） | `GPTWork/result-list-performance-20261118.json` | 同一真实目录 797 条、每页 500 条，十次交替测量中位耗时 51.18 → 30.32 ms，响应相同 | 不同存储介质与更大目录下的收益 |
+| F021 结果清理（11-18） | `tests/winui_results/Program.cs`、Release 候选 | 清理路径校验、已有异步生命周期与表格测试、原生构建通过 | 系统回收站、部分失败、关闭等待与最终布局的原生点击 |
+| F020/F022 GIF 双模式（11-17） | `GPTWork/gif-timing-s9udw0t8/verification.json`、`tests/postprocessor/test_animation.py` | 逐像素和逐帧延时核对四份真实模型动画。25 帧/秒对应 4.04 / 1.64 秒，统一 4 秒对应 25.25 / 10.25 平均帧率。两模式的请求、格式计时、工作区兼容及 WinUI 构建均通过 | 原生业务页切换与点击导出，播放器实际显示节奏 |
+| F020 完整时程 GIF（11-17） | `GPTWork/group-full-gifs-ri_g396m/verification.json` | 在相同分组色标下，完整时间轴与混凝土 Mises 的逐帧 PNG 序号、分析步和帧号匹配。成品逐帧解码，GJA 101 帧 / 20.2 秒，GJB 41 帧 / 8.2 秒，均为 1500×1000、5 帧/秒 | WinUI 点击导出、其他用户模型和参数组合 |
+| F020 命名组固定色标与 WinUI 编辑（11-17） | `GPTWork/group-render-check-c62b13k0/verification.json`、`tests/postprocessor/test_group_render_limits.py`、`tests/winui_postprocess/Program.cs` | GJA/GJB 实际预扫描按 101 / 41 帧算范围，两份 ODB 副本各取中间帧和末帧渲染；60 张自动范围 PNG，Mises 静态图与抽查动画帧色标区域分别逐像素一致。整组缺范围、单成员漏扫均报错，手动修复后 GJB 27 张 PNG。WinUI 构建与编辑数值边界检查通过 | 完整时程重新出图、所有模型/变量的成图像素对照、业务窗口鼠标及键盘纠错体验 |
 | F021 WinUI 翻页与表格预览（11-17） | `GPTWork/result-browser-verification-20261117/verification.json`、`tests/winui_host/test_results_api.py`、`tests/winui_results/ResultBrowser.Tests.csproj` | WinUI 使用的 C# 客户端经 HTTP 读取 GJB-15 的 797 条匹配记录（500+297、无跨页重叠、返回第一页顺序一致）；CSV 18×24 和 Excel 10×6 逐格匹配；独立模型检查覆盖跨列组复制、制表符/引号/换行与空值 | 原生业务页的布局、鼠标选区、横纵滚动、系统剪贴板及粘贴目标 |
 | F017 GJB 原基础流程 | `GPTWork/real-odb-validation/GJB-15-full-pipeline/acceptance-result.json` | 正式批处理返回结果目录；旧验收说明另记录 41 帧/100 截面及渲染产物 | 全部 GJA/GJB 工况、所有灌注桩对照、独立力学精度、原生操作 |
 | F021 GJB 结果链 | `GPTWork/real-odb-validation/GJB-15-full-pipeline/result-api-acceptance.json` | 771 索引记录、7 范围节点、CSV 预览 | 所有 UI 预览布局和干净机器部署 |

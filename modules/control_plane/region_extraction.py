@@ -1,18 +1,25 @@
 """Validated native-client requests for generic region extraction."""
 
-from dataclasses import dataclass
-from datetime import datetime
 import json
 import math
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .contracts import ApiProblem
-from modules.postprocessor.config import abaqus_script, save_json
-from modules.postprocessor.process_runner import run_process, ProcessCancelled
-from modules.postprocessor.result_assets import safe_result_name, INCOMPLETE_OUTPUT_MARKER
+from modules.postprocessor.abaqus_scripts.region_extract_core import (
+    require_source_identity,
+    source_identity,
+)
 from modules.postprocessor.abaqus_scripts.solid_section_math import section_config
-from modules.postprocessor.abaqus_scripts.region_extract_core import source_identity, require_source_identity
+from modules.postprocessor.config import abaqus_script, save_json
+from modules.postprocessor.process_runner import ProcessCancelled, run_process
+from modules.postprocessor.result_assets import (
+    INCOMPLETE_OUTPUT_MARKER,
+    safe_result_name,
+)
+
+from .contracts import ApiProblem
 
 REGION_KIND = "odb.postprocess.region"
 
@@ -28,7 +35,7 @@ class RegionExtractionResult(dict):
 def finalize_region_extraction(request, result):
     """Publish under the operation-manager lock after the cancellation check."""
     if not isinstance(result, RegionExtractionResult):
-        raise RuntimeError("Missing internal region publication handle")
+        raise RuntimeError("Missing internal region publication handle")  # noqa: TRY004 - publication lifecycle violation
     require_source_identity(request.path, json.loads(request.extraction_json)["sourceIdentity"])
     result.publication_marker.unlink()
 
@@ -52,7 +59,13 @@ class RegionExtractionRequest:
     @classmethod
     def from_payload(cls, payload, abaqus_command):
         # Reuse path/auth-independent protocol validation without a module cycle.
-        from .postprocessing import _validate_fields, _resolve_root, _resolve_odb_path, _text, _client_request_id
+        from .postprocessing import (
+            _client_request_id,
+            _resolve_odb_path,
+            _resolve_root,
+            _text,
+            _validate_fields,
+        )
         fields = {"schemaVersion", "clientRequestId", "root", "path", "region", "method", "frames",
                   "acknowledgeReferenceArea", "referenceAreaOverride", "section"}
         _validate_fields(payload, fields, required=fields - {"section"})
@@ -101,9 +114,9 @@ class RegionExtractionRequest:
             if key in seen:
                 raise ApiProblem(400, "INVALID_REGION_FRAMES", "不能重复选择同一帧")
             seen.add(key)
-        extraction = dict(path=str(path), region=region, method=method, frames=frames,
-                          acknowledgeReferenceArea=acknowledge, referenceAreaOverride=area,
-                          sourceIdentity=source_identity(path))
+        extraction = {"path": str(path), "region": region, "method": method, "frames": frames,
+                          "acknowledgeReferenceArea": acknowledge, "referenceAreaOverride": area,
+                          "sourceIdentity": source_identity(path)}
         if section is not None:
             extraction["section"] = section
         return cls(_client_request_id(payload), root, path, abaqus_command,
@@ -115,7 +128,7 @@ def execute_region_extraction(request, progress, log, controller):
     if controller is not None and controller.cancel_requested:
         raise ProcessCancelled("Process cancelled by user")
     require_source_identity(request.path, extraction["sourceIdentity"])
-    batch_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_region_" + uuid4().hex[:8]
+    batch_id = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S") + "_region_" + uuid4().hex[:8]
     result_root = request.root / "AbaqusODBPostProcessor_Results"
     batch = result_root / "通用对象提取" / batch_id
     batch.mkdir(parents=True, exist_ok=False)
@@ -150,7 +163,7 @@ def execute_region_extraction(request, progress, log, controller):
             or not (output / "region_values.csv").is_file()):
         raise RuntimeError("所选对象提取回执与任务不一致")
     if progress:
-        progress(95, "已校验 {0} 条结果，正在确认发布".format(report["rows"]))
+        progress(95, "已校验 {} 条结果，正在确认发布".format(report["rows"]))
     return RegionExtractionResult(
         {"batchId": batch_id, "resultRoots": [str(result_root)], "outputCount": 1,
          "outputs": [str(output)], "rowCount": report["rows"]}, marker)

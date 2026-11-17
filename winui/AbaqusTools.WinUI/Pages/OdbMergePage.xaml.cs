@@ -92,10 +92,21 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             }
 
             var history = await App.Current.ControlPlane.ListOdbMergeOperationsAsync();
-            var latestSuccess = history.Operations.FirstOrDefault(item => item.IsSuccessful);
-            if (latestSuccess is not null)
+            var latest = history.Operations.FirstOrDefault();
+            if (latest is not null && _materializationPlan is null && _batchPlan is null)
             {
-                ApplyCompletedOperation(latestSuccess);
+                MergeModeComboBox.SelectedIndex = 1;
+                RestoreDraft(latest.Request);
+                if (!latest.IsTerminal)
+                {
+                    // Another client can admit work between the two list calls.
+                    SetOperationBusy(true);
+                    await ObserveOperationAsync(latest);
+                    return;
+                }
+                ApplyOperationSnapshot(latest);
+                ApplyCompletedOperation(latest);
+                _activeOperationId = null;
             }
         }
         catch (OperationCanceledException)
@@ -104,6 +115,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
         catch (ControlPlaneException exception)
         {
+            _recoveryAttempted = false;
             ShowPlanState("无法恢复合并状态", exception.ToDisplayMessage(), InfoBarSeverity.Warning);
         }
         catch (Exception exception)
@@ -484,6 +496,8 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             ? $"ODB 合并状态：{snapshot.Status}"
             : snapshot.Progress.Phase;
         MergeOperationLogTextBox.Text = string.Join(Environment.NewLine, snapshot.Logs);
+        if (!string.IsNullOrWhiteSpace(snapshot.PersistenceWarning))
+            ShowPlanState("任务记录保存失败", snapshot.PersistenceWarning, InfoBarSeverity.Warning);
         if (snapshot.Logs.Count > 0)
         {
             MergeLogExpander.IsExpanded = true;
@@ -502,30 +516,39 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
                 $"结果：{snapshot.Result.OutputOdb}\n"
                 + $"原始备份：{snapshot.Result.OriginalBackup}\n"
                 + $"重启动备份：{snapshot.Result.RestartBackup}";
+            if (!string.IsNullOrWhiteSpace(snapshot.Result.ValidationReport))
+                MergeResultText.Text += $"\n校验回执：{snapshot.Result.ValidationReport}";
             OpenResultButton.IsEnabled = File.Exists(_lastResultPath);
             RevealResultButton.IsEnabled = Directory.Exists(Path.GetDirectoryName(_lastResultPath));
             UpdateExplorer();
             ShowPlanState(
-                "ODB 合并完成",
-                "合并结果已通过 Abaqus 只读验证并安全发布。",
-                InfoBarSeverity.Success);
-            App.Current.MainWindow.ReportPageStatus("ODB 合并与只读验证完成");
+                string.IsNullOrWhiteSpace(snapshot.PersistenceWarning) ? "ODB 合并完成" : "结果已保存，任务记录待核对",
+                snapshot.CompletionMessage,
+                string.IsNullOrWhiteSpace(snapshot.PersistenceWarning) ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+            App.Current.MainWindow.ReportPageStatus(snapshot.CompletionMessage);
             return;
         }
+
+        _lastResultPath = string.Empty;
+        MergeResultText.Text = string.Empty;
+        OpenResultButton.IsEnabled = false;
+        RevealResultButton.IsEnabled = false;
+        UpdateExplorer();
 
         if (string.Equals(snapshot.Status, "cancelled", StringComparison.Ordinal))
         {
             ShowPlanState(
                 "ODB 合并已停止",
-                "隔离工作区已清理，两个源 ODB 未被修改。",
+                snapshot.CompletionMessage,
                 InfoBarSeverity.Warning);
             App.Current.MainWindow.ReportPageStatus("ODB 合并已停止");
             return;
         }
 
-        var message = snapshot.Error?.Message ?? "ODB 合并未成功完成。";
-        ShowPlanState("ODB 合并失败", message, InfoBarSeverity.Error);
-        App.Current.MainWindow.ReportPageStatus("ODB 合并失败");
+        var title = snapshot.IsInterrupted ? "合并中断，待核对" : "ODB 合并失败";
+        ShowPlanState(title, snapshot.CompletionMessage,
+            snapshot.IsInterrupted ? InfoBarSeverity.Warning : InfoBarSeverity.Error);
+        App.Current.MainWindow.ReportPageStatus(title);
     }
 
     private async void OnOpenResultClicked(object sender, RoutedEventArgs e)

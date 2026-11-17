@@ -6,6 +6,7 @@
 
 | 功能 | 可定位证据 | 已证明 | 尚未证明 |
 |---|---|---|---|
+| F013 持久记录和恢复（11-18） | `GPTWork/control-history-regression-20261118.xml`、`tests/control_plane/test_odb_merge_recovery.py` | 178 项控制面回归，含测试进程真实终止、HTTP 重建、请求去重、损坏/磁盘失败、已提交结果保护、日志节流和联合退出；C# 3 项恢复信息检查通过 | 外部 Abaqus 实际运行中崩溃、原生页面恢复、F012 完整批量游标续接 |
 | F026 含 F013 的目录候选（11-18） | `GPTWork/release-win-x64-g_asfnjp/archive-verification.json`、`GPTWork/package-merge-probe/bundle-probe-xb9j82ur/verification.json` | 干净 16859c4 提交构建、1644 文件与 19 worker 核对、包内诊断、正式主机启动/API/退出及 ZIP CRC 通过 | 原生窗口、无开发环境机器、安装和二进制发布 |
 | F013 合并内容校验（11-18） | `GPTWork/merge-real-fv8_supj/verification.json`、`GPTWork/merge-regression-20261118.xml` | V20D 8 步/70 帧场值及历史一致；U100D 12 步/63 帧、四个无结果帧步骤如实保留，历史关闭/压缩/额外副本与发布通过，原始三份 ODB 全文件摘要不变；99 项相关回归及 C# 批量执行器 10 项通过 | 真实多节点、原生操作、进程崩溃恢复仍待验收 |
 | 全项目自动化基线（11-18） | `GPTWork/migration-tests-20261118.xml` | 648 测试和 9 子检查通过，测试发现范围固定为 tests | 八页全部原生交互、真实 SSH 和无开发环境发布 |

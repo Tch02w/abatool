@@ -81,6 +81,9 @@ public sealed class OdbMergeOperationSnapshot
     [JsonPropertyName("error")]
     public OdbCompatibilityOperationError? Error { get; init; }
 
+    [JsonPropertyName("persistenceWarning")]
+    public string? PersistenceWarning { get; init; }
+
     [JsonPropertyName("eventCursor")]
     public long EventCursor { get; init; }
 
@@ -89,6 +92,15 @@ public sealed class OdbMergeOperationSnapshot
 
     [JsonIgnore]
     public bool IsSuccessful => string.Equals(Status, "succeeded", StringComparison.Ordinal);
+
+    [JsonIgnore]
+    public bool IsInterrupted => string.Equals(Error?.Code, "ODB_MERGE_INTERRUPTED", StringComparison.Ordinal);
+
+    [JsonIgnore]
+    public string CompletionMessage => !string.IsNullOrWhiteSpace(PersistenceWarning)
+        ? PersistenceWarning
+        : Error?.Message ?? (string.IsNullOrWhiteSpace(Progress.Phase)
+            ? (IsSuccessful ? "ODB 合并与只读验证完成。" : "ODB 合并未成功完成。") : Progress.Phase);
 }
 
 public sealed class OdbMergeOperationRequest
@@ -129,6 +141,8 @@ public sealed class OdbMergeOperationProgress
 
 public sealed class OdbMergeOperationResult
 {
+    [JsonPropertyName("validationReport")]
+    public string? ValidationReport { get; init; }
     [JsonPropertyName("outputOdb")]
     public string OutputOdb { get; init; } = string.Empty;
 

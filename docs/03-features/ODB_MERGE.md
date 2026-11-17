@@ -31,7 +31,13 @@
 
 未产生合并结果、校验不一致、没有成功标记、回执缺失或路径不符、关闭 ODB 失败，都不能返回成功。失败时清理本次工作目录及尚未提交结果所对应的新备份/回执，保留用户原文件和旧目标。自动编号发布发生同名冲突时拒绝覆盖；明确覆盖只在全部校验通过后原子替换最终 ODB。
 
-停止请求在复制、外部进程和发布前处理。最终发布是一段短暂提交过程：提交后才到达的停止请求不把已保存结果改标为“已取消”。源备份、回执、ODB 不是跨文件事务；系统崩溃可能留下部分新文件，控制面进程重启后的任务历史恢复仍待完善，不自动重跑长合并。
+停止请求在复制、外部进程和发布前处理。最终发布是一段短暂提交过程：提交后才到达的停止请求不把已保存结果改标为“已取消”。源备份、回执、ODB 不是跨文件事务；系统崩溃可能留下部分新文件。
+
+控制面把单步合并记录保存在 descriptor 同目录的 `odb-merge-history.sqlite3`，重新打开合并页会显示最新任务及日志，包括失败和中断。已完成记录恢复来源、结果和回执路径；同一请求标识不会再次启动。页面加载新的结果图计划时保留新计划。
+
+若后台在确认完成前退出，任务显示“合并中断，待核对”。先检查原任务是否仍在运行，再查看目标目录的 `*.merge-validation.json`、结果、备份及 `.abasub-odb-merge-*` 工作区。不要只凭文件存在认定成功，也不要因没有新日志重复启动。程序保留现场，不自动清理或重跑；外部 Abaqus 的运行状态须另行核实。
+
+记录损坏或被其他后台占用时禁止新合并并保留数据库。运行中保存失败会请求停止未发布操作，界面显示保存失败提示；已发布结果仍显示实际结果。此时保留后台，处理磁盘问题并核对记录和文件。退出检查同时保护升级和合并；高频日志采用检查点节流，异常退出可能丢失最后检查点之后的日志。完整策略见 [ADR 0006](../submitter/adr/0006-durable-merge-history.md)。F012 批量计划及执行游标跨进程续接仍待实现。
 
 新增全量内容核对会增加读取时间。界面 82% 阶段显示逐分析步校验，日志按步骤更新；大文件需要等待，不因暂时没有新日志重复启动。
 
@@ -41,6 +47,8 @@
 - 隔离执行及发布：`modules/submitter/odb_merge_execution.py` / `execute_odb_merge`。
 - Abaqus 校验：`modules/postprocessor/abaqus_scripts/validate_odb_merge.py` / `verify`、`main`。
 - 控制面：`modules/control_plane/odb_merge_operations.py` / `OdbMergeOperationManager`。并发重复请求核对同一请求标识的参数，关闭后不再准入新操作。
+- 持久记录：`modules/control_plane/odb_merge_journal.py` / `MergeJournal`；仅保存操作数据，不打开或修改 ODB。
 - 回归：`tests/postprocessor/test_merge_validation.py`、`tests/submitter/test_odb_merge_execution.py`、`tests/submitter/test_odb_merge.py`、`tests/control_plane/test_odb_merge_operations_api.py`。
+- 重启恢复与异常退出：`tests/control_plane/test_odb_merge_recovery.py`；原生 DTO/生命周期：`tests/winui_host/Program.cs`。
 
 真实模型的路径、运行结果、失败记录及尚未完成的原生/多节点验收见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)；自动化与实际 ODB 验证不替代原生页面点击验收。

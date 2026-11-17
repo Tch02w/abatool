@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import threading
+import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -39,6 +41,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .odb_merge_journal import MergeJournal
 
 ODB_MERGE_OPERATION_KIND = "odb.merge"
 MAX_OPERATION_LOG_LINES = 200
@@ -182,6 +185,8 @@ class OdbMergeOperation:
     result: dict[str, str] | None = None
     error: dict[str, Any] | None = None
     event_cursor: int = 0
+    persistence_warning: str = ""
+    checkpoint_at: float = field(default=0.0, repr=False)
     controller: ProcessController = field(default_factory=ProcessController, repr=False)
 
 
@@ -194,6 +199,7 @@ class OdbMergeOperationManager:
         *,
         runner: OdbMergeRunner = execute_odb_merge,
         command_provider: Callable[[], str] | None = None,
+        journal_path: Path | None = None,
     ) -> None:
         self._events = event_store
         self._runner = runner
@@ -208,9 +214,135 @@ class OdbMergeOperationManager:
             max_workers=1, thread_name_prefix="odb-merge"
         )
         self._closed = False
+        self._disposed = False
+        self._journal = None
+        self._storage_error = None
+        self._history_unavailable = False
+        if journal_path is not None:
+            try:
+                self._journal = MergeJournal(journal_path)
+                recovered = [
+                    self._restore_record(record) for record in self._journal.load()
+                ]
+                if len({item.request.client_request_id for item in recovered}) != len(
+                    recovered
+                ):
+                    raise ValueError("合并记录包含重复请求标识")
+                for operation in recovered:
+                    self._operations[operation.operation_id] = operation
+                    self._client_requests[operation.request.client_request_id] = (
+                        operation.operation_id
+                    )
+                for operation in recovered:
+                    if operation.status not in TERMINAL_STATUSES:
+                        operation.phase = "合并中断，待核对"
+                        operation.error = {
+                            "code": "ODB_MERGE_INTERRUPTED",
+                            "message": "后台在合并完成确认前中断，未自动重跑。外部进程状态尚未确认；请核查原任务、目标目录及校验回执后再决定是否重试。",
+                            "retryable": False,
+                        }
+                        self._transition_locked(
+                            operation, FAILED, "odb.merge.recovered"
+                        )
+                    else:
+                        self._emit_locked(
+                            operation, "odb.merge.recovered", persist=False
+                        )
+            except (
+                OSError,
+                ValueError,
+                TypeError,
+                KeyError,
+                sqlite3.Error,
+                ApiProblem,
+            ) as error:
+                self._storage_error = str(error)
+                self._history_unavailable = True
+
+    @staticmethod
+    def _restore_record(record: dict) -> OdbMergeOperation:
+        snapshot = record["snapshot"]
+        request = OdbMergeOperationRequest.from_payload(
+            {"schemaVersion": 1, **snapshot["request"]}
+        )
+        signature = tuple(record["signature"])
+        if (
+            signature[:2] != request.signature[:2]
+            or signature[3:] != request.signature[3:]
+        ):
+            raise ValueError("合并记录的来源或配置与请求身份不一致")
+        result = snapshot["result"]
+        if result and (
+            Path(result["outputOdb"])
+            in (Path(request.original_odb), Path(request.restart_odb))
+        ):
+            raise ValueError("合并记录的输出与源文件冲突")
+        validated = ValidatedOdbMergeRequest(
+            request.client_request_id,
+            signature,
+            OdbMergeRequest(
+                Path(request.original_odb),
+                Path(request.restart_odb),
+                Path(request.output_odb),
+                record["abaqusCommand"],
+                request.include_history,
+                request.compress_result,
+                request.copy_original,
+                request.conflict_policy,
+            ),
+        )
+        return OdbMergeOperation(
+            validated,
+            operation_id=snapshot["operationId"],
+            attempt_id=snapshot["attemptId"],
+            status=snapshot["status"],
+            created_at=snapshot["createdAt"],
+            updated_at=snapshot["updatedAt"],
+            version=snapshot["version"],
+            percent=snapshot["progress"]["percent"],
+            phase=snapshot["progress"]["phase"],
+            logs=snapshot["logs"],
+            result=result,
+            error=snapshot["error"],
+        )
+
+    def _require_history(self, *, writable: bool = False) -> None:
+        if self._history_unavailable or (writable and self._storage_error):
+            raise ApiProblem(
+                503,
+                "ODB_MERGE_HISTORY_UNAVAILABLE",
+                "合并记录无法读取、保存或被其他后台占用；已禁止新合并。请保留记录并检查磁盘和后台。",
+            )
+
+    def _persist_locked(self, operation: OdbMergeOperation) -> bool:
+        if self._journal is None:
+            return not self._storage_error
+        if self._storage_error:
+            return False
+        try:
+            snapshot = self._snapshot_locked(operation)
+            snapshot.pop("persistenceWarning", None)
+            self._journal.save(
+                {
+                    "schemaVersion": 1,
+                    "snapshot": snapshot,
+                    "signature": list(operation.request.signature),
+                    "abaqusCommand": operation.request.request.abaqus_command,
+                }
+            )
+            operation.checkpoint_at = time.monotonic()
+            return True
+        except (OSError, ValueError, TypeError, sqlite3.Error) as error:
+            self._storage_error = str(error)
+            for current in self._operations.values():
+                current.persistence_warning = "合并记录保存失败，已禁止新任务并请求停止尚未发布的操作。请保留当前后台和结果，检查磁盘后核对；不要重复执行。"
+                if current.status not in TERMINAL_STATUSES:
+                    current.controller.cancel()
+            return False
 
     def create(self, request: OdbMergeOperationRequest) -> dict[str, Any]:
         with self._lock:
+            self._require_history(writable=True)
             if self._closed:
                 raise ApiProblem(
                     503,
@@ -260,6 +392,7 @@ class OdbMergeOperationManager:
         )
         with self._lock:
             # A concurrent repeat may have been admitted while paths were checked.
+            self._require_history(writable=True)
             if self._closed:
                 raise ApiProblem(
                     503,
@@ -281,14 +414,26 @@ class OdbMergeOperationManager:
             operation = OdbMergeOperation(validated)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id
-            self._emit_locked(operation, "odb.merge.queued")
+            if not self._persist_locked(operation):
+                self._operations.pop(operation.operation_id)
+                self._client_requests.pop(request.client_request_id)
+                raise ApiProblem(
+                    503,
+                    "ODB_MERGE_HISTORY_UNAVAILABLE",
+                    "合并记录无法保存，本次任务未启动。",
+                )
+            self._emit_locked(operation, "odb.merge.queued", persist=False)
             try:
                 future = self._executor.submit(
                     self._run_operation, operation.operation_id
                 )
             except RuntimeError as exc:
-                self._operations.pop(operation.operation_id, None)
-                self._client_requests.pop(request.client_request_id, None)
+                operation.error = {
+                    "code": "OPERATION_SCHEDULER_UNAVAILABLE",
+                    "message": "合并调度器不可用，任务未启动。",
+                }
+                operation.phase = "任务未启动"
+                self._transition_locked(operation, FAILED, "odb.merge.failed")
                 raise ApiProblem(
                     503,
                     "OPERATION_SCHEDULER_UNAVAILABLE",
@@ -300,10 +445,12 @@ class OdbMergeOperationManager:
 
     def get(self, operation_id: str) -> dict[str, Any]:
         with self._lock:
+            self._require_history()
             return self._snapshot_locked(self._require_locked(operation_id))
 
     def list_snapshots(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         with self._lock:
+            self._require_history()
             return [
                 self._snapshot_locked(operation)
                 for operation in reversed(tuple(self._operations.values()))
@@ -312,6 +459,7 @@ class OdbMergeOperationManager:
 
     def cancel(self, operation_id: str) -> dict[str, Any]:
         with self._lock:
+            self._require_history()
             operation = self._require_locked(operation_id)
             if operation.status in TERMINAL_STATUSES:
                 return self._snapshot_locked(operation)
@@ -328,10 +476,20 @@ class OdbMergeOperationManager:
                 self._finish_cancelled_locked(operation)
             return self._snapshot_locked(operation)
 
+    def prepare_shutdown(self, *, reserve: bool = True) -> dict[str, Any]:
+        with self._lock:
+            self._require_history()
+            active = self.list_snapshots(active_only=True)
+            safe = not active and not self._storage_error
+            if safe and reserve:
+                self._closed = True
+            return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": active}
+
     def close(self) -> None:
         with self._lock:
-            if self._closed:
+            if self._disposed:
                 return
+            self._disposed = True
             self._closed = True
             active_ids = [
                 operation.operation_id
@@ -340,7 +498,11 @@ class OdbMergeOperationManager:
             ]
         for operation_id in active_ids:
             self.cancel(operation_id)
-        self._executor.shutdown(wait=True, cancel_futures=True)
+        try:
+            self._executor.shutdown(wait=True, cancel_futures=True)
+        finally:
+            if self._journal is not None:
+                self._journal.close()
 
     def _run_operation(self, operation_id: str) -> None:
         try:
@@ -351,6 +513,9 @@ class OdbMergeOperationManager:
                     return
                 self._transition_locked(operation, STARTING, "odb.merge.starting")
                 self._transition_locked(operation, RUNNING, "odb.merge.running")
+                if operation.controller.cancel_requested:
+                    self._finish_cancelled_locked(operation)
+                    return
 
             result = self._runner(
                 operation.request.request,
@@ -461,7 +626,15 @@ class OdbMergeOperationManager:
         operation.error = None
         self._transition_locked(operation, CANCELLED, "odb.merge.cancelled")
 
-    def _emit_locked(self, operation: OdbMergeOperation, event_kind: str) -> None:
+    def _emit_locked(
+        self, operation: OdbMergeOperation, event_kind: str, *, persist: bool = True
+    ) -> None:
+        # Status boundaries always reach disk; coalesce busy progress/log streams.
+        if persist and (
+            event_kind not in {"odb.merge.progress", "odb.merge.log"}
+            or time.monotonic() - operation.checkpoint_at >= 0.5
+        ):
+            self._persist_locked(operation)
         event = self._events.append(
             aggregate_type="operation",
             aggregate_id=operation.operation_id,
@@ -475,6 +648,7 @@ class OdbMergeOperationManager:
                 "version": operation.version,
                 "progress": {"percent": operation.percent, "phase": operation.phase},
                 "error": dict(operation.error) if operation.error is not None else None,
+                "persistenceWarning": operation.persistence_warning or None,
             },
         )
         operation.event_cursor = event.sequence
@@ -482,7 +656,7 @@ class OdbMergeOperationManager:
     @staticmethod
     def _snapshot_locked(operation: OdbMergeOperation) -> dict[str, Any]:
         request = operation.request.request
-        return {
+        snapshot = {
             "schemaVersion": SCHEMA_VERSION,
             "operationId": operation.operation_id,
             "attemptId": operation.attempt_id,
@@ -507,6 +681,9 @@ class OdbMergeOperationManager:
             "error": dict(operation.error) if operation.error is not None else None,
             "eventCursor": operation.event_cursor,
         }
+        if operation.persistence_warning:
+            snapshot["persistenceWarning"] = operation.persistence_warning
+        return snapshot
 
 
 __all__ = [

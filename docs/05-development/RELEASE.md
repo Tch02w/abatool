@@ -40,4 +40,12 @@
 3. 开发验收通过 `tests/winui_host/Program.cs` 的 `--launch-bundle <发布目录> <独立运行数据目录>` 分支，使用正式 C# 主机启动包内服务、检查资源/队列 API、验证空闲退出。不会连接用户的默认控制面。附加 `--odb <既有ODB>` 时，先将该文件复制到独立目录，再通过正式 API 调用包内 Abaqus 兼容性 worker，并核对副本 SHA256 不变；需设置 `ABAQUS_TOOLS_ABAQUS_COMMAND` 和 `ABAQUS_TOOLS_ABAQUS_RELEASE`，不执行求解。
 4. 在无 Python/.NET SDK 的机器上验证原生窗口、八页业务、真实 Abaqus 只读检查及 SSH。完成后才能宣称目标环境可用；当前机器上的冻结运行不能替代此项。
 
+合并记录的冻结运行验收可执行：
+
+```powershell
+.\.venv\Scripts\python.exe packaging/verify_merge_restart.py <完整AbaqusTools目录>
+```
+
+它在 GPTWork 创建独立用户数据和微小测试文件，使用固定返回失败的测试命令，实际启动/退出两次包内控制面，核对 SQLite 历史、重启去重、失败清理和退出预留；不调用 Abaqus、不访问真实模型。输出 `frozen-merge-recovery-*/verification.json`，不在报告中保存鉴权令牌。它不能代替真实 Abaqus 运行中断或原生页面验收。
+
 实现依据：[PyInstaller 相对资源定位](https://pyinstaller.org/en/stable/runtime-information.html)、[Windows App SDK 自包含部署](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/self-contained-deploy/deploy-self-contained-apps)。Windows App SDK 自包含仍需另行启用 .NET 自包含，且发布文件必须整体分发。

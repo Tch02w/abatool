@@ -96,6 +96,18 @@ class ControlPlaneContext:
     remote_job_manager: RemoteJobOperationManager
     odb_result_graph_service: OdbResultGraphService
 
+    def prepare_odb_shutdown(self) -> dict[str, Any]:
+        # Reserve both file-mutating managers atomically in a fixed lock order.
+        # A failed check must not leave the other manager permanently reserved.
+        with self.odb_merge_manager._lock, self.odb_upgrade_manager._lock:
+            merge = self.odb_merge_manager.prepare_shutdown(reserve=False)
+            upgrade = self.odb_upgrade_manager.prepare_shutdown(reserve=False)
+            safe = merge["safeToStop"] and upgrade["safeToStop"]
+            if safe:
+                self.odb_merge_manager.prepare_shutdown()
+                self.odb_upgrade_manager.prepare_shutdown()
+            return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": merge["operations"] + upgrade["operations"]}
+
 
 class ControlPlaneHttpServer(ThreadingHTTPServer):
     daemon_threads = True
@@ -338,7 +350,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                     self.context.odb_upgrade_manager.create(self._read_json_object()), trace_id)
                 return
             if target.path == "/api/v1/odb-upgrade-shutdown-check" and not target.query:
-                self._send_json(HTTPStatus.OK, self.context.odb_upgrade_manager.prepare_shutdown(), trace_id)
+                self._send_json(HTTPStatus.OK, self.context.prepare_odb_shutdown(), trace_id)
                 return
             upgrade_id = self._upgrade_id_from_path(target.path, cancel=True)
             if upgrade_id is not None and not target.query:
@@ -1141,6 +1153,7 @@ class ControlPlaneRuntime:
             odb_merge_kwargs["command_provider"] = odb_merge_command_provider
         odb_merge_manager = OdbMergeOperationManager(
             event_history,
+            journal_path=self.descriptor_path.with_name("odb-merge-history.sqlite3"),
             **odb_merge_kwargs,
         )
         odb_upgrade_manager = OdbUpgradeOperationManager(

@@ -241,7 +241,7 @@ class OdbUpgradeOperationManager:
                 item["error"] = {"code": "UPGRADE_FAILED", "message": str(exc)[:2000]}
                 self._touch(item, "failed")
 
-    def prepare_shutdown(self):
+    def prepare_shutdown(self, *, reserve=True):
         """Atomically reserve an idle manager for exit; never kill an active file.
 
         An active manager remains usable if its UI disconnects. A successful
@@ -250,7 +250,7 @@ class OdbUpgradeOperationManager:
         with self._lock:
             active = self.list_snapshots(active_only=True)
             safe = not active and not self._storage_error
-            if safe:
+            if safe and reserve:
                 self._closed = True
             return {"schemaVersion": 1, "safeToStop": bool(safe), "operations": active}
 

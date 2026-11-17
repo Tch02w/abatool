@@ -80,6 +80,7 @@ try
     await Check("connection lost", "", false, disconnect: true);
     await Check("reconnect failure", "", false, connectionCleanup: true);
     CheckUpgradeContracts();
+    CheckMergeRecoveryContracts();
     ControlPlaneLaunchChecks.Run();
     Console.WriteLine("8 host process lifecycle checks passed.");
     return 0;
@@ -92,6 +93,29 @@ catch (Exception error)
 
 static void SetField(ControlPlaneHost host, string name, object value) =>
     typeof(ControlPlaneHost).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, value);
+
+static void CheckMergeRecoveryContracts()
+{
+    var interrupted = JsonSerializer.Deserialize<OdbMergeOperationSnapshot>("""
+        {"status":"failed","error":{"code":"ODB_MERGE_INTERRUPTED","message":"原任务待核对"},
+         "progress":{"percent":60,"phase":"旧进度"}}
+        """)!;
+    if (!interrupted.IsInterrupted || !interrupted.IsTerminal || interrupted.IsSuccessful
+        || interrupted.CompletionMessage != "原任务待核对")
+        throw new Exception("Interrupted merge must preserve uncertainty and its recovery guidance");
+    var success = JsonSerializer.Deserialize<OdbMergeOperationSnapshot>("""
+        {"status":"succeeded","progress":{"percent":100,"phase":"4 个分析步无结果帧，请核对计算状态"},
+         "result":{"outputOdb":"full_joined.odb","validationReport":"validation.json"}}
+        """)!;
+    if (!success.CompletionMessage.Contains("4 个分析步") || success.Result?.ValidationReport != "validation.json")
+        throw new Exception("Completion must retain partial-result guidance and receipt path");
+    var unsaved = JsonSerializer.Deserialize<OdbMergeOperationSnapshot>("""
+        {"status":"succeeded","persistenceWarning":"记录未保存","progress":{"percent":100,"phase":"已完成"}}
+        """)!;
+    if (!unsaved.IsSuccessful || unsaved.CompletionMessage != "记录未保存")
+        throw new Exception("Committed result remains successful while persistence warning takes priority");
+    Console.WriteLine("3 merge recovery presentation checks passed.");
+}
 
 static void CheckUpgradeContracts()
 {

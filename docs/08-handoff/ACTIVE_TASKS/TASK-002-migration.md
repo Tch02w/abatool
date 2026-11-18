@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · d5f9e76完整候选及用户授权推送
+
+本轮菜单/目标保护源码已提交d5f9e76615f4e312d4297e7514dea1e75d879a4f。从干净提交运行build_release.py --no-restore，34265退出0，生成 `GPTWork/release-win-x64-2c491d8001f9/AbaqusTools`。完整核对1670清单文件/19worker，含清单355000481字节，manifest SHA256 `42c108007dccc0b6b647159e390d46c5adab368f256a55b569921812e4c18031`；相对c245b91545d7新增ADR0020、无移除路径、20项变化，无ODB/INP/Qt/虚拟环境混入。`GPTWork/command-release-verification-20261118/inventory.json` verified，核对0492fbc为祖先。
+
+包内依赖探针退出0（bundle-probe.log，bundle-probe-832kzh6y/verification.json），默认配置、worker、GIF、Agg图表、xlsx预览、SSH加密导入、Qt-free通过。正式C#主机 `GPTWork/command-release-host-20261118/ControlPlaneHost.Tests.exe` 对新包启动/资源/队列/正常退出通过（frozen-host.log），descriptor已消失；未传--odb、未调用用户Abaqus或SSH，没有原生窗口。
+
+正式标识安装候选 `GPTWork/installer-win-x64-cc6a49dda23f/AbaqusTools-0.1.0-win-x64-setup.exe`，75847退出0；负载与安装器均为干净d5f9e76，1671安装项，125588867字节，SHA256 `6a8f73777220244c9a3e46dc66a8e42d1d20383eb39b9ee4bdbcf19b73ebed7e`。验证目录installer-artifact.json核对来源/摘要/PE（引导器0x14c，应用/后台0x8664），installer-signature.json为NotSigned。本轮未安装该候选，未重跑新负载生命周期；旧7c874d3生命周期记录仍保留且不冒充本轮实测。
+
+用户在本轮明确要求“完成这一轮修改检查后提交远端git push”，此前推送确认阻碍解除，原生暂停未解除。核对origin为 https://github.com/Tch02w/abatool.git、分支main，fetch成功，远端无新增分叉，本地领先49个提交；git push origin main的28299退出0，1ad194e..d5f9e76 main→main，随后HEAD与origin/main均为d5f9e76615f4e312d4297e7514dea1e75d879a4f。以下历史“未收到确认/未推送”只描述当时情况。
+
+发布回执文档导航49项通过0.14秒（`GPTWork/command-release-verification-20261118/docs-final.log`），随后统一使用手册和功能说明中的候选版本，不改产品源码。文档收尾提交与推送的准确提交号以实际Git核对为准，避免在提交内容中预填自身提交号。
+
+准确续接点：发布回执/当前状态等文档检查后提交并同步main，再核对远端HEAD。所有构建、包内检查及首次推送句柄已经结束，无自有长任务待收。下轮独立缺口：MainWindow.xaml两个后处理菜单共用只切页的OnPostprocessingMenuClicked，现有OdbPostprocessingPage.LoadOdbPathAsync未接到“当前作业送入后处理”。先核对选择/归档/结果源及PySide基线，给用户说明方案，再实现，不猜测或复制模型。原生/工程环境/三级链/签名/新负载生命周期仍待，整体目标active。
+
 ## 2026-11-18 · F001/F004/F005/F008 菜单状态与目标一致性
 
 从干净0492fbc继续，上一轮为实际代码/测试/文档提交进展。先说明共用状态与等待页面后复核，再实现App.Commands/WorkbenchCommandState、MainWindow.Commands、菜单命名/终止入口；页面执行方法也使用同一条件。队列选择只终止活动ID交集并列名确认；菜单等待后选择变化不执行。主窗口每个既有状态周期只读观察，队列页活跃时复用自身轮询；忙碌/版本保护使旧读数不能覆盖操作。资源首次加载后选择原连接，无匹配行不回退本机。

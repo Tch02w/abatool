@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+冻结包补充验证（产品仍为03b4adf/75efcbf6b9f7）：独立源路径 `GPTWork/scheduler-load-live-3a1be04c8ea6/verification.json` verified，261路径/5执行、260次GET中位38.808/P95 279.41/最大446.392ms。跨卷并发恢复 `GPTWork/archive-recovery-live-4db89f22762e/verification.json` verified，128MiB文件复制8MiB中断、完整摘要/半成品保留/源清理/重启去重，以及两个正式客户端6次明确忙碌拒绝后依次完成。原默认源码小夹具回归983424f3695b通过；首次3b67843bedc9正确忙碌拒绝导致验证失败，已保留，不称产品缺陷。所有本轮自有进程结束；工具/文档更新，应用未重建。并非工程多GiB/断电、MPI压力或原生界面验收。
+
+跨卷新增证据：既有75efcbf6b9f7包、正式C#客户端、G:→C:不同设备，两种中断场景各128MiB。`GPTWork/archive-recovery-live-d91a5ee5c815/verification.json` verified，8MiB不完整副本保留并核对摘要，已完成INP复用inode、完整归档摘要、源清理续接、原始输入不变、两次重启与提醒去重通过，所有自有进程结束。具体目标根及设备号见TASK-002顶部。不是工程ODB、多GiB压力、断电或原生鼠标操作验收；产品没有修改或重新打包。
+
 最新完整包 `GPTWork/release-win-x64-75efcbf6b9f7/AbaqusTools`（干净03b4adf）通过1663文件/19worker摘要、依赖 `bundle-probe-asbma2v2/verification.json`、正式主机启动/API/退出。冻结 `GPTWork/scheduler-load-live-b52bd66c9cfb/verification.json` verified：261行/5执行准入及停止/终止/失败、单项失败释放额度时另一作业继续、5条提醒重启不重放，输入不变、自有进程全结束。233次GET中位39.94/P95 284.58/最大1137.44ms。75项相关及65项通知/文档回归通过；下方源码阶段“待验”由本回执补齐。不是独立工程模型、MPI/CPU压力或原生操作验收，所有旧包/失败证据保留。
 
 261行队列与5次实际非求解进程：源码 `GPTWork/scheduler-load-live-afc4a08d44b5/verification.json` verified，正式C#客户端、CPU/内存等待、停止派发、单项终止、失败、编辑后放行、5条提醒持久恢复及不重放、输入摘要和所有自有进程结束通过。260次GET中位39.50/P95 266.12/最大1050.74ms。261行中256暂停条目共用一个INP，不是工程/MPI满载或261个不同模型。修复前超时回执与线程栈保留于171fc499f113/8c23ea54fc7a；另有Datacheck失败漏提醒复现和修复。75项相关检查通过59.46秒，新完整包与通知专项最终结果待收尾；精确记录见TASK-002顶部。

@@ -40,6 +40,8 @@
 
 `packaging/verify_scheduler_load.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` 使用261行隔离队列（256条暂停记录共用一个微型INP），5次真实自有非求解进程与正式客户端检查CPU/内存等待、停止/终止、失败、恢复和状态读取。声明的资源用于验证准入，每个helper仅约8MiB缓冲，不是CPU满载、Abaqus/MPI、261个不同工程模型或网络盘性能验收。具体响应时间及失败证据见TASK-002。
 
+追加 `--distinct-held` 时暂停记录使用独立目录/文件，队列合计261个不同源路径。现有冻结包此模式已通过：260次GET中位38.81ms、P95 279.41ms、最大446.39ms，资源准入和5次执行/提醒重启恢复继续通过。它覆盖本地独立文件路径元信息查询，文件内容仍为微型合成输入，不能外推到网络盘、工程解析、Abaqus/MPI或CPU压力。
+
 - 采集：`modules/submitter/runtime_observation.py` / `ProcessSnapshotCache`、`observe_local_job`；`local_job_execution.py` / `execute_local_job`。
 - 学习：`modules/control_plane/local_memory.py` / `LocalMemoryMonitor`，复用 `modules/submitter/memory_monitor.py` / `MemoryMonitorService`。
 - 接入：`LocalQueueRuntimeManager._receive_observation`、`_flush_observations`；`LocalQueueScheduling.reserve`；`JobQueueService._scan_external_roots`。

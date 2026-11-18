@@ -1,5 +1,25 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 独立文件路径与跨卷槽位竞争验收收尾
+
+最终文档导航 `GPTWork/archive-independent-final-docs-20261118.log` 47项通过（0.14秒），Ruff及差异空白检查通过；本轮工具/文档已可本地提交，没有待收回的测试句柄。
+
+**产品不变**：仍使用干净03b4adf的完整包75efcbf6b9f7；只扩展验证器、主机测试客户端和文档，没有重建应用或修改用户配置。多作业验证器新增 `--distinct-held`，261行使用261个不同源路径。冻结回执 `GPTWork/scheduler-load-live-3a1be04c8ea6/verification.json` verified（64943退出0）：260次GET中位38.808ms、P95 279.41ms、最大446.392ms；5次执行、CPU/内存等待、停止/终止/失败释放额度、输入不变、5条提醒两次启动不重放通过。实际5个helper和两个后台、包装均已结束。这是独立本地路径元信息开销，不是261个工程模型或MPI满载。
+
+**归档回归与忙碌保护**：原默认小样例首次源码回归 `GPTWork/archive-recovery-live-3b67843bedc9/verification.json` 失败（88222退出1）：第一归档已发布但线程尚在收尾，第二客户端被正确409 `LOCAL_ARCHIVE_BUSY`拒绝，全部自有进程结束。`ArchivePresentationChecks.RunApi`现只对该未受理错误在45秒总期限内核对同attempt/可恢复状态后等待重试，不重试其他错误或超时，不改变产品槽位保护。新主机 `GPTWork/archive-volume-host-build/Debug/net10.0/ControlPlaneHost.Tests.exe` 构建零警告/错误3.14秒，原主机检查通过。默认源码回归 `GPTWork/archive-recovery-live-983424f3695b/verification.json` verified，全部自有进程结束。
+
+**真实竞争分支**：跨卷命令追加 `--parallel-recovery`，两客户端同时竞争一个槽位；回执 `GPTWork/archive-recovery-live-4db89f22762e/verification.json` verified（77477退出0），实际6次忙碌拒绝后两项依次完成，两个128MiB内容全摘要、8MiB半成品保留、完整副本复用、源清理续接、同attempt和4条提醒两次重启去重通过。目标位于C:测试根的同名子目录；源/目标设备号与上一跨卷记录一致。两个生产者按计划中断、两个后台及两个客户端正常退出，均为已捕获自有进程。首次状态读取2.1/16.8ms只是本夹具，不是性能上限。
+
+**准确续接点**：本轮所有命令、后台、生产者和客户端均已结束。验证器Ruff、主机检查通过，最终文档检查后本地提交。下一项按完整迁移合同逐项审计剩余门槛，区分可继续实现项与必须恢复原生操作、提供真实环境/数据或确认发布目标的门槛；不反复跑同一夹具替代业务验收。原生恢复与具体GitHub main确认仍未收到回复，不重复询问或绕过。工程多GiB/断电、真实SSH/MPI、连续三层工程ODB、无开发环境目标机和原生八页仍未验收，整体目标不标完成。
+
+## 2026-11-18 · 跨卷128MiB归档与中断恢复
+
+在既有75efcbf6b9f7完整包（产品03b4adf）上补充跨卷证据，**没有修改产品或重建包**。扩展 `packaging/verify_archive_recovery.py`，保留原小夹具调用，新增不同卷目标及16–512MiB载荷选项；真实 `_copy_verified` 写入8MiB后在进度边界等待，由父进程仅结束已捕获的自有生产者。第二场景仍在发布后首次源文件删除后中断。正式C#客户端恢复同attempt，未启动求解。
+
+准确命令：项目Python运行 `packaging/verify_archive_recovery.py GPTWork/release-win-x64-75efcbf6b9f7/AbaqusTools GPTWork/scheduler-load-host-build/Debug/net10.0/ControlPlaneHost.Tests.exe --destination-root C:/Users/Chiw/.codex/visualizations/2026/10/28/01a182a2-461c-76b2-b649-05a4ff044834/GPTWork --payload-mib 128`。源卷设备号15996367331267573161，目标卷3051326448021075386；写入前确认目录及空闲空间，目标只创建唯一子目录。
+
+回执 `GPTWork/archive-recovery-live-d91a5ee5c815/verification.json` **verified**（5659退出0）。两个128MiB合成文件完整摘要、原始输入不变、8MiB不完整副本原样保留、完整INP副本inode复用、跨卷发布、部分清理续接、4条提醒两次重启保持唯一通过。目标完整副本及`.recovery-*`现场位于上述C:根的 `archive-recovery-live-d91a5ee5c815` 子目录；不清理历史。首次状态读取26.4/1.0ms只代表本夹具。实际生产者208884/181252按计划中断，后台211544/188136正常退出，包装也结束，无遗留进程。测试源码/文档/Ruff及路径检查收尾后本地提交；下一项独立模型路径的队列读取开销。真实工程多GiB、原生/SSH/MPI/三层链/目标机和发布仍待验。
+
 ## 2026-11-18 · 多作业资源准入与队列响应
 
 最终回执补记后文档导航 `GPTWork/scheduler-load-docs-final-20261118.log` 47项通过（0.15秒），差异空白检查通过；没有原生操作、GitHub推送或新求解。

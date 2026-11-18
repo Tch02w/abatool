@@ -8,6 +8,10 @@ F004/F005 外部扫描并发定位：`modules/control_plane/job_queue_commands.p
 
 F005/F007单轮内存文件元信息复用：`modules/control_plane/local_memory.py` / `_profile_file_signature`、`memory_profile_key`、`project_estimates`；`local_scheduling.py` / `reserve`。测试 `tests/control_plane/test_local_memory.py` 的空历史、同轮共用与下轮源变化用例。实际261行/5进程资源验收 `packaging/verify_scheduler_load.py`，正式C#客户端 `tests/winui_host/Program.cs` 的 `--scheduler-command`。F027数据检查失败映射为 `job_notifications.py` / `LOCAL_TERMINAL`，回归 `tests/control_plane/test_job_notifications.py`。
 
+F005/F011跨卷与文件内中断验收：`packaging/verify_archive_recovery.py` / `producer`、`verify`，追加 `--destination-root` 与 `--payload-mib`；仍调用正式C#归档恢复入口和冻结控制面，核对不同设备、部分文件保留、完整文件复用及完整摘要。范围见 [归档说明](LOCAL_ARCHIVE.md)。
+
+上述归档验收的 `--parallel-recovery` 使用 `tests/winui_host/ArchivePresentationChecks.cs` / `RunApi` 核对单槽位忙碌拒绝；调度验收的 `--distinct-held` 使用261个独立源路径，入口仍为 `packaging/verify_scheduler_load.py` / `verify`。两者只扩展验收工具，不改变产品API。
+
 ## 壳层、提交、调度、远程
 
 | ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |

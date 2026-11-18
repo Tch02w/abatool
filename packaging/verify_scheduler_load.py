@@ -55,7 +55,7 @@ def worker(work: Path, arguments: list[str]):
     return int(flag.read_text())
 
 
-def verify(bundle: str, client: Path, *, trace=False):
+def verify(bundle: str, client: Path, *, trace=False, distinct_held=False):
     if os.name != "nt" or Path(sys.executable).resolve() != ROOT / ".venv/Scripts/python.exe":
         raise RuntimeError("Use the project .venv Python on Windows")
     logical, physical = psutil.cpu_count() or 1, psutil.cpu_count(logical=False) or 1
@@ -78,7 +78,14 @@ def verify(bundle: str, client: Path, *, trace=False):
         inputs[str(source)] = digest(source)
         if name == "held_source":
             for number in range(256):
-                items.append(QueueItem(inp_path=str(source), source_inp_path=str(source), job_name=f"held_{number}",
+                held_source = source
+                if distinct_held and number:
+                    held_directory = work / "jobs" / f"held_{number}"
+                    held_directory.mkdir()
+                    held_source = held_directory / f"held_{number}.inp"
+                    held_source.write_bytes(source.read_bytes())
+                    inputs[str(held_source)] = digest(held_source)
+                items.append(QueueItem(inp_path=str(held_source), source_inp_path=str(held_source), job_name=f"held_{number}",
                     status=STATUS_PENDING_RUN, held=True, cores=1, memory="64 MB", datacheck_only=True,
                     abaqus_command=str(command)))
             continue
@@ -105,7 +112,8 @@ def verify(bundle: str, client: Path, *, trace=False):
     processes, backend_owners, helper_owners, samples = [], [], {}, []
     descriptor, backend = None, None
     report = {"status": "failed", "bundle": bundle, "solverStarted": False, "queueSize": len(items),
-              "logicalCpus": logical, "requestedCoresPerJob": cores, "maxParallel": 3}
+              "logicalCpus": logical, "requestedCoresPerJob": cores, "maxParallel": 3,
+              "distinctSourcePaths": len({item.source_inp_path for item in items})}
 
     def start_backend(index):
         with (work / f"backend-{index}.log").open("wb") as output:
@@ -246,4 +254,5 @@ def verify(bundle: str, client: Path, *, trace=False):
 if __name__ == "__main__":
     if sys.argv[1] == "--worker":
         sys.exit(worker(Path(sys.argv[2]), sys.argv[3:]))
-    verify(sys.argv[1], Path(sys.argv[2]).resolve(strict=True), trace="--trace" in sys.argv[3:])
+    verify(sys.argv[1], Path(sys.argv[2]).resolve(strict=True), trace="--trace" in sys.argv[3:],
+           distinct_held="--distinct-held" in sys.argv[3:])

@@ -12,6 +12,10 @@
 | 归档完成回调丢失后的提醒补发 | `packaging/verify_archive_notifications.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` |
 | 内存采样、持久历史与结束提醒 | `packaging/verify_local_memory.py --bundle <完整目录> --notifications --host-client <当前C#主机测试DLL>` |
 
+跨卷验收在归档恢复命令后追加 `--destination-root <已存在的不同卷GPTWork目录> --payload-mib 128`，每个合成ODB为128MiB，实际复制8MiB时中断自有生产者。只用新建隔离目录，不选择工程结果目录；保留目标副本、中断现场和回执。工具核对真实设备号不同，源目录清理只涉及本次生成的文件。当前G:→C:结果见TASK-002，不代表断电事务或工程多GiB负载。
+
+需要覆盖独立文件路径时，为资源准入命令追加 `--distinct-held`；需要覆盖归档单槽位竞争时，为归档命令追加 `--parallel-recovery` 并使用当前主机测试客户端。后者只对明确未受理的忙碌409等待，不重试超时/未知受理结果，不能通过增加客户端超时掩盖状态读取问题。
+
 资源准入夹具声明CPU/内存请求，但helper仅使用少量内存等待；它不能证明真实Abaqus/MPI满载或网络目录性能。成功回执必须核对范围、原输入摘要和自有进程结束。源代码检查、打包依赖和正式客户端通过也不能代替原生业务操作。最终回执与保留的失败见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) 与 [验收记录](../06-testing/VALIDATION.md)。
 
 ## 开发者构建

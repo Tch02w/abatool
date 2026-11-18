@@ -30,8 +30,26 @@ internal static class ArchivePresentationChecks
     {
         var before = (await host.GetLocalQueueRuntimeAsync()).Queue.QueueItems.Single(x => x.ItemId == itemId);
         if (!before.ArchiveRecoveryAvailable) throw new Exception("Recovery unavailable before client request");
-        await host.RetryLocalArchiveAsync(itemId);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var busyRetries = 0;
+        while (true)
+        {
+            try
+            {
+                await host.RetryLocalArchiveAsync(itemId, timeout.Token);
+                break;
+            }
+            catch (ControlPlaneException error) when (error.Code == "LOCAL_ARCHIVE_BUSY")
+            {
+                // A previous fixture's final callback may still own its slot.
+                // This 409 explicitly means no new operation was accepted.
+                var current = (await host.GetLocalQueueRuntimeAsync(timeout.Token)).Queue.QueueItems.Single(x => x.ItemId == itemId);
+                if (current.AttemptId != before.AttemptId || !current.ArchiveRecoveryAvailable)
+                    throw new Exception("Archive state changed while awaiting its slot");
+                busyRetries++;
+                await Task.Delay(100, timeout.Token);
+            }
+        }
         while (true)
         {
             timeout.Token.ThrowIfCancellationRequested();
@@ -42,7 +60,7 @@ internal static class ArchivePresentationChecks
             {
                 if (row.ArchiveRecoveryAvailable || !row.HasPublishedArchive)
                     throw new Exception("Completed archive state inconsistent");
-                Console.WriteLine("Production archive client recovered original attempt and published output.");
+                Console.WriteLine($"Production archive client recovered original attempt and published output; busy retries: {busyRetries}.");
                 return;
             }
             if (row.ArchiveRecoveryAvailable) throw new Exception("Archive recovery failed: " + row.ArchiveDetailsDisplay);

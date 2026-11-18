@@ -1,5 +1,15 @@
 # TASK-002：后续迁移、完善与整理
 
+收尾文档检查初次48通过/1失败：CURRENT_STATUS精简后缺少约定原句“每完成一个功能”；已恢复该交付要求，最终复测见`GPTWork/density-release-docs-final-20261118.log`。安装生命周期74818已退出0，无待轮询长任务；唯一当前等待为旧密度窗口的关闭及新包视觉确认。
+
+## 2026-11-18 · 密度修复干净完整候选与隔离安装通过
+
+源码758f1cc06fb7c917116ef9253861dcc54a5bf29f已提交并推送main，实际ls-remote一致。完整目录`GPTWork/release-win-x64-5497f45cfec3/AbaqusTools`，干净同源，1687清单文件、19worker、15应用资源、总计357517233字节（含清单），全部摘要核对通过，无ODB/INP/PySide6/虚拟环境。清单SHA256 `07e983cf67d7f9240b37f97343156653aec8a98586f4f20f925193f432b4d4ad`，主DLL `3167a93f4fd9907d5d63dd3833d172b627b404ad4e97a2e6f023e17883f5df9c`。包内依赖检查通过defaults/19worker/GIF/Agg/XLSX/SSH加密/Qt-free，`GPTWork/density-release-verification-20261118/bundle-probe.log`。
+
+正式标识安装候选`GPTWork/installer-win-x64-b4ca03cbe0c8/AbaqusTools-0.1.0-win-x64-setup.exe`，126116098字节，SHA256 `78563eedeac1d108042faa2c91eafa6f47cfde15b4ac150bc127cf515ff067e7`，NotSigned，正式身份未安装。相同负载的独立测试身份d597341f22be，从旧完整e98602890947升级，生命周期`GPTWork/installer-lifecycle-7818c66a5988/verification.json`通过：拒绝外来目录及junction、中文空格路径初装、活动自有后台阻止升级/卸载、空闲正常关闭后升级、保留旧版本及用户文件、开始菜单、安装后正式主机API和正常退出、卸载保留用户文件；无强制清理/残留自有进程/注册项。原始安装器和历史候选未删除。
+
+汇总`GPTWork/density-release-verification-20261118/verification-summary.json`；两份日常JSON摘要不变，没有求解或ODB新增/移动。当前包仍未打开原生窗口，不能把控件/安装流程通过称为新布局业务验收。旧密度窗口205808/213728/166276仍待用户关闭，已询问但尚未收到回复；不得重复启动旧测试或强杀。关闭后先运行`GPTWork/native_density_20261118.py finish result-browser`核对身份/配置，再用已准备的`GPTWork/native_density_release_20261118.py launch result-browser`启动本完整包，并以CUA观察及正常退出收尾。构建90778已退出0；安装生命周期最终句柄74818已确认退出0，报告已verified。完整迁移其余缺口继续保留。
+
 ## 2026-11-18 · 顶部24 DIP留白、八页密度与侧栏按钮位置
 
 用户在实际窗口反馈导航上方空白过大、整体稍松，要求适度紧凑，并授权选择侧栏按钮及收起后的内容方案。最终将按钮从标题菜单移到浏览器右上角，30 DIP按钮使用折线图标；收起保留40 DIP入口，原有页面上下文与草稿规则保持。八页边距统一20/16/20/20，卡片12，主要分组10，字体及输入按钮高度不缩小。窗口下限按此重算为展开1242、收起1002、默认高664 DIP。

@@ -30,7 +30,7 @@
 
 显示侧栏时客户区最小宽 1242 DIP，收起后为 1002 DIP，均保留八页导航和计算资源页的宽度要求。收起不会主动缩小现有窗口；在窄窗口重新显示时，只扩大不足的尺寸，仍受当前屏幕工作区限制。默认客户区最小高度为664 DIP，缩放和最大化规则不变。
 
-源码入口为 `winui/AbaqusTools.WinUI/MainWindow.ExplorerVisibility.cs` 的 `SetExplorerVisibility` / `ApplyExplorerVisibility`，尺寸入口为同项目 `Services/WindowLayoutConstraints.cs` 的 `MinimumClientWidthFor`。54 项相关回归、16 项尺寸检查以及实际新建页 Ctrl+B、CPU=6 保留、正常关闭后同一配置重开恢复通过。鼠标按钮、提示视觉、窗口拖动到最小值和跨屏仍待验，当前为开发发布输出 `GPTWork/winui-sidebar-20261118`；完整安装候选 d4fc4c7 尚不含此项。
+源码入口为 `winui/AbaqusTools.WinUI/MainWindow.ExplorerVisibility.cs` 的 `SetExplorerVisibility` / `ApplyExplorerVisibility`，尺寸入口为同项目 `Services/WindowLayoutConstraints.cs` 的 `MinimumClientWidthFor`。54 项相关回归、16 项尺寸检查以及实际新建页 Ctrl+B、CPU=6 保留、正常关闭后同一配置重开恢复通过。鼠标按钮、提示视觉、窗口拖动到最小值和跨屏仍待验，上述旧位置验证来自开发输出 `GPTWork/winui-sidebar-20261118`；当前完整758f1cc已含侧栏及位置调整，新位置的业务视觉仍待。
 
 ## 关闭、后台继续与草稿（F001/F003/F004/F009）
 

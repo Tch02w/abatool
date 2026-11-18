@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+2026-11-18 最新完整包：干净d4fc4c7目录ddd54a85dcf8、安装候选3fcfb102d9d4；1687文件/19worker/15应用资源、依赖探针、实际新包资源/合并页首次加载与正常退出、同身份完整旧负载升级卸载c80065c565a3均通过。未签名、正式身份未安装。`GPTWork/firstload-release-verification-20261118/verification-summary.json` 记录准确范围，并注明保留的结果浏览窗口70244等待用户确认CSV预览；原生记录预览/导出仍未通过。下方“尚不含两项修复”是早期候选状态，新包已纳入。
+
 2026-11-18 首次加载续验：07ccd1e06113其余五页实测，队列/概览/重启动链空状态正常，资源与合并各发现一项初始化缺陷。修复发布输出winui-firstload-fixed-20261118已实测资源无误报、图自动读取/目录编辑/正常关闭保存revision=1；名称/CPU=4及Ctrl+7/8复核通过。81项相关回归通过，所有本轮自有窗口/后台结束；汇总 `GPTWork/native-firstload-fixed-20261118/verification-summary.json`。八页已有跨候选版本的有限加载观察，不等于完整业务/视觉验收。下面4787f0f完整包和安装器尚不含这两项修复，准确失败/命令见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
 
 上一完整发布候选：干净4787f0f目录07ccd1e06113、正式标识安装器10f24dcc8dc8。1687清单文件/19worker/15项应用资源、包内依赖及实际完整包原生名称/CPU=4恢复、后处理/结果页有限状态和空闲退出通过，`GPTWork/resource-release-verification-20261118/native-verification.json`。新负载同身份旧→新安装生命周期0d5a9b4b803e通过，旧库存兼容读取不代表旧包可运行，新负载严格验资源；无残留测试进程/登记。正式身份未安装，NotSigned，全部八页/目标机仍待。

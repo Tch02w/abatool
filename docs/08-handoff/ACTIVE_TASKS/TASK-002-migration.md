@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 首次加载修复已进入干净完整包，结果预览等待交互确认
+
+上一轮d4fc4c7源码与文档已实际推送main；本轮从该干净提交接续。项目.venv执行 `packaging/build_release.py --no-restore`，22686退出0，目录 `GPTWork/release-win-x64-ddd54a85dcf8/AbaqusTools`。完整清单1687文件、19 worker、15应用资源，含清单357464197字节，manifest SHA256 `933eb6aacd5e7a94427227fad22028d68d5c24ded4865c88a0c3456222c493fc`，WinUI DLL SHA256 `0d1370991d0e81bc5a5de5c1415c345f2cdadddc448d803e21108bcccc0530cd`。摘要/文件集合、无ODB/INP/Qt/虚拟环境混入、干净来源均核对通过；`GPTWork/firstload-release-verification-20261118/inventory.json`。包内 `--check-bundle` 探针 `bundle-probe-eh407xfr/verification.json` 同父目录，默认配置/19worker/GIF/Agg/xlsx/SSH加密/Qt-free通过，未连接SSH或启动Abaqus。
+
+正式标识安装候选 `GPTWork/installer-win-x64-3fcfb102d9d4/AbaqusTools-0.1.0-win-x64-setup.exe`，负载与构建均为干净d4fc4c7，1688负载项，126097541字节，SHA256 `184ee6cf62a3a91c7108c18e63109053fa07db5563edff2a7c222f59426499b3`，NotSigned；未安装正式身份到用户默认目录。同负载测试身份e98602890947，沿用独立标识202611180002，从完整旧负载d6c7f4cdaca8执行 `packaging/verify_installer.py <old build-report.json> <new build-report.json> GPTWork/profile-release-host-20261118/ControlPlaneHost.Tests.exe`，12782退出0。`GPTWork/installer-lifecycle-c80065c565a3/verification.json` verified，legacyOldInventoryOnly=false；陌生/链接目录拒绝、初装全摘要、运行后台拒绝升级卸载、空闲关闭后升级保留旧版本和用户文件、快捷方式/安装后主机API/卸载均通过，无强制清理、残留进程或登记。
+
+实际新完整包原生：资源页203252/后台198064/子210504，观察本机在线且无启动错误；合并页167132/后台219756/子85564，观察版本0“结果合并图已读取”，输出目录和添加根节点可用。两窗口均正常Alt+F4，CUA库存确认结束，再核对PID+创建时间、描述符移除和两份日常JSON摘要不变。回执 `GPTWork/firstload-release-native-20261118/<route>/verification.json`。新旧发布输出的15项XAML/PRI资源相同，但EXE/DLL摘要不同，未用旧窗口观察冒充新完整包启动；比较记录ui-payload-comparison.json只保留文件比较范围。
+
+F021实测准备：在 `GPTWork/native-result-records-20261118/fixture/验收组/20261118_212500/模型甲/data` 生成两个CSV（无任何ODB），load_point_raw.csv为80行3列，另有pile_displacement_curve.csv。初始夹具误以为两项均属“常用”，断言失败；检查分类后确认后者不推荐，修正为全部2项/常用1项，并建立真实索引，4范围节点核对通过。真实结果窗口显示4范围，但仍在上级根节点，未选中CSV。click(模型甲)再次报coordinate input geometry is unavailable，Tab及Raise/Tab后未观察到焦点变化；没有据此认定应用键盘缺陷。已异步请用户点击“模型甲”及load_point_raw.csv确认表格，尚未收到回复或观察到预览。不得把目录/接口检查写成原生记录预览或导出成功。
+
+收尾文档导航49 passed in 0.13s，项目.venv运行 `pytest tests/common/test_documentation_navigation.py -q --basetemp=GPTWork/pytest-firstload-release-docs-20261118`；`GPTWork/firstload-release-verification-20261118/docs-final.log` / `.xml`，差异检查通过。本轮未改业务源码，不重复记为新的81项源码回归。
+
+准确续接点：结果测试窗口**仍保留给用户**，不是已退出。原生70244、创建时间1795008578.1117785、窗口5178004；后台33100及子165996。应用路径winui-firstload-fixed-20261118，独立配置 `GPTWork/native-result-records-20261118/result-browser/profile`，进程回执同父目录processes.json；最后已确认原生/后台身份仍存活，返回并Raise该窗口。下一步先读取用户回复和新鲜窗口状态，不重复启动，不自动关掉交给用户的窗口；确认预览后继续原生导出/文件内容核对。其他本轮构建、探针、安装和新完整包窗口均结束。汇总 `GPTWork/firstload-release-verification-20261118/verification-summary.json`。新完整包/安装器已含两项修复，不因后续文档回执再打相同包；八页完整交互、视觉、真实SSH/GPU/MPI、三级工程链、目标机和签名仍待，目标active。未创建/移动ODB或启动求解。
+
 ## 2026-11-18 · 其余五页首次加载及两处实际启动修复
 
 从干净文档 HEAD ffd8d28 接续，使用4787f0f完整包07ccd1e06113和每页独立G:配置，真实窗口检查其余五页。队列0候选/0正式，数字并行上限1→2且关闭后JSON为2；概览无作业/操作禁用/日志占位；重启动链0链0节点正常。计算资源虽读到本机数据，却有ExplorerErrorInfoBar“主窗口尚未创建。”；合并图持续“尚未读取”，输出目录和添加根节点禁用。后两项记录为缺陷，不能把五页都标为通过。

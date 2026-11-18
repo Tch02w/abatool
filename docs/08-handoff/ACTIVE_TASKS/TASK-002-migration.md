@@ -1,5 +1,23 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 可取消导出进入完整候选及包内验证
+
+从干净129b2573077906eee3472502daba7839f4ac32a4继续，上一轮已提交/推送并实际核对GitHub main与本地一致，属于实际进展。使用项目解释器、G: TEMP/TMP运行build_release.py --no-restore，62251退出0；新目录 `GPTWork/release-win-x64-bbb1a83a8997/AbaqusTools`，sourceDirty=false，1671清单文件/19 worker，含清单355060382字节。manifest SHA256为 `2c3d884126e77525c9bb865b31b947c5ee32eba4bee7938ceba277897dc0d2ec`。相对22e47f6候选新增ADR0021，无移除路径、18项文件变化；完整摘要、来源祖先和禁止ODB/INP/Qt/虚拟环境混入均通过，回执 `GPTWork/result-export-release-verification-20261118/inventory.json`。
+
+包内依赖探针 `bundle-probe-56fhtv1x/verification.json`（位于上述验证目录）通过默认配置、19 worker、GIF、Agg、xlsx、SSH加密和Qt-free。正式C#主机 `GPTWork/result-export-release-host-20261118/ControlPlaneHost.Tests.exe` 构建0警告/错误0.60秒，包内后台启动/资源与队列API/正常退出通过，frozen-host.log和host-build.log保留，descriptor确认移除。未传--odb，不调用求解、用户SSH或业务窗口。
+
+进一步直接引用完整包中的AbaqusTools.WinUI.dll运行既有24项导出文件检查，未重新编译ResultFileExport实现。测试加载的DLL与完整包SHA256相同（`01209a261bd31af760b4581fd0706a00b84a9d6cf29b1680f4d8978404d47190`），文件中途取消、源不变、重名不覆盖、部分失败/已完成保留等全部通过；compiled-export/verification.json及assembly-verification.json、compiled-export-03.log保留。入口 `GPTWork/result-export-bundle-checks-20261118/ResultExportBundle.Checks.csproj` 与Program.cs，仅引用生产DLL和既有检查文件；数据仅G:合成CSV/JSON/TXT，不是原生页面验收。
+
+额外探针的失败如实保留：首次窗口目标框架隐含还原访问NuGet被拒，9624退出1，compiled-export.log；改为无新增依赖的net10.0后，WinUI模块初始化找不到测试目录里的Microsoft.WindowsAppRuntime.dll，compiled-export-02.log，尚未执行24项检查。核对自有PID220188及创建时间/路径和子进程16336后结束失败探针，72394终态15，确认两者消失、没有业务窗口；未操作未知进程。最终探针在调用前配置完整包本地DLL目录，并用独立方法和异常边界执行；24项通过退出0，compiled-export-03.log。无需修改产品源码/运行库。CIM只读过程查询曾拒绝访问，后用Get-Process和项目psutil核对；Windows通配路径检索失败不计为产品故障。
+
+正式标识安装候选 `GPTWork/installer-win-x64-b1639b2aeb30/AbaqusTools-0.1.0-win-x64-setup.exe`，58592退出0，负载与安装器来源均为干净129b257；1672安装项，125608366字节，SHA256 `168b1eece5c340fea44a43f9214a00e97455bdadd090769d3887f29cfa890e61`，payloadId为129b25730779-2c3d884126e7。摘要、来源、PE架构核对通过（引导器0x14c，应用/后台0x8664）；签名NotSigned。installer-artifact.json和installer-signature.json位于本轮验证目录。
+
+相同负载测试身份候选f4a53d0a13f4，与保留的22e47f6测试候选d43eaffd9617执行verify_installer.py；78046退出0，`GPTWork/installer-lifecycle-e2b22336049c/verification.json` verified。陌生/链接目录拒绝、中文空格目录初装/全摘要、活动自有后台拒绝升级/卸载、正常退出后升级保留旧版本和用户样本、开始菜单指向更新、安装后正式主机API及卸载保留用户文件均通过；forcedCleanupPids/remainingOwnedPids为空，registrationRemaining=null。正式身份未实际安装到默认目录，原生安装向导/目标机未验收。新旧包与失败记录保留。
+
+收尾文档导航49项与安装清单11项共60项通过0.16秒，`GPTWork/result-export-release-verification-20261118/docs-installer.log` / `.xml`；差异空白检查通过。本轮未重跑无关完整回归，包内文档保持构建时快照，最终回执在仓库。
+
+准确续接点：本轮只新增完整候选和验收文档，产品源码仍为129b257；所有打包/探针/主机/安装生命周期句柄均已终态。文档检查后提交并推送，准确提交号以实际Git核对为准，不为文档再生成相同包。下一步按交付核对清单继续检查八页与PySide业务映射；结果页NavigationCacheMode.Required已只读核对，换页/返回时导出进度和取消、关闭30秒提示仍需原生验收，不能用包内服务检查代替。原生操作恢复确认未到，不启动桌面；真实SSH/GPU/MPI、连续三级工程链、无开发环境目标机和签名缺口仍在。整体目标未完成；禁止C:ODB、未移动用户模型。
+
 ## 2026-11-18 · F001/F021 可取消结果导出与关闭等待
 
 从干净24dd38fb9bac932b458fd48b576ab63afe564bc6继续，上一轮完整候选/安装生命周期及GitHub同步是实际进展。先核对PySide _export_selected与WinUI OnExportClicked、PendingResultFileOperation，向用户说明进度/取消/部分结果/关闭等待方案，再实现独立ResultFileExport服务与ResultBrowserPage.Export。1MiB缓冲、后台异步复制、约100毫秒进度节流，只读共享源并核对长度/修改时间；本次`.part`完成后不覆盖发布，重名自动编号。取消/失败保留已完成项并报告剩余，清理失败保留临时路径；目录和索引排除临时导出。导出和回收从选择/确认框前登记关闭等待、互斥保护；30秒未结束则关闭失败并提示，不中止原操作。

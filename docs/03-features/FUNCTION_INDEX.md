@@ -1,6 +1,6 @@
 # 功能定位索引
 
-F026 当前完整负载来自干净22e47f6，目录e3274f974142、正式标识安装候选fa6e79921794，含当前作业结果路由；1670文件/19worker摘要、依赖/正式主机及安装候选来源/架构核对通过。相同负载的独立测试身份安装/升级/卸载生命周期c027e16d589d通过，正式身份未实际安装，NotSigned。准确回执与GitHub同步见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部，候选入口见[当前状态](../08-handoff/CURRENT_STATUS.md)，原生与目标机仍待。
+F026 当前完整负载来自干净129b257，目录bbb1a83a8997、正式标识安装候选b1639b2aeb30，含可取消结果导出；1671文件/19worker摘要、依赖/正式主机及包内实际DLL的24项导出检查通过。相同负载测试身份生命周期e2b22336049c通过；正式身份未实际安装、NotSigned。准确回执见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部，候选入口见[当前状态](../08-handoff/CURRENT_STATUS.md)，原生与目标机仍待。
 
 F001/F022 后处理恢复草稿：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` / `SavePostprocessDraftAsync`、`OnRestoreWorkspaceDraftClicked`；同目录 `OdbPostprocessingPage.DialogDrafts.cs` / `ShowRecoverableDialogAsync` 覆盖提取参数、图例、管理分组和组内顺序。服务 `winui/AbaqusTools.WinUI/Services/OdbPostprocessDraftRecovery.cs` / `Matches`、`PrepareRows`、`Fingerprint`；共用磁盘写入迁至 `Services/RecoveryDraftFile.cs`（同一WinUI项目），结果图存储继承它。测试 `tests/winui_postprocess/PostprocessDraftChecks.cs`（`--draft-checks`）、既有后处理与结果图专项、`tests/winui/test_shell_contract.py`；边界见 [ADR0019](../submitter/adr/0019-postprocess-recovery-drafts.md)。
 

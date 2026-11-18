@@ -32,6 +32,7 @@ public sealed partial class TestApp : Application
             _root.Loaded += (_, _) => loaded.TrySetResult();
             _window.Activate();
             await loaded.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await CheckInfoBarLayoutAsync();
             await CheckSelectionsAsync();
             Write(new { status = "passed", checks = _checks });
         }
@@ -48,6 +49,38 @@ public sealed partial class TestApp : Application
             await DispatchAsync();
             Exit();
         }
+    }
+
+    private async Task CheckInfoBarLayoutAsync()
+    {
+        var panel = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
+        var bars = Enumerable.Range(0, 3).Select(_ => new InfoBar
+        {
+            IsOpen = false, Margin = new Thickness(12, 8, 12, 0), Title = "Layout check"
+        }).ToArray();
+        foreach (var bar in bars) panel.Children.Add(bar);
+        _root.Children.Add(panel);
+        await DispatchAsync();
+        _root.UpdateLayout();
+        Check(Math.Abs(panel.ActualHeight - 24) < .1,
+            "Three closed stock InfoBars reproduce the 24 DIP blank band");
+        InfoBarLayout.Track(panel, bars);
+        _root.UpdateLayout();
+        Check(panel.Visibility == Visibility.Collapsed && panel.DesiredSize.Height == 0,
+            "Closed messages and their container release all reserved space");
+        bars[1].IsOpen = true;
+        await DispatchAsync();
+        _root.UpdateLayout();
+        Check(panel.Visibility == Visibility.Visible && bars[1].ActualHeight > 0
+            && bars[0].Visibility == Visibility.Collapsed && bars[2].Visibility == Visibility.Collapsed,
+            "A newly opened message remains visible while closed siblings take no space");
+        bars[1].IsOpen = false;
+        await DispatchAsync();
+        _root.UpdateLayout();
+        Check(panel.Visibility == Visibility.Collapsed && panel.DesiredSize.Height == 0,
+            "Closing the last message releases its margin again");
+        _root.Children.Remove(panel);
+        await DispatchAsync();
     }
 
     private async Task CheckSelectionsAsync()

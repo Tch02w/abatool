@@ -4,18 +4,20 @@ namespace AbaqusTools.WinUI.Services;
 public static class WindowLayoutConstraints
 {
     public const double ExplorerWidth = 280;
+    public const double ExplorerRailWidth = 40;
     public const double NavigationWidth = 8 * 118;
-    public const double ResourcePageWidth = ExplorerWidth + 2 * 24 + 600 + 12 + 310;
-    public const double SingleColumnFormWidth = ExplorerWidth + 2 * 24 + 2 * 17 + 108 + 10 + 160;
+    public const double ResourcePageWidth = ExplorerWidth + 2 * 20 + 600 + 12 + 310;
+    public const double SingleColumnFormWidth = ExplorerWidth + 2 * 20 + 2 * 13 + 108 + 10 + 160;
     public static double MinimumClientWidth => MinimumClientWidthFor(explorerVisible: true);
     public static double MinimumClientWidthFor(bool explorerVisible) => Math.Max(NavigationWidth,
-        Math.Max(ResourcePageWidth, SingleColumnFormWidth) - (explorerVisible ? 0 : ExplorerWidth));
+        Math.Max(ResourcePageWidth, SingleColumnFormWidth)
+            - (explorerVisible ? 0 : ExplorerWidth - ExplorerRailWidth));
 
     // Reserve the fixed shell and a useful viewport, not the full height of scrollable pages.
     // Each queue pane has three control rows (40), three gaps (10), a table header (34),
-    // one visible data row (40), and the card's padding/border (2 * 17).
-    public const double QueuePaneViewportHeight = 3 * 40 + 3 * 10 + 34 + 40 + 2 * 17;
-    public const double PageViewportHeight = 20 + 24 + 12 + 2 * QueuePaneViewportHeight;
+    // one visible data row (40), and the card's padding/border (2 * 13).
+    public const double QueuePaneViewportHeight = 3 * 40 + 3 * 10 + 34 + 40 + 2 * 13;
+    public const double PageViewportHeight = 16 + 20 + 10 + 2 * QueuePaneViewportHeight;
     public const double DefaultNavigationHeight = 48;
 
     public static double MinimumClientHeight(double navigationHeight = DefaultNavigationHeight) =>

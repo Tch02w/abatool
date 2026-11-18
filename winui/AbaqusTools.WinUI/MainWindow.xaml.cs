@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(ControlPlaneHost controlPlane)
     {
         InitializeComponent();
+        Controls.InfoBarLayout.Track(null, StartupInfoBar, DraftSaveInfoBar, JobNotificationBar);
         App.Current.Commands.Changed += UpdateCommandMenus;
         _controlPlane = controlPlane;
         _fallbackExplorerAdapter = new ProjectExplorerAdapter(

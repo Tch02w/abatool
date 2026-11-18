@@ -8,28 +8,28 @@ try
         throw new InvalidOperationException("Intentional test-runner failure-exit verification");
     }
 
-    Check(WindowLayoutConstraints.MinimumClientWidth == 1250,
+    Check(WindowLayoutConstraints.MinimumClientWidth == 1242,
         "The resource-page columns must dominate the navigation and responsive form width");
-    Check(WindowLayoutConstraints.MinimumClientHeight() == 690,
+    Check(WindowLayoutConstraints.MinimumClientHeight() == 664,
         "Height must reserve shell chrome and two useful table viewports, not a full scrolling page");
-    Check(WindowLayoutConstraints.MinimumClientWidthFor(false) == 970,
+    Check(WindowLayoutConstraints.MinimumClientWidthFor(false) == 1002,
         "Hiding the explorer must release its width while preserving page and navigation minima");
     Check(WindowLayoutConstraints.MinimumOuterSize(1.25, 16, 16, 2560, 1440, explorerVisible: false)
-        == new WindowLayoutConstraints.PixelSize(1233, 883),
+        == new WindowLayoutConstraints.PixelSize(1273, 850),
         "Hidden explorer minima must still include nonclient extents and round at current DPI");
-    Check(WindowLayoutConstraints.ClampToMinimum(986, 706,
+    Check(WindowLayoutConstraints.ClampToMinimum(1018, 680,
         WindowLayoutConstraints.MinimumOuterSize(1, 16, 16, 1920, 1080, explorerVisible: true))
-        == new WindowLayoutConstraints.PixelSize(1266, 706),
+        == new WindowLayoutConstraints.PixelSize(1258, 680),
         "Showing the explorer in a narrow restored window must expand only the required dimension");
     var normal = Size(1, 1920, 1080);
-    Check(normal == new WindowLayoutConstraints.PixelSize(1266, 706),
+    Check(normal == new WindowLayoutConstraints.PixelSize(1258, 680),
         "100% DPI must include measured nonclient dimensions once");
-    Check(Size(1.25, 2560, 1440) == new WindowLayoutConstraints.PixelSize(1583, 883),
+    Check(Size(1.25, 2560, 1440) == new WindowLayoutConstraints.PixelSize(1573, 850),
         "125% DPI must round each physical minimum up");
     Check(Size(1.5, 1366, 768) == new WindowLayoutConstraints.PixelSize(1366, 768),
         "Small high-DPI screens must cap both minimum extents to the current work area");
-    Check(Size(1, 1200, 1080) == new WindowLayoutConstraints.PixelSize(1200, 706)
-        && Size(1, 1920, 600) == new WindowLayoutConstraints.PixelSize(1266, 600),
+    Check(Size(1, 1200, 1080) == new WindowLayoutConstraints.PixelSize(1200, 680)
+        && Size(1, 1920, 600) == new WindowLayoutConstraints.PixelSize(1258, 600),
         "Work-area caps must apply independently, preserving the other dimension");
     Check(WindowLayoutConstraints.ClampToMinimum(800, 500, normal) == normal,
         "A restored startup window smaller than both limits must be enlarged");
@@ -37,12 +37,12 @@ try
         == new WindowLayoutConstraints.PixelSize(1400, 800),
         "A valid user window size must not be changed");
     Check(WindowLayoutConstraints.ClampToMinimum(1400, 500, normal)
-        == new WindowLayoutConstraints.PixelSize(1400, 706),
+        == new WindowLayoutConstraints.PixelSize(1400, 680),
         "A resize correction must not shrink the unaffected dimension");
-    Check(Size(2, 3840, 2160) == new WindowLayoutConstraints.PixelSize(2532, 1412)
+    Check(Size(2, 3840, 2160) == new WindowLayoutConstraints.PixelSize(2516, 1360)
         && Size(1, 1920, 1080) == normal,
         "Cross-monitor recomputation must use DIPs rather than scaling an earlier pixel minimum");
-    Check(WindowLayoutConstraints.MinimumOuterSize(1, 16, 16, 1920, 1080, 72).Height == 730,
+    Check(WindowLayoutConstraints.MinimumOuterSize(1, 16, 16, 1920, 1080, 72).Height == 704,
         "A measured taller navigation header must retain the same page viewport");
     foreach (var scale in new[] { 0d, -1d, double.NaN, double.PositiveInfinity })
     {

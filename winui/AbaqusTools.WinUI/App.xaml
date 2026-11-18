@@ -12,6 +12,9 @@
             <SolidColorBrush x:Key="AbaqusWarningBrush" Color="#9D5D00" />
             <SolidColorBrush x:Key="AbaqusErrorBrush" Color="#C42B1C" />
             <SolidColorBrush x:Key="AbaqusMutedBrush" Color="#6B6B6B" />
+            <Thickness x:Key="WorkbenchPagePadding">20,16,20,20</Thickness>
+            <Thickness x:Key="WorkbenchCardPadding">12</Thickness>
+            <x:Double x:Key="WorkbenchSectionSpacing">10</x:Double>
             <Style x:Key="WorkbenchPageTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="24" />
                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -21,7 +24,7 @@
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
             <Style x:Key="WorkbenchCardStyle" TargetType="Border">
-                <Setter Property="Padding" Value="16" />
+                <Setter Property="Padding" Value="{StaticResource WorkbenchCardPadding}" />
                 <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />

@@ -49,6 +49,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     public ResultBrowserPage()
     {
         InitializeComponent();
+        Controls.InfoBarLayout.Track(StatusMessagesPanel, ErrorInfoBar, WarningInfoBar, IndexInfoBar);
         _explorerAdapter = new ResultExplorerAdapter(
             () => FileOperationBusy || string.IsNullOrWhiteSpace(RootTextBox.Text)
                 ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),

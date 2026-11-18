@@ -5,7 +5,7 @@
     xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Padding="24,20,24,28" Spacing="12">
+        <StackPanel Padding="{StaticResource WorkbenchPagePadding}" Spacing="{StaticResource WorkbenchSectionSpacing}">
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <TextBlock VerticalAlignment="Center" Text="合并方式" />
                 <ComboBox x:Name="MergeModeComboBox" Width="200" SelectedIndex="0" SelectionChanged="OnMergeModeChanged">

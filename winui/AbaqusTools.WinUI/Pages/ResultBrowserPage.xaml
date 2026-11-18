@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
-    <Grid Padding="28" RowSpacing="12">
+    <Grid Padding="{StaticResource WorkbenchPagePadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -12,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <Border
-            Padding="16"
+            Padding="{StaticResource WorkbenchCardPadding}"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="1"
@@ -57,7 +57,7 @@
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="1" Spacing="8">
+        <StackPanel x:Name="StatusMessagesPanel" Grid.Row="1" Spacing="4" Margin="0,10,0,0" Visibility="Collapsed">
             <InfoBar x:Name="ErrorInfoBar" IsClosable="True" Severity="Error" />
             <InfoBar x:Name="WarningInfoBar" IsClosable="True" Severity="Warning" />
             <InfoBar
@@ -72,7 +72,7 @@
             </InfoBar>
         </StackPanel>
 
-        <Grid Grid.Row="2" ColumnSpacing="12">
+        <Grid Grid.Row="2" Margin="0,10,0,0" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="292" />
                 <ColumnDefinition Width="*" />
@@ -252,7 +252,7 @@
 
                 <Border
                     Grid.Row="2"
-                    Padding="14"
+                    Padding="{StaticResource WorkbenchCardPadding}"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"

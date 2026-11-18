@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid Padding="24,20,24,24" RowSpacing="12">
+    <Grid Padding="{StaticResource WorkbenchPagePadding}" RowSpacing="{StaticResource WorkbenchSectionSpacing}">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
         <Grid ColumnSpacing="10">

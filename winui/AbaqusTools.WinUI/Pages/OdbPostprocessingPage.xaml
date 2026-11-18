@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
-    <Grid Padding="24" RowSpacing="12">
+    <Grid Padding="{StaticResource WorkbenchPagePadding}" RowSpacing="{StaticResource WorkbenchSectionSpacing}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <Border
-            Padding="16"
+            Padding="{StaticResource WorkbenchCardPadding}"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="1"
@@ -211,7 +211,7 @@
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="12">
-                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                    <Border Padding="{StaticResource WorkbenchCardPadding}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                         <StackPanel Spacing="10">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="选择与对比组" />
                             <TextBlock x:Name="SelectedPlanText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="选择 ODB 后可编辑参数" TextWrapping="Wrap" />
@@ -239,7 +239,7 @@
                         HorizontalContentAlignment="Stretch"
                         Header="输出与计算设置"
                         IsExpanded="True">
-                        <StackPanel Padding="16,12,16,16" Spacing="10">
+                        <StackPanel Padding="{StaticResource WorkbenchCardPadding}" Spacing="10">
                             <CheckBox x:Name="FullTimehistoryCheckBox" Content="全部帧执行 FreeBodyCut（耗时较长）" />
                             <Grid x:Name="OutputSettingsGrid" MinWidth="0" ColumnSpacing="10" RowSpacing="8">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -277,7 +277,7 @@
                         </StackPanel>
                     </Expander>
 
-                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                    <Border Padding="{StaticResource WorkbenchCardPadding}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                         <StackPanel Spacing="10">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="执行" />
                             <TextBlock x:Name="PostprocessPhaseText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="读取结构并完成配置后即可运行" TextWrapping="Wrap" />

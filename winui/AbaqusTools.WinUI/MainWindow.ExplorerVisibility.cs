@@ -10,7 +10,7 @@ namespace AbaqusTools.WinUI;
 public sealed partial class MainWindow
 {
     private void OnExplorerToggleClicked(object sender, RoutedEventArgs args) =>
-        SetExplorerVisibility(ExplorerToggleButton.IsChecked is true);
+        SetExplorerVisibility(!App.Current.Session.State.ExplorerVisible);
 
     private void OnExplorerAcceleratorInvoked(
         KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -31,7 +31,8 @@ public sealed partial class MainWindow
     private void ApplyExplorerVisibility()
     {
         var visible = App.Current.Session.State.ExplorerVisible;
-        ExplorerToggleButton.IsChecked = visible;
+        ExplorerToggleIcon.Glyph = visible ? "\uE76B" : "\uE76C";
+        ExplorerToggleButton.Margin = new Thickness(0, 8, visible ? 8 : 5, 0);
         var action = visible ? "收起浏览侧栏" : "显示浏览侧栏";
         AutomationProperties.SetName(ExplorerToggleButton, action);
         ToolTipService.SetToolTip(ExplorerToggleButton, action + " (Ctrl+B)");
@@ -47,7 +48,9 @@ public sealed partial class MainWindow
         }
         // Keep the same explorer and page instances, including selection and ongoing work.
         ExplorerHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        ExplorerColumn.Width = new GridLength(visible ? WindowLayoutConstraints.ExplorerWidth : 0);
+        ExplorerCollapsedRail.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        ExplorerColumn.Width = new GridLength(visible
+            ? WindowLayoutConstraints.ExplorerWidth : WindowLayoutConstraints.ExplorerRailWidth);
         UpdateWindowSizeLimits();
     }
 }

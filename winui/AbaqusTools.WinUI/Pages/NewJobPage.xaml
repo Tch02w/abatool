@@ -5,7 +5,7 @@
     xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Padding="24,20,24,28" Spacing="12">
+        <StackPanel Padding="{StaticResource WorkbenchPagePadding}" Spacing="{StaticResource WorkbenchSectionSpacing}">
             <InfoBar
                 x:Name="DraftInfoBar"
                 IsClosable="False"

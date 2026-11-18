@@ -1,5 +1,17 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 顶部24 DIP留白、八页密度与侧栏按钮位置
+
+用户在实际窗口反馈导航上方空白过大、整体稍松，要求适度紧凑，并授权选择侧栏按钮及收起后的内容方案。最终将按钮从标题菜单移到浏览器右上角，30 DIP按钮使用折线图标；收起保留40 DIP入口，原有页面上下文与草稿规则保持。八页边距统一20/16/20/20，卡片12，主要分组10，字体及输入按钮高度不缩小。窗口下限按此重算为展开1242、收起1002、默认高664 DIP。
+
+第一次仅设置IsTitleBarAutoPaddingEnabled=False，用户指出空白仍在；继续定位到MainWindow三条关闭InfoBar各8 DIP外边距，实际共24 DIP。新增InfoBarLayout.Track把关闭提示和结果页提示容器真正Collapsed。原生自身窗口复现24 DIP、修复后0、重新打开仍可见、最后关闭再次0，连同既有选择刷新9项共13项通过，177532退出0；回执`GPTWork/density-control-checks-20261118/verification.json`及process.json。此为原生控件几何证明，不替代整页截图与鼠标验收。
+
+最终发布构建成功：`GPTWork/winui-density-sidebar-20261118`，日志`GPTWork/winui-density-sidebar-publish-20261118.log`。16项尺寸通过`GPTWork/density-layout-final-20261118.log`；39项shell/结果API通过3.26秒，`GPTWork/density-regression-final-20261118.log`。失败记录保留：初次尺寸命令误写Layout.Tests.csproj，正确名称WindowLayout.Tests.csproj；随后--no-restore缺assets，缓存还原后发现一处测试旧706期望漏改，改为680后通过。生产计算未靠放宽断言规避问题。
+
+先前干净6d45342目录cb9a79ed69bd/正式安装器46444abe6d77/测试安装器2a9ce6ea95e4已生成，清单1687、worker19、应用资源15。原生44576/后台221940/子219336启动结果页4范围并正常结束，日常JSON未改；这些包尚不含随后用户要求的密度调整，未完成新安装生命周期，保留追溯、不作为本轮最终候选。`GPTWork/explorer-release-verification-20261118/inventory.json`与`GPTWork/native-explorer-release-20261118/result-browser/verification.json`。
+
+准确续接点：旧密度试窗205808/后台213728/子166276，窗口1573058，已记录身份于`GPTWork/native-density-20261118/result-browser/processes.json`。CUA截图超时；两次重新观察后Alt+F4激活失败，未强杀，已请用户关闭再打开修正版。发布输出winui-density-sidebar已编译但未打开；待关闭确认后检查旧进程、启动独立新配置、检查实际侧栏及提示，再打干净完整候选和安装生命周期。没有新增求解或ODB复制。
+
 ## 2026-11-18 · 用户操作确认CSV预览、完整导出与正常退出
 
 用户确认修复窗口选择“模型甲 → load_point_raw.csv”可显示表格且窗口正常。CUA随后独立读到模型甲已索引、1个结果/正式索引、预览前50行3列Time/RF3/U3，最后预览行4.9、661.5、−12.25。此前等待预览的198808窗口记录已更新为本段通过范围。

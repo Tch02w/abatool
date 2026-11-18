@@ -59,7 +59,12 @@ public sealed partial class MainWindow : Window
         UpdateWindowSizeLimits();
         RestoreWindowState();
         UpdateTitleBarInsets();
+    }
 
+    internal void RestoreWorkspace()
+    {
+        // Explorer attachment can synchronously call page code that needs App.MainWindow.
+        // App must publish this fully constructed window before restoring any page.
         SelectRoute(App.Current.Session.State.LastRoute);
         if (ContentFrame.Content is null)
         {

@@ -29,6 +29,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
     private bool _updatingFields;
     private bool _requestBusy;
     private bool _executionBusy;
+    private bool _initialLoadDeferred;
 
     public OdbResultGraphEditor()
     {
@@ -76,6 +77,10 @@ public sealed partial class OdbResultGraphEditor : UserControl
     {
         _executionBusy = busy;
         RefreshInteractionState();
+        if (!busy && _initialLoadDeferred && IsLoaded)
+        {
+            _ = LoadInitialGraphAsync();
+        }
     }
 
     public void SelectNode(string nodeId)
@@ -101,10 +106,19 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     private async void OnEditorLoaded(object sender, RoutedEventArgs e)
     {
+        await LoadInitialGraphAsync();
+    }
+
+    private async Task LoadInitialGraphAsync()
+    {
         // A cached page can be loaded again while holding an unsaved draft.
-        if (_savedSnapshot is null && !HasUnsavedChanges && !_requestBusy)
+        if (_savedSnapshot is null && !HasUnsavedChanges && !_requestBusy
+            && !App.Current.Session.IsClosing)
         {
-            await LoadGraphAsync();
+            // Parent recovery can lock the editor before its first Loaded event.
+            // Resume this read when recovery releases the lock, without retrying errors.
+            _initialLoadDeferred = _executionBusy;
+            if (!_initialLoadDeferred) await LoadGraphAsync();
         }
     }
 

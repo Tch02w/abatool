@@ -1,5 +1,23 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 其余五页首次加载及两处实际启动修复
+
+从干净文档 HEAD ffd8d28 接续，使用4787f0f完整包07ccd1e06113和每页独立G:配置，真实窗口检查其余五页。队列0候选/0正式，数字并行上限1→2且关闭后JSON为2；概览无作业/操作禁用/日志占位；重启动链0链0节点正常。计算资源虽读到本机数据，却有ExplorerErrorInfoBar“主窗口尚未创建。”；合并图持续“尚未读取”，输出目录和添加根节点禁用。后两项记录为缺陷，不能把五页都标为通过。
+
+F001/F007：MainWindow构造中SelectRoute→AttachExplorerForCurrentPage→ResourceExplorerAdapter.RefreshAsync→ComputeResourcesPage.RefreshSelectedAsync同步访问App.MainWindow，此时赋值尚未完成。把页面恢复和会话保存启动移到内部RestoreWorkspace，由App.OnLaunched在主窗口赋值、关闭订阅完成后、Activate前调用；不吞掉真正的刷新异常。
+
+F012：父页面恢复后台任务时锁定编辑器，子控件Loaded的首次读取被_executionBusy跳过；恢复完成后没有重试入口。OdbResultGraphEditor新增LoadInitialGraphAsync和_initialLoadDeferred，仅在首次读取因执行锁延期、仍在页面且不关闭时续读；已有快照/未保存编辑/正在请求均不覆盖，失败不循环重试，仍允许显式重新读取。
+
+实际测试：项目.venv执行 `pytest tests/winui/test_shell_contract.py tests/winui/test_session_bindings.py tests/control_plane/test_odb_result_graphs_api.py tests/common/test_installer_manifest.py -q --basetemp=GPTWork/pytest-native-firstload-fixes-20261118`，81 passed in 4.86s；日志/XML为 `GPTWork/native-firstload-fixes-tests-20261118.log` / `.xml`。`dotnet publish winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 --no-restore -o GPTWork/winui-firstload-fixed-20261118`，32856退出0，日志同名.log，15项应用资源齐全。这个发布输出复制了07ccd1e06113未变的冻结后台用于原生复核，不冒称干净完整发布包或新版安装器。
+
+修复后原生：计算资源页无错误栏、本机在线；合并页自动显示“结果合并图已读取”、版本0，输出目录和添加根节点可用。通过真实输入框填写G:测试目录后正常Alt+F4，正式图JSON保存revision=1、nodes=[]、目录正确，未执行任何合并。另一窗口恢复名称/CPU=4，Ctrl+7后处理空目录无误报、Ctrl+8结果根恢复并读取1个范围/0条记录，不能据此认定记录预览/导出通过。
+
+所有窗口均经Alt+F4关闭，CUA库存确认消失，再按PID+创建时间核对自有进程结束、描述符移除、两份已知日常JSON摘要不变。修复前原生/后台：189500/190716、207796/39668、201036/153356、207180/181260、207644/35560；修复后216852/216880、214820/177484、40132/165312；各自子进程亦已结束。回执分别在 `GPTWork/native-remaining-pages-20261118/<route>/verification.json` 和 `GPTWork/native-firstload-fixed-20261118/<route>/verification.json`，汇总 `GPTWork/native-firstload-fixed-20261118/verification-summary.json`。未创建/移动ODB、未启动求解。
+
+收尾文档路径检查49 passed in 0.12s，命令为项目.venv执行 `pytest tests/common/test_documentation_navigation.py -q --basetemp=GPTWork/pytest-native-firstload-docs-20261118`；日志/XML为 `GPTWork/native-firstload-docs-20261118.log` / `.xml`，差异检查通过。81项相关回归与49项文档检查分别记录，不替代原生业务验证。
+
+准确续接点：八个页面已有跨本轮候选版本的有限首次加载观察，两处发现的问题已修复并实测；不是八页完整业务验收。当前修复开发入口为winui-firstload-fixed-20261118，07ccd1e06113完整包及10f24dcc8dc8安装器不含这两项修复；后续打包应基于提交后的源码，保留旧现场。截图/鼠标工具限制、日志拖选、帮助悬停、视觉/跨屏和原生记录导出仍待。全部本轮应用、后台和构建均已结束；宽泛GPTWork搜索75983已停止，未重复启动长任务。提交/推送身份以实际Git核对为准，整体目标保持active。
+
 ## 2026-11-18 · 补齐资源的干净完整候选及真实启动
 
 发布资源修复连同代码、20项安装门槛测试和文档提交为 `4787f0f0651177f3db3bbec686d05d91076c7cff`，已实际推送GitHub main并用ls-remote核对一致。上一段发布缺资源排查属于实际进展；本节是修复后最终产物，不再使用缺资源旧包作为可运行入口。

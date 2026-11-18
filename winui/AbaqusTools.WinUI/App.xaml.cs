@@ -29,6 +29,7 @@ public partial class App : Application
     {
         _mainWindow = new MainWindow(ControlPlane);
         _mainWindow.Closed += OnMainWindowClosed;
+        _mainWindow.RestoreWorkspace();
         _mainWindow.Activate();
     }
 

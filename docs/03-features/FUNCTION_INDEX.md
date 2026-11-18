@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F001/F007首次页面恢复顺序：`winui/AbaqusTools.WinUI/App.xaml.cs` / OnLaunched在主窗口赋值后调用`MainWindow.xaml.cs` / RestoreWorkspace（同目录），避免资源侧栏同步刷新访问尚未登记的主窗口。F012初次结果图读取：`winui/AbaqusTools.WinUI/Controls/OdbResultGraphEditor.xaml.cs` / LoadInitialGraphAsync、SetExecutionBusy在后台恢复解锁后续读，保留已有快照/编辑且失败不循环重试。相关检查 `tests/winui/test_shell_contract.py`、`tests/winui/test_session_bindings.py`、`tests/control_plane/test_odb_result_graphs_api.py`；真实复现与修复证据见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。修复开发入口winui-firstload-fixed-20261118，下面4787f0f完整包尚不含这两项修复。
+
 当前F026干净完整候选来源4787f0f：目录07ccd1e06113、安装器10f24dcc8dc8，已纳入下述独立配置/CPU/空目录及发布资源修复。15项应用资源与摘要、实际完整包三页有限原生状态/退出、同负载隔离升级生命周期通过；全八页/目标机未验。准确入口和回执见[当前状态](../08-handoff/CURRENT_STATUS.md)及[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 F001/F022/F023 独立验收配置：`winui/AbaqusTools.WinUI/Services/WorkbenchProfile.cs` / Resolve、ConfigureBackendEnvironment、SingleInstanceKey；`Program.cs`、`Services/ControlPlaneHost.cs`、`Services/WorkbenchSession.cs`、`Controls/OdbResultGraphEditor.Recovery.cs`、`Pages/OdbPostprocessingPage.xaml.cs`、`Pages/OdbPostprocessingPage.Drafts.cs`（均在同一 WinUI 项目）接入统一路径。测试 `tests/winui_host/WorkbenchProfileChecks.cs`（--profile-checks，14 项）和 `tests/winui_host/test_shutdown_api.py`；默认兼容和边界见 [ADR0022](../submitter/adr/0022-isolated-workbench-profiles.md)。

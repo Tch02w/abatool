@@ -47,12 +47,16 @@
 
 | ID / 功能 | 入口和实现 / 符号 | 首选测试 |
 |---|---|---|
-| F023 控制面启动、鉴权、HTTP 路由、操作跟踪 | `modules/control_plane/__main__.py`、`modules/control_plane/server.py`；`ControlPlaneRuntime`；`modules/control_plane/descriptor.py`、`modules/control_plane/contracts.py`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` | `tests/control_plane/test_api.py`、`tests/control_plane/test_descriptor.py`、`tests/winui_host/ControlPlaneHost.Tests.csproj` |
+| F023 控制面启动、鉴权、HTTP 路由、操作跟踪 | `modules/control_plane/__main__.py`、`modules/control_plane/server.py`；`ControlPlaneRuntime`；`modules/control_plane/descriptor.py`、`modules/control_plane/contracts.py`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` | `tests/control_plane/test_api.py`（含 `test_success_response_drains_delayed_optional_command_body`）、`tests/control_plane/test_descriptor.py`、`tests/winui_host/ControlPlaneHost.Tests.csproj` |
 | F024 PySide6 兼容工作台与旧提取基准 | `main.py`、`modules/workspace.py`、`modules/submitter/main.py`、`modules/postprocessor/app.py`、`modules/postprocessor/batch_window.py`、`modules/postprocessor/main_window.py` | `tests/postprocessor/test_legacy_payload_parity.py`、`tests/postprocessor/test_postprocessor_entrypoint.py`、`tests/submitter/test_module_entrypoint.py` |
 | F025 共用数字输入与参数说明 | `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`、`winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml`；`WorkbenchNumberBoxTemplate`；`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs`；`UpdateExplanation`、`AddToHeader`；`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs`；`ForTopic`；16 处入口分布于 F003/F004/F007/F008/F022，完整清单见 [界面交互说明](UI_INTERACTION.md) | `tests/winui_numberbox/NumberBox.Tests.csproj`、`tests/winui_numberbox/App.xaml.cs`、`tests/winui/test_shell_contract.py`；自身原生窗口 35 项和最新构建通过，业务页视觉/悬停验收待完成 |
 | F026 Windows 完整目录发布 | `packaging/build_release.py`、`packaging/release_inventory.py`、`packaging/control_plane.spec`、`packaging/control_plane_entry.py`、`packaging/bundle_probe.py`；F023 启动选择：`winui/AbaqusTools.WinUI/Services/ControlPlaneLaunch.cs` | `tests/winui_host/ControlPlaneLaunchChecks.cs`；`tests/winui_host/Program.cs` 的 `--launch-bundle`；包内 `--check-bundle`；`packaging/verify_merge_restart.py` 冻结控制面重启；约定见 [发布构建](../05-development/RELEASE.md) |
 
+| F027 作业结束提醒与未读恢复 | `modules/control_plane/job_notifications.py` / `JobNotificationManager`；F005 `_store_result`、F010 `_touch_locked`；`winui/AbaqusTools.WinUI/MainWindow.Notifications.cs`、`winui/AbaqusTools.WinUI/Services/JobNotificationContracts.cs`、`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Notifications.cs`；[提醒说明](JOB_NOTIFICATIONS.md) | `tests/control_plane/test_job_notifications.py`、`tests/winui_host/JobNotificationChecks.cs`；`packaging/verify_local_memory.py` 的 `--notifications` 模式 |
+
 ## 跨功能修改提示
+
+- F003/F005/F010 的结束提醒统一交给 F027；新增/改动终态时核对不会对未知/活动状态发结束提醒。远端请求 notify 省略默认 true，关闭选项必须在恢复后仍有效。
 
 - F001 与八页草稿：各页面 `Session.Register` 列出原始输入白名单；F003 新建作业、F004 队列参数、F013 合并输入等复用 `WorkbenchSession`。F004 `ApplyRuntime` 保留正在编辑的参数；F012 图保存 `OdbResultGraphEditor.SaveForCloseAsync`，F022 继续使用 `OdbPostprocessingPage.SaveWorkspace(forClose:true)`。关闭选择、租约、同步 POST 准入与后台自行退出见 [ADR 0009](../submitter/adr/0009-reversible-workbench-close.md)。原生业务交互待验收。
 

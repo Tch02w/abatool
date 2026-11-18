@@ -21,3 +21,4 @@ Current records:
 - [0010-native-shared-local-scheduler.md](0010-native-shared-local-scheduler.md)
 - [0011-native-memory-observation.md](0011-native-memory-observation.md)
 - [0012-durable-remote-tracking.md](0012-durable-remote-tracking.md)
+- [0013-durable-job-notifications.md](0013-durable-job-notifications.md)

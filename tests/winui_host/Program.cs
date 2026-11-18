@@ -13,6 +13,22 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 2 && args[0] == "--notifications-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        var inbox = await host.GetJobNotificationsAsync();
+        if (inbox.UnreadCount != 1 || inbox.Items[0].Status != "cancelled")
+            throw new Exception("Expected the previous owned attempt's durable cancellation notice");
+        var acknowledged = await host.AcknowledgeJobNotificationsAsync([inbox.Items[0].Id]);
+        if (acknowledged.UnreadCount != 0 || (await host.GetJobNotificationsAsync()).UnreadCount != 0)
+            throw new Exception("Acknowledged execution reappeared after refresh");
+        Console.WriteLine("Production notification client: persisted inbox, acknowledgement, no replay passed.");
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--close-api")
     {
         await CheckCloseApi(args[1], args[2]);
@@ -100,6 +116,7 @@ try
     WorkbenchSessionChecks.Run();
     MemoryPresentationChecks.Run();
     RemoteRecoveryChecks.Run();
+    JobNotificationChecks.Run();
     Console.WriteLine("11 host process lifecycle checks passed.");
     return 0;
 }

@@ -9,11 +9,12 @@ from pathlib import Path
 
 
 class OperationJournal:
-    def __init__(self, path: Path, *, table: str, validator):
-        if table not in {"merge_operations", "batch_operations", "remote_operations"}:
+    def __init__(self, path: Path, *, table: str, validator, id_field=None):
+        if table not in {"merge_operations", "batch_operations", "remote_operations", "job_notifications"}:
             raise ValueError("Unknown operation journal table")
         self._table = table
         self._validate = validator
+        self._id_field = id_field
         self.path = Path(path)
         self._owner = None
         self._database = None
@@ -61,7 +62,7 @@ class OperationJournal:
         for operation_id, payload in rows:
             record = json.loads(payload)
             self._validate(record)
-            if operation_id != record["snapshot"]["operationId"]:
+            if operation_id != self._record_id(record):
                 raise ValueError("任务记录标识不一致")
             records.append(record)
         return records
@@ -76,10 +77,13 @@ class OperationJournal:
                 f"INSERT INTO {self._table}(operation_id, payload) VALUES (?, ?) "
                 "ON CONFLICT(operation_id) DO UPDATE SET payload=excluded.payload",
                 (
-                    record["snapshot"]["operationId"],
+                    self._record_id(record),
                     json.dumps(record, ensure_ascii=False),
                 ),
             )
+
+    def _record_id(self, record):
+        return record[self._id_field] if self._id_field else record["snapshot"]["operationId"]
 
     def close(self) -> None:
         if self._database is not None:

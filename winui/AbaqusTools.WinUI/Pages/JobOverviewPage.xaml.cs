@@ -52,6 +52,20 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _jobExplorerAdapter;
 
+    public async Task<bool> SelectNotificationJobAsync(JobNotification notification)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((!IsLoaded || _loading) && DateTime.UtcNow < deadline) await Task.Delay(50);
+        if (!IsLoaded || _loading || App.Current.Session.IsClosing) return false;
+        await RefreshAsync();
+        if (!IsLoaded || App.Current.Session.IsClosing || JobSelector.ItemsSource is not IEnumerable<JobOverviewEntry> entries) return false;
+        var entry = entries.FirstOrDefault(item => item.Key == notification.JobKey
+            && (item.LocalItem is null || item.LocalItem.AttemptId == notification.ExecutionId));
+        if (entry is null) return false;
+        SelectJob(entry.Key);
+        return true;
+    }
+
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         await RefreshAsync();

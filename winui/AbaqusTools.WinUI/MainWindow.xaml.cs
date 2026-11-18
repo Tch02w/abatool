@@ -158,7 +158,7 @@ public sealed partial class MainWindow : Window
     private async void OnResourceTimerTick(object? sender, object e)
     {
         if (App.Current.Session.IsClosing) return;
-        await RefreshLocalResourceNowAsync();
+        await Task.WhenAll(RefreshLocalResourceNowAsync(), RefreshJobNotificationsAsync());
     }
 
     private async void OnRootLoaded(object sender, RoutedEventArgs e)
@@ -177,6 +177,7 @@ public sealed partial class MainWindow : Window
         {
             await _controlPlane.EnsureReadyAsync();
             await RefreshLocalResourceNowAsync();
+            await RefreshJobNotificationsAsync();
             if (!App.Current.Session.IsClosing) _resourceTimer.Start();
         }
         catch (ControlPlaneException exception)

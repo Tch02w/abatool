@@ -10,6 +10,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 - 扫描候选 INP、管理正式队列，按优先级、CPU/绝对内存及依赖分配本机作业；后台重启保留身份并核对，未知状态不重复提交；[调度和恢复边界](docs/03-features/LOCAL_SCHEDULING.md)。
 - 观测本机作业的进程内存，区分当前占用、峰值和估计；结合历史及安全余量分配资源，多作业共享扫描。[内存口径与限制](docs/03-features/MEMORY_MONITORING.md)。
 - 查看作业日志与 STA/MSG/DAT，管理本机和远端计算资源及文件传输。
+- 本机/远端作业结束后集中显示提醒，按执行身份去重，未读记录可恢复；[提醒与保存边界](docs/03-features/JOB_NOTIFICATIONS.md)。
 - 远端作业按完成输出、进程/锁及稳定文件确认结束；断线与后台重启可连接原服务器继续跟踪，恢复不重复提交。支持离线取消意图保存，未知状态明确显示。[远端确认与恢复边界](docs/03-features/REMOTE_JOBS.md)。
 - 编辑并校验 Restart/oldjob 依赖链。
 - 异步合并 ODB，支持逐步逐帧内容校验、校验回执、无结果帧提示、持久任务记录、重启去重与中断提示，以及取消、冲突策略和失败清理；[规则与边界](docs/03-features/ODB_MERGE.md)。

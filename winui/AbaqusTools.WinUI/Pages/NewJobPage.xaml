@@ -130,7 +130,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="18">
                             <CheckBox x:Name="InteractiveCheckBox" Content="交互输出" />
                             <CheckBox x:Name="DatacheckCheckBox" Content="仅数据检查" />
-                            <CheckBox x:Name="NotifyCheckBox" Content="结束提醒" IsChecked="True" />
+                            <CheckBox x:Name="NotifyCheckBox" Content="结束提醒" IsChecked="True"
+                                      ToolTipService.ToolTip="完成、失败或取消后集中显示提醒；未读提醒在重新打开界面后保留。" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock VerticalAlignment="Center" Text="本地队列并行上限" />

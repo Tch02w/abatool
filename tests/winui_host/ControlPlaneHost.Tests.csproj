@@ -12,6 +12,7 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.OdbUpgrade.cs" Link="ControlPlaneHost.OdbUpgrade.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.ResultBatch.cs" Link="ControlPlaneHost.ResultBatch.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Shutdown.cs" Link="ControlPlaneHost.Shutdown.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Notifications.cs" Link="ControlPlaneHost.Notifications.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/WorkbenchSessionStore.cs" Link="WorkbenchSessionStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/*Contracts.cs" Link="%(Filename)%(Extension)" />
   </ItemGroup>

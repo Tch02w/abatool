@@ -16,6 +16,8 @@
 
 本机观测：多个执行器共用进程快照，以执行身份和 PID 创建时间约束统计；回调先聚合，再由队列线程批量保存。`LocalMemoryMonitor` 复用纯 Python 学习服务，历史写入同一 SQLite 的兼容元信息表，按 job ID 将估计交给调度核心。采样不可读与零占用不同，当前 RSS 与历史估计不同；详见 [内存说明](../03-features/MEMORY_MONITORING.md) 和 [ADR 0011](../submitter/adr/0011-native-memory-observation.md)。
 
+作业提醒：本机/远端终态回调 → `JobNotificationManager` → 独立 SQLite → 全局 WinUI 提醒区。执行身份去重，已读必须保存确认；待保存提醒参与联合退出检查。旧作业历史补查不持有提醒锁，避免与完成回调形成反向锁顺序。原生仅负责显示和确认，不能自行推断作业成功。见 [提醒说明](../03-features/JOB_NOTIFICATIONS.md) 与 [ADR 0013](../submitter/adr/0013-durable-job-notifications.md)。
+
 ## 后处理数据流
 
 远端作业：`RemoteJobOperationManager → RemoteJobJournal / RemoteJobRecovery → RemoteServerService → Windows PowerShell`。启动 intent 本地持久化，服务器独占提交回执约束单次启动；恢复仅观察原身份，凭据不入任务记录。连接锁同时保护身份核对和命令执行。实现、未确认窗口和测试边界见 [远端说明](../03-features/REMOTE_JOBS.md) 与 [ADR 0012](../submitter/adr/0012-durable-remote-tracking.md)。

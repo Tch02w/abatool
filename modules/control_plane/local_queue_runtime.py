@@ -110,10 +110,12 @@ class LocalQueueRuntimeManager:
         *,
         runner: LocalJobRunner = execute_local_job,
         resource_provider=read_scheduling_resources,
+        completion_sink=None,
     ) -> None:
         self.queue_service = queue_service
         self.event_store = event_store
         self.runner = runner
+        self._completion_sink = completion_sink
         self._lock = threading.RLock()
         self._wake = threading.Event()
         self._closing = False
@@ -659,6 +661,8 @@ class LocalQueueRuntimeManager:
             record.finished_at = utc_now_text()
             self._scheduling.memory.finish(record.attempt_id)
             self._close_scheduler_if_idle(excluding=record)
+        if self._completion_sink is not None:
+            self._completion_sink(item, record, result)
         self.event_store.append(
             aggregate_type="localJob",
             aggregate_id=item.item_id,

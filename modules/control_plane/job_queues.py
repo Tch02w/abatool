@@ -53,6 +53,7 @@ def _project_item(raw: object, index: int) -> dict[str, Any] | None:
     return {
         "index": index,
         "itemId": _string(raw.get("item_id")),
+        "attemptId": _string(raw.get("attempt_id")),
         "jobId": _string(raw.get("job_id") or raw.get("item_id")),
         "jobName": _string(raw.get("job_name")) or Path(inp_path).stem,
         "inpPath": inp_path,

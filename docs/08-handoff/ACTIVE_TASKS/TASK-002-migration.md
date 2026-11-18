@@ -6,6 +6,30 @@
 
 ## 接续顺序
 
+### 2026-11-18 F027 作业结束提醒与 F023 成功响应修正（源码通过，完整包待构建）
+
+对照迁移合同发现 F003 的“结束提醒”保存到 QueueItem，但原生界面/控制面没有消费；旧 Qt 的 `notify_job_finished` 为每个作业打开消息框。改动前已说明新方案：后台确认终态后持久保存、按执行身份去重、跨页集中查看，使用非阻塞提醒，点击定位对应执行。用户此前 Esc 停止 UI 操作，本轮已询问是否可以恢复原生验收，尚未得到答复；先继续代码/后台验证。
+
+已实现 F027：本机/远端完成回调、SQLite 提醒记录、恢复补查、已读持久确认及待保存关闭保护；远端 notify 选项保留默认兼容。全局非模态横幅可收起并从菜单重开，弹层阅读时冻结列表，本页已读只针对当前显示记录。再次运行产生新身份，查看提醒不能误定位同名新执行。详见 [提醒说明](../../03-features/JOB_NOTIFICATIONS.md) 和 [ADR 0013](../../submitter/adr/0013-durable-job-notifications.md)。
+
+当前实际验证（集合重叠，不累计）：
+
+- 首轮 7 项通过，`GPTWork/job-notices-first-20261118.xml`；后续通知与文档 53 项通过，`GPTWork/job-notices-final-20261118.xml`。
+- 扩展控制面回归 **289 通过 / 2 失败，580.13 秒**，`GPTWork/job-notices-broad-20261118.xml`。一项为提取取消成功响应 Windows 10053；一项为真实远端恢复夹具在完成后读取超时（5 秒），不能记为全通过。
+- F023 已定位并修正第一项：取消等不解析正文的命令接受 schemaVersion 正文，但发送成功响应前未读完，Windows 可能重置连接。成功 JSON 响应现在同错误响应一样限时排空已声明的小正文。真实 TCP 延迟正文回归用旧实现必然提前返回（`DID NOT RAISE TimeoutError`），证据 `GPTWork/optional-body-before-fix2-20261118.xml/log`；恢复实际修正后 **1 项通过，4.10 秒**，`GPTWork/optional-body-after-fix-20261118.xml/log`。旧实现仅在测试进程内替换，未回退工作区源码。
+- 首次旧实现证明夹具导入顺序不当，默认调度路径指向 AppData，遇到 SQLite/权限错误，未进入目标断言。`GPTWork/optional-body-before-fix-20261118.xml/log` 保留为无效证明；改成显式 GPTWork 测试路径后才取得上面的因果证据。未清理或修改用户数据库。
+- 修正后的 API、全部通用提取、真实远端恢复进程、通知和关闭协议 **48 项通过，123.57 秒**，`GPTWork/job-notices-delivery-20261118.xml/log`。包含 11 项提醒检查和两项扩展失败场景。远端超时在专项通过，没有证明其负载下超时根因已修复。
+- C# 新增 **10 项**提醒契约/显示检查及既有主机测试通过，`GPTWork/job-notices-host-tests-20261118.log`；正式测试客户端输出 `GPTWork/job-notices-host-client`。最终 WinUI Release **0 警告 / 0 错误，14.26 秒**，`GPTWork/job-notices-winui-delivery-20261118.log`。修改 Python 文件 Ruff 与 diff 空白检查通过。
+- 源码真实 Windows helper：`packaging/verify_local_memory.py --notifications --host-client GPTWork/job-notices-host-client/ControlPlaneHost.Tests.dll`，回执 **`GPTWork/local-memory-live-88f62b2d8635/verification.json`**。两次后台启动和 96 MiB 自有 helper，实际取消产生两条独立提醒；正式 C# 客户端读取、确认已读、重新读取为零；第二次明确运行产生新提醒。持久数据库两条记录、历史恢复、不自动重放、源夹具不变全部通过。后台 PID 187180/138308、helper 83880/136444 已检查不存在，连接文件已清理。未调用 Abaqus 或真实 SSH。
+
+已核对用户截图：读取目录左侧为加载圆环，源码已在空闲时 Collapsed、忙时跟随按钮前景色；按钮文字水平/垂直居中，保留此前修正。GIF 两种控制模式已包含在源码及上一完整包。未操作旧原生窗口，不将构建通过写成按钮视觉验收。
+
+另识别迁移合同中的 GPU/精度参数未出现在共享提交模型，使用手册已纠正为待迁移，不缩减原合同。原生八页、真实 SSH/MPI/负载、三层连续 ODB 链和目标机器仍待验收。
+
+最终文档导航 **43 项通过，0.16 秒**，`GPTWork/job-notices-docs-20261118.xml/log`；包含功能索引、Wiki/README、接口、架构/ADR、任务与当前状态。读取已知 PID 均不存在；系统全进程 CIM 枚举被权限拒绝，未据此推断其他用户进程归属或结束状态。
+
+准确续接点：上述测试与构建均已结束，无需重复启动。接着完成本轮文档导航检查、本地提交、从干净来源构建完整包，核对清单/依赖/正式主机，再用冻结后台跑提醒双启动流程。既有最新包仍为 `release-win-x64-a7e34c128937`，未包含 F027；新包通过后替换入口。周额度最新剩余 **53%**，未触及 15%。GitHub push 仍等待先前自动审批所要求的具体远端确认；本轮没有重试推送。
+
 ### 2026-11-18 F008/F010 持久恢复与重连（源码与完整包通过，真实 SSH/原生待验收）
 
 改动前已说明方案：本地保存任务阶段，服务器保存提交回执；断线或后台重启只核对原任务，不重发启动。固定服务器地址、账户、指纹及工作目录范围，记录中不保存认证秘密。已实现 `remote_job_journal.py`、`remote_job_recovery.py`，接入远端服务/HTTP 和 WinUI 状态；离线取消持久保存，写入失败不启动新任务，损坏记录不伪装空历史。功能说明、索引、使用手册、README、接口说明、架构与 ADR 0012 已同步。

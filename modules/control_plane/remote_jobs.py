@@ -131,6 +131,7 @@ class RemoteJobRequest:
     cpus: int
     memory: str
     datacheck: bool
+    notify: bool = True
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any], *, validate_local_files=True) -> RemoteJobRequest:
@@ -145,6 +146,7 @@ class RemoteJobRequest:
             "cpus",
             "memory",
             "datacheck",
+            "notify",
         }
         unknown = sorted(set(payload) - allowed)
         missing = sorted(
@@ -206,6 +208,7 @@ class RemoteJobRequest:
             cpus=cpus,
             memory=memory,
             datacheck=_flag(payload, "datacheck"),
+            notify=_flag(payload, "notify", True),
         )
         if request.input_mode == "upload" and validate_local_files:
             for name, value in (
@@ -232,6 +235,7 @@ class RemoteJobRequest:
             self.cpus,
             self.memory,
             self.datacheck,
+            self.notify,
         )
 
 
@@ -270,9 +274,10 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
     _operation_type = RemoteJobOperation
     _request_type = RemoteJobRequest
 
-    def __init__(self, events: EventStore, service: RemoteServerService, journal_path=None) -> None:
+    def __init__(self, events: EventStore, service: RemoteServerService, journal_path=None, *, completion_sink=None) -> None:
         self._events = events
         self._service = service
+        self._completion_sink = completion_sink
         self._lock = threading.RLock()
         self._operations: dict[str, RemoteJobOperation] = {}
         self._client_requests: dict[str, str] = {}
@@ -714,6 +719,8 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
         operation.version += 1
         self._persist_locked(operation)
         self._emit_locked(operation, kind)
+        if self._completion_sink is not None and operation.status in TERMINAL_STATUSES:
+            self._completion_sink(operation)
 
     def _emit_locked(self, operation: RemoteJobOperation, kind: str) -> None:
         event = self._events.append(
@@ -764,6 +771,7 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
                 "cpus": operation.request.cpus,
                 "memory": operation.request.memory,
                 "datacheck": operation.request.datacheck,
+                "notify": operation.request.notify,
             },
             "phase": operation.phase,
             "percent": operation.percent,

@@ -4,6 +4,14 @@
 
 ## 启动与就绪
 
+### 作业结束提醒补充（2026-11-18，F027）
+
+健康能力 `job.notifications-v1`。`GET /api/v1/job-notifications` 返回 `schemaVersion=1`、`unreadCount`、最多 50 条未读 `items`、可空的 `persistenceWarning`；每条含 `id/source/executionId/jobId/jobName/status/message/workDirectory/observedAt/read`，按记录时间倒序。`observedAt` 是记录/恢复观察时间。`status` 仅为 succeeded/failed/cancelled；未知、断线和活动状态不作为结束。
+
+`POST /api/v1/job-notification-acknowledgements` 只接受 `{schemaVersion:1, ids:[...]}`，1–50 个已知 ID。重复确认幂等，逐条持久保存后返回当前快照；批量后续项失败时先前已保存项不回滚。错误为 400 `INVALID_JOB_NOTIFICATION_ACK`、404 `JOB_NOTIFICATION_NOT_FOUND`、503 `JOB_NOTIFICATION_HISTORY_UNAVAILABLE` / `JOB_NOTIFICATION_STORAGE_UNAVAILABLE`。遵循普通 POST 关闭准入，准备关闭/已预留退出时拒绝修改。
+
+远端请求可选 `notify`，严格布尔类型，省略默认 true；进入请求幂等签名及持久恢复记录。本机沿用 `complete_notify`。队列条目增加 `attemptId`（旧条目为空）；查看本机提醒必须匹配此执行 ID，不能仅以 job ID 或名称定位。提醒规则见 [F027 说明](03-features/JOB_NOTIFICATIONS.md)。
+
 ### 远端完成确认补充（2026-11-18，F010）
 
 持久恢复补充：快照新增可选 `trackingState`（preparing/tracking/reconnecting/submission_unknown/unverified/finished/interrupted）和 `persistenceWarning`。启动后 SSH 失败不再返回终态失败，而保持 running/cancelling；重连后核对原回执与原任务。历史错误返回 503 `REMOTE_JOB_HISTORY_UNAVAILABLE`；保存错误返回 503 `REMOTE_JOB_STORAGE_UNAVAILABLE`，不启动新计算。preparing 阶段后台重启返回 failed / `REMOTE_PREPARATION_INTERRUPTED`，明确没有自动提交；线程提交失败为 `REMOTE_JOB_DISPATCH_FAILED`。同一 `clientRequestId`、同参数跨后台返回原操作，不重新要求已上传本地源文件存在；新请求仍验证本地文件。活动作业只允许连接相同的固定服务器身份/路径范围，存在活动传输时仍拒绝切换/重连，返回 409 `REMOTE_SESSION_BUSY`。取消先持久保存，未核对时暂缓远端控制；暂停/恢复在非 tracking 状态返回 409 `REMOTE_JOB_NOT_STARTED`。细节见 [ADR 0012](submitter/adr/0012-durable-remote-tracking.md)。
@@ -330,7 +338,7 @@ data: {"schemaVersion":1,"sequence":2,"eventId":"...","occurredAt":"...","aggreg
 
 准备租约为 60 秒，读取/停止会续期，窗口选择弹窗每 10 秒续期。租约失效返回 `SHUTDOWN_REQUEST_EXPIRED`；不会永久封锁操作。准备时新普通 POST 返回 503 `CONTROL_PLANE_CLOSE_PENDING`，已提交退出时为 `CONTROL_PLANE_SHUTTING_DOWN`。已接收请求由计数保护，仍在执行时停止/提交返回 409 `SHUTDOWN_REQUESTS_BUSY`。活动工作阻止 idle/stop 提交，返回 `SHUTDOWN_WORK_ACTIVE`；未先 stop 而提交 stop 返回 `SHUTDOWN_STOP_NOT_REQUESTED`。回执与不同提交方式冲突返回 `SHUTDOWN_COMMIT_CONFLICT`。
 
-仅保存最近 32 个进程内完成回执，不承诺跨后台重启保存。客户端遇到提交回执丢失，只能查询原实例；不得以断连推断停止成功，或根据旧回执终止替换后台。已提交 idle/stop 后，即使响应连接丢失，后台仍完成清理退出。拒绝正文解析前的请求时，仅限时读取大小受限的已声明正文，避免 Windows 连接重置遮蔽 401/503；不执行被拒请求。协议实现见 [ADR 0009](submitter/adr/0009-reversible-workbench-close.md)。
+仅保存最近 32 个进程内完成回执，不承诺跨后台重启保存。客户端遇到提交回执丢失，只能查询原实例；不得以断连推断停止成功，或根据旧回执终止替换后台。已提交 idle/stop 后，即使响应连接丢失，后台仍完成清理退出。响应前限时读取大小受限的已声明未读正文，既覆盖解析前被拒的请求，也覆盖取消等不解析可选正文的成功命令，避免 Windows 连接重置遮蔽 200/202 或 401/503；不执行被拒请求。协议实现见 [ADR 0009](submitter/adr/0009-reversible-workbench-close.md)。
 
 ### 旧接口响应与范围
 
@@ -340,4 +348,4 @@ data: {"schemaVersion":1,"sequence":2,"eventId":"...","occurredAt":"...","aggreg
 {"schemaVersion":1,"scope":"all-workers-v1","safeToStop":true,"operations":[]}
 ```
 
-检查范围为批量结果、单步合并、升级、本机队列/作业、后处理、兼容性、索引、远端传输和远端作业。任何管理器活动、线程未收尾或持久记录不可确认时拒绝整体预留；返回非空 `operations` 或 `safeToStop:false`，其他管理器仍可使用。运行状态未知时可能直接返回错误，新客户端同样保留后台。新客户端必须校验 `scope`，不能将旧版只覆盖 ODB 的成功响应视为允许结束整个后台。健康能力为 `controlPlane.shutdown.all-workers-v1`。关闭交互、同步命令协调与完整 Prepare/Commit/Abort 不在本接口完成范围，见 [ADR 0008](submitter/adr/0008-all-worker-shutdown-fence.md)。
+检查范围为批量结果、单步合并、升级、本机队列/作业、后处理、兼容性、索引、远端传输和远端作业，以及尚未保存的结束提醒（已保存未读不阻止退出）。任何管理器活动、线程未收尾或持久记录不可确认时拒绝整体预留；返回非空 `operations` 或 `safeToStop:false`，其他管理器仍可使用。运行状态未知时可能直接返回错误，新客户端同样保留后台。新客户端必须校验 `scope`，不能将旧版只覆盖 ODB 的成功响应视为允许结束整个后台。健康能力为 `controlPlane.shutdown.all-workers-v1`。关闭交互、同步命令协调与完整 Prepare/Commit/Abort 不在本接口完成范围，见 [ADR 0008](submitter/adr/0008-all-worker-shutdown-fence.md)。

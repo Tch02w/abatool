@@ -33,6 +33,9 @@ public sealed class RemoteJobRequest
 
     [JsonPropertyName("datacheck")]
     public bool Datacheck { get; init; }
+
+    [JsonPropertyName("notify")]
+    public bool Notify { get; init; } = true;
 }
 
 public sealed class RemoteJobPreview

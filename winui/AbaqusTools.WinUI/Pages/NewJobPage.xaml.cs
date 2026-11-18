@@ -447,6 +447,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
             Cpus = NumberValue(CpuNumberBox, 0),
             Memory = memory,
             Datacheck = DatacheckCheckBox.IsChecked is true,
+            Notify = NotifyCheckBox.IsChecked is true,
         };
     }
 

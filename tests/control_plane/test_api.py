@@ -1,21 +1,51 @@
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
 import sys
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPResponse
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
+
 from modules.control_plane.__main__ import build_parser
 from modules.control_plane.server import ControlPlaneRuntime
 
 TEST_TOKEN = "control-plane-test-token"
+
+
+def test_success_response_drains_delayed_optional_command_body(tmp_path, monkeypatch):
+    seen = threading.Event()
+    with running_control_plane(tmp_path, joblist_path=tmp_path / "joblist.json",
+                               server_profiles_path=tmp_path / "profiles.json",
+                               odb_result_graph_path=tmp_path / "graph.json") as runtime:
+        def reserve(context):
+            seen.set()
+            return {"schemaVersion": 1, "safeToStop": True}
+        monkeypatch.setattr(runtime.httpd.context.shutdown_protocol, "legacy_reserve", reserve)
+        body = b'{"schemaVersion":1}'
+        with socket.create_connection((runtime.host, runtime.port), timeout=5) as connection:
+            headers = ("POST /api/v1/odb-upgrade-shutdown-check HTTP/1.1\r\n"
+                       f"Host: 127.0.0.1\r\nAuthorization: Bearer {TEST_TOKEN}\r\n"
+                       f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode()
+            connection.sendall(headers + body[:5])
+            assert seen.wait(3)
+            connection.settimeout(.05)
+            # The command has completed, but the response must not close over unread bytes.
+            with pytest.raises(TimeoutError):
+                connection.recv(1)
+            connection.settimeout(5)
+            connection.sendall(body[5:])
+            response = HTTPResponse(connection)
+            response.begin()
+            assert response.status == 200 and json.loads(response.read())["safeToStop"]
 
 
 @contextmanager

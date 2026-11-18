@@ -22,6 +22,7 @@
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
 | 本机优先级、资源准入、后台重启与未知状态 | [本机调度说明](03-features/LOCAL_SCHEDULING.md) |
 | 作业内存占用、估计来源及采样失败 | [内存观测说明](03-features/MEMORY_MONITORING.md) |
+| 作业结束提醒、未读恢复与批量已读 | [作业提醒说明](03-features/JOB_NOTIFICATIONS.md) |
 | 远端完成确认、数据检查和日志去重 | [远端作业说明](03-features/REMOTE_JOBS.md) |
 | 完整结果批量执行、共享祖先与重启继续 | [批量结果说明](03-features/ODB_RESULT_BATCH.md) |
 | ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |

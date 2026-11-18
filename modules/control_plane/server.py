@@ -44,6 +44,7 @@ from .descriptor import remove_descriptor_if_owned, write_descriptor_atomic
 from .discovery import discover_odb_files
 from .events import EventStore
 from .job_drafts import preview_local_job_draft
+from .job_notifications import JobNotificationManager
 from .job_queue_commands import JobQueueService
 from .local_queue_runtime import LocalJobRunner, LocalQueueRuntimeManager
 from .odb_merge_drafts import preview_odb_merge_draft
@@ -97,6 +98,7 @@ class ControlPlaneContext:
     remote_server_service: RemoteServerService
     remote_transfer_manager: RemoteTransferOperationManager
     remote_job_manager: RemoteJobOperationManager
+    job_notifications: JobNotificationManager
     odb_result_graph_service: OdbResultGraphService
     odb_result_batch_manager: OdbResultBatchManager
     shutdown_protocol: ShutdownProtocol = field(default_factory=ShutdownProtocol)
@@ -109,7 +111,7 @@ class ControlPlaneContext:
                     self.odb_upgrade_manager, self.local_queue_runtime,
                     self.postprocess_manager, self.operation_manager,
                     self.result_index_manager, self.remote_transfer_manager,
-                    self.remote_job_manager)
+                    self.remote_job_manager, self.job_notifications)
         with ExitStack() as locks:
             for manager in managers:
                 locks.enter_context(manager._lock)
@@ -174,6 +176,10 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/events":
                 self._handle_event_replay(target.query, trace_id)
+                return
+            if target.path == "/api/v1/job-notifications" and not target.query:
+                self.context.job_notifications.reconcile(self.context.job_queue_service, self.context.remote_job_manager)
+                self._send_json(HTTPStatus.OK, self.context.job_notifications.snapshot(), trace_id)
                 return
             if target.path == "/api/v1/operations":
                 self._handle_list_operations(target.query, trace_id)
@@ -372,6 +378,9 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/job-queue-commands" and not target.query:
                 self._handle_job_queue_command(trace_id)
+                return
+            if target.path == "/api/v1/job-notification-acknowledgements" and not target.query:
+                self._send_json(HTTPStatus.OK, self.context.job_notifications.acknowledge(self._read_json_object()), trace_id)
                 return
             if target.path == "/api/v1/local-queue-controls" and not target.query:
                 self._handle_local_queue_control(trace_id)
@@ -607,7 +616,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "job.notifications-v1", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -1124,6 +1133,10 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         *,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
+        # Body-less commands still accept callers that send schemaVersion.
+        # Drain that bounded optional body before closing the connection; on
+        # Windows an unread request body can reset even a successful response.
+        self._discard_unread_request_body()
         self._send_bytes(
             status,
             json_bytes(payload),
@@ -1151,9 +1164,9 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _discard_unread_request_body(self) -> None:
-        # Admission/authentication can reject before JSON parsing. Closing a
-        # Windows socket with unread request bytes can reset the connection and
-        # hide the intended 401/503 response. Drain only bounded, declared bodies.
+        # Rejected requests and body-less commands can respond before parsing.
+        # Closing a Windows socket with unread bytes can hide even a successful
+        # response. Drain only bounded, declared bodies.
         if self.command != "POST" or getattr(self, "_request_body_consumed", False):
             return
         try:
@@ -1297,9 +1310,11 @@ class ControlPlaneRuntime:
         if external_job_scanner is not None:
             job_queue_kwargs["external_job_scanner"] = external_job_scanner
         job_queue_service = JobQueueService(joblist_path, **job_queue_kwargs)
+        job_notifications = JobNotificationManager(self.descriptor_path.with_name("job-notifications.sqlite3"))
         local_queue_runtime = LocalQueueRuntimeManager(
             job_queue_service,
             event_history,
+            completion_sink=job_notifications.local_finished,
             **({"runner": local_job_runner} if local_job_runner is not None else {}),
         )
         remote_server_service = RemoteServerService(
@@ -1315,6 +1330,7 @@ class ControlPlaneRuntime:
             event_history,
             remote_server_service,
             self.descriptor_path.with_name("remote-jobs.sqlite3"),
+            completion_sink=job_notifications.remote_finished,
         )
         odb_result_graph_service = OdbResultGraphService(odb_result_graph_path)
         odb_result_batch_manager = OdbResultBatchManager(
@@ -1336,6 +1352,7 @@ class ControlPlaneRuntime:
             remote_server_service=remote_server_service,
             remote_transfer_manager=remote_transfer_manager,
             remote_job_manager=remote_job_manager,
+            job_notifications=job_notifications,
             odb_result_graph_service=odb_result_graph_service,
             odb_result_batch_manager=odb_result_batch_manager,
         )
@@ -1353,6 +1370,7 @@ class ControlPlaneRuntime:
             result_index_manager.close()
             odb_merge_manager.close()
             odb_upgrade_manager.close()
+            job_notifications.close()
             raise
         actual_host, actual_port = self.httpd.server_address[:2]
         self.host = str(actual_host)
@@ -1455,6 +1473,7 @@ class ControlPlaneRuntime:
             self.result_index_manager.close()
             self.odb_merge_manager.close()
             self.odb_upgrade_manager.close()
+            self.httpd.context.job_notifications.close()
             remove_descriptor_if_owned(self.descriptor_path, self.instance_id)
 
 

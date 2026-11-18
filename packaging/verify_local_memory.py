@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -42,6 +43,8 @@ def wait_for(check, seconds=45):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path)
+    parser.add_argument("--notifications", action="store_true", help="Also verify durable notices from the owned attempts")
+    parser.add_argument("--host-client", type=Path, help="Production C# client test DLL for notification HTTP checks")
     args = parser.parse_args()
     if os.name != "nt" or Path(sys.executable).resolve() != ROOT / ".venv/Scripts/python.exe":
         raise RuntimeError("Use this project's .venv Python on Windows")
@@ -74,7 +77,7 @@ while not flag.exists() and time.monotonic() < deadline: time.sleep(.1)
     command.write_text(f'@echo off\n"{sys.executable}" "{helper}" %*\nexit /b %errorlevel%\n', encoding="utf-8")
     item = QueueItem(inp_path=str(source), source_inp_path=str(source), job_name="memory-case",
                      status=STATUS_PENDING_RUN, cores=1, memory="90%", datacheck_only=True,
-                     abaqus_command=str(command))
+                     abaqus_command=str(command), complete_notify=args.notifications)
     joblist = work / "submitter/joblist.json"
     save_joblist_state([], [item], joblist)
     descriptor_path = work / "control-plane.json"
@@ -125,6 +128,19 @@ while not flag.exists() and time.monotonic() < deadline: time.sleep(.1)
             initial = call("/api/v1/local-queue-runtime")
             if index:
                 assert not initial["operations"] and not initial["active"]
+                if args.notifications:
+                    inbox = call("/api/v1/job-notifications")
+                    assert inbox["unreadCount"] == 1 and inbox["items"][0]["executionId"] == receipts[0]["attemptId"]
+                    assert inbox["items"][0]["status"] == "cancelled"
+                    if args.host_client:
+                        checked = subprocess.run(["dotnet", str(args.host_client.resolve()), "--notifications-api", str(descriptor_path)],
+                            cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+                        (work / "notification-client.log").write_text(checked.stdout + checked.stderr, encoding="utf-8")
+                        assert checked.returncode == 0, "Production client check failed; see notification-client.log"
+                    else:
+                        call("/api/v1/job-notification-acknowledgements", {"schemaVersion": 1, "ids": [inbox["items"][0]["id"]]})
+                    assert call("/api/v1/job-notifications")["unreadCount"] == 0
                 restored = initial["queue"]["queueItems"][0]
                 assert restored["memoryEstimateSource"] == "history" and restored["memoryEstimatedBytes"] > 96 * 1024**2
                 assert len((work / "invocations.txt").read_text().splitlines()) == 1
@@ -155,8 +171,17 @@ while not flag.exists() and time.monotonic() < deadline: time.sleep(.1)
         assert receipts[0]["attemptId"] != receipts[1]["attemptId"]
         assert len((work / "invocations.txt").read_text().splitlines()) == 2
         assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
+        notices = []
+        if args.notifications:
+            with sqlite3.connect(work / "job-notifications.sqlite3") as database:
+                notices = [json.loads(row[0]) for row in database.execute("SELECT payload FROM job_notifications")]
+            notices = [notice for notice in notices if notice["id"] != "baseline"]
+            assert {notice["executionId"] for notice in notices} == {entry["attemptId"] for entry in receipts}
+            assert len(notices) == 2 and sum(notice["read"] for notice in notices) == 1
+            assert all(notice["status"] == "cancelled" for notice in notices)
         report = {"status": "verified", "runs": receipts, "historyRestored": True, "noAutomaticReplay": True,
-                  "sourceUnchanged": True, "solverStarted": False,
+                  "sourceUnchanged": True, "solverStarted": False, "notificationsVerified": args.notifications,
+                  "notificationCount": len(notices), "productionNotificationClient": bool(args.notifications and args.host_client),
                   "scope": "Real Windows process working-set sampling through backend API, isolated 96 MiB Python helper"}
         (work / "verification.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         print("VERIFIED=" + str(work / "verification.json"), flush=True)

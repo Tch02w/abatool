@@ -36,6 +36,8 @@ public sealed class JobQueueSnapshot
 
 public sealed class JobQueueItem
 {
+    [JsonPropertyName("attemptId")]
+    public string AttemptId { get; init; } = string.Empty;
     [JsonPropertyName("index")]
     public int Index { get; init; }
 

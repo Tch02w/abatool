@@ -63,13 +63,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     public ControlPlaneHost()
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(localAppData))
-        {
-            localAppData = Path.GetTempPath();
-        }
-
-        var runtimeDirectory = Path.Combine(localAppData, "AbaqusTools", "runtime");
+        WorkbenchProfile.Current.ConfigureBackendEnvironment();
+        var runtimeDirectory = Path.Combine(WorkbenchProfile.Current.StateDirectory, "runtime");
         _descriptorPath = Path.Combine(runtimeDirectory, "control-plane.json");
         _launchLockPath = Path.Combine(runtimeDirectory, "control-plane.launch.lock");
     }

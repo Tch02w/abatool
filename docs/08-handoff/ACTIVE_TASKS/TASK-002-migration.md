@@ -1,6 +1,40 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 恢复原生验收、隔离配置与启动提示修复
+
+用户已恢复整体目标，明确答复“允许恢复桌面验收”，并确认窗口正常显示。此前额度暂停和 Esc 暂停是历史状态，本轮不再据此停止。由干净 58bdfca 继续；原生验收仅使用 `GPTWork/native-acceptance-20261118-a`，没有创建/移动 ODB 或启动求解。
+
+### 实际修改
+
+- F001/F022/F023：新增 `WorkbenchProfile`，以进程环境 `ABAQUS_TOOLS_PROFILE_DIR` 统一隔离原生单实例、控制面描述符/锁、Python 两套数据目录、页面/结果图/后处理草稿。默认路径和原单实例标识保留；显式相对路径或日常目录拒绝启动，不复制/搬迁用户配置。原方案只设置 Python 数据目录仍会共享原生草稿，故先向用户说明完整隔离方案再实现。路径、兼容与 TEMP 边界见 [ADR0022](../../submitter/adr/0022-isolated-workbench-profiles.md)。
+- F003/F025：实际编辑名称和 CPU=4、正常关闭重开后发现 CPU 变为 1。原因是 XAML 初始最大值和 `_localCpuLimit` 都为 1，真实 CPU 查询前已裁剪恢复值。改为未知时保留输入，真实上限返回后再应用；资源读取失败不把填写重置为 1，后台预览/提交仍校验。移除新建页常驻“功能接入状态”开发说明，保留实际操作提示。
+- F014/F021：实际 Ctrl+8/Ctrl+7 首次进入空目录页面会因侧栏刷新报错。自动刷新现在在空目录时不发现/读取，结果页“内部”开关同样处理；显式按钮和 Enter 的校验保留。最终可见窗口后处理页显示“选择目录以发现 ODB 文件”，没有错误栏。
+
+### 自动检查与构建
+
+1. 生产 `WorkbenchProfileChecks` 14 项通过，覆盖默认兼容、规范化实例标识、不同配置、无效路径及 Python 环境，日志 `GPTWork/native-ui-profile-checks-20261118.log`；新增 pytest 包装。先期 shell/session/host 53 项通过，`native-profile-regression-20261118.log`，64770 退出 0。
+2. CPU 与结果页修复后：项目 `.venv` 执行 `tests/winui/test_shell_contract.py`、`tests/winui/test_session_bindings.py`、`tests/winui_host/test_shutdown_api.py`、`tests/control_plane/test_cpu_policy.py`、`tests/control_plane/test_job_drafts_api.py`、`tests/control_plane/test_results_api.py`，`--basetemp=GPTWork/pytest-native-recovery-fixed-20261118`；72 项通过，22.59 秒，21559 退出 0，日志/XML `GPTWork/native-recovery-fixed-regression-20261118.*`。后处理空目录最后一行修正的追加检查见本节收尾，不冒称这 72 项包含后改内容。
+3. 最终 WinUI 构建命令 `dotnet build winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj -c Debug --no-restore -p:OutputPath=G:/PythonProject/abaqusTool/GPTWork/winui-native-startup-final-20261118/ -p:OutDir=G:/PythonProject/abaqusTool/GPTWork/winui-native-startup-final-20261118/`：0 警告/错误，11.88 秒，78229 退出 0；日志 `GPTWork/winui-native-startup-final-build-20261118.log`。前三次构建 50254/50155/33869 均已结束，旧构建及失败回执保留。所有命令 TEMP/TMP 使用 G: GPTWork。
+
+### 原生证据和限制
+
+- 使用真实 WinUI 窗口与 CUA 无障碍树/键盘编辑和观察，不是独立控件探针。首实例 199180、后台 199840：名称与 CPU=4 实际定期落盘；同配置重复启动 220864 退出 0，原窗口/后台身份保持；Alt+F4 正常关闭，后台退出、描述符移除。记录的两份日常 JSON 摘要不变，`profile-verification.json`。
+- 第二实例 212296 暴露 CPU 恢复丢失，已正常关闭；第三实例 154516（`winui-native-recovery-fixed-20261118`）观察到 CPU=4 恢复、常驻说明移除、结果空目录无错误。系统文件夹选择器选中 G: 测试 results，页面报告“结果目录已读取 · 1 个范围”；Ctrl+7/8 切页可用，GIF 帧率输入从 25 改为 30 可见。未选择 ODB/工作区，未声称帧率跨重启保存；该普通 CSV 根目录无时间/ODB 范围，未验证记录预览/导出。正常关闭后名称、CPU=4、结果根目录仍落盘。
+- 最终构建第一次普通工具启动 PID 173700/后台 202548，进程存在但 CUA 窗口/应用列表无窗口。没有重复启动；先核对 PID、创建时间、路径、独立配置和空闲关闭状态，只结束该原生测试实例，再向原后台提交 idle 关闭并确认退出/描述符移除；`startup-final-unlisted-cleanup.json`。这是测试清理，不计为正常关窗通过。
+- 同一二进制改从已授权的可见桌面启动：168436/窗口 5053578/后台 219640。结果目录自动恢复并读取，后处理空目录初态无错误；Alt+F4 后窗口消失，原生及子进程 47668/19700/219640 全部退出，描述符移除。最终 `verification-final.json` 状态为 `partial-native-acceptance`，日常两份 JSON 摘要未变，CPU=4 仍保存。没有启动求解或移动模型。
+- 截图仍报 `window capture timed out: timed out waiting on channel`；坐标点击报 `coordinate input geometry is unavailable`，Windows 文本选择接口不可用。用户确认真实窗口正常显示，但这不是布局验收截图。八页鼠标、日志拖选、悬停、主题/跨屏/缩放、导出取消及有任务时关闭仍待，不能用可读写输入或构建替代。
+
+### 准确续接点
+
+收尾追加 `tests/winui/test_shell_contract.py`、`tests/control_plane/test_postprocessing_api.py`、`tests/control_plane/test_discovery.py` 共 50 项功能检查通过；同次 49 项文档检查有 1 项失败，原因是功能索引误写 `cpu_policy.py` 所在目录，已改为实际 `modules/submitter/cpu_policy.py`，未修改产品源码或测试断言。首轮 98 passed / 1 failed、8.83 秒，`GPTWork/native-startup-final-regression-20261118.log` / `.xml` 保留。修正后完整文档检查 49 passed，0.12 秒，`--basetemp=GPTWork/pytest-native-docs-final-20261118`，`GPTWork/native-docs-final-20261118.log` / `.xml`。Ruff 检查改动 Python 测试及差异空白检查均通过。
+
+本轮自有原生窗口、后台和全部构建/回归句柄均已结束，最新最终核对 `GPTWork/native-acceptance-20261118-a/verification-final.json`。当前开发入口是 `GPTWork/winui-native-startup-final-20261118/AbaqusTools.WinUI.exe`，依赖项目控制面；129b257 完整目录/安装候选不包含本轮改动。最终文档导航、最后空目录修复相关回归、Ruff、差异检查通过。用户已授权检查后提交并 push；执行后再记录准确提交及远端核对信息。
+
+继续原生验收时使用已授权可见桌面与同一独立配置，先检查进程，不能再把普通工具启动后“没有窗口”直接记成产品故障或重复运行。真实鼠标/截图工具限制仍需解决；优先补日志选区、提示、尺寸和结果记录/导出，再逐项八页。真实 SSH/GPU/MPI、连续三级工程 ODB、无开发环境目标机及签名缺口继续保留。完整目标保持 active。
+
 ## 2026-11-18 · 可取消导出进入完整候选及包内验证
+
+以下为恢复前的历史阶段；暂停状态已由本页顶部的新授权覆盖。
 
 本轮验收文档已提交并推送208a244c7135a8a32895470b4e1951e0431b3829，实际ls-remote核对main与本地一致、工作区干净。随后查询周额度剩余15%，达到用户此前明确设定的暂停线；保存本续接点后将目标设为paused，不再开始新开发或验证。恢复时从下述准确续接点继续，原生操作暂停仍需用户另行解除。完整迁移仍未完成。
 

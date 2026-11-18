@@ -12,6 +12,15 @@ from tests.control_plane.test_postprocessing_api import _scan_payload, _settings
 from tests.control_plane.test_remote_transfers_api import FakeRemoteManager, _connect
 
 
+def test_workbench_profile_isolates_paths_and_instance_identity(tmp_path, close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--profile-checks", str(tmp_path / "profiles")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "14 profile isolation checks passed" in result.stdout
+
+
 def test_job_postprocess_route_respects_attempt_archive_and_missing_results(tmp_path, close_client):
     result = subprocess.run(
         ["dotnet", str(close_client), "--job-route-checks", str(tmp_path / "routes")],

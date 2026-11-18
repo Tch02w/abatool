@@ -89,8 +89,8 @@ public sealed partial class OdbPostprocessingPage
         var key = OdbPostprocessDraftRecovery.RootKey(root);
         if (!_draftFiles.TryGetValue(key, out _draftFile))
         {
-            _draftFile = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "AbaqusTools", "postprocess-recovery", OdbPostprocessDraftRecovery.FileName(root)), draft => draft.Validate(), 8 * 1024 * 1024);
+            _draftFile = new(Path.Combine(WorkbenchProfile.Current.StateDirectory,
+                "postprocess-recovery", OdbPostprocessDraftRecovery.FileName(root)), draft => draft.Validate(), 8 * 1024 * 1024);
             _draftFiles[key] = _draftFile;
         }
         try { await _draftFile.PendingWrites; _pendingDraft = _draftFile.Load(); }

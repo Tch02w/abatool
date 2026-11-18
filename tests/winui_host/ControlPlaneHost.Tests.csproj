@@ -7,6 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/WorkbenchProfile.cs" Link="WorkbenchProfile.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs" Link="ControlPlaneHost.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneLaunch.cs" Link="ControlPlaneLaunch.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.OdbUpgrade.cs" Link="ControlPlaneHost.OdbUpgrade.cs" />

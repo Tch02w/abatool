@@ -12,7 +12,8 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     private bool _previewBusy;
     private bool _submitBusy;
     private int _lastExecutionIndex;
-    private int _localCpuLimit = 1;
+    // Unknown policy must not clamp a restored draft before the first resource response.
+    private int _localCpuLimit = int.MaxValue;
     private int _cpuPolicyRequest;
 
     public NewJobPage()
@@ -122,11 +123,11 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         catch (Exception)
         {
             if (request != _cpuPolicyRequest) return;
-            _localCpuLimit = 1;
+            _localCpuLimit = int.MaxValue;
             if (!IsRemote)
             {
-                CpuNumberBox.Maximum = 1;
-                ToolTipService.SetToolTip(CpuNumberBox, "未取得 CPU 上限，暂按 1；请检查控制面连接或重新进入页面。");
+                CpuNumberBox.Maximum = int.MaxValue;
+                ToolTipService.SetToolTip(CpuNumberBox, "未取得 CPU 上限，已保留填写值；请检查连接后重新进入页面。预览和提交时仍由后台校验。");
             }
         }
     }

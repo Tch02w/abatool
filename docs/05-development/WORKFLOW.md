@@ -13,6 +13,26 @@ Start-Process .\winui\AbaqusTools.WinUI\bin\Debug\net10.0-windows10.0.26100.0\wi
 
 最后一行是用户主动启动可见应用的命令。开发验证不要自动关闭已有窗口来替换文件。实际 Abaqus 验收当前使用 `D:\SIMULIA\Commands\abaqus.bat`，需在新机器核实安装和许可，不假定该路径通用。
 
+## 原生验收使用独立配置
+
+用户已于 2026-11-18 明确允许恢复桌面验收。每次启动前检查已有测试进程和后台，不能因窗口暂未出现再次启动长任务。独立配置用于原生验收，默认运行方式和日常配置保持不变，约定见 [ADR0022](../submitter/adr/0022-isolated-workbench-profiles.md)。
+
+从项目根目录运行，使用新的 G: 验收目录；替换 `$nativeCandidate` 为本轮已构建并核对的程序路径：
+
+```powershell
+$nativeCase = Join-Path (Get-Location) ('GPTWork/native-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path (Join-Path $nativeCase 'temp') -Force | Out-Null
+$env:ABAQUS_TOOLS_PROFILE_DIR = Join-Path $nativeCase 'profile'
+$env:TEMP = Join-Path $nativeCase 'temp'
+$env:TMP = $env:TEMP
+$env:ABAQUS_TOOLS_ROOT = (Get-Location).Path
+$env:ABAQUS_TOOLS_PYTHON = Join-Path (Get-Location) '.venv/Scripts/python.exe'
+# $nativeCandidate 须指向已核对的完整构建目录，用户已授权本次可见桌面验收。
+Start-Process -FilePath $nativeCandidate -WorkingDirectory $nativeCase -PassThru
+```
+
+显式配置必须是绝对路径且不能与日常目录相同；不使用链接或别名指向同一目录。启动器应按进程传递环境，或在专用终端执行，避免影响日常启动。它会覆盖后台的两项 Python 数据目录变量，不搬迁旧数据；`TEMP`/`TMP`、Abaqus 工作目录和输出目录仍须显式核对。禁止 C: ODB 的限制继续有效。原生编辑后检查磁盘草稿、后台环境、正常退出及日常配置摘要；截图、鼠标或窗口操作失败须单独记录，不能用自动检查代替。
+
 ## 每个功能的完成条件
 
 1. 在功能索引找到固定编号，确认上下游、协议、配置和相关测试。

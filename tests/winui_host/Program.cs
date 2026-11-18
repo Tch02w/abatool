@@ -13,6 +13,11 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 2 && args[0] == "--profile-checks")
+    {
+        WorkbenchProfileChecks.Run(args[1]);
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--job-route-checks")
     {
         await JobPostprocessRouteChecks.RunAsync(args[1]);

@@ -14,7 +14,7 @@ public sealed class WorkbenchSession
     private readonly Dictionary<string, Func<Task>> _checkpoints = [];
     private readonly NewJobDraftReset _newJobReset = new();
     private readonly WorkbenchSessionStore _store = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AbaqusTools", "workbench-session.json"));
+        WorkbenchProfile.Current.StateDirectory, "workbench-session.json"));
     public WorkbenchSessionState State { get; }
     public string? LoadError { get; }
     public bool IsClosing { get; private set; }

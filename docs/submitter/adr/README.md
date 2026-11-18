@@ -30,3 +30,4 @@ Current records:
 - [0019-postprocess-recovery-drafts.md](0019-postprocess-recovery-drafts.md)
 - [0020-shared-workbench-command-state.md](0020-shared-workbench-command-state.md)
 - [0021-cancellable-result-export.md](0021-cancellable-result-export.md)
+- [0022-isolated-workbench-profiles.md](0022-isolated-workbench-profiles.md)

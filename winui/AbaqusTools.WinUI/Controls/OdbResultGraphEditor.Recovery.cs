@@ -7,7 +7,7 @@ namespace AbaqusTools.WinUI.Controls;
 public sealed partial class OdbResultGraphEditor
 {
     private readonly OdbResultGraphDraftStore _recoveryStore = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AbaqusTools", "result-graph-draft.json"));
+        WorkbenchProfile.Current.StateDirectory, "result-graph-draft.json"));
     private OdbResultGraphDraft? _recoveryDraft;
     private string? _recoveryError;
     private bool _checkpointPaused;

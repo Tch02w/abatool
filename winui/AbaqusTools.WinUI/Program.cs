@@ -7,14 +7,13 @@ namespace AbaqusTools.WinUI;
 
 public static class Program
 {
-    private const string SingleInstanceKey = "AbaqusTools.WinUI.Primary";
-
     [STAThread]
     public static void Main(string[] args)
     {
+        Services.WorkbenchProfile.Current.ConfigureBackendEnvironment();
         ComWrappersSupport.InitializeComWrappers();
         var current = AppInstance.GetCurrent();
-        var primary = AppInstance.FindOrRegisterForKey(SingleInstanceKey);
+        var primary = AppInstance.FindOrRegisterForKey(Services.WorkbenchProfile.Current.SingleInstanceKey);
         if (!primary.IsCurrent)
         {
             primary

@@ -39,8 +39,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private string? _lastDiscoveryRoot;
     private readonly Dictionary<string, List<string>> _groupMemberOrder = new(StringComparer.OrdinalIgnoreCase);
     private readonly OdbPostprocessWorkspaceStore _workspaceStore = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AbaqusTools", "postprocess-workspaces"));
+        WorkbenchProfile.Current.StateDirectory, "postprocess-workspaces"));
     private readonly HashSet<string> _unreadableWorkspaces = new(StringComparer.OrdinalIgnoreCase);
     private bool _compatibilityBusy;
     private bool _postprocessBusy;
@@ -71,7 +70,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         Controls.ParameterHelpButton.AddToHeader(ImageHeightNumberBox, "image-size");
         Controls.ParameterHelpButton.AddToHeader(RebarToleranceNumberBox, "rebar-tolerance");
         _explorerAdapter = new PostprocessingExplorerAdapter(
-            DiscoverAsync,
+            () => string.IsNullOrWhiteSpace(RootTextBox.Text) ? Task.CompletedTask : DiscoverAsync(),
             SelectExplorerOdb,
             ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;

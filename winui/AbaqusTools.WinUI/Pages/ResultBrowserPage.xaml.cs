@@ -50,7 +50,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         InitializeComponent();
         _explorerAdapter = new ResultExplorerAdapter(
-            () => FileOperationBusy ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
+            () => FileOperationBusy || string.IsNullOrWhiteSpace(RootTextBox.Text)
+                ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
             SelectExplorerItem,
             ActivateExplorerItemAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
@@ -219,7 +220,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnShowInternalChanged(object sender, RoutedEventArgs e)
     {
-        if (IsLoaded && !_scopeBusy)
+        if (IsLoaded && !_scopeBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text))
         {
             await RefreshScopesAsync(_selectedScope?.Path);
         }

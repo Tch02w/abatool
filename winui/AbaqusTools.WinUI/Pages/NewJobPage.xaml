@@ -9,10 +9,8 @@
             <InfoBar
                 x:Name="DraftInfoBar"
                 IsClosable="False"
-                IsOpen="True"
-                Message="本机队列、上传至服务器和服务器现有文件三种执行方式均已接入。"
-                Severity="Informational"
-                Title="功能接入状态" />
+                IsOpen="False"
+                Severity="Informational" />
 
             <Border Style="{StaticResource WorkbenchCardStyle}">
                 <StackPanel Spacing="12">
@@ -106,7 +104,7 @@
                                 <TextBlock Style="{StaticResource WorkbenchFieldLabelStyle}" Text="CPU" />
                                 <controls:ParameterHelpButton Title="CPU" Topic="cpu" />
                             </StackPanel>
-                            <controls:WorkbenchNumberBox x:Name="CpuNumberBox" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline" Value="1" />
+                            <controls:WorkbenchNumberBox x:Name="CpuNumberBox" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="2147483647" SpinButtonPlacementMode="Inline" Value="1" />
                             <TextBlock Grid.Row="1" Style="{StaticResource WorkbenchFieldLabelStyle}" Text="优先级" />
                             <ComboBox x:Name="PriorityComboBox" Grid.Row="1" Grid.Column="1" MinHeight="40" HorizontalAlignment="Stretch" VerticalContentAlignment="Center" SelectedIndex="0">
                                 <ComboBoxItem Content="普通" />

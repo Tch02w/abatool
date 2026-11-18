@@ -70,17 +70,20 @@ public sealed partial class MainWindow
         try { state = await _controlPlane.PrepareCloseAsync(Guid.NewGuid()); }
         catch (Exception error)
         {
+            if (_sessionEnd.IsEnding) return false;
             var unknown = CloseDialog("无法确认后台状态", CloseText(error.Message +
                 "\n\n编辑内容已保存。可以保留后台并关闭窗口；现有任务不会因此被取消。"));
             unknown.PrimaryButtonText = "保留后台并关闭";
             return await unknown.ShowAsync() == ContentDialogResult.Primary;
         }
+        if (_sessionEnd.IsEnding) return false;
         var deadline = DateTime.UtcNow.AddSeconds(20);
         while (state.PendingRequests > 0)
         {
             if (DateTime.UtcNow >= deadline) throw new TimeoutException("仍有提交或文件操作没有结束，请稍后关闭。");
             await Task.Delay(200);
             state = await _controlPlane.GetCloseStateAsync();
+            if (_sessionEnd.IsEnding) return false;
         }
         var mode = "idle";
         if (!state.SafeToStop)
@@ -91,6 +94,7 @@ public sealed partial class MainWindow
             dialog.PrimaryButtonText = "后台继续";
             dialog.SecondaryButtonText = "停止任务并关闭";
             var choice = await ShowCloseChoiceWithHeartbeatAsync(dialog);
+            if (_sessionEnd.IsEnding) return false;
             if (choice == ContentDialogResult.None)
             {
                 ReportPageStatus("关闭已取消");
@@ -107,6 +111,7 @@ public sealed partial class MainWindow
                 }
             }
         }
+        if (_sessionEnd.IsEnding) return false;
         await _controlPlane.CommitCloseAsync(mode);
         return true;
     }

@@ -25,3 +25,4 @@ Current records:
 - [0014-verified-local-archive-publication.md](0014-verified-local-archive-publication.md)
 - [0015-external-scan-snapshot-merge.md](0015-external-scan-snapshot-merge.md)
 - [0016-versioned-per-user-installer.md](0016-versioned-per-user-installer.md)
+- [0017-periodic-drafts-and-system-session-end.md](0017-periodic-drafts-and-system-session-end.md)

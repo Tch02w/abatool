@@ -6,7 +6,10 @@ namespace AbaqusTools.WinUI.Services;
 
 public sealed class WorkbenchSession
 {
-    private sealed record Entry(Page Page, string[] Fields, Func<Task>? Save, Action? Pause, Action? Resume);
+    private sealed record Entry(Page Page, string[] Fields, Func<Task>? Save, Action? Pause, Action? Resume)
+    {
+        public bool Restored { get; set; }
+    }
     private readonly Dictionary<string, Entry> _pages = [];
     private readonly WorkbenchSessionStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AbaqusTools", "workbench-session.json"));
@@ -24,12 +27,12 @@ public sealed class WorkbenchSession
         Action? pause = null, Action? resume = null)
     {
         page.NavigationCacheMode = NavigationCacheMode.Required;
-        _pages[route] = new(page, fields, save, pause, resume);
-        var restored = false;
+        var entry = new Entry(page, fields, save, pause, resume);
+        _pages[route] = entry;
         page.Loaded += (_, _) =>
         {
-            if (restored) return;
-            restored = true;
+            if (entry.Restored) return;
+            entry.Restored = true;
             if (!State.Pages.TryGetValue(route, out var values)) return;
             foreach (var name in fields)
             {
@@ -54,8 +57,16 @@ public sealed class WorkbenchSession
         await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30));
         foreach (var page in _pages.Values)
             if (page.Save is not null) await page.Save();
+        await SaveDraftAsync(window);
+    }
+
+    // No network, page save callbacks or operation waits: suitable for routine checkpoints.
+    public Task SaveDraftAsync(WorkbenchWindowState window)
+    {
         foreach (var (route, entry) in _pages)
         {
+            // A constructed page may not have restored its inputs yet.
+            if (!entry.Restored) continue;
             var values = new Dictionary<string, string>();
             foreach (var name in entry.Fields)
             {
@@ -72,7 +83,7 @@ public sealed class WorkbenchSession
             State.Pages[route] = values;
         }
         State.Window = window;
-        _store.Save(State);
+        return _store.SaveAsync(State);
     }
 
     public void ResumeAfterCancelledClose()

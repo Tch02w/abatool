@@ -94,6 +94,9 @@
                 Severity="Error"
                 Title="本地控制面不可用" />
 
+            <InfoBar x:Name="DraftSaveInfoBar" Margin="12,8,12,0" IsOpen="False" IsClosable="False"
+                     Title="工作台草稿未能保存" Severity="Warning" />
+
             <InfoBar x:Name="JobNotificationBar" Margin="12,8,12,0" IsOpen="False" IsClosable="True" Closed="OnNotificationBarClosed"
                      Title="作业结束提醒" Severity="Informational">
                 <InfoBar.ActionButton>

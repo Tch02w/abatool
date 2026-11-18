@@ -49,6 +49,7 @@ public partial class App : Application
         {
             _mainWindow.Closed -= OnMainWindowClosed;
         }
-        await ControlPlane.DisposeAsync();
+        // Windows owns session termination. Do not turn it into cooperative task cancellation.
+        if (_mainWindow?.IsSystemSessionEnding != true) await ControlPlane.DisposeAsync();
     }
 }

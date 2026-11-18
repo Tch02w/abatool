@@ -16,6 +16,8 @@ F005/F011跨卷与文件内中断验收：`packaging/verify_archive_recovery.py`
 
 ## 壳层、提交、调度、远程
 
+F001 日常草稿与系统会话结束：`MainWindow.Session.cs` / `OnDraftTimerTick`、`SaveForSystemSessionEnd`，`Services/WorkbenchSession.cs` / `SaveDraftAsync`，`Services/WorkbenchSessionStore.cs` / `SaveAsync`，`Services/SystemSessionEndState.cs` / `TryHandle`，`Services/SystemSessionEndHook.cs`。上述源码均位于 `winui/AbaqusTools.WinUI/`。测试为 `tests/winui_host/SystemSessionEndChecks.cs`（`--session-checks`）及既有 `WorkbenchSessionChecks.cs`；原生 HWND 接线和业务恢复仍待验收。普通关闭与 OS 结束的边界见 [ADR 0017](../submitter/adr/0017-periodic-drafts-and-system-session-end.md)。
+
 | ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |
 |---|---|---|---|
 | F001 壳层、标题栏、导航、关闭 | `winui/AbaqusTools.WinUI/MainWindow.xaml.cs`、`winui/AbaqusTools.WinUI/MainWindow.Closing.cs`；`RequestCloseAsync`；[窗口与提示说明](UI_INTERACTION.md) | `modules/control_plane/shutdown_protocol.py` / `ShutdownProtocol`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Shutdown.cs`；`PrepareCloseAsync`、`DetachForCloseAsync`；`winui/AbaqusTools.WinUI/Services/WorkbenchSession.cs`、`winui/AbaqusTools.WinUI/Services/WorkbenchSessionStore.cs`；`winui/AbaqusTools.WinUI/Services/WindowLayoutConstraints.cs`；`MinimumOuterSize`、`ClampToMinimum` | `tests/control_plane/test_shutdown_protocol.py`、`tests/winui_host/test_shutdown_api.py`、`tests/winui_host/ShutdownClientChecks.cs`、`tests/winui_host/WorkbenchSessionChecks.cs`、`tests/winui/test_session_bindings.py`、`tests/winui/test_shell_contract.py`、`tests/winui_layout/WindowLayout.Tests.csproj` |

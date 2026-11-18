@@ -46,6 +46,8 @@ public sealed partial class MainWindow : Window
             controlPlane,
             ActivateFallbackExplorerItemAsync);
         _resourceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _draftTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _sessionEnd = new SystemSessionEndState(SaveForSystemSessionEnd, TimeSpan.FromSeconds(2));
         _resourceTimer.Tick += OnResourceTimerTick;
         _controlPlane.StateChanged += OnControlPlaneStateChanged;
         Closed += OnWindowClosed;
@@ -62,6 +64,7 @@ public sealed partial class MainWindow : Window
         {
             NavigateTo("new-job");
         }
+        InitializeSessionSaving();
     }
 
     public void ReportPageStatus(string message)
@@ -557,6 +560,7 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _windowClosed = true;
+        DisposeSessionSaving();
         AppWindow.Changed -= OnAppWindowChanged;
         if (_sizeLimitXamlRoot is not null)
         {
@@ -572,7 +576,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_shutdownComplete)
+        if (_shutdownComplete || _sessionEnd.IsEnding)
         {
             return;
         }
@@ -583,6 +587,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CloseWorkbenchAsync()
     {
+        if (_sessionEnd.IsEnding) return;
         _shutdownStarted = true;
         SetCloseInteractionEnabled(false);
         _resourceTimer.Stop();
@@ -590,7 +595,9 @@ public sealed partial class MainWindow : Window
         try
         {
             await App.Current.Session.SaveForCloseAsync(CaptureWindowState());
+            if (_sessionEnd.IsEnding) return;
             if (!await ConfirmAndCommitCloseAsync()) return;
+            if (_sessionEnd.IsEnding) return;
             await _controlPlane.DetachForCloseAsync();
             _shutdownComplete = true;
             AppWindow.Closing -= OnAppWindowClosing;
@@ -598,6 +605,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            if (_sessionEnd.IsEnding) return;
             StartupInfoBar.Severity = InfoBarSeverity.Error;
             StartupInfoBar.Title = "无法安全关闭";
             StartupInfoBar.Message = exception.Message;
@@ -606,7 +614,7 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
-            if (!_shutdownComplete)
+            if (!_shutdownComplete && !_sessionEnd.IsEnding)
             {
                 try { await _controlPlane.AbortCloseAsync(); }
                 catch (Exception error) { ReportPageStatus("关闭已取消 · 后台确认暂不可达，准备状态会在一分钟内失效。" + error.Message); }

@@ -2,7 +2,7 @@
 
 当前产物为 Windows x64 完整目录候选。必须复制整个目录；无开发环境机器验收和正式安装包评审仍需完成。Abaqus 本身和许可证由目标机器提供，不随本软件分发。
 
-最新已验证候选与当前开发差异以[当前状态](../08-handoff/CURRENT_STATUS.md)为准，下面有历史包回执，不应将后文每个“最新”都视为当前入口。本轮增加 F027 提醒，源码/正式客户端/真实 Windows helper 已通过，完整包验收随后记录在 TASK-002。
+最新已验证候选与当前开发差异以[当前状态](../08-handoff/CURRENT_STATUS.md)为准，下面有历史包回执，不应将后文每个“最新”都视为当前入口。本轮 F027 新目录为 `GPTWork/release-win-x64-2df945d26036/AbaqusTools`（干净 `2ff6740`），1657 文件/19 worker、依赖、正式主机及冻结通知双后台验证通过。原生窗口和真实环境仍待验收，完整回执见 TASK-002。
 
 提醒冻结验证使用项目解释器运行 `packaging/verify_local_memory.py --bundle <完整AbaqusTools目录> --notifications --host-client <当前C#主机测试DLL>`。它只在 GPTWork 创建隔离数据，实际启动两次包内后台及 96 MiB 等待 helper；验证两次取消提醒、已读确认、冷启动恢复和新的执行身份，不启动 Abaqus 或连接 SSH。后台、helper、连接文件必须确认结束/移除，保存 verification.json；不能以它代替原生弹层与真实求解验收。
 

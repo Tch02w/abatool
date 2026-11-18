@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F027 作业结束提醒与 F023 成功响应修正（源码通过，完整包待构建）
+### 2026-11-18 F027 作业结束提醒与 F023 成功响应修正（源码与完整包通过，原生待验收）
 
 对照迁移合同发现 F003 的“结束提醒”保存到 QueueItem，但原生界面/控制面没有消费；旧 Qt 的 `notify_job_finished` 为每个作业打开消息框。改动前已说明新方案：后台确认终态后持久保存、按执行身份去重、跨页集中查看，使用非阻塞提醒，点击定位对应执行。用户此前 Esc 停止 UI 操作，本轮已询问是否可以恢复原生验收，尚未得到答复；先继续代码/后台验证。
 
@@ -29,6 +29,19 @@
 最终文档导航 **43 项通过，0.16 秒**，`GPTWork/job-notices-docs-20261118.xml/log`；包含功能索引、Wiki/README、接口、架构/ADR、任务与当前状态。读取已知 PID 均不存在；系统全进程 CIM 枚举被权限拒绝，未据此推断其他用户进程归属或结束状态。
 
 准确续接点：上述测试与构建均已结束，无需重复启动。接着完成本轮文档导航检查、本地提交、从干净来源构建完整包，核对清单/依赖/正式主机，再用冻结后台跑提醒双启动流程。既有最新包仍为 `release-win-x64-a7e34c128937`，未包含 F027；新包通过后替换入口。周额度最新剩余 **53%**，未触及 15%。GitHub push 仍等待先前自动审批所要求的具体远端确认；本轮没有重试推送。
+
+#### F027 最终完整包及准确续接点
+
+功能、测试和文档已本地提交 **`2ff6740a7560c8f49a438652d152ba1978b78e4d`**。基于该干净来源生成完整目录 **`GPTWork/release-win-x64-2df945d26036/AbaqusTools`**，构建句柄 24218 退出 0，日志 `GPTWork/job-notices-package-20261118.log`。下面回执补记在仓库；包内文档是构建时快照。
+
+- 用户账户核对 **1657 文件 / 19 worker**，大小和完整 SHA256 一致，`sourceDirty=false`；回执 `GPTWork/release-win-x64-2df945d26036/inventory-verification.json`。
+- 包内依赖探针通过，回执 `GPTWork/release-win-x64-2df945d26036/bundle-probe-gflgahr1/verification.json`，包含 GIF、绘图、XLSX、SSH 加密库离线依赖及 Qt-free；不是 SSH 连通性验证。
+- 本轮 C# 正式主机客户端 `GPTWork/job-notices-host-client/ControlPlaneHost.Tests.dll --launch-bundle` 启动/API/正常退出通过，日志 `GPTWork/job-notices-host-live-20261118.log`；隔离数据 `GPTWork/job-notices-host-2df945d26036`，描述文件已移除。
+- 冻结提醒验证：`.venv/Scripts/python.exe packaging/verify_local_memory.py --bundle GPTWork/release-win-x64-2df945d26036/AbaqusTools --notifications --host-client GPTWork/job-notices-host-client/ControlPlaneHost.Tests.dll`；75321 退出 0。回执 **`GPTWork/local-memory-live-966282df5338/verification.json`**：两次独立执行 `cedc234a7ee34b9caf44ada74710e871` / `7554998a047448658aa5fb8282e184f7`，均确认取消；两条持久提醒、一条已读一条未读；C# 正式接口确认和重读通过。历史恢复、无自动重放、源夹具不变、后台正常退出均通过。
+- 冻结 helper PID 165288/211824、后台 201948/210572 已直接检查均不存在，连接文件移除；没有 Abaqus 求解、SSH 连接或原生窗口操作。源码和冻结检查不替代原生验收。
+- 最后文档检查 **43 项通过，0.15 秒**，`GPTWork/job-notices-docs-final-20261118.log`。最终回执补记后需再执行标准导航检查。
+
+准确续接点：本轮源码、完整包、清单/依赖/正式主机、冻结通知全部结束，无未确认的自有长任务。下一步继续迁移合同中的 GPU/精度参数设计与实现，改动前向用户说明方案；原生恢复问题仍未得到答复，暂不操作旧窗口。其余缺口为真实 SSH/MPI/并发负载、三层连续 ODB 链和无开发环境目标机。不要重复已通过的通知 helper 或真实 ODB 样例。周额度最后剩余 **52%**，目标继续，不到 15% 暂停阈值。GitHub push 仍受此前自动审批拒绝约束，未重试；没有正式安装包或 GitHub 二进制 Release。
 
 ### 2026-11-18 F008/F010 持久恢复与重连（源码与完整包通过，真实 SSH/原生待验收）
 

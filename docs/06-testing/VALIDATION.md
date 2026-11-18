@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F027 新完整目录 **`GPTWork/release-win-x64-2df945d26036/AbaqusTools`**（干净 `2ff6740`）已通过用户账户 1657 文件/19 worker 摘要、包内依赖和本轮正式 C# 主机启动/API/退出。冻结通知双后台/实际等待 helper/正式客户端回执 **`GPTWork/local-memory-live-966282df5338/verification.json`** 确认两次执行、持久恢复、已读和新提醒，无自动重放且源不变。全部自有进程已结束，未执行 Abaqus/SSH 或原生操作；下文“完整包待构建”由本回执补齐。
+
 F027 本轮源码提醒/跨后台恢复/已读确认已验证；API、提取取消、真实远端恢复进程、通知和关闭专项 **48 项通过**，最终 Release 零警告/错误，C# 新增 10 项及既有检查通过。扩展初轮为 **289 通过 / 2 失败**，不是全通过；成功响应未读取可选正文的问题已取得旧实现失败/新实现通过的真实 TCP 证据并修正，远端负载下 5 秒超时仅专项复核通过。源码真实 Windows 双后台/96 MiB helper/正式 C# 客户端回执 `GPTWork/local-memory-live-88f62b2d8635/verification.json`；全部自有进程已结束，没有 Abaqus/SSH 或原生操作。新完整包待构建，准确命令、失败和续接点见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下包属于前一阶段。
 
 F008/F010 新完整目录 **`GPTWork/release-win-x64-a7e34c128937/AbaqusTools`**（干净 `7e09e1a`）已通过用户账户 1655 文件/19 worker 摘要、包内依赖和当前正式 C# 主机启动/API/退出；独立连接文件已清理。本轮检查均已结束，旧原生窗口未替换。下面源码阶段“完整包待构建”由本回执补齐；真实 SSH、MPI、原生操作和其他迁移缺口仍在，见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。

@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+最新完整包 `GPTWork/release-win-x64-75efcbf6b9f7/AbaqusTools`（干净03b4adf）通过1663文件/19worker摘要、依赖 `bundle-probe-asbma2v2/verification.json`、正式主机启动/API/退出。冻结 `GPTWork/scheduler-load-live-b52bd66c9cfb/verification.json` verified：261行/5执行准入及停止/终止/失败、单项失败释放额度时另一作业继续、5条提醒重启不重放，输入不变、自有进程全结束。233次GET中位39.94/P95 284.58/最大1137.44ms。75项相关及65项通知/文档回归通过；下方源码阶段“待验”由本回执补齐。不是独立工程模型、MPI/CPU压力或原生操作验收，所有旧包/失败证据保留。
+
 261行队列与5次实际非求解进程：源码 `GPTWork/scheduler-load-live-afc4a08d44b5/verification.json` verified，正式C#客户端、CPU/内存等待、停止派发、单项终止、失败、编辑后放行、5条提醒持久恢复及不重放、输入摘要和所有自有进程结束通过。260次GET中位39.50/P95 266.12/最大1050.74ms。261行中256暂停条目共用一个INP，不是工程/MPI满载或261个不同模型。修复前超时回执与线程栈保留于171fc499f113/8c23ea54fc7a；另有Datacheck失败漏提醒复现和修复。75项相关检查通过59.46秒，新完整包与通知专项最终结果待收尾；精确记录见TASK-002顶部。
 
 外部扫描新完整包 `GPTWork/release-win-x64-5f29d9d738de/AbaqusTools`（干净a01382f）：1663文件/19worker用户账户全摘要、依赖 `bundle-probe-iqcgci8t/verification.json`、正式主机启动/API/退出通过。`GPTWork/external-scan-live-2b0fdadc1f67/verification.json` verified：扫描期间62次读取73.38–489.22ms，自动监测实际自有进程退出完成、输入不变；归档恢复回归 `GPTWork/archive-recovery-live-7ddb793bdfea/verification.json` verified。全部自有进程结束。首轮冻结验证脚本与周期扫描竞态409失败保留，验证器改为等待原扫描，产品不变；不视为工程负载或原生UI验收。下方“新完整包待验”由此最终回执补齐，旧包记录为历史。

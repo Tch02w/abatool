@@ -11,7 +11,7 @@
 - 冻结包真实双后台/正式客户端回执：`GPTWork/local-memory-live-966282df5338/verification.json`，两条独立提醒、已读确认、持久恢复、无自动重放、源夹具不变及正常退出通过；全部自有 PID 已检查结束。源码真实双后台/自有 helper/正式客户端验证：`GPTWork/local-memory-live-88f62b2d8635/verification.json`。两次独立执行、提醒持久恢复、已读、无自动重放和正常退出通过；未启动 Abaqus 求解。全部自有检查与进程已结束。
 - F028 完整包回执 `GPTWork/execution-options-host-d1ad1556cf70/verification.json`：生产 C# 客户端预览、入队、旧式编辑保留、撤销和正常退出通过，夹具未变、无求解。源码 138 项扩展、最后 46 项能力/API/文档检查通过，Release 零警告/错误，文档 44 项通过。
 - 本轮未替换旧原生窗口。用户此前按 Esc 停止 UI 操作；本轮恢复交互验证的问题尚未收到答复，不继续桌面操作。
-- 周额度最近剩余 **51%**；用户要求剩余 15% 时暂停并待确认，后续须重新读取。GitHub push 仍受先前自动审批拒绝约束，具体远端 `https://github.com/Tch02w/abatool.git` 的 main 分支确认尚未收到，不重试。
+- 周额度最近剩余 **50%**；用户要求剩余 15% 时暂停并待确认，后续须重新读取。GitHub push 仍受先前自动审批拒绝约束，具体远端 `https://github.com/Tch02w/abatool.git` 的 main 分支确认尚未收到，不重试。
 
 ## 功能状态与下一项
 

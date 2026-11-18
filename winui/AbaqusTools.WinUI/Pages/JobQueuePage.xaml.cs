@@ -666,6 +666,9 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private void ApplySnapshot(JobQueueSnapshot snapshot)
     {
+        _externalScanActive = snapshot.ExternalScanActive;
+        ScanExternalJobsButton.Content = _externalScanActive ? "扫描中…" : "扫描";
+        ScanExternalJobsButton.IsEnabled = !_busy && !_externalScanActive;
         var selectedFormalItemIds = CaptureSelectedFormalItemIds();
         _queueExplorerAdapter.Update(snapshot);
         ReplaceItems(_candidates, snapshot.Candidates);
@@ -747,6 +750,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         _pendingFormalSelectionId = null;
     }
 
+    private bool _externalScanActive;
+
     private void SetBusy(bool busy, string? status = null)
     {
         _busy = busy;
@@ -755,7 +760,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         AddCandidateFilesButton.IsEnabled = !busy;
         ScanCandidateFolderButton.IsEnabled = !busy;
         ChooseExternalWorkDirButton.IsEnabled = !busy;
-        ScanExternalJobsButton.IsEnabled = !busy;
+        ScanExternalJobsButton.IsEnabled = !busy && !_externalScanActive;
         ExternalWorkDirTextBox.IsEnabled = !busy;
         if (!string.IsNullOrWhiteSpace(status))
         {

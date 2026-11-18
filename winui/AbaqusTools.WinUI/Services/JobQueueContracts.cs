@@ -5,6 +5,9 @@ namespace AbaqusTools.WinUI.Services;
 
 public sealed class JobQueueSnapshot
 {
+    [JsonPropertyName("externalScanActive")]
+    public bool ExternalScanActive { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; }
 

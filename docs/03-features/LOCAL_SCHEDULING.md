@@ -33,6 +33,16 @@ WinUI 的正式队列由 Qt-free Python 控制面调度。`LocalQueueScheduling`
 
 存储或线程启动失败会暂停新派发并在队列显示原因。启动失败释放未启动分配；运行中进度保存失败继续监控原执行器；最终结果保存失败保留未收尾状态，每 5 秒重试保存，绝不重新运行计算。保存成功后由用户重新开始队列。停止队列只停止派发；终止请求继续沿用自有执行器的合作停止。后台继续和关闭协议见 [退出说明](UI_INTERACTION.md)。
 
+## 外部作业扫描与并发修改
+
+在正式队列的「工作目录 → 扫描」读取外部作业。扫描期间 API 的 `externalScanActive` 为 true，页面显示「扫描中…」并禁止重复启动；状态读取返回最近已保存的队列，不等待进程枚举、目录检查或日志诊断。同一后台只进行一轮外部扫描，多目录共用一次进程列表。重复手动请求返回 409 `EXTERNAL_SCAN_BUSY`，周期扫描遇忙跳过本轮。
+
+扫描在独立副本上计算结果，结束后重新读取当前队列。只有完整原记录仍匹配的条目才允许更新；扫描期间被编辑、删除、重新执行或被同名同目录条目替换的结果会跳过，且保留候选区和当前排序。本机执行器管理的活动记录及正在归档的记录不接受扫描覆盖。统计中的新增、更新按实际落盘计数；`staleResultsSkipped` 表示跳过的旧结果，可稍后刷新核对。
+
+扫描失败不保存部分结果并释放扫描占用；关闭后台后不再合并迟到结果，手动请求返回 503 `CONTROL_PLANE_SHUTTING_DOWN`。扫描本身没有独立取消按钮；此修改也不意味着线程中的系统调用可即时终止。识别外部进程仍沿用目录、作业名、状态证据规则，不获得求解控制权；没有结束证据不能报告成功。
+
+源码定位：`JobQueueService._run_external_scan`、`_scan_external_roots` 和 `external_job_scan_core.scan_external_jobs(additional_roots=...)`。回归入口 `tests/control_plane/test_external_scan_concurrency.py`；真实 Windows 自有非求解进程与生产 C# 客户端验证为 `packaging/verify_external_scan.py`。小型夹具响应时间不能代表工程负载或网络目录性能，原生界面显示仍需验收。锁与合并约定见 [ADR 0015](../submitter/adr/0015-external-scan-snapshot-merge.md)。
+
 ## 输出与性能边界
 
 队列显示槽位、CPU、内存、依赖或目录冲突的等待原因；运行 API 增加 `schedulerMessage` 和操作的 `attemptId`。相同队列内容不重复替换 JSON，相同状态及消息不重复写调度事件。过期执行回调不能覆盖已完成结果。

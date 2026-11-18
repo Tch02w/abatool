@@ -23,3 +23,4 @@ Current records:
 - [0012-durable-remote-tracking.md](0012-durable-remote-tracking.md)
 - [0013-durable-job-notifications.md](0013-durable-job-notifications.md)
 - [0014-verified-local-archive-publication.md](0014-verified-local-archive-publication.md)
+- [0015-external-scan-snapshot-merge.md](0015-external-scan-snapshot-merge.md)

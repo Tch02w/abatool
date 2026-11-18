@@ -4,6 +4,12 @@
 
 ## 启动与就绪
 
+### 外部扫描响应补充（2026-11-18，F004/F005）
+
+队列快照新增 `externalScanActive` 布尔字段，旧后台缺省 false。包括 `GET /api/v1/job-queues`、`GET /api/v1/local-queue-runtime` 的 queue 及队列命令响应的 snapshot；扫描期间读取最近保存状态。`scanExternalJobs` 命令保持同步返回最终结果，同一后台重复手动扫描返回 409 `EXTERNAL_SCAN_BUSY`；关闭后拒绝开始/合并，返回 503 `CONTROL_PLANE_SHUTTING_DOWN`。
+
+成功响应的 `added`、`updated`、`statusOnlyUpdates` 按实际合并条数统计；有过期或本机执行器管理记录时新增可选 `stats.staleResultsSkipped`，不会覆盖扫描期间的新状态。扫描失败不发布部分结果。目录输入和原状态证据规则不变，详见 [本机扫描说明](03-features/LOCAL_SCHEDULING.md)。
+
 ### 连接状态响应补充（2026-11-18，F008）
 
 `GET /api/v1/remote-servers` 的 `connection` 新增可选 `busy`（布尔，旧后台缺省 false）和 `activity`（可读状态文本，空闲为空）。远端 I/O 执行期间返回最近完整发布的状态，不等待连接锁；资源值沿用原采样时间，并明确为上次读取。连接切换时 `status=connecting`、`resource=null`，不沿用旧机器资源。操作完成/失败/需确认指纹后发布对应状态并清除 busy。服务器命令 POST 返回本次操作的最终快照，仍遵守身份/指纹/活动任务校验。只读返回值与内部资源独立，事件游标随对应完整快照发布。

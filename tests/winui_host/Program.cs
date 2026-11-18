@@ -13,6 +13,28 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 3 && args[0] == "--external-scan-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        var samples = new List<double>();
+        var scan = host.ScanExternalJobsAsync(args[2]);
+        while (!scan.IsCompleted)
+        {
+            var timer = Stopwatch.StartNew();
+            var view = await host.GetLocalQueueRuntimeAsync();
+            if (view.Queue.ExternalScanActive) samples.Add(timer.Elapsed.TotalMilliseconds);
+            await Task.Delay(5);
+        }
+        var result = await scan;
+        if (samples.Count == 0 || !result.Snapshot.QueueItems.Any(x => x.IsExternal))
+            throw new Exception("No real external job/read overlap was observed");
+        Console.WriteLine(JsonSerializer.Serialize(new { observedWhileScanActive = samples.Count, readMilliseconds = samples }));
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--archive-recovery-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),

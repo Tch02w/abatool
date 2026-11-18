@@ -1,5 +1,15 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 外部扫描期间状态读取与条件合并
+
+**实现**：F004/F005手动及后台扫描改为独立扫描锁，短队列事务取副本，锁外目录/进程/日志诊断，最终只合并基线仍匹配的记录。防删除复活、重执行/编辑覆盖和并发新增同目录同名重复。保留当前候选与排序，跳过本机活动/归档记录，失败及关闭不发布迟到结果。生产多目录共用一次进程枚举，兼容原双参数扩展扫描器。API/C#增加externalScanActive，WinUI按钮显示扫描中并防重复。使用说明、API、Wiki、README、功能索引及ADR0015已同步。
+
+**已执行**：`external-scan-delivery-20261118.xml/log` 96项通过（308.37秒），覆盖并发、队列命令、调度、内存、归档恢复、关闭保护和壳层；追加冲突/失败重试后 `external-scan-edges-20261118.xml/log` 13项通过（3.14秒）。集合重叠不累计。Ruff通过；C#主机检查通过，WinUI Release `external-scan-winui-20261118.log` 零警告/错误20.64秒（52854退出0）。源码正式客户端真实进程回执 `GPTWork/external-scan-live-8801618bf931/verification.json` verified：扫描期间71次状态读取79.37–431.06ms，识别自有非求解进程及退出完成；输入摘要不变，包装213656/214848正常退出，实际209248/197620均结束（8855退出0）。时间仅代表此机器此小型夹具。没有新Abaqus求解。
+
+**失败证据**：修复前 `external-scan-before-fixed-20261118.xml/log` 两项复现手动/自动扫描锁住读取；更早before文件中的自动案例未设置工作目录，属于夹具错误。首次真实验证 `GPTWork/external-scan-live-402ccde15b89/verification.json` 因脚本误读API不存在的pids失败（63212退出1），自有进程全部结束；后改为读取真实持久队列的进程身份，并使用生产C#客户端检查第二轮完成扫描，不调整状态GET超时掩盖响应问题。
+
+**准确续接点**：96项原命令输出句柄因上下文截断未保留，最终XML/日志通过，已知进程202440/209696已核对不存在；其他本轮自有进程已结束。文档导航 `external-scan-docs-20261118.log` 47项通过（0.16秒）。接下来本地提交、干净来源完整包及冻结扫描回执。原生业务显示、工程大队列/网络目录未验；具体GitHub main确认与原生操作恢复仍待用户答复，不重复询问或绕过。此局部不能代表完整迁移结束。
+
 ## 2026-11-18 · 归档独立提醒的崩溃补发
 
 **最终完整包回执**：本地源码提交 `e31a3583159a3e8f1822b72977d582cb6f5ce53b`，干净来源包 `GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`（构建59888退出0）；用户账户1662文件/19worker摘要、依赖 `GPTWork/bundle-probe-v7sw1_nd/verification.json`、正式主机 `GPTWork/archive-notice-frozen-host-20261118.log` 均通过。冻结提醒补发 `GPTWork/archive-notice-live-2af35a395468/verification.json` 和归档恢复回归 `GPTWork/archive-recovery-live-7e74fa0a82cd/verification.json` verified：实际中断自有生产者、队列清除、正式客户端补发与已读、第二次重启保持已读；原归档恢复、完整摘要与原输入不变继续通过。所有自有实际/包装进程均已核对结束，没有Abaqus求解。文档导航47项通过，旧候选及失败回执保留。

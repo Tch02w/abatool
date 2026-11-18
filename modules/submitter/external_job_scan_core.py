@@ -131,10 +131,16 @@ def scan_external_jobs(
     known_external_jobs: list[dict] | None = None,
     *,
     process_rows: list[dict] | None = None,
+    additional_roots: list[str] | None = None,
 ) -> tuple[list[dict], list[int]]:
     known_external_jobs = known_external_jobs or []
     scan_roots = [work_dir]
     seen_roots = {normalize_work_dir(work_dir)}
+    for root in additional_roots or []:
+        normalized = normalize_work_dir(root)
+        if normalized not in seen_roots:
+            scan_roots.append(root)
+            seen_roots.add(normalized)
     for known in known_external_jobs:
         known_work_dir = known.get("work_dir") or os.path.dirname(
             known.get("inp_path", "")

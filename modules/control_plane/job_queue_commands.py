@@ -191,6 +191,7 @@ class JobQueueService:
     ) -> None:
         self.path = Path(path) if path is not None else Path(JOBLIST_PATH)
         self._lock = threading.RLock()
+        self._external_scan_lock = threading.Lock()
         self._external_job_scanner = external_job_scanner
         self._external_monitor_interval = max(0.05, float(external_monitor_interval))
         self._external_scan_roots: set[str] = set()
@@ -206,7 +207,12 @@ class JobQueueService:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             candidates, queue_items = self._load()
-            return project_job_queues(candidates, queue_items)
+            return self._project(candidates, queue_items)
+
+    def _project(self, candidates, items, *, scan_active=None):
+        snapshot = project_job_queues(candidates, items)
+        snapshot["externalScanActive"] = self._external_scan_lock.locked() if scan_active is None else scan_active
+        return snapshot
 
     def runtime_transaction(self, mutation) -> Any:
         """Run one trusted runtime mutation inside the queue-file transaction."""
@@ -250,6 +256,9 @@ class JobQueueService:
                 details={"action": action, "supported": sorted(SUPPORTED_ACTIONS)},
             )
 
+        if action == "scanExternalJobs":
+            return self._scan_external_jobs(payload)
+
         with self._lock:
             candidates, queue_items = self._load()
             changed, message, stats = self._dispatch(
@@ -266,7 +275,7 @@ class JobQueueService:
                 "changed": changed,
                 "message": message,
                 "stats": stats,
-                "snapshot": project_job_queues(candidates, queue_items),
+                "snapshot": self._project(candidates, queue_items),
             }
 
     def _load(self) -> tuple[list[QueueItem], list[QueueItem]]:
@@ -299,8 +308,6 @@ class JobQueueService:
                 raise ApiProblem(409, "ACTIVE_ARCHIVE_PROTECTED", "归档正在执行，请先取消并等待归档收尾")
         if action in {"addCandidates", "scanCandidates"}:
             return self._add_candidates(action, payload, candidates, queue_items)
-        if action == "scanExternalJobs":
-            return self._scan_external_jobs(payload, queue_items)
         if action == "setCandidateSelection":
             _require_fields(payload, {"itemIds", "selected"})
             return self._set_candidate_selection(payload, candidates)
@@ -347,27 +354,106 @@ class JobQueueService:
     def _scan_external_jobs(
         self,
         payload: Mapping[str, Any],
-        queue_items: list[QueueItem],
-    ) -> tuple[int, str, dict[str, Any]]:
+    ) -> dict[str, Any]:
         _require_fields(payload, {"root"})
         root = _normal_path(_text(payload, "root"))
         if not Path(root).is_dir():
             raise ApiProblem(
                 400, "INVALID_EXTERNAL_SCAN_ROOT", "外部作业工作目录不存在或不可读"
             )
-        self._external_scan_roots.add(os.path.normcase(root))
-        return self._scan_external_roots(queue_items, [root])
+        return self._run_external_scan([root])
+
+    def _run_external_scan(self, requested_roots=None):
+        manual = requested_roots is not None
+        if not self._external_scan_lock.acquire(blocking=False):
+            if manual:
+                raise ApiProblem(409, "EXTERNAL_SCAN_BUSY", "已有外部作业扫描正在进行，请稍后刷新")
+            return None
+        try:
+            with self._lock:
+                if self._external_monitor_closing.is_set():
+                    if manual:
+                        raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "后台正在关闭，未开始扫描")
+                    return None
+                _, scanned_items = self._load()
+                before = {item.item_id: asdict(item) for item in scanned_items}
+                if manual:
+                    self._external_scan_roots.update(os.path.normcase(root) for root in requested_roots)
+                    roots = requested_roots
+                else:
+                    roots = set(self._external_scan_roots)
+                    unresolved_roots = {
+                        os.path.normcase(_normal_path(item.external_work_dir or item.effective_work_dir))
+                        for item in scanned_items if item.status in ACTIVE_STATUSES | {STATUS_UNKNOWN}
+                        and (item.external_work_dir or item.effective_work_dir)
+                    }
+                    roots.update(self._recovered_scan_roots & unresolved_roots)
+                    roots.update(os.path.normcase(_normal_path(item.external_work_dir or item.effective_work_dir))
+                                 for item in scanned_items if item.is_external
+                                 and (item.external_work_dir or item.effective_work_dir))
+            # Directory checks, process inspection, diagnostics and detached merge
+            # must not hold the queue lock used by reads, edits or execution.
+            roots = sorted(root for root in roots if Path(root).is_dir())
+            if not roots:
+                if manual:
+                    raise ApiProblem(400, "INVALID_EXTERNAL_SCAN_ROOT", "扫描目录已不可读，未更新队列")
+                return None
+            stats, kinds = self._scan_external_roots(scanned_items, roots)
+            with self._lock:
+                if self._external_monitor_closing.is_set():
+                    if manual:
+                        raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "后台正在关闭，未合并扫描结果")
+                    return None
+                candidates, current = self._load()
+                positions = {item.item_id: index for index, item in enumerate(current)}
+                keys = {queue_item_conflict_key(item) for item in current}
+                applied = {"added": 0, "updated": 0, "statusOnlyUpdates": 0}
+                stale = 0
+                for observed in scanned_items:
+                    baseline = before.get(observed.item_id)
+                    if baseline is not None:
+                        if asdict(observed) == baseline:
+                            continue
+                        index = positions.get(observed.item_id)
+                        if (index is None or asdict(current[index]) != baseline
+                                or current[index].active_job_key or current[index].archive_status == "归档中"):
+                            stale += 1
+                            continue
+                        current[index] = observed
+                        applied[kinds.get(queue_item_conflict_key(observed), "statusOnlyUpdates")] += 1
+                    elif observed.item_id in positions or queue_item_conflict_key(observed) in keys:
+                        stale += 1
+                    else:
+                        current.append(observed)
+                        positions[observed.item_id] = len(current) - 1
+                        keys.add(queue_item_conflict_key(observed))
+                        applied["added"] += 1
+                changed = sum(applied.values())
+                if changed:
+                    save_joblist_state(candidates, current, self.path)
+                stats.update(applied)
+                message = f"外部作业扫描完成：发现 {stats['scanned']} 个，新增 {applied['added']} 个，更新 {applied['updated'] + applied['statusOnlyUpdates']} 个"
+                if stale:
+                    stats["staleResultsSkipped"] = stale
+                    message += f"；{stale} 条记录已变化或由本机执行器管理，未覆盖，请稍后刷新"
+                return {"schemaVersion": SCHEMA_VERSION, "action": "scanExternalJobs", "changed": changed,
+                        "message": message, "stats": stats, "snapshot": self._project(candidates, current, scan_active=False)}
+        finally:
+            self._external_scan_lock.release()
 
     def _scan_external_roots(
         self,
         queue_items: list[QueueItem],
         roots: list[str],
-    ) -> tuple[int, str, dict[str, Any]]:
+    ) -> tuple[dict[str, Any], dict[tuple[str, str], str]]:
         jobs_by_key: dict[tuple[str, str], dict] = {}
         skipped_pids: set[int] = set()
-        for root in roots:
-            known = collect_known_external_jobs(queue_items, root)
-            jobs, skipped = self._external_job_scanner(root, known)
+        if self._external_job_scanner is scan_external_jobs:
+            known = {entry["item_id"]: entry for root in roots for entry in collect_known_external_jobs(queue_items, root)}
+            batches = [(roots[0], self._external_job_scanner(roots[0], list(known.values()), additional_roots=roots[1:]))]
+        else:
+            batches = [(root, self._external_job_scanner(root, collect_known_external_jobs(queue_items, root))) for root in roots]
+        for root, (jobs, skipped) in batches:
             skipped_pids.update(int(pid) for pid in skipped)
             for job in jobs:
                 job_name = str(job.get("job_name") or "").strip()
@@ -393,22 +479,8 @@ class JobQueueService:
                 item.memory_observation_status = "observed"
             else:
                 item.memory_observation_status = "unavailable"
-        added = int(merge["added"])
-        updated = int(merge["updated"])
-        status_only = int(merge["status_only_updates"])
-        scanned = len(jobs_by_key)
-        changed = added + updated + status_only
-        return (
-            changed,
-            f"外部作业扫描完成：发现 {scanned} 个，新增 {added} 个，更新 {updated + status_only} 个",
-            {
-                "scanned": scanned,
-                "added": added,
-                "updated": updated,
-                "statusOnlyUpdates": status_only,
-                "skippedPids": sorted(skipped_pids),
-            },
-        )
+        return ({"scanned": len(jobs_by_key), "skippedPids": sorted(skipped_pids)},
+                {key: "statusOnlyUpdates" if job.get("status_only_update") else "updated" for key, job in jobs_by_key.items()})
 
     def _external_monitor_loop(self) -> None:
         while not self._external_monitor_closing.wait(self._external_monitor_interval):
@@ -418,37 +490,11 @@ class JobQueueService:
                 LOGGER.exception("External Abaqus job monitor refresh failed")
 
     def refresh_external_jobs(self) -> None:
-        with self._lock:
-            candidates, queue_items = self._load()
-            roots = set(self._external_scan_roots)
-            # Recovery observation ends when another trusted path has confirmed
-            # the solve. Explicitly requested directory monitoring is retained.
-            unresolved_roots = {
-                os.path.normcase(_normal_path(item.external_work_dir or item.effective_work_dir))
-                for item in queue_items
-                if item.status in ACTIVE_STATUSES | {STATUS_UNKNOWN}
-                and (item.external_work_dir or item.effective_work_dir)
-            }
-            roots.update(self._recovered_scan_roots & unresolved_roots)
-            roots.update(
-                os.path.normcase(
-                    _normal_path(item.external_work_dir or item.effective_work_dir)
-                )
-                for item in queue_items
-                if item.is_external
-                and (item.external_work_dir or item.effective_work_dir)
-            )
-            valid_roots = sorted(root for root in roots if Path(root).is_dir())
-            if not valid_roots:
-                return
-            before = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
-            self._scan_external_roots(queue_items, valid_roots)
-            after = ([asdict(item) for item in candidates], [asdict(item) for item in queue_items])
-            if before != after:
-                save_joblist_state(candidates, queue_items, self.path)
+        self._run_external_scan()
 
     def close(self) -> None:
-        self._external_monitor_closing.set()
+        with self._lock:
+            self._external_monitor_closing.set()
         self._external_monitor.join(timeout=2)
 
     def _add_candidates(

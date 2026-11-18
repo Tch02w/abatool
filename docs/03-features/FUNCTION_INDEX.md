@@ -4,6 +4,8 @@
 
 接到任务后先按功能编号打开本行文件和测试，不必遍历整个仓库。页面的 `.xaml` 负责布局，同名 `.xaml.cs` 负责交互；下面优先列交互文件。
 
+F004/F005 外部扫描并发定位：`modules/control_plane/job_queue_commands.py` / `_run_external_scan`、`_scan_external_roots`，`modules/submitter/external_job_scan_core.py` / `scan_external_jobs`；`JobQueueSnapshot.ExternalScanActive` 与 `JobQueuePage.ApplySnapshot`。测试 `tests/control_plane/test_external_scan_concurrency.py`；实际进程/正式客户端 `packaging/verify_external_scan.py`、`tests/winui_host/Program.cs` 的 `--external-scan-api`。输入、失败、关闭和过期结果规则见 [本机调度说明](LOCAL_SCHEDULING.md)。
+
 ## 壳层、提交、调度、远程
 
 | ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |

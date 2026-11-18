@@ -2,6 +2,8 @@
 
 ## 2026-11-18 · 可取消导出进入完整候选及包内验证
 
+本轮验收文档已提交并推送208a244c7135a8a32895470b4e1951e0431b3829，实际ls-remote核对main与本地一致、工作区干净。随后查询周额度剩余15%，达到用户此前明确设定的暂停线；保存本续接点后将目标设为paused，不再开始新开发或验证。恢复时从下述准确续接点继续，原生操作暂停仍需用户另行解除。完整迁移仍未完成。
+
 从干净129b2573077906eee3472502daba7839f4ac32a4继续，上一轮已提交/推送并实际核对GitHub main与本地一致，属于实际进展。使用项目解释器、G: TEMP/TMP运行build_release.py --no-restore，62251退出0；新目录 `GPTWork/release-win-x64-bbb1a83a8997/AbaqusTools`，sourceDirty=false，1671清单文件/19 worker，含清单355060382字节。manifest SHA256为 `2c3d884126e77525c9bb865b31b947c5ee32eba4bee7938ceba277897dc0d2ec`。相对22e47f6候选新增ADR0021，无移除路径、18项文件变化；完整摘要、来源祖先和禁止ODB/INP/Qt/虚拟环境混入均通过，回执 `GPTWork/result-export-release-verification-20261118/inventory.json`。
 
 包内依赖探针 `bundle-probe-56fhtv1x/verification.json`（位于上述验证目录）通过默认配置、19 worker、GIF、Agg、xlsx、SSH加密和Qt-free。正式C#主机 `GPTWork/result-export-release-host-20261118/ControlPlaneHost.Tests.exe` 构建0警告/错误0.60秒，包内后台启动/资源与队列API/正常退出通过，frozen-host.log和host-build.log保留，descriptor确认移除。未传--odb，不调用求解、用户SSH或业务窗口。

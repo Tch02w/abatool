@@ -1,6 +1,8 @@
 import json
 import threading
 import time
+from dataclasses import replace
+from pathlib import Path
 
 from modules.control_plane.job_queue_commands import JobQueueService
 from modules.control_plane.job_queues import _project_item
@@ -23,6 +25,49 @@ from tests.control_plane.test_local_queue_runtime_api import (
 )
 
 GB = 1024**3
+
+
+def test_empty_history_does_not_probe_files_but_keeps_live_estimate(tmp_path, monkeypatch):
+    from modules.control_plane import local_memory
+    item = queue_item(tmp_path, "cold")
+    item.attempt_id = "owned-attempt"
+    repo = SQLiteSchedulerRepository(tmp_path / "state.db")
+    try:
+        memory = LocalMemoryMonitor(repo)
+        memory.live_estimates[item.attempt_id] = 3 * GB
+
+        def unexpected_probe(_):
+            raise AssertionError("No historical profile exists to look up")
+        monkeypatch.setattr(local_memory, "_profile_file_signature", unexpected_probe)
+        assert memory.project_estimates([item]) == {item.job_id: 3 * GB}
+        assert item.memory_estimate_source == "observed"
+    finally:
+        repo.close()
+
+
+def test_history_metadata_is_shared_per_pass_and_invalidated_on_next_pass(tmp_path, monkeypatch):
+    from modules.control_plane import local_memory
+    first = queue_item(tmp_path, "shared")
+    second = replace(first, job_id="other-job", item_id="other-item", cores=first.cores + 1)
+    repo = SQLiteSchedulerRepository(tmp_path / "state.db")
+    try:
+        memory = LocalMemoryMonitor(repo)
+        memory.profiles = {memory_profile_key(first): {"estimated": GB},
+                           memory_profile_key(second): {"estimated": 2 * GB}}
+        probes = []
+        original = local_memory._profile_file_signature
+
+        def counted(value):
+            probes.append(value)
+            return original(value)
+        monkeypatch.setattr(local_memory, "_profile_file_signature", counted)
+        assert memory.project_estimates([first, second]) == {first.job_id: GB, second.job_id: 2 * GB}
+        assert len(probes) == 1
+        Path(first.inp_path).write_text("*Heading\nChanged source with a new size\n")
+        assert memory.project_estimates([first, second]) == {}
+        assert len(probes) == 2 and first.memory_estimate_source == ""
+    finally:
+        repo.close()
 
 
 def observation(rss, stamp=None):

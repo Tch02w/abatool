@@ -13,6 +13,23 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 5 && args[0] == "--scheduler-command")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        var result = args[2] switch
+        {
+            "start" => await host.StartLocalQueueAsync(int.Parse(args[3]), "backup"),
+            "stop" => await host.StopLocalQueueAsync(),
+            "terminate" => await host.TerminateLocalQueueItemsAsync([args[3]]),
+            _ => throw new ArgumentException("Unsupported scheduler verification action"),
+        };
+        await File.WriteAllTextAsync(args[4], JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--external-scan-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),

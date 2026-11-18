@@ -13,6 +13,7 @@ from modules.submitter.archive_notifications import ArchiveNoticeStore
 from modules.submitter.constants import (
     STATUS_COMPLETED,
     STATUS_DATACHECK_COMPLETED,
+    STATUS_DATACHECK_FAILED,
     STATUS_FAILED,
     STATUS_TERMINATED,
 )
@@ -23,7 +24,7 @@ from .contracts import ApiProblem, utc_now_text
 from .operation_journal import OperationJournal
 
 LOCAL_TERMINAL = {STATUS_COMPLETED: "succeeded", STATUS_DATACHECK_COMPLETED: "succeeded",
-                  STATUS_FAILED: "failed", STATUS_TERMINATED: "cancelled"}
+                  STATUS_FAILED: "failed", STATUS_DATACHECK_FAILED: "failed", STATUS_TERMINATED: "cancelled"}
 
 
 def validate_record(record):

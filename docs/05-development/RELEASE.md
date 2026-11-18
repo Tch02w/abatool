@@ -1,18 +1,18 @@
 # Windows 发布构建（F026）
 
-最新提醒补发候选为 `GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`（干净e31a358），1662文件/19worker、依赖/正式主机、新提醒补发与原归档恢复真实进程验证通过。`packaging/verify_archive_notifications.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` 只中断自己的微型生产者，清除夹具队列后核对正式客户端补发/已读和第二次重启，证据见[当前状态](../08-handoff/CURRENT_STATUS.md)。以下8791f815c891为前一归档恢复候选，保留原记录。
+本页说明如何构建和验证完整目录包。**当前候选路径与准确源码提交只以 [当前状态](../08-handoff/CURRENT_STATUS.md) 为准**；正式交付需要复制整个目录，不能单独复制exe。无开发环境目标机、原生业务页面、真实SSH/MPI及工程负载仍有待验项，候选包不等于正式安装版。Abaqus及许可证由目标机提供，不随软件分发。
 
-最新已验证完整目录为 `GPTWork/release-win-x64-8791f815c891/AbaqusTools`，干净源码6cb343d，1662文件/19worker、依赖、正式主机及归档中断恢复通过。前一89d3b6ab518e候选的状态读取超时和修正证据保留，详见[当前状态](../08-handoff/CURRENT_STATUS.md)及[验收记录](../06-testing/VALIDATION.md)。原生业务页面、跨卷大文件与目标机未验收，不是正式安装版。
+实际进程验收工具均在GPTWork创建隔离夹具，仅操作自有进程，不启动Abaqus求解。运行前查看各工具说明，失败后先确认原句柄及进程状态，不因超时重复启动：
 
-当前产物为 Windows x64 完整目录候选。必须复制整个目录；无开发环境机器验收和正式安装包评审仍需完成。Abaqus 本身和许可证由目标机器提供，不随本软件分发。
+| 范围 | 验证入口 |
+|---|---|
+| 多作业资源准入与261行队列状态响应 | `packaging/verify_scheduler_load.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` |
+| 外部扫描期间读取、实际发现与自动完成监测 | `packaging/verify_external_scan.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` |
+| 归档中断后同一执行恢复 | `packaging/verify_archive_recovery.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` |
+| 归档完成回调丢失后的提醒补发 | `packaging/verify_archive_notifications.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` |
+| 内存采样、持久历史与结束提醒 | `packaging/verify_local_memory.py --bundle <完整目录> --notifications --host-client <当前C#主机测试DLL>` |
 
-最新已验证候选与当前开发差异以[当前状态](../08-handoff/CURRENT_STATUS.md)为准，下面有历史包回执，不应将后文每个“最新”都视为当前入口。当前 F028 新目录为 `GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools`（干净 `35b2372`），1658 文件/19 worker、依赖及正式主机冻结参数流程验证通过；前一阶段 F027 的冻结通知证据保留。原生窗口和真实环境仍待验收，完整回执见 TASK-002。
-
-提醒冻结验证使用项目解释器运行 `packaging/verify_local_memory.py --bundle <完整AbaqusTools目录> --notifications --host-client <当前C#主机测试DLL>`。它只在 GPTWork 创建隔离数据，实际启动两次包内后台及 96 MiB 等待 helper；验证两次取消提醒、已读确认、冷启动恢复和新的执行身份，不启动 Abaqus 或连接 SSH。后台、helper、连接文件必须确认结束/移除，保存 verification.json；不能以它代替原生弹层与真实求解验收。
-
-最新目录为 **`GPTWork/release-win-x64-b2bb97c3929a/AbaqusTools`**（干净 `11ee6ff`），加入远端完成证据/稳定确认及日志去重，保留内存和此前界面修正。用户账户 1654 文件/19 worker 的完整清单、依赖探针和正式主机启动/API/退出通过。50 项相关检查含生产 PowerShell 本机夹具，不代表真实 SSH/远端求解或原生交互验收。以下是前阶段包记录，最终回执见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
-
-11 月 18 日本轮最新目录为 `GPTWork/release-win-x64-5a09eb59688b/AbaqusTools`，干净来源 `a4e8212`，包含本机内存观测/历史估计，以及共享调度、关闭/草稿、GIF 与读取按钮修正。用户账户核对 1653 文件/19 worker、依赖和正式主机启动/API/退出通过；冻结包实际 96 MiB helper 的两次后台启动、PID/创建时间/内存、历史恢复、明确重新排队及安全退出通过，详见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。没有调用求解，原生业务和目标机器仍未验收，旧候选保留。包内文档为构建时快照，最终验证回执补记于仓库。
+资源准入夹具声明CPU/内存请求，但helper仅使用少量内存等待；它不能证明真实Abaqus/MPI满载或网络目录性能。成功回执必须核对范围、原输入摘要和自有进程结束。源代码检查、打包依赖和正式客户端通过也不能代替原生业务操作。最终回执与保留的失败见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) 与 [验收记录](../06-testing/VALIDATION.md)。
 
 ## 开发者构建
 
@@ -90,3 +90,22 @@ F028 提交参数的冻结验证：正式 C# 主机 `--launch-bundle <完整目�
 ### 11 月 18 日连接状态响应候选
 
 当前最新完整目录 `GPTWork/release-win-x64-f4d22485d254/AbaqusTools`，干净来源 `6890ffa`，包含 F008 慢通信期间的连接视图和错误显示修正。用户账户核对 1658 文件/19 worker，通过包内依赖、正式客户端启动/API/退出，以及冻结状态接口和两次启动的配置恢复。准确回执见 [验收记录](../06-testing/VALIDATION.md)；慢通信由源码隔离夹具验证，没有进行真实 SSH/原生点击。旧候选保持原样，未发布本轮 ZIP/安装程序/二进制 Release；包内文档是构建时快照，最终回执在源码仓库补记。
+
+
+## 历史候选记录（仅供追溯）
+
+以下段落保留原阶段记录；其中的“最新”只指当时阶段，不作为当前下载入口。
+
+最新提醒补发候选为 `GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`（干净e31a358），1662文件/19worker、依赖/正式主机、新提醒补发与原归档恢复真实进程验证通过。`packaging/verify_archive_notifications.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` 只中断自己的微型生产者，清除夹具队列后核对正式客户端补发/已读和第二次重启，证据见[当前状态](../08-handoff/CURRENT_STATUS.md)。以下8791f815c891为前一归档恢复候选，保留原记录。
+
+最新已验证完整目录为 `GPTWork/release-win-x64-8791f815c891/AbaqusTools`，干净源码6cb343d，1662文件/19worker、依赖、正式主机及归档中断恢复通过。前一89d3b6ab518e候选的状态读取超时和修正证据保留，详见[当前状态](../08-handoff/CURRENT_STATUS.md)及[验收记录](../06-testing/VALIDATION.md)。原生业务页面、跨卷大文件与目标机未验收，不是正式安装版。
+
+当前产物为 Windows x64 完整目录候选。必须复制整个目录；无开发环境机器验收和正式安装包评审仍需完成。Abaqus 本身和许可证由目标机器提供，不随本软件分发。
+
+最新已验证候选与当前开发差异以[当前状态](../08-handoff/CURRENT_STATUS.md)为准，下面有历史包回执，不应将后文每个“最新”都视为当前入口。当前 F028 新目录为 `GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools`（干净 `35b2372`），1658 文件/19 worker、依赖及正式主机冻结参数流程验证通过；前一阶段 F027 的冻结通知证据保留。原生窗口和真实环境仍待验收，完整回执见 TASK-002。
+
+提醒冻结验证使用项目解释器运行 `packaging/verify_local_memory.py --bundle <完整AbaqusTools目录> --notifications --host-client <当前C#主机测试DLL>`。它只在 GPTWork 创建隔离数据，实际启动两次包内后台及 96 MiB 等待 helper；验证两次取消提醒、已读确认、冷启动恢复和新的执行身份，不启动 Abaqus 或连接 SSH。后台、helper、连接文件必须确认结束/移除，保存 verification.json；不能以它代替原生弹层与真实求解验收。
+
+最新目录为 **`GPTWork/release-win-x64-b2bb97c3929a/AbaqusTools`**（干净 `11ee6ff`），加入远端完成证据/稳定确认及日志去重，保留内存和此前界面修正。用户账户 1654 文件/19 worker 的完整清单、依赖探针和正式主机启动/API/退出通过。50 项相关检查含生产 PowerShell 本机夹具，不代表真实 SSH/远端求解或原生交互验收。以下是前阶段包记录，最终回执见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
+11 月 18 日本轮最新目录为 `GPTWork/release-win-x64-5a09eb59688b/AbaqusTools`，干净来源 `a4e8212`，包含本机内存观测/历史估计，以及共享调度、关闭/草稿、GIF 与读取按钮修正。用户账户核对 1653 文件/19 worker、依赖和正式主机启动/API/退出通过；冻结包实际 96 MiB helper 的两次后台启动、PID/创建时间/内存、历史恢复、明确重新排队及安全退出通过，详见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。没有调用求解，原生业务和目标机器仍未验收，旧候选保留。包内文档为构建时快照，最终验证回执补记于仓库。

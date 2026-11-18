@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+261行队列与5次实际非求解进程：源码 `GPTWork/scheduler-load-live-afc4a08d44b5/verification.json` verified，正式C#客户端、CPU/内存等待、停止派发、单项终止、失败、编辑后放行、5条提醒持久恢复及不重放、输入摘要和所有自有进程结束通过。260次GET中位39.50/P95 266.12/最大1050.74ms。261行中256暂停条目共用一个INP，不是工程/MPI满载或261个不同模型。修复前超时回执与线程栈保留于171fc499f113/8c23ea54fc7a；另有Datacheck失败漏提醒复现和修复。75项相关检查通过59.46秒，新完整包与通知专项最终结果待收尾；精确记录见TASK-002顶部。
+
 外部扫描新完整包 `GPTWork/release-win-x64-5f29d9d738de/AbaqusTools`（干净a01382f）：1663文件/19worker用户账户全摘要、依赖 `bundle-probe-iqcgci8t/verification.json`、正式主机启动/API/退出通过。`GPTWork/external-scan-live-2b0fdadc1f67/verification.json` verified：扫描期间62次读取73.38–489.22ms，自动监测实际自有进程退出完成、输入不变；归档恢复回归 `GPTWork/archive-recovery-live-7ddb793bdfea/verification.json` verified。全部自有进程结束。首轮冻结验证脚本与周期扫描竞态409失败保留，验证器改为等待原扫描，产品不变；不视为工程负载或原生UI验收。下方“新完整包待验”由此最终回执补齐，旧包记录为历史。
 
 F004/F005外部扫描并发：`GPTWork/external-scan-delivery-20261118.xml/log` 96项通过（308.37秒），追加边界 `GPTWork/external-scan-edges-20261118.xml/log` 13项通过（3.14秒，重叠不累计）；修复前两项读取阻塞复现保留。源码真实进程/正式C#客户端 `GPTWork/external-scan-live-8801618bf931/verification.json` verified，扫描期间71次读取79.37–431.06ms，退出完成、输入不变、自有进程结束；非Abaqus求解/非工程负载。首次脚本字段错误失败回执402ccde15b89保留。Release零警告/错误20.64秒，正式主机检查通过，新完整包尚待验证，原生交互仍未验收。细节及接续见TASK-002顶部。

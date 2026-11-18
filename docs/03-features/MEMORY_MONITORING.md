@@ -36,6 +36,10 @@
 
 ## 代码和验证
 
+历史查找只在存在已保存历史时读取文件元信息；没有历史时仍使用本次观测/参考估计，但不为查找不存在的记录遍历模型路径。同一轮投影中，相同文件路径共用一次解析和stat（INP、子程序及oldjob都适用）；每轮重新建立缓存，文件大小/修改时间变化、删除和恢复可重新判定，不跨轮沿用旧文件身份。估计值仍按作业ID、CPU/精度等配置分别计算。没有活动归档时，调度不额外解析目录来检查不存在的归档冲突。准入公式和已有历史键格式均不变。
+
+`packaging/verify_scheduler_load.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` 使用261行隔离队列（256条暂停记录共用一个微型INP），5次真实自有非求解进程与正式客户端检查CPU/内存等待、停止/终止、失败、恢复和状态读取。声明的资源用于验证准入，每个helper仅约8MiB缓冲，不是CPU满载、Abaqus/MPI、261个不同工程模型或网络盘性能验收。具体响应时间及失败证据见TASK-002。
+
 - 采集：`modules/submitter/runtime_observation.py` / `ProcessSnapshotCache`、`observe_local_job`；`local_job_execution.py` / `execute_local_job`。
 - 学习：`modules/control_plane/local_memory.py` / `LocalMemoryMonitor`，复用 `modules/submitter/memory_monitor.py` / `MemoryMonitorService`。
 - 接入：`LocalQueueRuntimeManager._receive_observation`、`_flush_observations`；`LocalQueueScheduling.reserve`；`JobQueueService._scan_external_roots`。

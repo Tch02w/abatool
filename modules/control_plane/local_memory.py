@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import time
 from pathlib import Path
 
@@ -16,20 +17,32 @@ from modules.submitter.memory_monitor import (
 from modules.submitter.scheduler_adapter import parse_memory_request_bytes
 
 
-def memory_profile_key(item):
+def _profile_file_signature(value):
+    try:
+        path = Path(value).resolve()
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode):
+            return None
+        return (os.path.normcase(str(path)), info.st_size, info.st_mtime_ns)
+    except OSError:
+        return None
+
+
+def memory_profile_key(item, *, file_cache=None):
     """A conservative history hint, not a claim to fingerprint every INP include."""
     files = []
-    try:
-        for value in (item.source_inp_path or item.inp_path, item.fortran_path, item.oldjob_path):
-            if not value:
-                continue
-            path = Path(value).resolve()
-            stat = path.stat()
-            if not path.is_file():
-                return ""
-            files.append((os.path.normcase(str(path)), stat.st_size, stat.st_mtime_ns))
-    except OSError:
-        return ""
+    for value in (item.source_inp_path or item.inp_path, item.fortran_path, item.oldjob_path):
+        if not value:
+            continue
+        if file_cache is None:
+            signature = _profile_file_signature(value)
+        else:
+            if value not in file_cache:
+                file_cache[value] = _profile_file_signature(value)
+            signature = file_cache[value]
+        if signature is None:
+            return ""
+        files.append(signature)
     if not files:
         return ""
     data = (files, item.cores, item.abaqus_command, item.run_mode, item.datacheck_only)
@@ -133,8 +146,11 @@ class LocalMemoryMonitor:
         """Return job-ID keyed estimates; never accidentally match duplicate names."""
         estimates = {}
         reference = self.session_reference_bytes
+        # Only one projection pass shares file metadata. A later pass probes
+        # again so changes and temporarily unreadable files invalidate history.
+        file_cache = {}
         for item in items:
-            profile = self.profiles.get(memory_profile_key(item), {})
+            profile = self.profiles.get(memory_profile_key(item, file_cache=file_cache), {}) if self.profiles else {}
             learned = max(int(profile.get("estimated", 0)), self.live_estimates.get(item.attempt_id, 0))
             if learned:
                 estimates[item.job_id] = learned

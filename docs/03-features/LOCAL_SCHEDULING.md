@@ -45,6 +45,8 @@ WinUI 的正式队列由 Qt-free Python 控制面调度。`LocalQueueScheduling`
 
 ## 输出与性能边界
 
+相同路径的历史内存查询在单轮共享文件元信息，空历史不扫描文件；无活动归档时省去归档目录比较。缓存不跨轮，作业配置与准入规则不变，详见 [内存说明](MEMORY_MONITORING.md)。正式客户端/实际进程场景入口为 `packaging/verify_scheduler_load.py`，包含261条队列记录与5次受控执行，覆盖优先级/CPU、超大声明内存等待后编辑放行、停止派发不杀现有作业、单项终止、失败后资源释放和重启不重放；不代表工程高负载验收。
+
 队列显示槽位、CPU、内存、依赖或目录冲突的等待原因；运行 API 增加 `schedulerMessage` 和操作的 `attemptId`。相同队列内容不重复替换 JSON，相同状态及消息不重复写调度事件。过期执行回调不能覆盖已完成结果。
 
 源码：`modules/control_plane/local_scheduling.py`、`local_queue_runtime.py`、`job_queue_commands.py`，共享算法位于 `modules/submitter/scheduling.py`、`scheduler_adapter.py`、`scheduler_repository.py`。验证入口为 `tests/control_plane/test_local_scheduling.py`、`test_local_queue_runtime_api.py`、`test_shutdown_guard.py` 和 `tests/submitter/test_scheduler_adapter.py`。本轮实际结果与未验收范围见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。

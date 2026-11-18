@@ -143,10 +143,11 @@ class LocalQueueScheduling:
             for item in items:
                 if item.item_id not in ready_ids or item.is_external:
                     continue
-                source = work_directory(item)
-                if any(source.is_relative_to(root) or root.is_relative_to(source) for root in archiving):
-                    item.message = "计算目录正在归档，等待归档线程收尾"
-                    continue
+                if archiving:
+                    source = work_directory(item)
+                    if any(source.is_relative_to(root) or root.is_relative_to(source) for root in archiving):
+                        item.message = "计算目录正在归档，等待归档线程收尾"
+                        continue
                 if item.cores <= 0:
                     item.message = "请先设置 Core 后再开始队列"
                     continue

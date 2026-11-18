@@ -6,6 +6,8 @@
 
 F004/F005 外部扫描并发定位：`modules/control_plane/job_queue_commands.py` / `_run_external_scan`、`_scan_external_roots`，`modules/submitter/external_job_scan_core.py` / `scan_external_jobs`；`JobQueueSnapshot.ExternalScanActive` 与 `JobQueuePage.ApplySnapshot`。测试 `tests/control_plane/test_external_scan_concurrency.py`；实际进程/正式客户端 `packaging/verify_external_scan.py`、`tests/winui_host/Program.cs` 的 `--external-scan-api`。输入、失败、关闭和过期结果规则见 [本机调度说明](LOCAL_SCHEDULING.md)。
 
+F005/F007单轮内存文件元信息复用：`modules/control_plane/local_memory.py` / `_profile_file_signature`、`memory_profile_key`、`project_estimates`；`local_scheduling.py` / `reserve`。测试 `tests/control_plane/test_local_memory.py` 的空历史、同轮共用与下轮源变化用例。实际261行/5进程资源验收 `packaging/verify_scheduler_load.py`，正式C#客户端 `tests/winui_host/Program.cs` 的 `--scheduler-command`。F027数据检查失败映射为 `job_notifications.py` / `LOCAL_TERMINAL`，回归 `tests/control_plane/test_job_notifications.py`。
+
 ## 壳层、提交、调度、远程
 
 | ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from types import SimpleNamespace
 
@@ -7,7 +8,11 @@ import pytest
 
 from modules.control_plane.contracts import ApiProblem
 from modules.control_plane.job_notifications import JobNotificationManager
-from modules.submitter.constants import STATUS_COMPLETED, STATUS_UNKNOWN
+from modules.submitter.constants import (
+    STATUS_COMPLETED,
+    STATUS_DATACHECK_FAILED,
+    STATUS_UNKNOWN,
+)
 from modules.submitter.local_job_execution import LocalJobExecutionResult
 from modules.submitter.queue_store import save_joblist_state
 from tests.control_plane.test_api import (
@@ -39,6 +44,40 @@ def unread(runtime):
 def publish(manager, attempt="one", **options):
     manager.publish(source="local", execution_id=attempt, job_id="item", job_name="case",
                     status="succeeded", **options)
+
+
+@pytest.mark.parametrize("recovered", [False, True])
+def test_datacheck_failure_is_notified_and_read_state_survives_replay(tmp_path, recovered):
+    path = tmp_path / "datacheck-notices.sqlite3"
+    manager = JobNotificationManager(path)
+    item = queue_item(tmp_path, "bad_datacheck")
+    item.complete_notify, item.status, item.attempt_id = True, STATUS_DATACHECK_FAILED, "failed-check"
+    item.submitted_at = manager.since + 1
+    item.message = "Input data check returned code 7"
+    record = SimpleNamespace(attempt_id=item.attempt_id)
+    result = LocalJobExecutionResult(item.status, item.message, str(tmp_path), "fixture")
+    try:
+        if recovered:
+            manager.reconcile(SimpleNamespace(runtime_items=lambda: ([], [item])),
+                              SimpleNamespace(list_snapshots=list))
+        else:
+            manager.local_finished(item, record, result)
+        inbox = manager.snapshot()
+        assert inbox["unreadCount"] == 1 and inbox["items"][0]["status"] == "failed"
+        assert inbox["items"][0]["executionId"] == item.attempt_id
+        manager.acknowledge({"schemaVersion": 1, "ids": [inbox["items"][0]["id"]]})
+    finally:
+        manager.close()
+    manager = JobNotificationManager(path)
+    try:
+        manager.local_finished(item, record, result)
+        assert manager.snapshot()["unreadCount"] == 0 and not manager.snapshot()["items"]
+        with sqlite3.connect(path) as database:
+            records = [record for (raw,) in database.execute("SELECT payload FROM job_notifications")
+                       if (record := json.loads(raw))["id"] != "baseline"]
+        assert len(records) == 1 and records[0]["read"] and records[0]["executionId"] == item.attempt_id
+    finally:
+        manager.close()
 
 
 def test_inbox_ack_survives_restart_and_replayed_completion(tmp_path):

@@ -1,5 +1,17 @@
-from modules.postprocessor.result_catalog import collect_result_records, classify_result, result_section
+from modules.postprocessor.result_catalog import (
+    classify_result,
+    collect_result_records,
+    result_section,
+)
 from modules.postprocessor.result_index import build_result_index, load_result_index
+
+
+def test_incomplete_export_is_hidden_from_live_catalog_and_persisted_index(tmp_path):
+    (tmp_path / ".abatool-export-unique.part").write_bytes(b"incomplete export")
+    (tmp_path / "summary.csv").write_text("time,value\n1,2\n", encoding="utf-8")
+    assert {r.path.name for r in collect_result_records(tmp_path)} == {"summary.csv"}
+    build_result_index(tmp_path, classify_result, result_section)
+    assert {r["name"] for r in load_result_index(tmp_path).records} == {"summary.csv"}
 
 
 def test_incomplete_group_is_not_published_by_catalog_or_index(tmp_path):

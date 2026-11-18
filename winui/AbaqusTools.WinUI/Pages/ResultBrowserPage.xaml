@@ -122,6 +122,7 @@
                     <RowDefinition Height="3*" />
                     <RowDefinition Height="2*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <Border
@@ -289,14 +290,19 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <ProgressBar
                             x:Name="IndexProgressBar"
                             Width="180"
                             IsIndeterminate="True"
                             Visibility="Collapsed" />
-                        <TextBlock x:Name="ResultStatusText" VerticalAlignment="Center" Text="就绪" />
-                    </StackPanel>
+                        <ProgressBar x:Name="ExportProgressBar" Width="100" Minimum="0" Maximum="100" Visibility="Collapsed" />
+                        <TextBlock x:Name="ResultStatusText" Grid.Column="1" VerticalAlignment="Center" Text="就绪" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                     <Button
                         x:Name="CancelIndexButton"
                         Grid.Column="1"
@@ -325,7 +331,14 @@
                             </MenuFlyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>
+                    <Button x:Name="CancelExportButton" Grid.Column="5" Content="取消导出"
+                            Click="OnCancelExportClicked" Visibility="Collapsed" />
                 </Grid>
+                <Expander x:Name="ExportDetailsExpander" Grid.Row="4" Header="导出记录" Visibility="Collapsed"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <TextBox x:Name="ExportDetailsText" IsReadOnly="True" AcceptsReturn="True" MaxHeight="150"
+                             TextWrapping="NoWrap" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                </Expander>
             </Grid>
         </Grid>
     </Grid>

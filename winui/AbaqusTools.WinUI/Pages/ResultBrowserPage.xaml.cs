@@ -50,7 +50,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         InitializeComponent();
         _explorerAdapter = new ResultExplorerAdapter(
-            () => _recycleBusy ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
+            () => FileOperationBusy ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
             SelectExplorerItem,
             ActivateExplorerItemAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
@@ -93,7 +93,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     public async Task SetResultRootAsync(string root)
     {
-        if (_recycleBusy) throw new InvalidOperationException("请等待当前结果清理结束。");
+        if (FileOperationBusy) throw new InvalidOperationException("请等待当前结果导出或清理结束。");
         if (string.IsNullOrWhiteSpace(root))
         {
             throw new ArgumentException("结果根目录不能为空。", nameof(root));
@@ -398,7 +398,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void SelectExplorerItem(ExplorerItem item)
     {
-        if (_scopeBusy || _indexBusy || _recycleBusy)
+        if (_scopeBusy || _indexBusy || FileOperationBusy)
         {
             return;
         }
@@ -426,7 +426,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async Task ActivateExplorerItemAsync(ExplorerItem item)
     {
-        if (_recycleBusy) return;
+        if (FileOperationBusy) return;
         SelectExplorerItem(item);
         if (item.Kind == ExplorerItemKind.ResultRecord
             && _records.FirstOrDefault(candidate => string.Equals(
@@ -787,7 +787,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnResultSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_recycleBusy) return;
+        if (FileOperationBusy) return;
         var selected = SelectedRecords();
         var hasFiles = selected.Any(record => !record.Internal && !record.IsDirectory);
         var primary = selected.FirstOrDefault();
@@ -953,7 +953,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnRecycleClicked(object sender, RoutedEventArgs e)
     {
-        if (_recycleBusy || _recordsBusy || _scopeBusy || _indexBusy) return;
+        if (FileOperationBusy || _recordsBusy || _scopeBusy || _indexBusy || App.Current.Session.IsClosing
+            || !App.Current.PendingResultFileOperation.IsCompleted) return;
         var records = SelectedRecords().ToArray();
         if (records.Length == 0 || records.Any(record => record.Internal || record.IsDirectory
             || !ResultFileRecycle.IsExport(record.Path))) return;
@@ -967,14 +968,15 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             PrimaryButtonText = "移到回收站", CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
         };
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        App.Current.PendingResultFileOperation = completion.Task;
         _recycleBusy = true;
         RefreshInteractionState();
         try
         {
-            if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await confirm.ShowAsync() != ContentDialogResult.Primary || App.Current.Session.IsClosing) return;
             ResetPreview();
             var operation = RecycleSelectedAsync(root, records);
-            App.Current.PendingResultFileOperation = operation;
             await operation;
         }
         catch (Exception exception)
@@ -983,7 +985,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         finally
         {
-            App.Current.PendingResultFileOperation = Task.CompletedTask;
+            completion.TrySetResult();
+            if (ReferenceEquals(App.Current.PendingResultFileOperation, completion.Task))
+                App.Current.PendingResultFileOperation = Task.CompletedTask;
             _recycleBusy = false;
             RefreshInteractionState();
         }
@@ -1012,86 +1016,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         ResultStatusText.Text = $"已清理 {completed}/{records.Length} 个文件";
         if (failure is not null) ShowWarning(failure, $"已清理 {completed} 个，剩余 {records.Length - completed} 个");
-    }
-
-    private async void OnExportClicked(object sender, RoutedEventArgs e)
-    {
-        var records = SelectedRecords()
-            .Where(record => !record.Internal && !record.IsDirectory)
-            .ToArray();
-        if (records.Length == 0)
-        {
-            return;
-        }
-
-        try
-        {
-            var picker = new FolderPicker
-            {
-                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-                CommitButtonText = "导出到此目录",
-            };
-            picker.FileTypeFilter.Add("*");
-            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-            var destination = await picker.PickSingleFolderAsync();
-            if (destination is null)
-            {
-                return;
-            }
-
-            var copied = 0;
-            foreach (var record in records)
-            {
-                var source = await StorageFile.GetFileFromPathAsync(record.Path);
-                var targetFolder = await ResolveExportFolderAsync(destination, record.RelativePath);
-                await source.CopyAsync(
-                    targetFolder,
-                    source.Name,
-                    NameCollisionOption.GenerateUniqueName);
-                copied++;
-            }
-
-            ResultStatusText.Text = $"已导出 {copied} 个文件 · {destination.Path}";
-            App.Current.MainWindow.ReportPageStatus($"结果导出完成 · {copied} 个文件");
-        }
-        catch (Exception exception)
-        {
-            ShowError(exception.Message, "结果导出失败");
-        }
-    }
-
-    private static async Task<StorageFolder> ResolveExportFolderAsync(
-        StorageFolder destination,
-        string relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath)
-            || Path.IsPathFullyQualified(relativePath)
-            || relativePath.Split(
-                    [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-                    StringSplitOptions.RemoveEmptyEntries)
-                .Any(segment => segment == ".."))
-        {
-            return destination;
-        }
-
-        var directory = Path.GetDirectoryName(relativePath);
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            return destination;
-        }
-
-        var current = destination;
-        foreach (var segment in directory.Split(
-            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-            StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = await current.CreateFolderAsync(
-                segment,
-                CreationCollisionOption.OpenIfExists);
-        }
-
-        return current;
     }
 
     private IReadOnlyList<ResultRecordItem> SelectedRecords()
@@ -1131,7 +1055,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
-        var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !_recycleBusy;
+        var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !FileOperationBusy;
         ResultList.IsEnabled = idle;
         var selected = SelectedRecords();
         OpenFileButton.IsEnabled = idle && selected.FirstOrDefault() is { Internal: false, IsDirectory: false };

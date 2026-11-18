@@ -49,6 +49,8 @@ F001/F012结果图独立恢复草稿：`winui/AbaqusTools.WinUI/Controls/OdbResu
 
 ## 后处理与结果浏览
 
+F001/F021结果导出：`winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.Export.cs` / OnExportClicked、OnCancelExportClicked；`winui/AbaqusTools.WinUI/Services/ResultFileExport.cs` / CopyAsync、CopyCoreAsync、PublishUnique。页面登记整个文件选择/复制与回收确认流程，`Services/WorkbenchSession.cs`（同一WinUI项目）等待PendingResultFileOperation；`modules/postprocessor/result_catalog.py` / collect_result_records排除未完成导出。测试 `tests/winui_results/ResultFileExportChecks.cs`（--export-checks）、`tests/winui_results/test_result_export.py`、`tests/postprocessor/test_incomplete_output.py`、`tests/winui/test_shell_contract.py`。规则见[ADR0021](../submitter/adr/0021-cancellable-result-export.md)。
+
 共同页面：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs`。详细输入输出、算法和影响链见 [后处理说明](POSTPROCESSING.md)。
 
 | ID / 功能 | 入口和业务文件 / 定位符号 | 首选测试 |

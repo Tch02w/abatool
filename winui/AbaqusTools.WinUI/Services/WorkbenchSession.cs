@@ -70,7 +70,11 @@ public sealed class WorkbenchSession
     {
         IsClosing = true;
         foreach (var page in _pages.Values) page.Pause?.Invoke();
-        await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30));
+        try { await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException("结果导出或清理仍在进行，关闭已取消。可等待完成，或返回结果浏览取消导出后再关闭。");
+        }
         foreach (var page in _pages.Values)
             if (page.Save is not null) await page.Save();
         await SaveDraftAsync(window);

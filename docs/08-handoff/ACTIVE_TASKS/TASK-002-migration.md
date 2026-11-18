@@ -1,5 +1,17 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · F001/F021 可取消结果导出与关闭等待
+
+从干净24dd38fb9bac932b458fd48b576ab63afe564bc6继续，上一轮完整候选/安装生命周期及GitHub同步是实际进展。先核对PySide _export_selected与WinUI OnExportClicked、PendingResultFileOperation，向用户说明进度/取消/部分结果/关闭等待方案，再实现独立ResultFileExport服务与ResultBrowserPage.Export。1MiB缓冲、后台异步复制、约100毫秒进度节流，只读共享源并核对长度/修改时间；本次`.part`完成后不覆盖发布，重名自动编号。取消/失败保留已完成项并报告剩余，清理失败保留临时路径；目录和索引排除临时导出。导出和回收从选择/确认框前登记关闭等待、互斥保护；30秒未结束则关闭失败并提示，不中止原操作。
+
+首次专项命令dotnet run --project tests/winui_results/ResultBrowser.Tests.csproj --no-restore -- --export-checks 指向G:目录时，因缺project.assets.json报NETSDK1004，未执行检查。dotnet restore --ignore-failed-sources完成（40毫秒，无新增依赖）；随后21项初版生产文件检查通过，日志 `GPTWork/result-export-checks-20261118.log`，初次失败输出在工具回执中，重跑覆盖了同名日志，不把它计为测试通过。加入源文件占用/并发重名/临时目录排除后，最终24项生产文件检查由pytest包装验证。
+
+49875退出0，相关回归46项通过11.29秒（`GPTWork/result-export-regression-20261118.log` / `.xml`），包含24项文件检查包装、壳层/页面登记、结果API/索引/部分输出以及正式C#客户端分页/宽表检查。16MiB合成文件中途取消、已有文件不覆盖、并发重名、原始内容不变均验证；所有数据仅G: GPTWork，不涉及工程ODB。既有结果页10项异步状态/表格与6项回收路径检查通过（`GPTWork/result-export-existing-checks-20261118.log`），未调用实际回收站。首次WinUI构建39462退出0、0警告/错误17.28秒；最终构建退出0、0警告/错误9.00秒（`GPTWork/result-export-winui-build-final-20261118.log`），输出 `GPTWork/winui-result-export-20261118`。所有构建/测试句柄均已终态。
+
+收尾49项文档导航通过0.09秒（`GPTWork/result-export-docs-20261118.log`）；Ruff初查发现两处既有导入格式，整理后全部通过，未改算法。功能索引、说明、ADR0021、Wiki、验证及交接已同步。实际周额度剩余16%，未到用户15%暂停线。
+
+准确续接点：代码/测试/必要文档一起提交并同步GitHub；22e47f6完整候选不含本轮导出修复，之后从干净源码更新候选。原生选择器/进度/取消/关闭与页面高度布局仍待验，测试不能替代真实业务操作。未建立跨重启导出历史，异常进程结束可能遗留不可见`.part`，不自动清理其他操作产物；真实SSH/三级链/目标机/签名等缺口仍在，目标保持active。
+
 ## 2026-11-18 · 当前作业路由进入完整候选与安装验证
 
 从干净22e47f61bd17f1077de69c920c1bace67516ef26继续，上一轮实际完成代码/测试/文档及GitHub main同步。本轮使用项目解释器、G: TEMP/TMP运行build_release.py --no-restore，50985退出0，生成 `GPTWork/release-win-x64-e3274f974142/AbaqusTools`。来源22e47f6、sourceDirty=false；1670清单文件、19 worker，含清单355028418字节，manifest SHA256 `32ea575cffc356e7354e2da65557585e2aa3adeb7c764afdf92aec12eb37a75d`。对比d5f9e76完整目录，无新增/移除路径，17项文件变化；完整摘要/禁止模型与Qt/虚拟环境混入均通过，回执 `GPTWork/job-route-release-verification-20261118/inventory.json`。源码祖先核对d5f9e76。

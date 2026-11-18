@@ -6,6 +6,11 @@ try
     {
         throw new InvalidOperationException("Intentional test-runner failure-exit verification");
     }
+    if (args.Length == 2 && args[0] == "--export-checks")
+    {
+        await ResultFileExportChecks.RunAsync(args[1]);
+        return;
+    }
 
     await RefreshLoadsAfterSelectionAsync();
     await IndexSuccessLoadsAfterBothBusyStatesAsync();

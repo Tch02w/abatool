@@ -53,6 +53,22 @@ def _named_element(root: ET.Element, name: str) -> ET.Element:
     return next(element for element in root.iter() if element.attrib.get(XAML_NAME) == name)
 
 
+def test_result_export_and_recycle_register_the_entire_operation_before_dialogs():
+    page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.Export.cs").read_text(encoding="utf-8")
+    assert page.index("PendingResultFileOperation = completion.Task") < page.index("PickSingleFolderAsync")
+    assert "!App.Current.PendingResultFileOperation.IsCompleted" in page
+    assert "App.Current.Session.IsClosing" in page
+    assert "completion.TrySetResult()" in page and "ResultFileExport.CopyAsync" in page
+    assert "ReferenceEquals(_exportCancellation, cancellation)" in page
+    shell = ET.parse(WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml").getroot()
+    assert _named_element(shell, "CancelExportButton").attrib["Click"] == "OnCancelExportClicked"
+    assert _named_element(shell, "ExportDetailsText").attrib["IsReadOnly"] == "True"
+    original = (WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml.cs").read_text(encoding="utf-8")
+    recycle = original.split("private async void OnRecycleClicked", 1)[1].split("private async Task RecycleSelectedAsync", 1)[0]
+    assert recycle.index("PendingResultFileOperation = completion.Task") < recycle.index("confirm.ShowAsync")
+    assert "FileOperationBusy" in recycle and "App.Current.Session.IsClosing" in recycle
+
+
 def test_current_job_route_is_distinct_and_does_not_replace_pending_workspace():
     shell = ET.parse(WINUI_ROOT / "MainWindow.xaml").getroot()
     assert _named_element(shell, "CurrentJobPostprocessingMenuItem").attrib["Click"] == "OnCurrentJobPostprocessingMenuClicked"

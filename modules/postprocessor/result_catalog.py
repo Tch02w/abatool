@@ -11,7 +11,12 @@ from itertools import islice
 from pathlib import Path
 from xml.etree import ElementTree
 
-from .result_assets import ASSET_MANIFEST_NAME, INCOMPLETE_OUTPUT_MARKER, is_incomplete_output, resolve_group_member_asset
+from .result_assets import (
+    ASSET_MANIFEST_NAME,
+    INCOMPLETE_OUTPUT_MARKER,
+    is_incomplete_output,
+    resolve_group_member_asset,
+)
 
 VARIABLE_LABELS = {
     "PILE_U_MAG": "桩身位移大小",
@@ -198,7 +203,11 @@ def collect_result_records(scope: Path) -> list[ResultRecord]:
         if INCOMPLETE_OUTPUT_MARKER in files:
             children.clear()
             continue
-        records.extend(classify_result(Path(directory) / name) for name in files)
+        records.extend(
+            classify_result(Path(directory) / name)
+            for name in files
+            if not (name.casefold().startswith(".abatool-export-") and name.casefold().endswith(".part"))
+        )
     return sorted(
         records,
         key=lambda record: (

@@ -2,6 +2,10 @@
 
 ## 2026-11-18 · 归档中断恢复与独立重试
 
+功能已本地提交 `fc7f8b82e451df2df821178648a58b8fbd3cc37a`，从干净来源构建的首包 `GPTWork/release-win-x64-89d3b6ab518e/AbaqusTools`（句柄69915退出0）通过1662文件/19worker用户账户摘要、依赖 `GPTWork/bundle-probe-05hor33e/verification.json`、正式主机启动/API/退出；但冻结恢复 `GPTWork/archive-recovery-live-e14df1f5caa0/verification.json` 首次状态请求5秒超时，句柄54957退出1，全部自有包装/实际进程已结束。不得把首包写为恢复通过。
+
+定向回归 `archive-observation-before-20261118.log` 1项失败（62170退出1），已确认归档的旧目录仍进入恢复进程扫描。修正为恢复目录与用户显式监测目录分开，仅将活动/未知作业的恢复目录纳入扫描；保留显式外部监测。`archive-observation-final-20261118.xml/log` **79项通过（38.39秒，55080退出0）**，包含7项恢复API、调度、队列及47项文档；源码真实进程 `GPTWork/archive-recovery-live-df2804ad50e8/verification.json` verified、全部自有进程结束。与185项集合重叠不累计。接续：提交此定向修正，重新构建新目录，重复冻结归档恢复并记录首次状态读取耗时；不能仅靠增大超时或重跑首包宣布修复。
+
 最终相关回归 `GPTWork/archive-recovery-delivery-20261118.xml/log` **185 项通过（96.09 秒）**，包含 47 项文档导航；句柄7903已返回0。只读进程核对句柄77610也已返回0，未发现此轮测试进程。下方各专项集合重叠不累计；下一步本地功能提交与新完整包验证。
 
 实施前已说明方案：保留原求解执行身份，持久记录归档阶段，重启展示待恢复；显式恢复时核对并复用完整副本，继续复制/清理，不通过重新求解重试归档。相比只持久保存最终状态，增加了复制途中与部分清理后恢复能力。详见 [归档说明](../../03-features/LOCAL_ARCHIVE.md) 和 [ADR 0014](../../submitter/adr/0014-verified-local-archive-publication.md)。

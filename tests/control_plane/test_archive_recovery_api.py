@@ -137,3 +137,18 @@ def test_corrupt_checkpoint_never_upgrades_unknown_to_success_or_enables_retry(t
         assert not row["archiveRecoveryAvailable"]
         assert runtime_control(runtime, "retryArchive", itemIds=[item.item_id])[0] == 409
     assert source_bytes(source) == before
+
+
+def test_confirmed_archive_recovery_does_not_scan_an_ended_solver(tmp_path, monkeypatch):
+    _, _, _, joblist = interrupted_fixture(tmp_path, monkeypatch)
+    scans = []
+
+    def scan(root, known):
+        scans.append(root)
+        return [], []
+
+    with running_control_plane(tmp_path, joblist_path=joblist, external_job_scanner=scan,
+                               external_monitor_interval=999, server_profiles_path=tmp_path / "profiles.json",
+                               odb_result_graph_path=tmp_path / "graph.json") as runtime:
+        runtime.job_queue_service.refresh_external_jobs()
+        assert not scans, "Validated completed solves must leave automatic recovered-process observation"

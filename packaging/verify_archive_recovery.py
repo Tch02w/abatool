@@ -80,7 +80,7 @@ def verify(bundle, client):
     work = ROOT / "GPTWork" / ("archive-recovery-live-" + uuid4().hex[:12])
     work.mkdir()
     print("WORK=" + str(work), flush=True)
-    report = {"status": "failed", "bundle": bundle, "solverStarted": False}
+    report = {"status": "failed", "bundle": bundle, "solverStarted": False, "firstStatusReadSeconds": []}
     processes, items, expected, originals, ready_records, owners = [], [], {}, {}, [], []
     descriptor_path = work / "control-plane.json"
     try:
@@ -159,7 +159,9 @@ def verify(bundle, client):
                 except (OSError, ValueError, KeyError):
                     pass
             descriptor = wait_until(ready, "Backend startup timeout")
+            read_started = time.monotonic()
             snapshot = call(descriptor, "/api/v1/local-queue-runtime")
+            report["firstStatusReadSeconds"].append(round(time.monotonic() - read_started, 4))
             assert not snapshot["active"]
             rows = snapshot["queue"]["queueItems"]
             assert all(r["status"] == STATUS_COMPLETED for r in rows)

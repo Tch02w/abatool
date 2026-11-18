@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+归档恢复打包复核发现：首包 `GPTWork/release-win-x64-89d3b6ab518e/AbaqusTools` 来源干净 `fc7f8b8`，1662 文件/19 worker、依赖/正式主机启动通过，但冻结恢复首次读取状态超时，回执 `GPTWork/archive-recovery-live-e14df1f5caa0/verification.json` failed，所有自有进程结束，未认定通过。定向检查 `archive-observation-before-20261118.log` 1 项失败，证明已确认求解完成的归档仍在自动扫描目录。将恢复观察和显式监测目录分开，仅自动扫描活动/未知记录后，`archive-observation-final-20261118.xml/log` **79 项通过（38.39 秒）**，源码真实进程回执 `GPTWork/archive-recovery-live-df2804ad50e8/verification.json` 再次通过。新冻结包待重建验证，旧失败现场保留。
+
 归档恢复最终相关检查 `GPTWork/archive-recovery-delivery-20261118.xml/log` **185 项全部通过（96.09 秒）**，包含归档核心/恢复、执行器、真实 HTTP、队列/调度/通知/关闭、WinUI 壳层与 47 项文档导航；与下方集合重叠，不累计。没有把模拟/壳层检查视为原生业务页验收。
 
 2026-11-18 F005 独立归档恢复：`GPTWork/archive-recovery-final-20261118.xml/log` **40 项通过（34.85 秒）**，覆盖 14 项恢复核心、6 项真实 HTTP、20 项调度。之前相关回归 `archive-recovery-regression-20261118.xml/log` **117 项通过（68.60 秒）**；集合重叠不累计。C# `archive-recovery-host-tests-20261118.log` 11 项归档显示/兼容及原有检查通过，原生 Release `archive-recovery-winui-20261118.log` 零警告/错误（22.42 秒）。源码真实进程回执 `GPTWork/archive-recovery-live-323ba9721d6f/verification.json` verified：复制中、部分清理后结束自有进程，原生跨进程锁释放，新后台正式客户端恢复原执行、复用完整副本、全摘要校验、源 INP 不变、第二次重启及提醒不重放；所有自有进程结束，没有启动 Abaqus。新冻结包、跨卷负载和原生操作尚未验证。以下为上一阶段发布保护证据；本次不以其替代新恢复功能验收。

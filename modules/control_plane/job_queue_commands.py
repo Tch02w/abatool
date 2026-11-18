@@ -194,6 +194,7 @@ class JobQueueService:
         self._external_job_scanner = external_job_scanner
         self._external_monitor_interval = max(0.05, float(external_monitor_interval))
         self._external_scan_roots: set[str] = set()
+        self._recovered_scan_roots: set[str] = set()
         self._external_monitor_closing = threading.Event()
         self._external_monitor = threading.Thread(
             target=self._external_monitor_loop,
@@ -221,7 +222,7 @@ class JobQueueService:
 
     def observe_recovered_directories(self, directories):
         with self._lock:
-            self._external_scan_roots.update(os.path.normcase(_normal_path(root)) for root in directories if root)
+            self._recovered_scan_roots.update(os.path.normcase(_normal_path(root)) for root in directories if root)
 
     def runtime_items(self) -> tuple[list[QueueItem], list[QueueItem]]:
         """Return detached queue objects for the runtime dispatcher."""
@@ -420,6 +421,15 @@ class JobQueueService:
         with self._lock:
             candidates, queue_items = self._load()
             roots = set(self._external_scan_roots)
+            # Recovery observation ends when another trusted path has confirmed
+            # the solve. Explicitly requested directory monitoring is retained.
+            unresolved_roots = {
+                os.path.normcase(_normal_path(item.external_work_dir or item.effective_work_dir))
+                for item in queue_items
+                if item.status in ACTIVE_STATUSES | {STATUS_UNKNOWN}
+                and (item.external_work_dir or item.effective_work_dir)
+            }
+            roots.update(self._recovered_scan_roots & unresolved_roots)
             roots.update(
                 os.path.normcase(
                     _normal_path(item.external_work_dir or item.effective_work_dir)

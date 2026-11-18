@@ -12,21 +12,14 @@ from tests.control_plane.test_api import (
 
 def test_local_resource_endpoint_returns_real_bounded_metrics(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     joblist = tmp_path / "joblist.json"
-    save_json_mapping(
-        joblist,
-        {
-            "queue_items": [
-                {"job_name": "running-1", "status": "运行中"},
-                {"job_name": "waiting-1", "status": "等待运行"},
-            ]
-        },
-    )
-    monkeypatch.setattr("modules.control_plane.resources.JOBLIST_PATH", joblist)
-
-    with running_control_plane(tmp_path) as runtime:
+    with running_control_plane(tmp_path, joblist_path=joblist) as runtime:
+        # Publish current states after startup recovery, just as the live queue does.
+        save_json_mapping(joblist, {"queue_items": [
+            {"job_name": "running-1", "status": "运行中"},
+            {"job_name": "waiting-1", "status": "等待运行"},
+        ]})
         response = api_request(runtime, "/api/v1/local-resources")
 
     assert response[0] == 200

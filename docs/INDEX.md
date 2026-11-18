@@ -34,6 +34,7 @@
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
 | Windows 完整目录包、运行诊断和发布限制 | [发布构建](05-development/RELEASE.md) |
 | 哪些验收已通过，证据证明什么 | [验收记录与缺口](06-testing/VALIDATION.md) |
+| 完整迁移合同还缺什么 | [交付核对清单](06-testing/COMPLETION_AUDIT.md) |
 | 接手时先做什么、目前未完成什么 | [当前状态](08-handoff/CURRENT_STATUS.md) |
 | 任务过程、失败定位、后续动作 | [任务索引](08-handoff/TASK_INDEX.md) |
 | 为什么这样设计 | [现有 ADR](submitter/adr/README.md) |

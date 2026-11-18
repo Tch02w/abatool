@@ -281,9 +281,10 @@ def validate_record(record):
 
 
 class OdbResultBatchManager:
-    def __init__(self, merge_manager, graph_service, journal_path):
+    def __init__(self, merge_manager, graph_service, journal_path, *, joblist_path=None):
         self._merge = merge_manager
         self._graph = graph_service
+        self._joblist_path = joblist_path
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="odb-result-batch"
@@ -375,7 +376,8 @@ class OdbResultBatchManager:
                             "outputDirectory": str(
                                 Path(expected["finalOutputOdb"]).parent
                             ),
-                        }
+                        },
+                        joblist_path=self._joblist_path,
                     )
                 except (KeyError, TypeError) as error:
                     raise ApiProblem(

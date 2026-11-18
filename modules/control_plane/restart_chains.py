@@ -69,8 +69,8 @@ def _output_odb(item: dict[str, Any]) -> str:
     return str(candidates[0]) if candidates else ""
 
 
-def read_restart_chains() -> dict[str, Any]:
-    queue = read_job_queues()
+def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any]:
+    queue = read_job_queues(joblist_path)
     items = list(queue["queueItems"])
     by_id = {item["jobId"]: item for item in items if item["jobId"]}
     by_name: dict[str, list[dict[str, Any]]] = defaultdict(list)

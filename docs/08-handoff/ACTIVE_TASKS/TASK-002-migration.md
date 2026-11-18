@@ -1,5 +1,18 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 完整合同核对、队列来源与整套回归
+
+本轮从干净bd22cd8开始，逐项核对迁移合同；新增[交付核对清单](../../06-testing/COMPLETION_AUDIT.md)，整理CURRENT_STATUS/TASK_INDEX中过时的连续“下一步”。Wiki和功能索引接入。发现正式安装/升级/卸载入口仍是开发缺口，不能把所有剩余事项归为外部阻塞。原生恢复、具体GitHub main确认均未收到，不操作/推送。
+
+**初轮失败**：`GPTWork/migration-audit-20261118-135640/tests.log`、`results.xml`，961项中944通过/17失败/9子检查通过，580.13秒，22758退出1。显式排除会清除offscreen并打开窗口的 `tests/submitter/test_native_window_startup.py`，其他Qt检查offscreen；TEMP/TMP及basetemp均在本轮GPTWork。17项均被旧Qt测试写入共享文件的running/waiting记录干扰，退出保护正确识别“状态未知”，没有放宽产品关闭规则。HTTP夹具现默认每个tmp_path独立队列/服务器配置/结果图，重复同目录仍保留恢复语义。
+
+**另行复现的产品问题**：`tests/control_plane/test_runtime_queue_scope.py` 四项将默认队列设为另一份文件，旧实现资源统计错、链为空、计划和批量返回404。有效失败回执 `scope-before-final.log`（60582退出1，4失败11.50秒）；更早 `scope-before.log` 的第四项是测试输出目录缺失，已修正夹具，不能当作产品失败。产品现把运行实例的JobQueueService.path传给资源、链、预览和批量重新核对，默认入口/HTTP字段/检查点/取消规则不变。代码为server.py、resources.py、restart_chains.py、restart_result_plans.py、odb_result_batches.py；测试相应更新显式路径，不通过修改全局常量伪装路由正确。
+
+**定向通过**：`scope-after.log`，12项通过51.99秒，18711退出0，含四项来源隔离、原资源、重启动链和计划；全量Ruff范围及git diff --check通过。完整重跑 `GPTWork/migration-audit-20261118-135640/final.log` 与 `final.xml`：**966项及9子检查全部通过，746.54秒，66842退出0**。48项文档导航通过0.15秒（docs-final.log）。早期文档整理漏保留“每完成一个功能”原句导致1项导航失败（docs-first.log），已恢复该规则，不削弱测试。全部本轮测试句柄结束，没有Abaqus求解或原生窗口操作。
+
+**准确续接点**：完整回归及文档检查均已通过；本地提交后重建包含新源码的完整目录并进行冻结验收。75efcbf6b9f7仍是旧已验候选，尚无本轮修复。随后给出正式安装入口实现方案并开发；原生/真实SSH/GPU/MPI/三级工程链/目标机及推送门槛仍未完成。当前goal active，周额度读数剩余35%，未达到用户此前15%暂停线。
+
+
 ## 2026-11-18 · 独立文件路径与跨卷槽位竞争验收收尾
 
 最终文档导航 `GPTWork/archive-independent-final-docs-20261118.log` 47项通过（0.14秒），Ruff及差异空白检查通过；本轮工具/文档已可本地提交，没有待收回的测试句柄。

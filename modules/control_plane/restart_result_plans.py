@@ -63,7 +63,9 @@ def _parent(
     return candidates[0] if candidates else None
 
 
-def build_restart_result_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
+def build_restart_result_plan(
+    payload: Mapping[str, Any], *, joblist_path: str | Path | None = None,
+) -> dict[str, Any]:
     unknown_fields = sorted(set(payload) - _FIELDS)
     if unknown_fields:
         raise ApiProblem(
@@ -83,7 +85,7 @@ def build_restart_result_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not item_id:
         raise ApiProblem(400, "MISSING_ITEM_ID", "请选择重启动作业节点")
 
-    queue = job_queues.read_job_queues()
+    queue = job_queues.read_job_queues() if joblist_path is None else job_queues.read_job_queues(joblist_path)
     items = list(queue["queueItems"])
     target = next(
         (

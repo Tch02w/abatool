@@ -44,8 +44,8 @@ def _abaqus_snapshot() -> tuple[str, str, bool]:
     return command, release, available
 
 
-def _queue_snapshot() -> tuple[list[str], int, int]:
-    payload = load_json_mapping(JOBLIST_PATH)
+def _queue_snapshot(joblist_path: str | Path | None = None) -> tuple[list[str], int, int]:
+    payload = load_json_mapping(JOBLIST_PATH if joblist_path is None else Path(joblist_path))
     raw_items = payload.get("queue_items", [])
     if not isinstance(raw_items, list):
         return [], 0, 0
@@ -65,7 +65,7 @@ def _queue_snapshot() -> tuple[list[str], int, int]:
     return active_jobs, waiting_jobs, total_jobs
 
 
-def capture_local_resource(command: str = "") -> dict[str, Any]:
+def capture_local_resource(command: str = "", *, joblist_path: str | Path | None = None) -> dict[str, Any]:
     global _CPU_PERCENT_INITIALIZED
     memory = psutil.virtual_memory()
     logical_cpus = psutil.cpu_count(logical=True) or 1
@@ -74,7 +74,7 @@ def capture_local_resource(command: str = "") -> dict[str, Any]:
     )
     _CPU_PERCENT_INITIALIZED = True
     cpu_percent = max(0.0, min(100.0, float(cpu_percent)))
-    active_jobs, waiting_jobs, total_jobs = _queue_snapshot()
+    active_jobs, waiting_jobs, total_jobs = _queue_snapshot(joblist_path)
     abaqus_command, abaqus_release, abaqus_available = _abaqus_snapshot()
     return {
         **local_cpu_policy(command),

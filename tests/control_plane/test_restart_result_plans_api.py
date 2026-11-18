@@ -28,7 +28,6 @@ def _request(runtime, item_id: str, output_directory: Path):
 
 def test_restart_result_plan_materializes_only_the_selected_ancestry(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     for name in ("base", "phase2", "phase3", "sibling"):
         (tmp_path / f"{name}.odb").write_bytes(name.encode())
@@ -80,9 +79,7 @@ def test_restart_result_plan_materializes_only_the_selected_ancestry(
             ]
         },
     )
-    monkeypatch.setattr("modules.control_plane.job_queues.JOBLIST_PATH", joblist)
-
-    with running_control_plane(tmp_path) as runtime:
+    with running_control_plane(tmp_path, joblist_path=joblist) as runtime:
         response = _request(runtime, "item-phase3", tmp_path)
 
     assert response[0] == 200
@@ -105,7 +102,6 @@ def test_restart_result_plan_materializes_only_the_selected_ancestry(
 
 def test_restart_result_plan_reports_missing_stage_output(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     base = tmp_path / "base.odb"
     base.write_bytes(b"base")
@@ -134,9 +130,7 @@ def test_restart_result_plan_reports_missing_stage_output(
             ]
         },
     )
-    monkeypatch.setattr("modules.control_plane.job_queues.JOBLIST_PATH", joblist)
-
-    with running_control_plane(tmp_path) as runtime:
+    with running_control_plane(tmp_path, joblist_path=joblist) as runtime:
         response = _request(runtime, "restart-item", tmp_path)
 
     payload = json_response(response)

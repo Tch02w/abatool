@@ -53,6 +53,11 @@ def running_control_plane(
     tmp_path: Path,
     **runtime_options: Any,
 ) -> Iterator[ControlPlaneRuntime]:
+    # Independent HTTP fixtures must not inherit queues written by legacy UI tests.
+    # Reusing tmp_path still exercises durable restart; explicit paths remain supported.
+    runtime_options.setdefault("joblist_path", tmp_path / "joblist.json")
+    runtime_options.setdefault("server_profiles_path", tmp_path / "server_profiles.json")
+    runtime_options.setdefault("odb_result_graph_path", tmp_path / "odb_result_graph.json")
     runtime = ControlPlaneRuntime(
         descriptor_path=tmp_path / "runtime" / "control-plane.json",
         port=0,

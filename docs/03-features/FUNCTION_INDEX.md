@@ -4,6 +4,8 @@
 
 接到任务后先按功能编号打开本行文件和测试，不必遍历整个仓库。页面的 `.xaml` 负责布局，同名 `.xaml.cs` 负责交互；下面优先列交互文件。
 
+F007/F011/F012/F023 运行实例的队列来源：`modules/control_plane/server.py` 将 `JobQueueService.path` 传给 `resources.py` / `capture_local_resource`、`restart_chains.py` / `read_restart_chains`、`restart_result_plans.py` / `build_restart_result_plan` 和 `odb_result_batches.py` / `OdbResultBatchManager`。回归 `tests/control_plane/test_runtime_queue_scope.py` 对照另一默认队列，检查资源、链、预览和批量执行；规则见 [本机队列](LOCAL_SCHEDULING.md)。整体交付门槛见 [核对清单](../06-testing/COMPLETION_AUDIT.md)。
+
 F004/F005 外部扫描并发定位：`modules/control_plane/job_queue_commands.py` / `_run_external_scan`、`_scan_external_roots`，`modules/submitter/external_job_scan_core.py` / `scan_external_jobs`；`JobQueueSnapshot.ExternalScanActive` 与 `JobQueuePage.ApplySnapshot`。测试 `tests/control_plane/test_external_scan_concurrency.py`；实际进程/正式客户端 `packaging/verify_external_scan.py`、`tests/winui_host/Program.cs` 的 `--external-scan-api`。输入、失败、关闭和过期结果规则见 [本机调度说明](LOCAL_SCHEDULING.md)。
 
 F005/F007单轮内存文件元信息复用：`modules/control_plane/local_memory.py` / `_profile_file_signature`、`memory_profile_key`、`project_estimates`；`local_scheduling.py` / `reserve`。测试 `tests/control_plane/test_local_memory.py` 的空历史、同轮共用与下轮源变化用例。实际261行/5进程资源验收 `packaging/verify_scheduler_load.py`，正式C#客户端 `tests/winui_host/Program.cs` 的 `--scheduler-command`。F027数据检查失败映射为 `job_notifications.py` / `LOCAL_TERMINAL`，回归 `tests/control_plane/test_job_notifications.py`。

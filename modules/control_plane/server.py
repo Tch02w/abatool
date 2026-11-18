@@ -217,7 +217,9 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 if set(query) - {"abaqusCommand"} or len(query.get("abaqusCommand", [])) > 1:
                     raise ApiProblem(400, "INVALID_QUERY", "无效的本机资源查询")
                 command = query.get("abaqusCommand", [""])[0]
-                self._send_json(HTTPStatus.OK, capture_local_resource(command), trace_id)
+                self._send_json(HTTPStatus.OK, capture_local_resource(
+                    command, joblist_path=self.context.job_queue_service.path,
+                ), trace_id)
                 return
             if target.path == "/api/v1/job-queues" and not target.query:
                 self._send_json(
@@ -285,7 +287,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if target.path == "/api/v1/restart-chains" and not target.query:
-                self._send_json(HTTPStatus.OK, read_restart_chains(), trace_id)
+                self._send_json(HTTPStatus.OK, read_restart_chains(self.context.job_queue_service.path), trace_id)
                 return
             if target.path == "/api/v1/odb-result-graph" and not target.query:
                 self._send_json(HTTPStatus.OK, self.context.odb_result_graph_service.snapshot(), trace_id)
@@ -441,7 +443,9 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/restart-result-plans" and not target.query:
                 self._send_json(
                     HTTPStatus.OK,
-                    build_restart_result_plan(self._read_json_object()),
+                    build_restart_result_plan(
+                        self._read_json_object(), joblist_path=self.context.job_queue_service.path,
+                    ),
                     trace_id,
                 )
                 return
@@ -1336,6 +1340,7 @@ class ControlPlaneRuntime:
         odb_result_batch_manager = OdbResultBatchManager(
             odb_merge_manager, odb_result_graph_service,
             self.descriptor_path.with_name("odb-result-batches.sqlite3"),
+            joblist_path=job_queue_service.path,
         )
         context = ControlPlaneContext(
             token=self.token,

@@ -27,6 +27,8 @@ Start-Process .\winui\AbaqusTools.WinUI\bin\Debug\net10.0-windows10.0.26100.0\wi
 
 pytest 默认只收集 `tests` 内的检查，忽略 GPTWork、虚拟环境和构建输出。指定验收范围时仍可传入明确的测试路径。
 
+原生操作未获恢复时，整套回归需设置 `QT_QPA_PLATFORM=offscreen` 并排除 `tests/submitter/test_native_window_startup.py`；该文件会主动移除此环境变量并打开窗口，不能默认为无界面检查。排除项须记录为待验。测试临时目录使用 GPTWork 新建子目录，避免复用基目录覆盖旧回执。HTTP 夹具 `running_control_plane` 默认将队列、服务器配置和结果图放到各自 `tmp_path`；重复同一路径仍验证持久恢复，显式传入路径优先。不让 Qt 测试留下的共享队列干扰退出检查。
+
 文档链接和代码路径：
 
 ```powershell

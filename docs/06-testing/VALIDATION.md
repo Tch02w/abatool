@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+本轮整体合同核对见[交付清单](COMPLETION_AUDIT.md)。整套无桌面首轮944通过/17失败/9子检查通过，失败为共享Qt夹具队列干扰退出判断；已隔离HTTP测试目录。另行四项真实HTTP复现指定队列的资源/链/计划/批量来源错误，源码修正后12项定向通过（scope-after.log）。完整重跑966项及9子检查通过746.54秒（final.log/final.xml），文档48项通过，所有测试句柄已结束；新候选待构建，精确记录见TASK-002顶部。排除原生窗口测试，不计作通过。
+
 冻结包补充验证（产品仍为03b4adf/75efcbf6b9f7）：独立源路径 `GPTWork/scheduler-load-live-3a1be04c8ea6/verification.json` verified，261路径/5执行、260次GET中位38.808/P95 279.41/最大446.392ms。跨卷并发恢复 `GPTWork/archive-recovery-live-4db89f22762e/verification.json` verified，128MiB文件复制8MiB中断、完整摘要/半成品保留/源清理/重启去重，以及两个正式客户端6次明确忙碌拒绝后依次完成。原默认源码小夹具回归983424f3695b通过；首次3b67843bedc9正确忙碌拒绝导致验证失败，已保留，不称产品缺陷。所有本轮自有进程结束；工具/文档更新，应用未重建。并非工程多GiB/断电、MPI压力或原生界面验收。
 
 跨卷新增证据：既有75efcbf6b9f7包、正式C#客户端、G:→C:不同设备，两种中断场景各128MiB。`GPTWork/archive-recovery-live-d91a5ee5c815/verification.json` verified，8MiB不完整副本保留并核对摘要，已完成INP复用inode、完整归档摘要、源清理续接、原始输入不变、两次重启与提醒去重通过，所有自有进程结束。具体目标根及设备号见TASK-002顶部。不是工程ODB、多GiB压力、断电或原生鼠标操作验收；产品没有修改或重新打包。

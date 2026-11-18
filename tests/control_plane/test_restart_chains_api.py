@@ -12,7 +12,6 @@ from tests.control_plane.test_api import (
 
 def test_restart_chain_endpoint_reports_valid_missing_and_cycle_nodes(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     joblist = tmp_path / "joblist.json"
     save_json_mapping(
@@ -58,9 +57,7 @@ def test_restart_chain_endpoint_reports_valid_missing_and_cycle_nodes(
             ]
         },
     )
-    monkeypatch.setattr("modules.control_plane.job_queues.JOBLIST_PATH", joblist)
-
-    with running_control_plane(tmp_path) as runtime:
+    with running_control_plane(tmp_path, joblist_path=joblist) as runtime:
         response = api_request(runtime, "/api/v1/restart-chains")
 
     assert response[0] == 200

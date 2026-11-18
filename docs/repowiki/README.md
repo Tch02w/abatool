@@ -18,6 +18,7 @@
 - [开发、测试与发布](development.md)：环境、验证命令、生成物和安全约定。
 - [HTTP API 契约](../api-contract.md)：控制面端点、鉴权、错误和异步操作模型。
 - [WinUI 迁移合同](../winui-migration.md)：功能对等与验收边界。
+- [完整迁移交付核对](../06-testing/COMPLETION_AUDIT.md)：实现、工程证据、原生验收和安装发布缺口。
 - [架构决策记录](../submitter/adr/README.md)：影响长期维护的关键决策。
 
 ## 事实源顺序

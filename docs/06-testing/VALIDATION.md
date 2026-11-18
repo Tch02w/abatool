@@ -1,6 +1,8 @@
 # 验收记录与已知缺口
 
-F003/F005 工作目录准备：旧代码在已有 LCK 时仍先改写输入和 Restart 文件，复现日志 `GPTWork/workspace-before-20261118.log`；现改为只读计划和命令校验在前、逐文件临时写入后发布，加入准备取消与启动同步保护。扩展回归 110 项通过（137.87 秒），最终专项含真实 HTTP/重启 **35 项通过（11.45 秒）**，分别为 `GPTWork/workspace-regression-final-20261118.xml`、`GPTWork/workspace-delivery-final-20261118.xml`。含真实 NTFS junction/硬链接、复制中取消/失败、源变化、临时名碰撞和 Windows 回显参数验证；未运行 Abaqus。测试初稿对重启后的开始请求预期 202，实际正确返回没有可调度作业 409，已修正测试而非修改产品防重试行为。不是全目录事务、完整源摘要或归档完成验收；范围见 [准备说明](../03-features/LOCAL_WORKSPACE.md)。完整包验证待本轮补记。
+F003/F005 工作目录准备：旧代码在已有 LCK 时仍先改写输入和 Restart 文件，复现日志 `GPTWork/workspace-before-20261118.log`；现改为只读计划和命令校验在前、逐文件临时写入后发布，加入准备取消与启动同步保护。扩展回归 110 项通过（137.87 秒），最终专项含真实 HTTP/重启 **35 项通过（11.45 秒）**，分别为 `GPTWork/workspace-regression-final-20261118.xml`、`GPTWork/workspace-delivery-final-20261118.xml`。含真实 NTFS junction/硬链接、复制中取消/失败、源变化、临时名碰撞和 Windows 回显参数验证；未运行 Abaqus。测试初稿对重启后的开始请求预期 202，实际正确返回没有可调度作业 409，已修正测试而非修改产品防重试行为。不是全目录事务、完整源摘要或归档完成验收；范围见 [准备说明](../03-features/LOCAL_WORKSPACE.md)。
+
+准备保护完整包为 **`GPTWork/release-win-x64-e3e69bc08715/AbaqusTools`**，干净来源 `4f40281`，1659 文件/19 worker 全摘要和用户账户可读检查通过。依赖 `GPTWork/bundle-probe-vun0fu70/verification.json`、正式主机 `GPTWork/workspace-frozen-host-20261118.log`、冻结 LCK 拒绝/两次重启 `GPTWork/frozen-workspace-1ac420a2e39b/verification.json` 均通过；冻结正常启动/取消/历史恢复 helper 为 `GPTWork/local-memory-live-c608394af626/verification.json`，两个独立执行、源文件不变、无自动重放通过。本轮未重复通知专项，未启动求解或原生窗口，全部自有进程结束。文档/壳层/API 81 项通过；不与重叠测试累计。
 
 F008 状态读取响应优化：旧版在阻塞远端刷新期间 GET 连接视图超过测试的 2 秒等待界限，失败回执 `GPTWork/remote-responsive-before-20261118.xml`。独立快照发布后，新专项 7 项及远端/通知/关闭/壳层相关 **127 项通过，187.46 秒**，`GPTWork/remote-responsive-regression-20261118.xml`；C# 新增 4 项显示/旧协议兼容与既有检查通过，Release 零警告/错误。验证覆盖慢通信时读取、连接切换不沿用旧资源、错误清除忙态、返回值独立和实际命令继续串行。真实 SSH、原生资源页仍待验证；不能据本修正宣称历史 `remote-jobs` GET 的全部偶发超时已解决。
 

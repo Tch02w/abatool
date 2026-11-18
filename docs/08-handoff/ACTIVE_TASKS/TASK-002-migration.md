@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F003/F005 工作目录准备保护（源码通过，完整包待验）
+### 2026-11-18 F003/F005 工作目录准备保护（源码与完整包通过，归档/原生待验）
 
 从已完成 F008 候选继续审查准备/归档边界。实际发现 `_prepare_workspace` 在当前作业 LCK 和取消策略判定前已复制输入及 Restart 文件；原 Restart 复制先删除旧目标，复制失败可使旧文件丢失。修改前已向用户说明先只读验证、再逐文件发布的方案及归档另行处理的边界。
 
@@ -22,7 +22,18 @@
 
 用户再次关注按钮及 GIF，复核 F021 生产代码：读取目录左侧为加载圆环，空闲 Collapsed、忙时随按钮前景，内容双向居中；F020 双模式和 1500×1000 四份实际 GIF 回执已有记录，本轮未重复改写。原生窗口仍未恢复操作，不把源码/既有包等同实际外观验收。
 
-准确续接点：以上测试句柄结束，无新求解/用户进程操作。先完成文档检查与新包验证，再处理归档：`_archive_result` 的 root.mkdir 在异常保护外、逐文件移动可能部分完成、空目录可能被记成功；归档失败字段与求解成功的界面提示尚需分开，`_dependency_odb_path` 也需避免优先使用部分归档。Qt `archive_finished_job_files` 对照保留。必须先说明新归档实现方案再变更。最近已验证包仍 f4d22485d254，本轮准备修复尚未打包；具体 GitHub main 推送与恢复原生交互确认仍未收到。最近周额度剩余 **47%**，未触及 15% 暂停线。
+代码、测试和文档已本地提交 **`4f4028110a4f0cb016dab647da157c13f321b53f`**。从该干净来源运行 `.\.venv\Scripts\python.exe packaging/build_release.py --no-restore`，完整目录 **`GPTWork/release-win-x64-e3e69bc08715/AbaqusTools`** 构建成功，96980 退出 0，日志 `GPTWork/workspace-package-20261118.log`。用户账户逐文件核对 **1659 文件/19 worker**，全部大小/SHA256 一致，sourceDirty=false，回执为该发布父目录的 `inventory-verification.json`。旧包保留。
+
+完整包实际验证：
+
+- 包内依赖通过：`GPTWork/bundle-probe-vun0fu70/verification.json`，含默认配置、worker、GIF、Agg、工作簿、SSH 加密及 Qt-free；日志 `GPTWork/workspace-bundle-probe-20261118.log`。
+- 正式 C# 客户端 `GPTWork/remote-responsive-host/ControlPlaneHost.Tests.exe --launch-bundle GPTWork/release-win-x64-e3e69bc08715/AbaqusTools GPTWork/workspace-host-e3e69bc08715` 启动、资源/队列 API 与安全退出通过，6254 退出 0，`GPTWork/workspace-frozen-host-20261118.log`；隔离描述文件清除。
+- `.\.venv\Scripts\python.exe GPTWork/verify_workspace_bundle_20261118.py GPTWork/release-win-x64-e3e69bc08715/AbaqusTools` 退出 0，97328 结束，`GPTWork/frozen-workspace-1ac420a2e39b/verification.json` 为 verified。正式冻结执行器遇到已有 LCK 时拒绝，源/目标全部夹具字节不变，回显命令未启动；两次后台启动恢复同一失败 attemptId，开始请求 409、没有自动重放，正常关闭。PID 165052/214776 均退出 0。
+- `.\.venv\Scripts\python.exe packaging/verify_local_memory.py --bundle GPTWork/release-win-x64-e3e69bc08715/AbaqusTools` 退出 0，44351 结束，`GPTWork/local-memory-live-c608394af626/verification.json` 为 verified。两个不同执行、实际 Windows helper 内存采样、取消/正常退出、历史恢复、无自动重放和源文件不变通过；本轮未重复提醒专项。后台 PID 130976/217912、helper 210960/216900 均确认不存在。没有启动 Abaqus 求解。
+
+最终回执同步后，文档导航 **45 项通过，0.10 秒**，`GPTWork/workspace-package-docs-20261118.log`；diff 空白检查通过。Wiki 中“旧候选尚未包含关闭选择”的过期说明同步更正为当前包已包含、原生窗口流程仍待验收。
+
+准确续接点：本节所有测试、构建、自有后台和 helper 已结束，最近已验证包为 e3e69bc08715，包内文档是构建时快照，最终回执在仓库补记。下一项处理归档：`_archive_result` 的 root.mkdir 在异常保护外、逐文件移动可能部分完成、空目录可能被记成功；归档失败字段与求解成功的界面提示尚需分开，`_dependency_odb_path` 也需避免优先使用部分归档。Qt `archive_finished_job_files` 对照保留。必须先说明新归档实现方案再变更。没有替换用户窗口，未生成安装程序/ZIP/GitHub Release；具体 GitHub main 推送与恢复原生交互确认仍未收到。最近周额度剩余 **47%**，未触及 15% 暂停线。
 
 ### 2026-11-18 F008 慢远端通信期间读取状态（源码与完整包通过，原生/真实 SSH 待验）
 

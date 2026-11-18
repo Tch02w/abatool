@@ -11,7 +11,7 @@
 - 最新完整目录：`GPTWork/release-win-x64-bbb1a83a8997/AbaqusTools`，干净来源`129b2573077906eee3472502daba7839f4ac32a4`，1671清单文件、19个worker。完整摘要、包内依赖、正式C#主机启动/资源/队列/正常退出及包内导出服务通过；回执`GPTWork/result-export-release-verification-20261118`。
 - 最新安装候选：`GPTWork/installer-win-x64-b1639b2aeb30/AbaqusTools-0.1.0-win-x64-setup.exe`，负载与安装器均为干净129b257，摘要/来源/架构核对通过，NotSigned。相同负载测试身份安装/升级/卸载及开始菜单生命周期通过，`GPTWork/installer-lifecycle-e2b22336049c/verification.json` verified，无残留测试进程/登记；正式身份未安装到默认目录。
 - 包含当前作业结果路由、运行批次/归档核对、页面恢复/草稿保护，以及此前新建、菜单、服务器目标、数字输入、日志、按钮和GIF等修复。上一轮30项路径、四种归档HTTP、111项相关回归含49文档及174项既有后处理通过，原生交互仍待。包内文档为构建时快照，后续回执以仓库为准；旧目录/安装候选全部保留。
-- origin已核对为`https://github.com/Tch02w/abatool.git`；本轮起点58bdfca已推送main。用户已授权本轮检查后提交并推送，准确新HEAD以实际Git核对和TASK-002收尾为准；原生操作已恢复授权。
+- origin为`https://github.com/Tch02w/abatool.git`；本轮代码/测试/文档cf09283已推送main，实际ls-remote与本地HEAD一致，推送后工作区干净。收尾回执随后补记，最新文档HEAD以实际Git核对为准；原生操作已恢复授权。
 
 ## 最新验证范围
 

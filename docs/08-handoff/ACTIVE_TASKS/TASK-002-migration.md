@@ -28,7 +28,7 @@
 
 收尾追加 `tests/winui/test_shell_contract.py`、`tests/control_plane/test_postprocessing_api.py`、`tests/control_plane/test_discovery.py` 共 50 项功能检查通过；同次 49 项文档检查有 1 项失败，原因是功能索引误写 `cpu_policy.py` 所在目录，已改为实际 `modules/submitter/cpu_policy.py`，未修改产品源码或测试断言。首轮 98 passed / 1 failed、8.83 秒，`GPTWork/native-startup-final-regression-20261118.log` / `.xml` 保留。修正后完整文档检查 49 passed，0.12 秒，`--basetemp=GPTWork/pytest-native-docs-final-20261118`，`GPTWork/native-docs-final-20261118.log` / `.xml`。Ruff 检查改动 Python 测试及差异空白检查均通过。
 
-本轮自有原生窗口、后台和全部构建/回归句柄均已结束，最新最终核对 `GPTWork/native-acceptance-20261118-a/verification-final.json`。当前开发入口是 `GPTWork/winui-native-startup-final-20261118/AbaqusTools.WinUI.exe`，依赖项目控制面；129b257 完整目录/安装候选不包含本轮改动。最终文档导航、最后空目录修复相关回归、Ruff、差异检查通过。用户已授权检查后提交并 push；执行后再记录准确提交及远端核对信息。
+本轮自有原生窗口、后台和全部构建/回归句柄均已结束，最新最终核对 `GPTWork/native-acceptance-20261118-a/verification-final.json`。当前开发入口是 `GPTWork/winui-native-startup-final-20261118/AbaqusTools.WinUI.exe`，依赖项目控制面；129b257 完整目录/安装候选不包含本轮改动。最终文档导航、最后空目录修复相关回归、Ruff、差异检查通过。代码、测试和文档已提交 `cf0928348f3a90a20aedde600b9edb1eacdba2af` 并推送 GitHub main；实际 `git ls-remote` 与本地 HEAD 一致，推送后工作区干净。本段是随后补记的核对回执；最终文档提交以实际 Git HEAD 为准，不为补记重复构建相同开发版。
 
 继续原生验收时使用已授权可见桌面与同一独立配置，先检查进程，不能再把普通工具启动后“没有窗口”直接记成产品故障或重复运行。真实鼠标/截图工具限制仍需解决；优先补日志选区、提示、尺寸和结果记录/导出，再逐项八页。真实 SSH/GPU/MPI、连续三级工程 ODB、无开发环境目标机及签名缺口继续保留。完整目标保持 active。
 

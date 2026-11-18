@@ -63,6 +63,7 @@
 
 - F001/F005/F009/F010/F014/F021 后台退出联动：`modules/control_plane/shutdown_guard.py` / `OperationShutdownGuard.prepare_shutdown`、`server.py` / `ControlPlaneContext.prepare_odb_shutdown`、`local_queue_runtime.py` / `prepare_shutdown`、`_launch_locked`；测试 `tests/control_plane/test_shutdown_guard.py` 与 `tests/winui_host/Program.cs`。九类工作联合预留和范围标记见 [ADR 0008](../submitter/adr/0008-all-worker-shutdown-fence.md)。
 - F012 真实 HTTP 验收入口为 `tests/winui_host/Program.cs` / `CheckBatchApi`，参数 `--batch-api` / `--batch-recover-api`：同一基础两个重启动目标、请求去重、后台重启历史读取。需要真实 ODB 与隔离控制面；它不操作原生页面，也不证明三层连续重启动链。
+- F012/F026 冻结进程中断验收入口为 `packaging/verify_batch_interruption.py` / `verify`：实际中断自有后台，保留外部测试子进程并检查重启暂停、拒绝重放、后续阶段未提交及失败记录持久恢复。仅微小字节夹具，不能替代真实连续 ODB 链或 Abaqus 崩溃检查；操作见 [发布验收](../05-development/RELEASE.md)。
 
 - F020/F022 的 GIF 播放方式同时检查 `tests/postprocessor/test_animation.py`（完整源帧及计时）、`tests/control_plane/test_postprocessing_api.py`（`animationDurationSeconds` 可选字段及校验）和 `tests/winui_postprocess/Program.cs`（模式持久化与旧工作区兼容）。
 - CPU 规则变动同时检查 F003/F004/F005/F007；后处理进程并行数不是单作业 CPU 数。

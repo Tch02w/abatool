@@ -58,6 +58,14 @@
 
 它在 GPTWork 创建独立用户数据和微小测试文件，使用固定返回失败的测试命令，实际启动/退出两次包内控制面，核对 SQLite 历史、重启去重、失败清理和退出预留；不调用 Abaqus、不访问真实模型。输出 `frozen-merge-recovery-*/verification.json`，不在报告中保存鉴权令牌。它不能代替真实 Abaqus 运行中断或原生页面验收。
 
+后台突然退出、外部子进程仍存活时的批量恢复检查：
+
+```powershell
+.\.venv\Scripts\python.exe packaging/verify_batch_interruption.py <完整AbaqusTools目录>
+```
+
+该工具只创建独立测试后台与等待程序，记录其 PID/创建时间后中断自己启动的后台，保留子进程直到重启检查结束。核对原阶段中断、禁止重跑、后续阶段未提交，以及第三次启动仍恢复同一失败记录；最后释放测试子进程并确认自有进程退出。所有夹具、日志和回执保留在 `GPTWork/frozen-batch-interruption-*`，仅清除自有描述文件中的临时鉴权信息。三节点字节夹具不是真实 ODB，工具不调用 Abaqus、不启动求解，不证明真实连续三级链的数值正确性。若退出失败，应先读回执并核对原测试进程，不能重复启动测试或按程序名批量终止进程。
+
 实现依据：[PyInstaller 相对资源定位](https://pyinstaller.org/en/stable/runtime-information.html)、[Windows App SDK 自包含部署](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/self-contained-deploy/deploy-self-contained-apps)。Windows App SDK 自包含仍需另行启用 .NET 自包含，且发布文件必须整体分发。
 
 ## 11 月 18 日批量恢复候选

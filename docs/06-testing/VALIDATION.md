@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+11 月 18 日补充 F012 冻结进程中断验收：`GPTWork/frozen-batch-interruption-691d9fb533f3/verification.json`。最新完整包的隔离后台在测试子进程仍存活时被中断；第二次启动恢复暂停批次与 `ODB_MERGE_INTERRUPTED` 子任务，继续请求明确失败，后续阶段未启动；第三次启动恢复同一失败记录。计划两阶段、仅一条子操作/一次测试命令，三份夹具摘要未变、没有发布结果。三个后台和四个已捕获后代 PID 均确认结束，未启动 Abaqus。这补充冻结进程生命周期证据，不代表真实 ODB 内容或真实 Abaqus 崩溃验收。工具及续接点见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
 F028 最终完整目录 **`GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools`**（干净 `35b2372`）已从用户账户核对 1658 文件/19 worker 全部摘要、包内依赖，并通过本轮 C# 正式主机的包内预览/入队/保留/撤销与安全退出。回执 **`GPTWork/execution-options-host-d1ad1556cf70/verification.json`**，没有求解、SSH 或原生交互；全部自有检查已结束。下文“完整包待验”由本回执补齐，原生/GPU 实测和整体迁移仍未完成。
 
 F028 GPU/Explicit/ODB 精度已贯通新建、队列、实际启动及恢复。扩展 **138 项通过，178.86 秒**（`GPTWork/execution-options-final-20261118.xml`），C# 新增 11 项及原有主机检查通过，包含真实 HTTP 预览/入队/保留/撤销和实际 Windows cmd/PowerShell 参数回显；没有 Abaqus/GPU 求解或 SSH。初次 UI 构建类型错误已修正，后续 Release 零警告/错误；最后坏草稿保留和能力检查已构建通过（13.03 秒），46 项能力/API/文档检查通过；完整包仍待验证。详情见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下候选为上一轮，不含 F028。

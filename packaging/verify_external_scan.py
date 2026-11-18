@@ -94,17 +94,19 @@ def verify(bundle, client):
         assert row["isExternal"] and row["status"] in ACTIVE_STATUSES and actual["pid"] in stored.pids
         (work / "release").touch()
         assert helper.wait(timeout=15) == 0
-        with (work / "completion-client.log").open("wb") as output:
-            completed = subprocess.run([str(client), "--external-scan-api", str(descriptor_path), str(jobs)], cwd=ROOT,
-                stdout=output, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW, timeout=60, check=False)
-        assert completed.returncode == 0, "Completion scan/read client failed"
-        final = next(r for r in call(descriptor, "/api/v1/job-queues")["queueItems"] if r["itemId"] == row["itemId"])
+        # The periodic monitor may already be scanning. Observe that existing
+        # work instead of racing it with a second manual scan (which must 409).
+        def completed_row():
+            final = next(r for r in call(descriptor, "/api/v1/job-queues")["queueItems"] if r["itemId"] == row["itemId"])
+            return final if final["status"] == STATUS_COMPLETED else None
+
+        final = wait_until(completed_row, "Automatic monitoring did not observe fixture completion")
         stored = next(r for r in load_joblist_state(joblist, restore_active_state=False)[1] if r.item_id == row["itemId"])
         assert final["status"] == STATUS_COMPLETED and not stored.pids
         assert digest(inp) == before
         shutdown(descriptor, backend)
         report.update(status="verified", productionClient=timings, originalInputUnchanged=True,
-                      ownedProcessIdentified=True, completionObservedWithoutReplay=True)
+                      ownedProcessIdentified=True, completionObservedWithoutReplay=True, automaticCompletionObserved=True)
     except Exception as exc:
         report["error"] = str(exc)
         raise

@@ -1,5 +1,7 @@
 # 功能定位索引
 
+当前F026干净完整候选来源4787f0f：目录07ccd1e06113、安装器10f24dcc8dc8，已纳入下述独立配置/CPU/空目录及发布资源修复。15项应用资源与摘要、实际完整包三页有限原生状态/退出、同负载隔离升级生命周期通过；全八页/目标机未验。准确入口和回执见[当前状态](../08-handoff/CURRENT_STATUS.md)及[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
 F001/F022/F023 独立验收配置：`winui/AbaqusTools.WinUI/Services/WorkbenchProfile.cs` / Resolve、ConfigureBackendEnvironment、SingleInstanceKey；`Program.cs`、`Services/ControlPlaneHost.cs`、`Services/WorkbenchSession.cs`、`Controls/OdbResultGraphEditor.Recovery.cs`、`Pages/OdbPostprocessingPage.xaml.cs`、`Pages/OdbPostprocessingPage.Drafts.cs`（均在同一 WinUI 项目）接入统一路径。测试 `tests/winui_host/WorkbenchProfileChecks.cs`（--profile-checks，14 项）和 `tests/winui_host/test_shutdown_api.py`；默认兼容和边界见 [ADR0022](../submitter/adr/0022-isolated-workbench-profiles.md)。
 
 F003/F025 CPU 恢复顺序：`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml` / CpuNumberBox 与 `NewJobPage.xaml.cs` / RefreshCpuLimitAsync（同目录）在上限未知时保留草稿，取得真实上限后再限制；后台仍由 `modules/submitter/cpu_policy.py` 和 `modules/control_plane/job_drafts.py` 校验。相关测试 `tests/control_plane/test_cpu_policy.py`、`tests/control_plane/test_job_drafts_api.py`；CPU=4 的实际关闭/重开证据见 TASK-002。

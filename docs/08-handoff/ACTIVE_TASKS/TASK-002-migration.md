@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 补齐资源的干净完整候选及真实启动
+
+发布资源修复连同代码、20项安装门槛测试和文档提交为 `4787f0f0651177f3db3bbec686d05d91076c7cff`，已实际推送GitHub main并用ls-remote核对一致。上一段发布缺资源排查属于实际进展；本节是修复后最终产物，不再使用缺资源旧包作为可运行入口。
+
+从干净4787f0f运行 `packaging/build_release.py --no-restore`，98299退出0，完整目录 `GPTWork/release-win-x64-07ccd1e06113/AbaqusTools`。1687清单文件、19worker、15项应用XBF/PRI齐全；含清单357451413字节，manifest SHA256 `379a8b1d7649e971b02bd75a4afdd85c38dd9f57c6825b48087b1ba0fb41d8be`。摘要/实际文件集合、无ODB/INP/Qt/虚拟环境混入及来源核对通过；`GPTWork/resource-release-verification-20261118/inventory.json`。包内依赖探针 `bundle-probe-muojfwn9/verification.json` 同父目录，默认配置、worker、GIF、Agg、xlsx、SSH加密、Qt-free均通过；不连接真实SSH，不调用Abaqus。
+
+实际启动该完整目录的原生221068/窗口8527618/冻结后台183436和子进程199432。源Python环境已移除，核对后台EXE正是此目录 `control-plane/AbaqusTools.ControlPlane.exe`，数据和TEMP/TMP都在G:独立配置。CUA观察名称/CPU=4恢复、Ctrl+7后处理空目录无误报、Ctrl+8结果目录恢复并读取1个范围；工具曾报窗口身份变化，刷新库存确认仍为同一窗口后重新绑定，没有重复启动。Alt+F4正常关闭后窗口、自有进程和描述符均消失，CPU=4仍保存，日常两份JSON摘要未变。`native-verification.json` 为 verified-limited-native；只证明三个页面有限状态和空闲退出，未证明全部交互、记录预览/导出或截图/鼠标。
+
+正式标识安装候选 `GPTWork/installer-win-x64-10f24dcc8dc8/AbaqusTools-0.1.0-win-x64-setup.exe`，负载/安装器来源均为干净4787f0f、1688负载项、126096005字节，SHA256 `29c258e13b23b768cc890d4d63407acc0a8b8b1204b8da639dd8aea6e6c5cbfd`。摘要/来源/PE架构核对通过（引导器0x14c，应用/后台0x8664），签名NotSigned；`installer-artifact.json`、`installer-signature.json`。正式身份未实际安装到用户默认位置。
+
+同负载测试安装器d6c7f4cdaca8，以历史f4a53d0a13f4为旧版执行 `packaging/verify_installer.py ... --legacy-old`，59950退出0，`GPTWork/installer-lifecycle-0d5a9b4b803e/verification.json` verified。旧负载仅按历史清单核对，新负载严格要求15项应用资源；报告legacyOldInventoryOnly=true。陌生/链接目录拒绝、中文空格目录初装、活动自有后台拒绝升级/卸载、空闲退出后升级保留旧版本和用户文件、开始菜单更新、安装后正式客户端API及卸载保留用户数据均通过；forcedCleanupPids/remainingOwnedPids为空、registrationRemaining=null。
+
+准确续接点：所有本轮构建/安装/诊断/原生句柄已终态，新旧产物和失败现场均保留；不为文档回执重复生成相同包。包内文档是4787f0f构建时快照，最终产物/原生记录以仓库本节为准。收尾文档导航49 passed、0.13秒，`GPTWork/resource-release-verification-20261118/docs-final.log` / `.xml`，差异检查通过。回执随文档提交/推送，准确文档HEAD以实际Git核对为准。下一步核对其余五个业务页的首次加载，再补完整八页鼠标、日志选区、说明、窗口布局与导出/关闭。截图/鼠标工具限制、真实SSH/GPU/MPI、连续三级工程ODB、无SDK目标机及签名仍缺。未创建/移动ODB或启动求解，完整目标保持active。
+
 ## 2026-11-18 · 实际发布启动暴露 XAML 资源漏打包
 
 上一轮源码修复/文档 a52c480 已推送且工作区干净，属于实际进展。本轮从该干净提交构建目录 `GPTWork/release-win-x64-73c34ceec193/AbaqusTools`，88337 退出0；1672文件/19worker摘要通过，manifest SHA256 `e6505ebf85f274f363b82136c77ea8813b5c857061bfa18db1e725bfbe7529b3`。包内依赖与正式C#后台启动/API/退出通过，`GPTWork/profile-release-verification-20261118`。正式标识安装器4f1e14d5fb6f与测试标识65d84fb9d6b7编译通过；旧f4a53d0a13f4→新65d84fb9d6b7隔离生命周期 `GPTWork/installer-lifecycle-8381c0a1ae9c/verification.json` 通过、52410退出0、无残留登记/进程。**这些检查没有覆盖原生窗口，随后发现该负载仍不可运行，不能作为交付候选。**

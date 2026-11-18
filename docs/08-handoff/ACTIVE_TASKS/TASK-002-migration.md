@@ -2,6 +2,10 @@
 
 ## 2026-11-18 · 归档中断恢复与独立重试
 
+**最终回执**：定向修正已本地提交 `6cb343d6e7ead730a0f00ff36169f98a448b1d4c`。干净来源新完整目录 `GPTWork/release-win-x64-8791f815c891/AbaqusTools` 构建结束（52123退出0），用户账户1662文件/19worker全摘要通过；依赖 `GPTWork/bundle-probe-ugqe389y/verification.json`、正式主机 `GPTWork/archive-observation-frozen-host-20261118.log` 均通过。冻结真实中断/恢复回执 `GPTWork/archive-recovery-live-49c8ff630a0e/verification.json` verified：两次后台启动，首次状态读取2.5/2.9ms、正式客户端恢复同attempt、完整副本inode复用、部分清理续接、全摘要、源输入不变、4条提醒恢复且不重放。实际生产者217712/207092按计划中断，后台29008/35008正常退出，包装进程也均结束。没有Abaqus求解、原生界面操作、跨卷工程负载或GitHub推送。
+
+本功能代码/测试/使用说明及交接已同步；最终文档导航 `GPTWork/archive-recovery-docs-final-20261118.log` 47项通过（0.18秒），回执单独本地提交，不重建产品。准确下一项为F027独立归档提醒写入前崩溃的补发保护，以及可独立验证的并发/大文件边界；原生操作和具体GitHub main确认问题仍待用户答复，不重复询问或绕过。周额度复查41%，整体目标保持active。以下为本轮过程及保留的失败证据，早先“待重建”由本最终回执覆盖。
+
 功能已本地提交 `fc7f8b82e451df2df821178648a58b8fbd3cc37a`，从干净来源构建的首包 `GPTWork/release-win-x64-89d3b6ab518e/AbaqusTools`（句柄69915退出0）通过1662文件/19worker用户账户摘要、依赖 `GPTWork/bundle-probe-05hor33e/verification.json`、正式主机启动/API/退出；但冻结恢复 `GPTWork/archive-recovery-live-e14df1f5caa0/verification.json` 首次状态请求5秒超时，句柄54957退出1，全部自有包装/实际进程已结束。不得把首包写为恢复通过。
 
 定向回归 `archive-observation-before-20261118.log` 1项失败（62170退出1），已确认归档的旧目录仍进入恢复进程扫描。修正为恢复目录与用户显式监测目录分开，仅将活动/未知作业的恢复目录纳入扫描；保留显式外部监测。`archive-observation-final-20261118.xml/log` **79项通过（38.39秒，55080退出0）**，包含7项恢复API、调度、队列及47项文档；源码真实进程 `GPTWork/archive-recovery-live-df2804ad50e8/verification.json` verified、全部自有进程结束。与185项集合重叠不累计。接续：提交此定向修正，重新构建新目录，重复冻结归档恢复并记录首次状态读取耗时；不能仅靠增大超时或重跑首包宣布修复。

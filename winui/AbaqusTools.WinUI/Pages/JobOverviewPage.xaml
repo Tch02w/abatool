@@ -25,11 +25,12 @@
                     <TextBlock x:Name="JobStatsText" Grid.Column="3" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="运行中 0 · 完成 0 · 异常 0" />
                 </Grid>
                 <Grid Grid.Row="1" ColumnSpacing="6">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <TextBlock x:Name="CurrentJobTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Text="Job: 未选择" />
                     <Button x:Name="OpenDirectoryButton" Grid.Column="1" Click="OnOpenDirectoryClicked" Content="目录" IsEnabled="False" /><Button x:Name="OpenStaButton" Grid.Column="2" Click="OnOpenOutputFileClicked" Content="STA" IsEnabled="False" Tag=".sta" />
                     <Button x:Name="OpenMsgButton" Grid.Column="3" Click="OnOpenOutputFileClicked" Content="MSG" IsEnabled="False" Tag=".msg" /><Button x:Name="OpenDatButton" Grid.Column="4" Click="OnOpenOutputFileClicked" Content="DAT" IsEnabled="False" Tag=".dat" />
                     <Button x:Name="PauseResumeButton" Grid.Column="5" Click="OnPauseResumeClicked" Content="暂停" IsEnabled="False" /><Button x:Name="TerminateButton" Grid.Column="6" Click="OnTerminateClicked" Content="终止" IsEnabled="False" />
+                    <Button x:Name="RetryArchiveButton" Grid.Column="7" Click="OnRetryArchiveClicked" Content="恢复归档" Visibility="Collapsed" />
                 </Grid>
                 <ProgressBar x:Name="RuntimeProgressBar" Grid.Row="2" Maximum="100" Value="0" />
                 <Grid Grid.Row="3" ColumnSpacing="18">

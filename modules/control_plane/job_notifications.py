@@ -90,6 +90,15 @@ class JobNotificationManager:
             self._save_locked(record)
 
     def local_finished(self, item, record, result):
+        if item.complete_notify and getattr(record, "archive_only", False):
+            self.publish(source="local", execution_id=f"{record.attempt_id}:archive:{record.archive_operation_id}",
+                         job_id=item.item_id, job_name=item.job_name,
+                         status=("succeeded" if result.archive_status == "已归档" else
+                                 "cancelled" if record.controller.cancel_requested else "failed"),
+                         message="归档处理：" + result.archive_status + ("；" + result.archive_error if result.archive_error else ""),
+                         work_directory=result.archive_destination if archive_published(result.archive_status, result.archive_destination)
+                         else result.work_dir)
+            return
         if item.complete_notify and result.status in LOCAL_TERMINAL:
             detail = result.message
             if result.archive_error:

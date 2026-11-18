@@ -1603,6 +1603,10 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             },
             cancellationToken);
 
+    public Task<LocalQueueRuntimeSnapshot> RetryLocalArchiveAsync(
+        string itemId, CancellationToken cancellationToken = default) =>
+        ControlLocalQueueAsync(new LocalQueueControlRequest { Action = "retryArchive", ItemIds = [itemId] }, cancellationToken);
+
     private async Task<LocalQueueRuntimeSnapshot> ControlLocalQueueAsync(
         LocalQueueControlRequest request,
         CancellationToken cancellationToken)

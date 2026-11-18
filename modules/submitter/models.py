@@ -42,6 +42,7 @@ class QueueItem:
     archive_destination: str = ""
     archive_status: str = ""
     archive_error: str = ""
+    archive_recovery_available: bool = False
     active_job_key: str = ""
     elapsed: str = ""
     job_type: str = ""

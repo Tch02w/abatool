@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +31,8 @@ from .constants import (
 from .cpu_policy import validate_local_cpus
 from .execution_options import validate_execution_options
 from .local_archive import ARCHIVE_EXTENSIONS, archive_job_files
+from .local_archive_recovery import resume_archive
+from .local_archive_state import ArchiveStateError
 from .local_workspace import (
     RESTART_EXTENSIONS,
     WorkspacePreparationCancelled,
@@ -64,14 +67,17 @@ class LocalJobExecutionResult:
     archive_destination: str = ""
     archive_status: str = ""
     archive_error: str = ""
+    archive_recovery_available: bool = False
 
 
 class LocalJobProcessController:
     """Request Abaqus termination without force-killing the solver tree."""
 
-    def __init__(self, *, observer=None, snapshots=SHARED_PROCESS_SNAPSHOTS) -> None:
+    def __init__(self, *, observer=None, snapshots=SHARED_PROCESS_SNAPSHOTS, archive_store=None) -> None:
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None
+        self.archive_store = archive_store
+        self.archive_claimed = False
         self.cancel_requested = False
         self.observer = observer
         self.snapshots = snapshots
@@ -173,18 +179,49 @@ def _archive_result(
     return archive_job_files(item, work_dir, **kwargs)
 
 
-def _completed_result(item, work_dir, command, message, controller, progress):
+def _completed_result(item, work_dir, command, message, controller, progress, *, recover=False):
     def report(detail, copied, total):
         percent = 92 + min(6, int(6 * copied / max(1, total)))
         _emit(progress, "archiving", "计算已完成，正在归档", percent, detail)
 
+    destination, status, error = "", "", ""
     if item.archive_dir:
         report("正在检查归档目录", 0, 1)
-    destination, status, error = _archive_result(
-        item, work_dir, cancelled=lambda: controller.cancel_requested, progress=report)
+    store = controller.archive_store
+    try:
+        if item.archive_dir and store is not None:
+            with (nullcontext() if controller.archive_claimed else store.claim(item)):
+                state = store.read(item) if recover else store.begin(item, work_dir, command, message)
+                if state is None:
+                    raise ArchiveStateError("没有可核对的归档记录，未重新计算")
+                work_dir, command, message = Path(state["source"]), state["command"], state["solveMessage"]
+                store.save(item, state)
+
+                def checkpoint(phase, fields):
+                    state.update(fields, phase=phase, result=None)
+                    store.save(item, state)
+
+                options = {"cancelled": lambda: controller.cancel_requested, "progress": report, "checkpoint": checkpoint}
+                destination, status, error = (resume_archive(item, state, **options) if recover
+                                               else _archive_result(item, work_dir, **options))
+                state["result"] = {"destination": destination, "status": status, "error": error}
+                store.save(item, state)
+        else:
+            destination, status, error = _archive_result(
+                item, work_dir, cancelled=lambda: controller.cancel_requested, progress=report)
+    except (OSError, RuntimeError, ValueError) as exc:
+        LOGGER.exception("归档记录或恢复失败，未改变已经确认的求解结果")
+        status, error = "归档待恢复", str(exc)
     if status:
         message += "；" + status
-    return LocalJobExecutionResult(STATUS_COMPLETED, message, str(work_dir), command, destination, status, error)
+    return LocalJobExecutionResult(STATUS_COMPLETED, message, str(work_dir), command, destination, status, error,
+                                   bool(store is not None and status and status != "已归档"))
+
+
+def run_archive_only(item, controller, progress=None):
+    """Resume only the archive; execution admission is not reachable from this entry."""
+    return _completed_result(item, Path(item.effective_work_dir or Path(item.inp_path).parent), "",
+                             "计算已完成", controller, progress, recover=True)
 
 
 def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) -> None:

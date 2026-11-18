@@ -6,9 +6,9 @@ internal static class ArchivePresentationChecks
     internal static void Run()
     {
         var legacy = JsonSerializer.Deserialize<JobQueueItem>("{\"message\":\"计算已完成\"}")!;
-        if (legacy.HasPublishedArchive || legacy.ArchiveDetailsDisplay != ""
+        if (legacy.HasPublishedArchive || legacy.ArchiveRecoveryAvailable || legacy.ArchiveDetailsDisplay != ""
             || legacy.ResultMessageDisplay != "计算已完成") throw new Exception("Legacy archive defaults changed");
-        foreach (var status in new[] { "已归档", "已归档，清理未完成", "归档失败", "归档需核对", "" })
+        foreach (var status in new[] { "已归档", "已归档，清理未完成", "归档失败", "归档需核对", "归档待恢复", "归档记录异常", "" })
         {
             var item = new JobQueueItem { ArchiveStatus = status, ArchiveDestination = "archive",
                 ArchiveError = status == "归档失败" ? "copy failed" : "", Message = "计算已完成" };
@@ -18,6 +18,35 @@ internal static class ArchivePresentationChecks
             if (status == "归档失败" && !item.ArchiveDetailsDisplay.Contains("copy failed"))
                 throw new Exception("Archive failure reason hidden");
         }
-        Console.WriteLine("6 archive presentation and legacy compatibility checks passed.");
+        var restored = JsonSerializer.Deserialize<JobQueueItem>("{\"archiveRecoveryAvailable\":true}")!;
+        if (!restored.ArchiveRecoveryAvailable) throw new Exception("Archive retry availability lost");
+        foreach (var operation in new[] { new LocalJobRuntimeOperation { ArchiveOnly = true },
+            new LocalJobRuntimeOperation { Phase = "archive_cancelling" } })
+            if (!operation.IsArchiving) throw new Exception("Archive cancellation routed to solver controls");
+        Console.WriteLine("11 archive presentation, recovery and legacy compatibility checks passed.");
+    }
+
+    internal static async Task RunApi(ControlPlaneHost host, string itemId)
+    {
+        var before = (await host.GetLocalQueueRuntimeAsync()).Queue.QueueItems.Single(x => x.ItemId == itemId);
+        if (!before.ArchiveRecoveryAvailable) throw new Exception("Recovery unavailable before client request");
+        await host.RetryLocalArchiveAsync(itemId);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        while (true)
+        {
+            timeout.Token.ThrowIfCancellationRequested();
+            var state = await host.GetLocalQueueRuntimeAsync(timeout.Token);
+            var row = state.Queue.QueueItems.Single(x => x.ItemId == itemId);
+            if (row.AttemptId != before.AttemptId) throw new Exception("Recovery created another solve attempt");
+            if (row.ArchiveStatus == "已归档")
+            {
+                if (row.ArchiveRecoveryAvailable || !row.HasPublishedArchive)
+                    throw new Exception("Completed archive state inconsistent");
+                Console.WriteLine("Production archive client recovered original attempt and published output.");
+                return;
+            }
+            if (row.ArchiveRecoveryAvailable) throw new Exception("Archive recovery failed: " + row.ArchiveDetailsDisplay);
+            await Task.Delay(100, timeout.Token);
+        }
     }
 }

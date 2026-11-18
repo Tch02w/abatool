@@ -135,6 +135,9 @@ public sealed class JobQueueItem
     [JsonPropertyName("archiveError")]
     public string ArchiveError { get; init; } = string.Empty;
 
+    [JsonPropertyName("archiveRecoveryAvailable")]
+    public bool ArchiveRecoveryAvailable { get; init; }
+
     [JsonIgnore]
     public bool HasPublishedArchive => !string.IsNullOrWhiteSpace(ArchiveDestination)
         && ArchiveStatus is "已归档" or "已归档，清理未完成";

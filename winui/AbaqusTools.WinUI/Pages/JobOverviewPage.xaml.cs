@@ -21,6 +21,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private bool _updatingJobSelector;
     private bool _applyingLogText;
     private bool _logPointerDown;
+    private bool _retryingArchive;
     private long _snapshotRequest;
     private long _controlRequest;
     private long _jobViewRevision;
@@ -218,6 +219,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             UpdateRuntimeLog(null, "选择作业后显示状态与运行信息。");
             PauseResumeButton.IsEnabled = false;
             TerminateButton.IsEnabled = false;
+            RetryArchiveButton.Visibility = Visibility.Collapsed;
             SetOutputButtons(null);
             return;
         }
@@ -257,14 +259,19 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             : item.OldjobName;
         UpdateRuntimeLog(entry.Key, BuildRuntimeLog(item, operation));
         PauseResumeButton.Content = operation?.Paused is true ? "恢复" : "暂停";
-        PauseResumeButton.IsEnabled = operation?.Active is true;
+        PauseResumeButton.IsEnabled = operation?.Active is true && !operation.IsArchiving;
+        TerminateButton.Content = operation?.IsArchiving is true ? "取消归档" : "终止";
         TerminateButton.IsEnabled = operation?.Active is true;
+        RetryArchiveButton.Visibility = item.ArchiveRecoveryAvailable ? Visibility.Visible : Visibility.Collapsed;
+        RetryArchiveButton.IsEnabled = item.ArchiveRecoveryAvailable && operation?.Active is not true && !_retryingArchive;
         SetOutputButtons(item);
         App.Current.MainWindow.ReportPageStatus($"作业概览 · {item.JobName} · {item.Status}");
     }
 
     private void ApplyRemoteJob(RemoteJobOperationSnapshot operation)
     {
+        RetryArchiveButton.Visibility = Visibility.Collapsed;
+        TerminateButton.Content = "终止";
         CurrentJobTitleText.Text = $"Remote Job: {operation.Request.JobName}";
         StatusSummaryText.Text = operation.StatusDisplay;
         ArchiveStatusText.Visibility = Visibility.Collapsed;
@@ -458,6 +465,33 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
     }
 
+    private async void OnRetryArchiveClicked(object sender, RoutedEventArgs e)
+    {
+        var item = _currentEntry?.LocalItem;
+        if (_retryingArchive || item?.ArchiveRecoveryAvailable is not true) return;
+        var selectedKey = _currentEntry!.Key;
+        var request = ++_snapshotRequest;
+        _retryingArchive = true;
+        RetryArchiveButton.IsEnabled = false;
+        try
+        {
+            var updated = await App.Current.ControlPlane.RetryLocalArchiveAsync(item.ItemId);
+            if (!IsLoaded || request != _snapshotRequest || _currentEntry?.Key != selectedKey) return;
+            _runtime = updated;
+            var row = updated.Queue.QueueItems.FirstOrDefault(x => x.ItemId == item.ItemId);
+            ApplyJob(row is null ? null : JobOverviewEntry.FromLocal(row));
+        }
+        catch (ControlPlaneException exception)
+        {
+            if (IsLoaded && _currentEntry?.Key == selectedKey) OverviewMessageText.Text = exception.ToDisplayMessage();
+        }
+        finally
+        {
+            _retryingArchive = false;
+            if (IsLoaded) ApplyJob(_currentEntry);
+        }
+    }
+
     private async void OnTerminateClicked(object sender, RoutedEventArgs e)
     {
         var remote = _currentEntry?.RemoteOperation;
@@ -468,12 +502,14 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             return;
         }
         var jobName = remote?.Request.JobName ?? currentJob?.JobName ?? "作业";
+        var archiving = remote is null && _runtime?.Operations.FirstOrDefault(x => x.ItemId == currentJob?.ItemId)?.IsArchiving is true;
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = $"终止 {jobName}？",
-            Content = "将向 Abaqus 发送 terminate，并等待求解进程安全退出。",
-            PrimaryButtonText = "终止作业",
+            Title = archiving ? $"取消 {jobName} 的归档？" : $"终止 {jobName}？",
+            Content = archiving ? "停止后续归档和清理，保留已有文件；可以稍后恢复归档。已完成的计算结果不变。"
+                : "将向 Abaqus 发送 terminate，并等待求解进程安全退出。",
+            PrimaryButtonText = archiving ? "取消归档" : "终止作业",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
         };

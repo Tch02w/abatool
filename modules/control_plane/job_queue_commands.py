@@ -289,6 +289,13 @@ class JobQueueService:
         candidates: list[QueueItem],
         queue_items: list[QueueItem],
     ) -> tuple[int, str, dict[str, Any]]:
+        if action in {"updateQueueItem", "requeueQueueItems", "removeQueueItems", "moveQueueItem", "clearFinished"}:
+            requested = {value for value in payload.get("itemIds", []) if isinstance(value, str)} if isinstance(payload.get("itemIds", []), list) else set()
+            if isinstance(payload.get("itemId"), str):
+                requested.add(payload["itemId"])
+            if any(item.archive_status == "归档中" and (action == "clearFinished" or item.item_id in requested)
+                   for item in queue_items):
+                raise ApiProblem(409, "ACTIVE_ARCHIVE_PROTECTED", "归档正在执行，请先取消并等待归档收尾")
         if action in {"addCandidates", "scanCandidates"}:
             return self._add_candidates(action, payload, candidates, queue_items)
         if action == "scanExternalJobs":

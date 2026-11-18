@@ -12,6 +12,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from modules.submitter.constants import (
     ACTIVE_STATUSES,
@@ -45,6 +46,7 @@ from modules.submitter.scheduling import ExecutionEventKind
 from .contracts import SCHEMA_VERSION, ApiProblem, utc_now_text
 from .events import EventStore
 from .job_queue_commands import JobQueueService
+from .local_archiving import LocalArchiveRecoveryMixin
 from .local_scheduling import LocalQueueScheduling, read_scheduling_resources
 
 LOGGER = logging.getLogger(__name__)
@@ -76,6 +78,8 @@ class _RuntimeRecord:
     finished_at: str = ""
     logs: list[str] = field(default_factory=list)
     paused: bool = False
+    archive_only: bool = False
+    archive_operation_id: str = ""
     observation_started: bool = False
     thread: threading.Thread | None = field(default=None, repr=False)
 
@@ -97,11 +101,12 @@ class _RuntimeRecord:
             "finishedAt": self.finished_at or None,
             "active": self.active,
             "paused": self.paused,
+            "archiveOnly": self.archive_only,
             "logs": list(self.logs),
         }
 
 
-class LocalQueueRuntimeManager:
+class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
     """Dispatch persisted queue items while keeping execution outside the UI."""
 
     def __init__(
@@ -134,6 +139,7 @@ class LocalQueueRuntimeManager:
         self._retry_results_after = 0.0
         self._pending_observations = {}
         self._next_observation_flush = 0.0
+        self._init_archive_recovery()
         self._dispatcher = threading.Thread(
             target=self._dispatch_loop,
             name="AbaqusLocalQueueDispatcher",
@@ -190,6 +196,8 @@ class LocalQueueRuntimeManager:
             self._pause_resume(payload, paused=True)
         elif action == "resume":
             self._pause_resume(payload, paused=False)
+        elif action == "retryArchive":
+            self._retry_archive(payload)
         else:
             raise ApiProblem(400, "INVALID_LOCAL_QUEUE_ACTION", "不支持该本机队列控制操作")
         return self.snapshot()
@@ -289,8 +297,14 @@ class LocalQueueRuntimeManager:
             record.controller.cancel()
             with self._lock:
                 record.status = STATUS_TERMINATING
-                record.phase = "terminating"
+                record.phase = "archive_cancelling" if record.archive_only or record.phase == "archiving" else "terminating"
                 record.message = "已发送终止请求"
+            if record.archive_only:
+                _, items = self.queue_service.runtime_items()
+                item = next((i for i in items if i.item_id == record.item_id), None)
+                if item is not None:
+                    self._set_archive_state(item, "归档中", "正在取消归档，等待当前文件检查结束", "", False)
+                continue
             self._update_queue_item(
                 record.item_id,
                 status=STATUS_TERMINATING,
@@ -319,6 +333,8 @@ class LocalQueueRuntimeManager:
         if not records:
             raise ApiProblem(409, "NO_ACTIVE_LOCAL_JOBS", "所选作业当前未在本机运行")
         action = "suspend" if paused else "resume"
+        if any(record.archive_only or record.phase in {"archiving", "archive_cancelling"} for record in records):
+            raise ApiProblem(409, "ARCHIVE_PAUSE_UNSUPPORTED", "归档可取消并恢复，不能向已结束的求解器发送暂停或恢复命令")
         for record in records:
             item = items.get(record.item_id)
             if item is None:
@@ -491,6 +507,8 @@ class LocalQueueRuntimeManager:
     @staticmethod
     def _dependency_odb_path(item: QueueItem) -> str:
         candidates = []
+        if item.archive_status in {"归档中", "归档待恢复", "归档记录异常"}:
+            return ""
         if archive_published(item.archive_status, item.archive_destination):
             candidates.append(Path(item.archive_destination) / f"{item.job_name}.odb")
         elif item.archive_destination:
@@ -531,6 +549,7 @@ class LocalQueueRuntimeManager:
                 item.archive_destination = ""
                 item.archive_status = ""
                 item.archive_error = ""
+                item.archive_recovery_available = False
                 item.rss_bytes = 0
                 item.memory_peak_bytes = 0
                 item.memory_sample_count = 0
@@ -546,7 +565,7 @@ class LocalQueueRuntimeManager:
             self.queue_service.runtime_transaction(mutation)
         if selected is None:
             return False
-        controller = LocalJobProcessController(observer=lambda observation:
+        controller = LocalJobProcessController(archive_store=self._archive_store, observer=lambda observation:
             self._receive_observation(item_id, attempt_id, observation))
         self._scheduling.memory.begin(selected)
         record = _RuntimeRecord(
@@ -578,6 +597,11 @@ class LocalQueueRuntimeManager:
             self._scheduling.memory.finish(attempt_id)
             raise
         return True
+
+    def _new_archive_record(self, item, controller):
+        return _RuntimeRecord(item_id=item.item_id, job_name=item.job_name, attempt_id=item.attempt_id,
+                              controller=controller, archive_only=True, archive_operation_id=uuid4().hex,
+                              status=STATUS_RUNNING, phase="archiving", message="计算已完成，正在恢复归档")
 
     def _run_item(self, item: QueueItem, record: _RuntimeRecord) -> None:
         def progress(phase: str, message: str, value: int, detail: str) -> None:
@@ -642,6 +666,8 @@ class LocalQueueRuntimeManager:
                 archive_destination=result.archive_destination,
                 archive_status=result.archive_status,
                 archive_error=result.archive_error,
+                archive_recovery_available=result.archive_recovery_available,
+                skip_solve_event=record.archive_only,
                 clear_active=True,
                 attempt_id=record.attempt_id,
             )
@@ -667,14 +693,15 @@ class LocalQueueRuntimeManager:
             record.message = result.message
             record.progress = 100
             record.finished_at = utc_now_text()
-            self._scheduling.memory.finish(record.attempt_id)
+            if not record.archive_only:
+                self._scheduling.memory.finish(record.attempt_id)
             self._close_scheduler_if_idle(excluding=record)
         if self._completion_sink is not None:
             self._completion_sink(item, record, result)
         self.event_store.append(
             aggregate_type="localJob",
             aggregate_id=item.item_id,
-            kind="local.job.finished",
+            kind="local.archive.finished" if record.archive_only else "local.job.finished",
             version=2,
             payload={"status": result.status, "message": result.message, "attemptId": record.attempt_id},
         )
@@ -739,6 +766,8 @@ class LocalQueueRuntimeManager:
         archive_destination: str = "",
         archive_status: str = "",
         archive_error: str = "",
+        archive_recovery_available: bool | None = None,
+        skip_solve_event: bool = False,
         clear_active: bool = False,
         attempt_id: str = "",
     ) -> None:
@@ -752,7 +781,8 @@ class LocalQueueRuntimeManager:
                 kind = {STATUS_RUNNING: ExecutionEventKind.STARTED, STATUS_TERMINATING: ExecutionEventKind.COMPLETING,
                         STATUS_COMPLETED: ExecutionEventKind.SUCCEEDED, STATUS_DATACHECK_COMPLETED: ExecutionEventKind.SUCCEEDED,
                         STATUS_TERMINATED: ExecutionEventKind.CANCELED, STATUS_UNKNOWN: ExecutionEventKind.LOST}.get(status, ExecutionEventKind.FAILED)
-                self._scheduling.event(item, kind, message)
+                if not skip_solve_event:
+                    self._scheduling.event(item, kind, message)
                 item.status = status
                 item.message = message
                 if effective_work_dir:
@@ -762,6 +792,8 @@ class LocalQueueRuntimeManager:
                 if clear_active or archive_status:
                     item.archive_status = archive_status
                 item.archive_error = archive_error
+                if archive_recovery_available is not None or clear_active:
+                    item.archive_recovery_available = bool(archive_recovery_available)
                 if clear_active:
                     item.active_job_key = ""
                     item.pids = []

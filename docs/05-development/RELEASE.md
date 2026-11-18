@@ -50,6 +50,8 @@
 3. 开发验收通过 `tests/winui_host/Program.cs` 的 `--launch-bundle <发布目录> <独立运行数据目录>` 分支，使用正式 C# 主机启动包内服务、检查资源/队列 API、验证空闲退出。不会连接用户的默认控制面。附加 `--odb <既有ODB>` 时，先将该文件复制到独立目录，再通过正式 API 调用包内 Abaqus 兼容性 worker，并核对副本 SHA256 不变；需设置 `ABAQUS_TOOLS_ABAQUS_COMMAND` 和 `ABAQUS_TOOLS_ABAQUS_RELEASE`，不执行求解。
 4. 在无 Python/.NET SDK 的机器上验证原生窗口、八页业务、真实 Abaqus 只读检查及 SSH。完成后才能宣称目标环境可用；当前机器上的冻结运行不能替代此项。
 
+归档中断恢复可用 `packaging/verify_archive_recovery.py <完整目录> <ControlPlaneHost.Tests.exe>` 验证；用 `--source` 替代完整目录先检查源码后台。它只在 GPTWork 创建非工程夹具，记录并中断自己创建的归档进程，核对原生跨进程锁、完整副本复用、部分清理恢复、正式 C# 客户端和第二次重启不重放，最后保存 `verification.json`。Windows 虚拟环境启动器可能有包装 PID，按自有父子链核对实际进程身份；不终止未知 Abaqus 进程。
+
 合并记录的冻结运行验收可执行：
 
 ```powershell

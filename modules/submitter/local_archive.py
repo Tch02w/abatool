@@ -41,7 +41,7 @@ def _identity(path):
     return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns
 
 
-def _inventory(source, item, full):
+def _inventory(source, item, full, *, allow_empty=False):
     files, directories = {}, []
 
     def visit(directory):
@@ -71,7 +71,7 @@ def _inventory(source, item, full):
                 files[Path(name)] = _identity(path)
     if Path(MANIFEST_NAME) in files:
         raise ValueError("工作目录含归档清单，需先核对目录来源")
-    if not files:
+    if not files and not allow_empty:
         raise ValueError("未找到可归档文件，未发布空归档")
     return files, directories
 
@@ -113,7 +113,39 @@ def _publish(stage, destination):
     stage.rename(destination)
 
 
-def archive_job_files(item, work_dir, *, cancelled=lambda: False, progress=None):
+def cleanup_verified(source, destination, files, directories, records, check, *, allow_missing=False):
+    for relative, identity in files.items():
+        check()
+        path, archived = source / relative, destination / relative
+        if path.resolve() != path or _linked(path):
+            raise RuntimeError(f"清理目标发生变化：{path}")
+        if allow_missing and not path.exists():
+            continue
+        digest = records[relative.as_posix()]["sha256"]
+        try:
+            if archived.resolve() != archived or _digest(archived, check) != digest:
+                raise ArchiveIntegrityError(f"已发布归档发生变化，停止清理：{archived}")
+        except OSError as exc:
+            if isinstance(exc, ArchiveCancelled):
+                raise
+            raise ArchiveIntegrityError(f"已发布归档不可读，停止清理：{archived}") from exc
+        if _identity(path) != identity or _digest(path, check) != digest:
+            raise RuntimeError(f"清理校验失败，保留原文件：{path}")
+        check()
+        path.unlink()
+    for relative in sorted(directories, key=lambda p: len(p.parts), reverse=True):
+        check()
+        directory = source / relative
+        if _linked(directory) or not directory.resolve().is_relative_to(source):
+            raise RuntimeError(f"清理目录发生变化：{directory}")
+        if directory.exists() or not allow_missing:
+            directory.rmdir()
+    check()
+    if source.exists() or not allow_missing:
+        source.rmdir()
+
+
+def archive_job_files(item, work_dir, *, cancelled=lambda: False, progress=None, checkpoint=None):
     if not item.archive_dir:
         return "", "", ""
     stage = None
@@ -151,7 +183,6 @@ def archive_job_files(item, work_dir, *, cancelled=lambda: False, progress=None)
 
         check()
         files, directories = _inventory(source, item, full)
-        root.mkdir(parents=True, exist_ok=True)
         destination = root / item.job_name
         if destination.exists() or _linked(destination):
             destination = root / f"{item.job_name}_{uuid4().hex}"
@@ -159,6 +190,11 @@ def archive_job_files(item, work_dir, *, cancelled=lambda: False, progress=None)
         if destination.resolve().parent != root or destination.resolve().is_relative_to(source):
             raise ValueError("归档目标不在指定根目录下")
         stage = root / f".{item.job_name}.archive-{uuid4().hex}.partial"
+        if checkpoint:
+            checkpoint("prepared", {"root": str(root), "stage": str(stage), "destination": str(destination),
+                "files": {p.as_posix(): list(v) for p, v in files.items()},
+                "directories": [p.as_posix() for p in directories]})
+        root.mkdir(parents=True, exist_ok=True)
         stage.mkdir()
         for relative in directories:
             (stage / relative).mkdir()
@@ -188,41 +224,21 @@ def archive_job_files(item, work_dir, *, cancelled=lambda: False, progress=None)
             stream.flush()
             os.fsync(stream.fileno())
         check()
+        if checkpoint:
+            checkpoint("ready", {"manifest": manifest})
         _publish(stage, destination)
         published = True
+        if checkpoint:
+            checkpoint("published", {})
         if full:
             if progress:
                 progress("归档已校验，正在清理计算目录", total, total)
             check()
             if _inventory(source, item, True) != (files, directories):
                 raise RuntimeError("归档已发布，但源目录已变化，未开始清理")
-            for relative, identity in files.items():
-                check()
-                path = source / relative
-                # Never recurse-delete a directory or remove an unverified/new file.
-                archived = destination / relative
-                if path.resolve() != path or _linked(path):
-                    raise RuntimeError(f"清理目标发生变化：{path}")
-                digest = records[relative.as_posix()]["sha256"]
-                try:
-                    if archived.resolve() != archived or _digest(archived, check) != digest:
-                        raise ArchiveIntegrityError(f"已发布归档发生变化，停止清理：{archived}")
-                except OSError as exc:
-                    if isinstance(exc, ArchiveCancelled):
-                        raise
-                    raise ArchiveIntegrityError(f"已发布归档不可读，停止清理：{archived}") from exc
-                if _identity(path) != identity or _digest(path, check) != digest:
-                    raise RuntimeError(f"清理校验失败，保留原文件：{path}")
-                check()
-                path.unlink()
-            for relative in sorted(directories, key=lambda p: len(p.parts), reverse=True):
-                check()
-                directory = source / relative
-                if _linked(directory) or not directory.resolve().is_relative_to(source):
-                    raise RuntimeError(f"清理目录发生变化：{directory}")
-                directory.rmdir()
-            check()
-            source.rmdir()
+            cleanup_verified(source, destination, files, directories, records, check)
+        if checkpoint:
+            checkpoint("done", {})
         return str(destination), "已归档", ""
     except Exception as exc:
         LOGGER.exception("归档未正常结束；保留已确认的求解结果和归档现场")

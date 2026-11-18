@@ -93,6 +93,12 @@ public sealed class LocalJobRuntimeOperation
     [JsonPropertyName("paused")]
     public bool Paused { get; init; }
 
+    [JsonPropertyName("archiveOnly")]
+    public bool ArchiveOnly { get; init; }
+
+    [JsonIgnore]
+    public bool IsArchiving => ArchiveOnly || Phase is "archiving" or "archive_cancelling";
+
     [JsonPropertyName("logs")]
     public IReadOnlyList<string> Logs { get; init; } = [];
 }

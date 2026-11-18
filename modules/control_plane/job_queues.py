@@ -89,6 +89,7 @@ def _project_item(raw: object, index: int) -> dict[str, Any] | None:
         "archiveDestination": _string(raw.get("archive_destination")),
         "archiveStatus": _string(raw.get("archive_status")),
         "archiveError": _string(raw.get("archive_error")),
+        "archiveRecoveryAvailable": bool(raw.get("archive_recovery_available", False)),
         "elapsed": _string(raw.get("elapsed")),
         "isExternal": bool(raw.get("is_external", False)),
         "dependencyJobIds": [

@@ -36,6 +36,21 @@ from tests.control_plane.test_local_queue_runtime_api import (
 GB = 1024**3
 
 
+def test_archive_only_work_reserves_overlapping_directory_even_for_another_job_name(tmp_path):
+    archive, waiting = queue_item(tmp_path, "archive"), queue_item(tmp_path, "other")
+    archive.status, archive.archive_status = STATUS_COMPLETED, "归档中"
+    path = tmp_path / "joblist.json"
+    save_joblist_state([], [archive, waiting], path)
+    service = JobQueueService(path, external_monitor_interval=999)
+    scheduler = LocalQueueScheduling(service, lambda: LocalSchedulingResources(8, 16 * GB))
+    try:
+        assert scheduler.reserve([waiting.item_id], 2, set()) == []
+        assert "归档" in load_joblist_state(path, restore_active_state=False)[1][1].message
+    finally:
+        scheduler.close()
+        service.close()
+
+
 def configure(runtime, cores=8, memory=16 * GB):
     runtime.local_queue_runtime._scheduling.resource_provider = lambda: LocalSchedulingResources(cores, memory)
 

@@ -15,6 +15,7 @@ from modules.submitter.constants import (
     STATUS_WAITING_DEPENDENCY,
 )
 from modules.submitter.cpu_policy import local_cpu_policy
+from modules.submitter.local_archive_state import work_directory
 from modules.submitter.models import QueueItem
 from modules.submitter.queue_scheduler import (
     effective_queue_item_work_dir,
@@ -76,6 +77,16 @@ class LocalQueueScheduling:
             self._recover()
             self._recovery_pending = False
 
+    def confirm_archive_solve(self, item):
+        """Only a validated checkpoint for this attempt permits this recovery transition."""
+        current = self.core.get(item.job_id)
+        if current is not None and current.attempt_id == item.attempt_id:
+            if current.state != JobState.COMPLETED:
+                self.core.transition(item.job_id, JobState.COMPLETED, attempt_id=item.attempt_id,
+                                     message="归档记录已确认原求解完成", event_type="ARCHIVE_SOLVE_CONFIRMED", force=True)
+            item.scheduler_state = JobState.COMPLETED.value
+            item.pending_reason = ""
+
     def _recover(self):
         recovered = []
         directories = []
@@ -122,13 +133,19 @@ class LocalQueueScheduling:
 
         def mutation(_candidates, items):
             by_job = {item.job_id: item for item in items}
-            active = [item for item in items if item.status in ACTIVE_STATUSES or item.item_id in finishing_ids]
+            active = [item for item in items if item.status in ACTIVE_STATUSES or item.item_id in finishing_ids
+                      or item.archive_status == "归档中"]
             # Unknown restored work is deliberately not counted as zero occupancy.
             unknown = [item for item in items if item.status == STATUS_UNKNOWN]
             policies = {}
             eligible = set()
+            archiving = [work_directory(item) for item in active if item.archive_status == "归档中"]
             for item in items:
                 if item.item_id not in ready_ids or item.is_external:
+                    continue
+                source = work_directory(item)
+                if any(source.is_relative_to(root) or root.is_relative_to(source) for root in archiving):
+                    item.message = "计算目录正在归档，等待归档线程收尾"
                     continue
                 if item.cores <= 0:
                     item.message = "请先设置 Core 后再开始队列"

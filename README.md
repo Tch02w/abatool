@@ -8,7 +8,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 - 新建本机或远程作业，校验路径和资源参数并预览实际 Abaqus 命令。
 - 本机启动前先检查工作目录、LCK 和输入，再逐文件准备；复制失败保留该文件旧目标，已接受的取消不再启动新进程。[准备与归档边界](docs/03-features/LOCAL_WORKSPACE.md)。
-- 本机归档先复制并校验再发布，可选清理原计算目录；界面区分求解完成与归档失败/取消，部分归档不用于 Restart。[归档及恢复限制](docs/03-features/LOCAL_ARCHIVE.md)、[候选版本变化](docs/05-development/CHANGELOG.md)。
+- 本机归档先复制并校验再发布，可选清理原计算目录；中断后可从作业概览「恢复归档」，核对已有副本继续处理，不重新求解。界面区分计算与归档结果，部分归档不用于 Restart。[归档及恢复限制](docs/03-features/LOCAL_ARCHIVE.md)、[候选版本变化](docs/05-development/CHANGELOG.md)。
 - WinUI 新建作业和队列编辑可配置 GPU、Explicit 计算精度及 ODB 场输出精度；默认沿用环境，预览/本机/远端共用校验和参数，持久恢复保留选择。没有 GPU 独占分配，真实加速与原生操作仍待验收。见 [选项说明](docs/03-features/EXECUTION_OPTIONS.md)。
 - 扫描候选 INP、管理正式队列，按优先级、CPU/绝对内存及依赖分配本机作业；后台重启保留身份并核对，未知状态不重复提交；[调度和恢复边界](docs/03-features/LOCAL_SCHEDULING.md)。
 - 观测本机作业的进程内存，区分当前占用、峰值和估计；结合历史及安全余量分配资源，多作业共享扫描。[内存口径与限制](docs/03-features/MEMORY_MONITORING.md)。

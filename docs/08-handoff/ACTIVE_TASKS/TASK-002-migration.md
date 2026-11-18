@@ -1,5 +1,20 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 归档中断恢复与独立重试
+
+最终相关回归 `GPTWork/archive-recovery-delivery-20261118.xml/log` **185 项通过（96.09 秒）**，包含 47 项文档导航；句柄7903已返回0。只读进程核对句柄77610也已返回0，未发现此轮测试进程。下方各专项集合重叠不累计；下一步本地功能提交与新完整包验证。
+
+实施前已说明方案：保留原求解执行身份，持久记录归档阶段，重启展示待恢复；显式恢复时核对并复用完整副本，继续复制/清理，不通过重新求解重试归档。相比只持久保存最终状态，增加了复制途中与部分清理后恢复能力。详见 [归档说明](../../03-features/LOCAL_ARCHIVE.md) 和 [ADR 0014](../../submitter/adr/0014-verified-local-archive-publication.md)。
+
+- 新增 `ArchiveStateStore`、`resume_archive`、`LocalArchiveRecoveryMixin`、`run_archive_only`；按原 itemId/attemptId 保存阶段与文件计划，原生文件锁防重复接管。损坏/错执行记录不把未知求解改成完成。未完成副本保留在独立现场；缺失的已清理文件可续接，新内容/链接/LCK/摘要变化拒绝清理。
+- 作业概览「恢复归档」连接正式 C# 客户端；取消、关闭、重复请求和队列编辑沿用运行保护，暂停/恢复不发送给已完成求解器。重叠计算目录不分配新作业。相同已完成状态重启不重复落盘。独立提醒已写入后可持久恢复；写提醒前崩溃的补发缺口如实保留。
+- `archive-recovery-final-20261118.xml/log`：40 项通过，34.85 秒；`archive-recovery-regression-20261118.xml/log`：117 项通过，68.60 秒（集合重叠）。C# 11 项归档/兼容及原有主机检查通过；WinUI Release 22.42 秒、零警告/错误。源码真实进程 `GPTWork/archive-recovery-live-323ba9721d6f/verification.json` verified，所有自有进程结束；未启动求解。
+- 验证脚本 `packaging/verify_archive_recovery.py --source GPTWork/archive-recovery-host-build/Debug/net10.0/ControlPlaneHost.Tests.exe` 实际终止复制中、部分清理后的夹具进程，再经新后台和正式客户端恢复。两次后台启动、原 attempt、全 SHA256、完整副本 inode 复用、空目录、原始输入不变、4 条求解/归档提醒去重通过。其后换完整包目录替代 `--source` 可验证冻结版本。
+- 检查期间修正损坏 files/directories 类型导致启动异常、恢复发布前复核遗漏、重叠目录准入遗漏。验证脚本初次语法错误未启动进程；后续 `archive-recovery-live-4877895a2c41` 因 Windows 虚拟环境启动器 PID 与实际子进程不同而失败，保留回执。改为验证自有父子链和实际 PID/createTime；该失败的 205536/201676 均确认结束，后续成功回执记录全部包装/实际进程终态。非产品故障。
+- 本轮复核 F021 读取目录按钮：空闲圆环 Collapsed、忙时绑定按钮前景色、内容水平/垂直居中仍在源码和旧完整包；GIF 两模式实际导出证据继续有效，不重复改动已修复入口。用户曾按 Esc 停止原生操作，未擅自恢复桌面控制。
+
+准确续接点：40 项检查句柄 79942 已返回 0；前轮回归117项日志终态明确，恢复 API 句柄15803已收回，Release91335此前结束。源码进程检查正常退出，新完整包尚未构建；先完成文档及最终相关回归，再本地提交、构建完整目录并运行冻结恢复/清单/依赖/正式主机检查。GitHub push 此前自动审批拒绝，具体远端 main 确认尚未收到，不重试。周额度本轮读取剩余42%，整体目标保持 active。
+
 ## 范围与前置条件
 
 后处理交付后继续，不以现有八个页面存在证明迁移完成。范围来自本线程用户要求和 [迁移合同](../../winui-migration.md)。功能入口均可由 [功能索引](../../03-features/FUNCTION_INDEX.md) 定位。

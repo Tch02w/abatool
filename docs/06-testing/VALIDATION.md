@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+归档恢复最终相关检查 `GPTWork/archive-recovery-delivery-20261118.xml/log` **185 项全部通过（96.09 秒）**，包含归档核心/恢复、执行器、真实 HTTP、队列/调度/通知/关闭、WinUI 壳层与 47 项文档导航；与下方集合重叠，不累计。没有把模拟/壳层检查视为原生业务页验收。
+
+2026-11-18 F005 独立归档恢复：`GPTWork/archive-recovery-final-20261118.xml/log` **40 项通过（34.85 秒）**，覆盖 14 项恢复核心、6 项真实 HTTP、20 项调度。之前相关回归 `archive-recovery-regression-20261118.xml/log` **117 项通过（68.60 秒）**；集合重叠不累计。C# `archive-recovery-host-tests-20261118.log` 11 项归档显示/兼容及原有检查通过，原生 Release `archive-recovery-winui-20261118.log` 零警告/错误（22.42 秒）。源码真实进程回执 `GPTWork/archive-recovery-live-323ba9721d6f/verification.json` verified：复制中、部分清理后结束自有进程，原生跨进程锁释放，新后台正式客户端恢复原执行、复用完整副本、全摘要校验、源 INP 不变、第二次重启及提醒不重放；所有自有进程结束，没有启动 Abaqus。新冻结包、跨卷负载和原生操作尚未验证。以下为上一阶段发布保护证据；本次不以其替代新恢复功能验收。
+
 F005 归档发布保护：旧版关闭清理仍移动源文件、坏根路径异常的 2 项复现失败已保存，`GPTWork/archive-before-20261118.xml/log`。改为目标盘复制校验、完整发布、可选清理并独立报告归档状态后，最终 **34 项归档/执行/API 通过（6.79 秒）**，`GPTWork/archive-final-20261118.xml/log`；相关队列/调度/通知/关闭/准备/壳层 **105 项通过（67.07 秒）**，`GPTWork/archive-regression-20261118.xml/log`。包含真实 NTFS junction、Windows 子进程在发布前/后中断、失败记录重启恢复；未运行 Abaqus。C# 新增 6 项展示/兼容和既有检查通过，Release 零警告/错误。独立归档恢复/重试、实际跨卷/大文件和原生界面仍未完成，见 [归档说明](../03-features/LOCAL_ARCHIVE.md)。
 
 归档完整包 **`GPTWork/release-win-x64-2c2808add94d/AbaqusTools`** 来自干净 `1f295df`，1662 文件/19 worker 摘要和用户账户可读检查通过。依赖 `GPTWork/bundle-probe-p4tay3kv/verification.json`、本轮正式 C# 主机 `GPTWork/archive-frozen-host-20261118.log` 通过。冻结正式执行器回执 `GPTWork/frozen-archive-5538576f393c/verification.json` 为 verified：非工程夹具分别归档成功并清理、归档失败且保留结果；两次后台启动保留同一执行/归档状态，提醒正确，没有自动重算，清单完整摘要及源 INP 不变。后台/夹具四个自有进程均结束，没有 Abaqus 求解。文档导航 47 项通过；不是归档中途崩溃后自动接续证明。

@@ -10,9 +10,11 @@
 
 实际静默生命周期 `GPTWork/installer-lifecycle-b2544857f35d/verification.json` verified（73495退出0）：陌生目录拒绝、中文空格目录首次安装、全摘要、活动自有后台拒绝升级/卸载且未被终止、正常退出后升级保留旧版本和用户样本、正式C#主机启动/API/退出、卸载清除登记程序/注册并保留用户文件。首轮NOICONS未验证菜单，后续 `GPTWork/installer-lifecycle-599f6e10a6fd/verification.json` verified（51187退出0），追加真实开始菜单首次指向/升级指向/卸载清除；old-shortcut.log/new-shortcut.log保留。均无强制收尾、无剩余自有PID/测试注册，不启动业务窗口/Abaqus。
 
-最后追加目录链接祖先拒绝检查：`GPTWork/installer-lifecycle-a1a720d99f20/verification.json` verified，51405退出0，日志GPTWork/installer-boundaries-20261118.log。链接目标无写入，其余完整生命周期/开始菜单回归均通过；无强制收尾、无剩余PID/测试注册。11项清单及49项文档共60项通过0.21秒（GPTWork/installer-delivery-tests-20261118.log），Ruff及差异空白检查通过。正式标识构建尚待完成。当前原生恢复及具体GitHub main确认仍未收到，未操作/推送。
+最后追加目录链接祖先拒绝检查：`GPTWork/installer-lifecycle-a1a720d99f20/verification.json` verified，51405退出0，日志GPTWork/installer-boundaries-20261118.log。链接目标无写入，其余完整生命周期/开始菜单回归均通过；无强制收尾、无剩余PID/测试注册。11项清单及49项文档共60项通过0.21秒（GPTWork/installer-delivery-tests-20261118.log），Ruff及差异空白检查通过。正式标识候选随后完成，见下方最终回执。当前原生恢复及具体GitHub main确认仍未收到，未操作/推送。
 
-准确续接点：本轮所有构建/测试句柄均已结束，无待回收进程。源码/文档本地提交后生成正式标识候选并核对摘要及来源。正式标识真实安装、签名/SmartScreen、原生向导与无开发环境目标机仍待验，不移除其他整体迁移缺口。本轮只在新建GPTWork内安装/卸载自有测试程序，不递归清理历史证据。
+最终候选：本地提交e69192befdffee14b412eaab9de8ed05bbae78ed，干净构建 `GPTWork/installer-win-x64-cfa638b65fa8`（65990退出0），正式AppId、非testOnly，负载仍为b2cfd57/6d5279845a23。安装器125523315字节，SHA256 b3b789e230c37b6998c1ffc01612c7d52112dfc067f98e9bf9e25020cb9ff1d1；artifact-verification.json核对文件/来源及架构，安装引导器0x14c、应用与后台0x8664；signature.json为NotSigned。正式标识没有实际安装到用户默认目录，没有发布GitHub。
+
+准确续接点：所有本轮构建/测试/验证句柄已结束，无待回收进程/测试注册。最终文档49项通过0.11秒（installer-final-docs-20261118.log），本地提交后继续F001系统会话结束及日常草稿保存。最终审计发现MainWindow仅普通AppWindow.Closing接线，WorkbenchSession只在SaveForCloseAsync保存；当前没有WM_QUERYENDSESSION/WM_ENDSESSION专用处理。Windows官方说明系统会话结束有独立消息和有限处理时间，不能沿用可等待网络/对话框的普通关闭流程作为证明。先给出新的非交互保存/恢复方案，再实现/模拟检查；不实际注销/关机。原生恢复、真实环境和资料、目标机及具体远端确认仍未补齐，但尚有独立实现项，goal继续active，不标blocked/complete。正式标识真实安装、签名/SmartScreen、原生向导与无开发环境目标机仍待验，不移除其他整体迁移缺口。本轮只在新建GPTWork内安装/卸载自有测试程序，不递归清理历史证据。
 
 
 ## 2026-11-18 · 完整合同核对、队列来源与整套回归
@@ -595,3 +597,5 @@ UI 保留已选结果，避免每次轮询重建结果列表和不可变计划�
 本任务是待逐项核对的范围，不表示全部未实现。每项开始时根据当前源码和运行证据判断已完成/待修/待验收，避免重复已完成工作。按原迁移合同维护需求，不为了通过现有测试缩小交付范围。
 
 每完成一个功能，同时写对应文档和测试记录，更新功能索引及当前状态；设计变化补 ADR。只有所有相关验收和必要文档完成后才能关闭对应任务。
+
+F001会话结束下一项的官方依据：[WM_QUERYENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-queryendsession)、[WM_ENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-endsession)。需及时响应查询、在实际结束时无提示地保存，并处理会话取消；本轮只核对文档/源码，尚未实现或测试该路径。

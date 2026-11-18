@@ -1,0 +1,156 @@
+[Setup]
+AppId=@APP_ID@
+AppName=@APP_NAME@
+AppVersion=@VERSION@
+VersionInfoVersion=@VERSION_INFO@
+AppPublisher=Abaqus Tools
+DefaultDirName={localappdata}\Programs\AbaqusTools
+DefaultGroupName=@APP_NAME@
+DisableProgramGroupPage=yes
+AllowNoIcons=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0.17763
+WizardStyle=modern
+CloseApplications=no
+RestartApplications=no
+SetupMutex=@APP_ID@.Setup
+UninstallLogMode=append
+UninstallDisplayIcon={app}\versions\@PAYLOAD_ID@\AbaqusTools.WinUI.exe
+OutputDir=@OUTPUT_DIR@
+OutputBaseFilename=AbaqusTools-@VERSION@-win-x64-setup
+Compression=lzma2/fast
+SolidCompression=yes
+SetupLogging=yes
+
+[Languages]
+Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+
+[Files]
+@FILES@
+
+[Icons]
+Name: "{autoprograms}\@APP_NAME@"; Filename: "{app}\versions\@PAYLOAD_ID@\AbaqusTools.WinUI.exe"; WorkingDir: "{app}\versions\@PAYLOAD_ID@"; BeforeInstall: GuardInstall
+
+[Code]
+function GetFileAttributesW(lpFileName: String): LongWord;
+  external 'GetFileAttributesW@kernel32.dll stdcall';
+
+function UnsafePath(Path: String): Boolean;
+var
+  Attributes: LongWord;
+  Parent: String;
+begin
+  Path := RemoveBackslashUnlessRoot(ExpandFileName(Path));
+  Result := (Length(Path) <= 3) or (Copy(Path, 1, 2) = '\\');
+  if Result then exit;
+  while Length(Path) > 3 do begin
+    Attributes := GetFileAttributesW(Path);
+    if Attributes <> $FFFFFFFF then begin
+      if (Attributes and $400) <> 0 then begin Result := True; exit; end;
+    end else if (DLLGetLastError <> 2) and (DLLGetLastError <> 3) then begin
+      Result := True; exit;
+    end;
+    Parent := ExtractFileDir(Path);
+    if Parent = Path then break;
+    Path := Parent;
+  end;
+end;
+
+function HasEntries(Path: String): Boolean;
+var
+  Find: TFindRec;
+begin
+  Result := False;
+  if FindFirst(AddBackslash(Path) + '*', Find) then begin
+    try
+      repeat
+        if (Find.Name <> '.') and (Find.Name <> '..') then begin
+          Result := True; exit;
+        end;
+      until not FindNext(Find);
+    finally
+      FindClose(Find);
+    end;
+  end;
+end;
+
+function OwnershipError: String;
+var
+  Marker: AnsiString;
+  Path: String;
+begin
+  Result := '';
+  Path := ExpandConstant('{app}');
+  if UnsafePath(Path) then begin
+    Result := '请选择本机普通目录，不能使用磁盘根目录、网络路径或目录链接。'; exit;
+  end;
+  if HasEntries(Path) then begin
+    if not LoadStringFromFile(AddBackslash(Path) + '.abatool-installation', Marker) then
+      Result := '所选目录已有其他文件。请选择空目录，或先前由本安装程序创建的目录。'
+    else if Marker <> '@APP_ID@' then
+      Result := '所选目录属于另一份安装，不能覆盖。';
+  end;
+end;
+
+function RunningError: String;
+var
+  Locator, Services, Processes, Process: Variant;
+  Index: Integer;
+  Root, Executable: String;
+begin
+  Result := '';
+  Root := Lowercase(AddBackslash(ExpandFileName(ExpandConstant('{app}'))));
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Services := Locator.ConnectServer('', 'root\CIMV2');
+    Processes := Services.ExecQuery('SELECT ExecutablePath FROM Win32_Process WHERE Name=''AbaqusTools.WinUI.exe'' OR Name=''AbaqusTools.ControlPlane.exe''');
+    for Index := 0 to Processes.Count - 1 do begin
+      Process := Processes.ItemIndex(Index);
+      if VarIsNull(Process.ExecutablePath) then begin
+        Result := '无法确认正在运行程序的位置。请关闭 Abaqus Workbench 及其后台任务后重试。'; exit;
+      end;
+      Executable := Lowercase(Process.ExecutablePath);
+      if Pos(Root, Executable) = 1 then begin
+        Result := '此目录的程序或后台任务仍在运行。请在工作台内正常结束任务并退出，再重试。'; exit;
+      end;
+    end;
+  except
+    Result := '无法检查正在运行的程序，安装或卸载已停止。请检查 Windows 管理服务后重试。';
+    Log(GetExceptionMessage);
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := OwnershipError;
+  if Result = '' then Result := RunningError;
+end;
+
+procedure GuardInstall;
+var
+  Error: String;
+begin
+  Error := RunningError;
+  if Error <> '' then RaiseException(Error);
+end;
+
+procedure VerifyInstalledFile(ExpectedHash: String);
+begin
+  if CompareText(GetSHA256OfFile(CurrentFileName), ExpectedHash) <> 0 then
+    RaiseException('文件校验失败，安装已停止：' + CurrentFileName);
+end;
+
+function InitializeUninstall: Boolean;
+var
+  Error: String;
+begin
+  Error := OwnershipError;
+  if Error = '' then Error := RunningError;
+  Result := Error = '';
+  if not Result then begin
+    Log(Error);
+    if not UninstallSilent then MsgBox(Error, mbError, MB_OK);
+  end;
+end;

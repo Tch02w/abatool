@@ -24,3 +24,4 @@ Current records:
 - [0013-durable-job-notifications.md](0013-durable-job-notifications.md)
 - [0014-verified-local-archive-publication.md](0014-verified-local-archive-publication.md)
 - [0015-external-scan-snapshot-merge.md](0015-external-scan-snapshot-merge.md)
+- [0016-versioned-per-user-installer.md](0016-versioned-per-user-installer.md)

@@ -1,5 +1,20 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · F026 安装、升级与卸载
+
+开始于干净45aa392，产品负载仍使用已验证b2cfd57/6d5279845a23，不修改业务代码。先给出按用户安装、独立版本目录、保留数据、活动任务拒绝的实现方案，再新增build_installer.py、installer.iss.in、verify_installer.py及11项清单测试。正式标识构建要求干净源码；负载和安装器源码分别记账。新增安装说明、ADR0016及Wiki/README/功能索引。测试标识产物不得交付用户。
+
+官方 Inno 7.1.1 x64 来自官方链接，Authenticode有效、发布者Pyrsys B.V.，下载SHA256为8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0。便携编译器位于GPTWork/inno-setup-7.1.1/compiler；初次普通运行因SHGetFolderPath 0x80070005拒绝读取autodesktop而退出1，未部署应用；正常账户便携释放退出0，不创建编译器快捷方式/卸载项。日志extract.log/extract-allowed.log均保留。
+
+测试包40d09cc651bf（0.0.9，负载03b4adf）和8a79e216e0c5（0.1.0，负载b2cfd57）编译通过，均使用独立身份AbaqusTools.Workbench.WinUI3.Test.202611180002。编译源码dirty为测试期如实记录；不是正式标识发布物。早期14a896056f83也保留。
+
+实际静默生命周期 `GPTWork/installer-lifecycle-b2544857f35d/verification.json` verified（73495退出0）：陌生目录拒绝、中文空格目录首次安装、全摘要、活动自有后台拒绝升级/卸载且未被终止、正常退出后升级保留旧版本和用户样本、正式C#主机启动/API/退出、卸载清除登记程序/注册并保留用户文件。首轮NOICONS未验证菜单，后续 `GPTWork/installer-lifecycle-599f6e10a6fd/verification.json` verified（51187退出0），追加真实开始菜单首次指向/升级指向/卸载清除；old-shortcut.log/new-shortcut.log保留。均无强制收尾、无剩余自有PID/测试注册，不启动业务窗口/Abaqus。
+
+最后追加目录链接祖先拒绝检查：`GPTWork/installer-lifecycle-a1a720d99f20/verification.json` verified，51405退出0，日志GPTWork/installer-boundaries-20261118.log。链接目标无写入，其余完整生命周期/开始菜单回归均通过；无强制收尾、无剩余PID/测试注册。11项清单及49项文档共60项通过0.21秒（GPTWork/installer-delivery-tests-20261118.log），Ruff及差异空白检查通过。正式标识构建尚待完成。当前原生恢复及具体GitHub main确认仍未收到，未操作/推送。
+
+准确续接点：本轮所有构建/测试句柄均已结束，无待回收进程。源码/文档本地提交后生成正式标识候选并核对摘要及来源。正式标识真实安装、签名/SmartScreen、原生向导与无开发环境目标机仍待验，不移除其他整体迁移缺口。本轮只在新建GPTWork内安装/卸载自有测试程序，不递归清理历史证据。
+
+
 ## 2026-11-18 · 完整合同核对、队列来源与整套回归
 
 本轮从干净bd22cd8开始，逐项核对迁移合同；新增[交付核对清单](../../06-testing/COMPLETION_AUDIT.md)，整理CURRENT_STATUS/TASK_INDEX中过时的连续“下一步”。Wiki和功能索引接入。发现正式安装/升级/卸载入口仍是开发缺口，不能把所有剩余事项归为外部阻塞。原生恢复、具体GitHub main确认均未收到，不操作/推送。

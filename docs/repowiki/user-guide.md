@@ -4,7 +4,7 @@
 
 ## 启动和环境
 
-当前提供源码启动方式和 Windows x64 自包含目录候选。源码方式需要 .NET 10 SDK、Python 3.14 和项目虚拟环境；目录候选携带控制面与界面运行库，须完整保留目录。ODB 读取、出图和合并仍需本机 Abaqus。安装依赖、构建和启动命令见 [README](../../README.md)，目录包限制见 [发布说明](../05-development/RELEASE.md)。
+当前提供源码启动方式、Windows x64 自包含目录及安装候选流程。安装/升级/卸载步骤见[安装说明](../05-development/INSTALLATION.md)，实际产物状态以[当前状态](../08-handoff/CURRENT_STATUS.md)为准。源码方式需要 .NET 10 SDK、Python 3.14 和项目虚拟环境；目录候选携带控制面与界面运行库，须完整保留目录。ODB 读取、出图和合并仍需本机 Abaqus。安装依赖、构建和启动命令见 [README](../../README.md)，目录包限制见 [发布说明](../05-development/RELEASE.md)。
 
 首次打开后，查看底部的 Abaqus 探测和控制面状态。若提示控制面不可用，检查项目根目录是否有 `.venv/Scripts/python.exe`。自定义解释器使用 `ABAQUS_TOOLS_PYTHON` 环境变量，自定义项目根目录使用 `ABAQUS_TOOLS_ROOT`。Abaqus 命令可填写安装目录下的 `abaqus.bat` 完整路径。启动失败的定位步骤见 [开发与发布](development.md)。
 

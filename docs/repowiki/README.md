@@ -16,6 +16,7 @@
 - [ODB 后处理](postprocessor.md)：发现、兼容性、合并、批处理和结果浏览。
 - [WinUI 结果浏览操作](../03-features/POSTPROCESSING.md#winui-结果列表与表格预览f021)说明如何翻页、查看 CSV 和 Excel 宽表，以及复制预览。
 - [开发、测试与发布](development.md)：环境、验证命令、生成物和安全约定。
+- [Windows 安装与升级](../05-development/INSTALLATION.md)：按用户安装、版本与数据保留、活动任务保护及卸载。
 - [HTTP API 契约](../api-contract.md)：控制面端点、鉴权、错误和异步操作模型。
 - [WinUI 迁移合同](../winui-migration.md)：功能对等与验收边界。
 - [完整迁移交付核对](../06-testing/COMPLETION_AUDIT.md)：实现、工程证据、原生验收和安装发布缺口。

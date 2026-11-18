@@ -58,6 +58,7 @@
 ## 跨功能修改提示
 
 - F003/F005/F010 的结束提醒统一交给 F027；新增/改动终态时核对不会对未知/活动状态发结束提醒。远端请求 notify 省略默认 true，关闭选项必须在恢复后仍有效。
+- F008 连接视图响应：`modules/control_plane/remote_servers.py` / `snapshot`、`_communication`、`_publish_snapshot_locked`；`winui/AbaqusTools.WinUI/Services/RemoteServerContracts.cs` / `RemoteServerConnection.DisplayText`、`StatusBarText`；资源页 `RefreshRemoteSnapshotInBackgroundAsync` 忙时只读快照。检查为 `tests/control_plane/test_remote_server_responsiveness.py` 和 `tests/winui_host/RemoteServerSnapshotChecks.cs`；身份校验与网络命令仍由原连接锁保护。
 
 - F001 与八页草稿：各页面 `Session.Register` 列出原始输入白名单；F003 新建作业、F004 队列参数、F013 合并输入等复用 `WorkbenchSession`。F004 `ApplyRuntime` 保留正在编辑的参数；F012 图保存 `OdbResultGraphEditor.SaveForCloseAsync`，F022 继续使用 `OdbPostprocessingPage.SaveWorkspace(forClose:true)`。关闭选择、租约、同步 POST 准入与后台自行退出见 [ADR 0009](../submitter/adr/0009-reversible-workbench-close.md)。原生业务交互待验收。
 

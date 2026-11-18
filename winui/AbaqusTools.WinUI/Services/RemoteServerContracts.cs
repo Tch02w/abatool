@@ -93,6 +93,12 @@ public sealed class RemoteServerCommandRequest
 
 public sealed class RemoteServerConnection
 {
+    [JsonPropertyName("busy")]
+    public bool IsBusy { get; init; }
+
+    [JsonPropertyName("activity")]
+    public string Activity { get; init; } = string.Empty;
+
     [JsonPropertyName("status")]
     public string Status { get; init; } = "disconnected";
 
@@ -107,6 +113,29 @@ public sealed class RemoteServerConnection
 
     [JsonPropertyName("resource")]
     public RemoteResourceSnapshot? Resource { get; init; }
+
+    [JsonIgnore]
+    public string DisplayText => IsBusy
+        ? (string.IsNullOrWhiteSpace(Activity) ? "正在更新连接状态" : Activity)
+            + (Resource is null ? string.Empty : " · 资源值为上次读取")
+        : Status switch
+        {
+            "connected" => $"已连接 · {ProfileName}",
+            "confirmationRequired" => "等待确认主机指纹",
+            "connecting" => "正在连接",
+            "error" => "连接异常",
+            _ => "当前未连接",
+        };
+
+    [JsonIgnore]
+    public string StatusBarText => IsBusy ? "远端 ◐ 更新中" : Status switch
+    {
+        "connected" => $"远端 ● {ProfileName}",
+        "confirmationRequired" => "远端 ◐ 等待指纹确认",
+        "connecting" => "远端 ◐ 正在连接",
+        "error" => "远端 △ 连接异常",
+        _ => "远端 ○ 未连接",
+    };
 }
 
 public sealed class RemoteResourceSnapshot

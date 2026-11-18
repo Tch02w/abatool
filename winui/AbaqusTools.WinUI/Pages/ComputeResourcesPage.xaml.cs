@@ -72,7 +72,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private async void OnRemoteRefreshTimerTick(object? sender, object e)
     {
         if (App.Current.Session.IsClosing) return;
-        if (_busy || _backgroundRefreshBusy || _remoteSnapshot.Connection.Status != "connected")
+        if (_busy || _backgroundRefreshBusy ||
+            (_remoteSnapshot.Connection.Status != "connected" && !_remoteSnapshot.Connection.IsBusy))
         {
             return;
         }
@@ -89,9 +90,14 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         _backgroundRefreshBusy = true;
         try
         {
-            ApplyRemoteSnapshot(
-                await App.Current.ControlPlane.RefreshRemoteServerAsync(CancellationToken.None));
-            App.Current.MainWindow.ReportPageStatus("远端资源已刷新");
+            // While another operation owns the SSH session, observe its published
+            // state instead of adding another resource command behind it.
+            var observing = _remoteSnapshot.Connection.IsBusy;
+            var snapshot = observing
+                ? await App.Current.ControlPlane.GetRemoteServersAsync(CancellationToken.None)
+                : await App.Current.ControlPlane.RefreshRemoteServerAsync(CancellationToken.None);
+            ApplyRemoteSnapshot(snapshot);
+            if (!observing) App.Current.MainWindow.ReportPageStatus("远端资源已刷新");
         }
         catch (OperationCanceledException)
         {
@@ -99,7 +105,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            ShowError(exception.Message);
+            await ShowRemoteActionErrorAsync(exception);
         }
         finally
         {
@@ -458,13 +464,36 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            ShowError(exception.Message);
+            await ShowRemoteActionErrorAsync(exception);
         }
         finally
         {
             _busy = false;
             UpdateButtons();
         }
+    }
+
+    private async Task ShowRemoteActionErrorAsync(Exception original)
+    {
+        var message = original.Message;
+        try
+        {
+            ApplyRemoteSnapshot(await App.Current.ControlPlane.GetRemoteServersAsync());
+        }
+        catch (Exception readError)
+        {
+            // This is a view error, not a remote job failure or a disconnect.
+            message += $"\n连接状态暂无法读取：{readError.Message}";
+            ApplyRemoteSnapshot(new RemoteServersSnapshot
+            {
+                SchemaVersion = _remoteSnapshot.SchemaVersion,
+                Profiles = _remoteSnapshot.Profiles,
+                ProfilesError = _remoteSnapshot.ProfilesError,
+                EventCursor = _remoteSnapshot.EventCursor,
+                Connection = new RemoteServerConnection { Status = "error", LastError = message },
+            });
+        }
+        ShowError(message);
     }
 
     private async Task ApplyServerDialogResultAsync(ServerDialogResult result)
@@ -754,14 +783,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     {
         _remoteSnapshot = snapshot;
         RemoteSummaryText.Text = $"{snapshot.Profiles.Count} 个配置";
-        RemoteConnectionText.Text = snapshot.Connection.Status switch
-        {
-            "connected" => $"已连接 · {snapshot.Connection.ProfileName}",
-            "confirmationRequired" => "等待确认主机指纹",
-            "connecting" => "正在连接",
-            "error" => "连接异常",
-            _ => "当前未连接",
-        };
+        RemoteConnectionText.Text = snapshot.Connection.DisplayText;
         if (!string.IsNullOrWhiteSpace(snapshot.ProfilesError))
         {
             ShowError("服务器配置读取失败：" + snapshot.ProfilesError);

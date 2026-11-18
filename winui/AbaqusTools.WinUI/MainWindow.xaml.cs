@@ -72,14 +72,8 @@ public sealed partial class MainWindow : Window
 
     public void ApplyRemoteServerSnapshot(RemoteServersSnapshot snapshot)
     {
-        RemoteStatusText.Text = snapshot.Connection.Status switch
-        {
-            "connected" => $"远端 ● {snapshot.Connection.ProfileName}",
-            "confirmationRequired" => "远端 ◐ 等待指纹确认",
-            "error" => "远端 △ 连接异常",
-            _ => "远端 ○ 未连接",
-        };
-        RemoteStatusText.Foreground = snapshot.Connection.Status == "connected"
+        RemoteStatusText.Text = snapshot.Connection.StatusBarText;
+        RemoteStatusText.Foreground = snapshot.Connection.Status == "connected" && !snapshot.Connection.IsBusy
             ? (Brush)Application.Current.Resources["AbaqusSuccessBrush"]
             : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
     }

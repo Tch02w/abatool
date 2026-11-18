@@ -24,6 +24,8 @@ F028 提交参数由 Qt-free `execution_options.py` 统一校验和生成；WinU
 
 远端作业：`RemoteJobOperationManager → RemoteJobJournal / RemoteJobRecovery → RemoteServerService → Windows PowerShell`。启动 intent 本地持久化，服务器独占提交回执约束单次启动；恢复仅观察原身份，凭据不入任务记录。连接锁同时保护身份核对和命令执行。实现、未确认窗口和测试边界见 [远端说明](../03-features/REMOTE_JOBS.md) 与 [ADR 0012](../submitter/adr/0012-durable-remote-tracking.md)。
 
+F008 连接视图由 `RemoteServerService._publish_snapshot_locked` 在命令状态改变时发布完整副本，`snapshot` 仅持有独立快照锁并再次深拷贝。慢 SSH/SFTP/PowerShell 不阻塞连接视图读取；`busy/activity` 区分正在通信和上一份资源采样。网络操作与服务器身份校验继续串行使用原连接锁，不能把快照缓存用于授权命令或判定作业完成。原生资源页忙时只观察快照，避免定时器排入重复远端刷新。
+
 ```text
 OdbPostprocessingPage → ControlPlaneHost → server.py
     ├─ discovery.py → ODB 路径与文件状态

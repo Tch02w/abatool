@@ -133,6 +133,7 @@ try
     WorkbenchSessionChecks.Run();
     MemoryPresentationChecks.Run();
     RemoteRecoveryChecks.Run();
+    RemoteServerSnapshotChecks.Run();
     JobNotificationChecks.Run();
     ExecutionOptionChecks.Run();
     Console.WriteLine("11 host process lifecycle checks passed.");

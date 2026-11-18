@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -188,16 +190,40 @@ class RemoteServerService:
         self._profiles_path = Path(profiles_path or SERVER_PROFILES_PATH)
         self._manager = manager or RemoteConnectionManager()
         self._lock = threading.RLock()
+        self._snapshot_lock = threading.Lock()
+        self._activity = ""
         self._profiles, self._load_error = self._load_profiles()
         self._connection_status = "disconnected"
         self._connected_profile_name = ""
         self._pending_fingerprint = ""
         self._resource: dict[str, Any] | None = None
         self._last_error = ""
+        self._publish_snapshot_locked()
 
     def snapshot(self) -> dict[str, Any]:
+        # Remote commands keep their identity/session lock. Readers only copy a
+        # complete published value and never wait for SSH, SFTP or PowerShell.
+        with self._snapshot_lock:
+            result = deepcopy(self._published_snapshot)
+        return result
+
+    def _publish_snapshot_locked(self) -> None:
+        result = deepcopy(self._snapshot_locked())
+        result["connection"].update(busy=bool(self._activity), activity=self._activity)
+        with self._snapshot_lock:
+            self._published_snapshot = result
+
+    @contextmanager
+    def _communication(self, activity):
         with self._lock:
-            return self._snapshot_locked()
+            previous = self._activity
+            self._activity = activity
+            self._publish_snapshot_locked()
+            try:
+                yield
+            finally:
+                self._activity = previous
+                self._publish_snapshot_locked()
 
     def execute(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         schema_version = payload.get("schemaVersion")
@@ -225,7 +251,12 @@ class RemoteServerService:
                 "服务器命令包含未知字段",
                 details={"fields": unknown},
             )
-        with self._lock:
+        activity = {
+            "connect": "正在连接服务器", "disconnect": "正在断开服务器",
+            "refresh": "正在刷新远端资源", "saveProfile": "正在保存服务器配置",
+            "deleteProfile": "正在删除服务器配置",
+        }.get(action, "正在处理服务器配置")
+        with self._communication(activity):
             if action == "saveProfile":
                 self._save_profile(_profile_from_payload(payload.get("profile")))
             elif action == "deleteProfile":
@@ -242,7 +273,7 @@ class RemoteServerService:
                     "UNSUPPORTED_REMOTE_ACTION",
                     f"不支持的服务器操作：{action}",
                 )
-            return self._snapshot_locked()
+            return deepcopy(self._snapshot_locked())
 
     def browse(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         if payload.get("schemaVersion") != SCHEMA_VERSION:
@@ -259,7 +290,7 @@ class RemoteServerService:
                 "远端目录请求包含未知字段",
                 details={"fields": unknown},
             )
-        with self._lock:
+        with self._communication("正在读取远端目录"):
             try:
                 result = self._manager.list_directory(_text(payload, "path"))
             except RemoteConnectionError as exc:
@@ -277,7 +308,7 @@ class RemoteServerService:
         cancel_requested: Callable[[], bool],
         expected_profile: dict | None = None,
     ) -> dict[str, Any]:
-        with self._lock:
+        with self._communication("正在传输文件"):
             self._verify_profile_locked(expected_profile)
             if direction == "upload":
                 return self._manager.upload_file(
@@ -308,7 +339,7 @@ class RemoteServerService:
             return profile
 
     def execute_powershell(self, script: str, *, timeout: float = 30, expected_profile: dict | None = None) -> str:
-        with self._lock:
+        with self._communication("正在与服务器通信"):
             self._verify_profile_locked(expected_profile)
             try:
                 return self._manager.execute_powershell(script, timeout=timeout)
@@ -341,7 +372,7 @@ class RemoteServerService:
             return identity
 
     def close(self) -> None:
-        with self._lock:
+        with self._communication("正在断开服务器"):
             try:
                 self._manager.disconnect()
             finally:
@@ -401,6 +432,8 @@ class RemoteServerService:
         self._connected_profile_name = ""
         self._pending_fingerprint = ""
         self._last_error = ""
+        self._resource = None
+        self._publish_snapshot_locked()
         try:
             resource = self._manager.connect(
                 ServerConnectionRequest(profile=profile, credentials=credentials)
@@ -524,6 +557,8 @@ class RemoteServerService:
             "profilesError": self._load_error,
             "connection": {
                 "status": self._connection_status,
+                "busy": False,
+                "activity": "",
                 "profileName": self._connected_profile_name,
                 "pendingFingerprint": self._pending_fingerprint,
                 "lastError": self._last_error,

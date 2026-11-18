@@ -130,7 +130,8 @@ def test_corrupt_checkpoint_never_upgrades_unknown_to_success_or_enables_retry(t
         else:
             state["directories"] = None
         store.path(item).write_text(json.dumps(state))
-    with running_control_plane(tmp_path, joblist_path=joblist, server_profiles_path=tmp_path / "profiles.json",
+    with running_control_plane(tmp_path, joblist_path=joblist, external_monitor_interval=999,
+                               server_profiles_path=tmp_path / "profiles.json",
                                odb_result_graph_path=tmp_path / "graph.json") as runtime:
         row = runtime_snapshot(runtime)["queue"]["queueItems"][0]
         assert row["status"] == STATUS_UNKNOWN and row["archiveStatus"] == "归档记录异常"

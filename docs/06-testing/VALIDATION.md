@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+归档提醒最终相关回归 `GPTWork/archive-notice-delivery-20261118.xml/log` **86项通过（202.82秒）**，含5项补发/损坏/取消/缓存/元数据一致性、归档恢复/核心、通知、关闭、执行和WinUI壳层；覆盖范围不同于原生视觉验收。新完整包仍待验证，下方“最终相关检查待验证”由本项补齐。
+
+F027归档提醒补发源码：`GPTWork/archive-notice-live-5dbd1b38a22d/verification.json` verified，实际结束已保存结果但未写提醒的自有进程、删除夹具队列，新后台仍补发；正式C#客户端已读后第二次重启不重复。最终文件摘要与原INP不变、全部自有进程结束，无求解。C#14项通知/定位检查及既有主机检查通过，Release零警告/错误26.35秒。4项初轮专项通过；最终相关检查/新完整包待验证。失败与准确进程状态见TASK-002顶部，不把首轮4秒等待超时当作缺陷断言复现。
+
 归档恢复最终完整包 **`GPTWork/release-win-x64-8791f815c891/AbaqusTools`**（干净源码 `6cb343d6e7ead730a0f00ff36169f98a448b1d4c`）已通过1662文件/19worker的用户账户摘要核对、依赖 `GPTWork/bundle-probe-ugqe389y/verification.json`、正式主机 `GPTWork/archive-observation-frozen-host-20261118.log`。冻结恢复 `GPTWork/archive-recovery-live-49c8ff630a0e/verification.json` verified：实际中断自有复制/清理进程，新后台经正式客户端恢复原执行、复用完整副本、完整SHA256、源输入不变、第二次重启和提醒无重放。首次读取状态2.5/2.9ms，仅代表该小夹具；全部自有进程结束，未运行Abaqus。下方首包失败后的“待重建”已由本回执补齐。原生、真实跨卷/大文件及其他整体迁移缺口仍未完成。
 
 归档恢复打包复核发现：首包 `GPTWork/release-win-x64-89d3b6ab518e/AbaqusTools` 来源干净 `fc7f8b8`，1662 文件/19 worker、依赖/正式主机启动通过，但冻结恢复首次读取状态超时，回执 `GPTWork/archive-recovery-live-e14df1f5caa0/verification.json` failed，所有自有进程结束，未认定通过。定向检查 `archive-observation-before-20261118.log` 1 项失败，证明已确认求解完成的归档仍在自动扫描目录。将恢复观察和显式监测目录分开，仅自动扫描活动/未知记录后，`archive-observation-final-20261118.xml/log` **79 项通过（38.39 秒）**，源码真实进程回执 `GPTWork/archive-recovery-live-df2804ad50e8/verification.json` 再次通过。新冻结包待重建验证，旧失败现场保留。

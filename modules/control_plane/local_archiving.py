@@ -5,6 +5,7 @@ import logging
 import threading
 from copy import deepcopy
 
+from modules.submitter.archive_notifications import ArchiveNoticeStore
 from modules.submitter.constants import (
     ACTIVE_STATUSES,
     STATUS_COMPLETED,
@@ -129,6 +130,9 @@ class LocalArchiveRecoveryMixin:
                 controller = LocalJobProcessController(archive_store=self._archive_store)
                 controller.archive_claimed = True
                 record = self._new_archive_record(item, controller)
+                notices = ArchiveNoticeStore(self._archive_store)
+                receipt = notices.begin(item, record.archive_operation_id)
+                controller.archive_notice = (notices, receipt) if receipt is not None else None
                 self._set_archive_state(item, "归档中", "", "", False)
                 self._runs[item.item_id] = record
                 selected = deepcopy(item)

@@ -33,7 +33,7 @@ try
         await ExecutionOptionChecks.RunApi(host, args[2], args.Length == 4 && args[3] == "unsupported");
         return 0;
     }
-    if (args.Length == 2 && args[0] == "--notifications-api")
+    if (args.Length == 2 && args[0] is "--notifications-api" or "--archive-notifications-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
@@ -41,7 +41,9 @@ try
         SetField(host, "_descriptor", descriptor);
         SetField(host, "_descriptorPath", args[1]);
         var inbox = await host.GetJobNotificationsAsync();
-        if (inbox.UnreadCount != 1 || inbox.Items[0].Status != "cancelled")
+        var archive = args[0] == "--archive-notifications-api";
+        if (inbox.UnreadCount != 1 || inbox.Items[0].Status != (archive ? "succeeded" : "cancelled")
+            || (archive && !inbox.Items[0].IsArchive))
             throw new Exception("Expected the previous owned attempt's durable cancellation notice");
         var acknowledged = await host.AcknowledgeJobNotificationsAsync([inbox.Items[0].Id]);
         if (acknowledged.UnreadCount != 0 || (await host.GetJobNotificationsAsync()).UnreadCount != 0)

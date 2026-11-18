@@ -30,6 +30,13 @@ internal static class JobNotificationChecks
         if (oldRequest?.Notify != true) throw new Exception("Legacy remote notification default changed");
         var disabled = new RemoteJobRequest { Notify = false };
         if (!JsonSerializer.Serialize(disabled).Contains("\"notify\":false")) throw new Exception("Notification opt-out lost");
-        Console.WriteLine("10 job notification contract and presentation checks passed.");
+        var archive = new JobNotification { Source = "local", ExecutionId = "original:archive:" + Guid.NewGuid().ToString("N"),
+            JobId = "item", JobName = "case", Status = "failed" };
+        if (archive.LocalAttemptId != "original" || !archive.IsArchive || !archive.Heading.StartsWith("本机归档"))
+            throw new Exception("Archive reminder must locate the original attempt and label the archive outcome");
+        foreach (var value in new[] { "attempt", "attempt:archive:invalid", ":archive:" + Guid.NewGuid().ToString("N") })
+            if (new JobNotification { Source = "local", ExecutionId = value }.LocalAttemptId != value)
+                throw new Exception("Unrecognized execution identity must remain unchanged");
+        Console.WriteLine("14 job notification contract and presentation checks passed.");
     }
 }

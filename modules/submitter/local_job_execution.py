@@ -77,6 +77,7 @@ class LocalJobProcessController:
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None
         self.archive_store = archive_store
+        self.archive_notice = None
         self.archive_claimed = False
         self.cancel_requested = False
         self.observer = observer
@@ -199,11 +200,17 @@ def _completed_result(item, work_dir, command, message, controller, progress, *,
 
                 def checkpoint(phase, fields):
                     state.update(fields, phase=phase, result=None)
+                    if phase == "done" and controller.archive_notice is not None:
+                        notices, receipt = controller.archive_notice
+                        notices.finish(receipt, state["destination"], "已归档", "")
                     store.save(item, state)
 
                 options = {"cancelled": lambda: controller.cancel_requested, "progress": report, "checkpoint": checkpoint}
                 destination, status, error = (resume_archive(item, state, **options) if recover
                                                else _archive_result(item, work_dir, **options))
+                if controller.archive_notice is not None:
+                    notices, receipt = controller.archive_notice
+                    notices.finish(receipt, destination, status, error, controller.cancel_requested)
                 state["result"] = {"destination": destination, "status": status, "error": error}
                 store.save(item, state)
         else:

@@ -61,7 +61,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         await RefreshAsync();
         if (!IsLoaded || App.Current.Session.IsClosing || JobSelector.ItemsSource is not IEnumerable<JobOverviewEntry> entries) return false;
         var entry = entries.FirstOrDefault(item => item.Key == notification.JobKey
-            && (item.LocalItem is null || item.LocalItem.AttemptId == notification.ExecutionId));
+            && (item.LocalItem is null || item.LocalItem.AttemptId == notification.LocalAttemptId));
         if (entry is null) return false;
         SelectJob(entry.Key);
         return true;

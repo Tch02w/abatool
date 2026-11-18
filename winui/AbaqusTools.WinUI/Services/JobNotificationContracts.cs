@@ -14,7 +14,17 @@ public sealed class JobNotification
     [JsonPropertyName("workDirectory")] public string WorkDirectory { get; init; } = "";
     [JsonPropertyName("observedAt")] public DateTimeOffset ObservedAt { get; init; }
     [JsonPropertyName("read")] public bool Read { get; init; }
-    [JsonIgnore] public string Heading => $"{(Source == "remote" ? "远端" : "本机")} · {JobName} · {StatusLabel}";
+    [JsonIgnore] public string LocalAttemptId
+    {
+        get
+        {
+            var marker = ExecutionId.LastIndexOf(":archive:", StringComparison.Ordinal);
+            return Source == "local" && marker > 0 && Guid.TryParseExact(ExecutionId[(marker + 9)..], "N", out _)
+                ? ExecutionId[..marker] : ExecutionId;
+        }
+    }
+    [JsonIgnore] public bool IsArchive => Source == "local" && LocalAttemptId != ExecutionId;
+    [JsonIgnore] public string Heading => $"{(Source == "remote" ? "远端" : IsArchive ? "本机归档" : "本机")} · {JobName} · {StatusLabel}";
     [JsonIgnore] public string StatusLabel => Status switch
     {
         "succeeded" => "已完成", "failed" => "失败", "cancelled" => "已取消", _ => "状态未知",

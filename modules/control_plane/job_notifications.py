@@ -9,6 +9,7 @@ import threading
 import time
 from datetime import datetime
 
+from modules.submitter.archive_notifications import ArchiveNoticeStore
 from modules.submitter.constants import (
     STATUS_COMPLETED,
     STATUS_DATACHECK_COMPLETED,
@@ -16,6 +17,7 @@ from modules.submitter.constants import (
     STATUS_TERMINATED,
 )
 from modules.submitter.local_archive import archive_published
+from modules.submitter.local_archive_state import ArchiveStateStore
 
 from .contracts import ApiProblem, utc_now_text
 from .operation_journal import OperationJournal
@@ -57,6 +59,7 @@ class JobNotificationManager:
         self._shutdown_reserved = False
         self._next_reconcile = 0
         self._reconcile_warning = ""
+        self._archive_notices = None
         self._stop = threading.Event()
         self.since = time.time()
         try:
@@ -91,13 +94,16 @@ class JobNotificationManager:
 
     def local_finished(self, item, record, result):
         if item.complete_notify and getattr(record, "archive_only", False):
+            context = getattr(record.controller, "archive_notice", None)
+            durable = context[1]["result"] if context is not None else None
             self.publish(source="local", execution_id=f"{record.attempt_id}:archive:{record.archive_operation_id}",
                          job_id=item.item_id, job_name=item.job_name,
-                         status=("succeeded" if result.archive_status == "已归档" else
+                         status=durable["status"] if durable is not None else ("succeeded" if result.archive_status == "已归档" else
                                  "cancelled" if record.controller.cancel_requested else "failed"),
-                         message="归档处理：" + result.archive_status + ("；" + result.archive_error if result.archive_error else ""),
-                         work_directory=result.archive_destination if archive_published(result.archive_status, result.archive_destination)
-                         else result.work_dir)
+                         message=durable["message"] if durable is not None else
+                                 "归档处理：" + result.archive_status + ("；" + result.archive_error if result.archive_error else ""),
+                         work_directory=durable["workDirectory"] if durable is not None else
+                             result.archive_destination if archive_published(result.archive_status, result.archive_destination) else result.work_dir)
             return
         if item.complete_notify and result.status in LOCAL_TERMINAL:
             detail = result.message
@@ -133,6 +139,13 @@ class JobNotificationManager:
                              message=item.message + ("；归档问题：" + item.archive_error if item.archive_error else ""),
                              work_directory=item.archive_destination if archive_published(item.archive_status, item.archive_destination)
                              else item.effective_work_dir)
+        if getattr(queue_service, "path", None) is not None:
+            if self._archive_notices is None:
+                self._archive_notices = ArchiveNoticeStore(ArchiveStateStore(queue_service.path.parent / "archive-state"))
+            try:
+                warnings.extend(self._archive_notices.recover(self.since, self.publish))
+            except (OSError, ValueError):
+                warnings.append("归档提醒历史暂无法核对")
         # Remote history may be independently unreadable; do not hide local notifications.
         try:
             snapshots = remote_manager.list_snapshots()

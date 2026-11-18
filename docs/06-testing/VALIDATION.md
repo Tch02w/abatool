@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F028 最终完整目录 **`GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools`**（干净 `35b2372`）已从用户账户核对 1658 文件/19 worker 全部摘要、包内依赖，并通过本轮 C# 正式主机的包内预览/入队/保留/撤销与安全退出。回执 **`GPTWork/execution-options-host-d1ad1556cf70/verification.json`**，没有求解、SSH 或原生交互；全部自有检查已结束。下文“完整包待验”由本回执补齐，原生/GPU 实测和整体迁移仍未完成。
+
 F028 GPU/Explicit/ODB 精度已贯通新建、队列、实际启动及恢复。扩展 **138 项通过，178.86 秒**（`GPTWork/execution-options-final-20261118.xml`），C# 新增 11 项及原有主机检查通过，包含真实 HTTP 预览/入队/保留/撤销和实际 Windows cmd/PowerShell 参数回显；没有 Abaqus/GPU 求解或 SSH。初次 UI 构建类型错误已修正，后续 Release 零警告/错误；最后坏草稿保留和能力检查已构建通过（13.03 秒），46 项能力/API/文档检查通过；完整包仍待验证。详情见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下候选为上一轮，不含 F028。
 
 F027 新完整目录 **`GPTWork/release-win-x64-2df945d26036/AbaqusTools`**（干净 `2ff6740`）已通过用户账户 1657 文件/19 worker 摘要、包内依赖和本轮正式 C# 主机启动/API/退出。冻结通知双后台/实际等待 helper/正式客户端回执 **`GPTWork/local-memory-live-966282df5338/verification.json`** 确认两次执行、持久恢复、已读和新提醒，无自动重放且源不变。全部自有进程已结束，未执行 Abaqus/SSH 或原生操作；下文“完整包待构建”由本回执补齐。

@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F028 GPU 与精度（源码通过，最终构建与完整包待验）
+### 2026-11-18 F028 GPU 与精度（源码与完整包通过，原生/真实求解待验）
 
 上一轮为实质进展：F027 与 F023 已本地提交并完成完整包/真实 helper 验证。本轮对照合同补齐 GPU/精度输入；修改前向用户说明共用编辑区、默认不覆盖环境、共享预览/执行校验及持久恢复方案。依据 Abaqus 2025 执行文档，区分 GPU、Explicit 计算精度和 ODB 场输出精度，不将其合并成模糊“高精度”开关。
 
@@ -25,6 +25,16 @@
 最后能力检查后的 Release **0 警告/0 错误，13.03 秒**，`GPTWork/execution-options-winui-capability-20261118.log`（63945 退出 0）。当前正式主机测试客户端输出 `GPTWork/execution-options-host-final`，构建及全部契约/生命周期检查通过，日志 `GPTWork/execution-options-host-final-20261118.log`；包验证分支新增 `--execution-options`。最终文档导航 **44 项通过，0.15 秒**，`GPTWork/execution-options-docs-final-20261118.log`。全部自有测试和构建结束，最新周额度 **51%**。下一步是本地提交和完整包，不重复已通过测试。
 
 准确续接点：上述全部测试句柄已结束。本轮尚未提交和构建完整包；先检查最后能力门禁的 Release、文档导航及代码审阅，再本地提交、干净来源打包，核对文件/依赖和正式客户端的包内提交参数。不要重复已通过的长测试。原生操作恢复未获答复，仍不操作旧窗口；真实 GPU/精度求解及 GPU 资源调度不能由这些测试证明。GitHub push 原自动审批拒绝未解除。周额度本轮开始 52%，未达暂停条件。
+
+#### F028 最终完整包与准确续接点
+
+代码、测试与 Wiki 已本地提交 **`35b2372a4b57041f5fac95919e9d959c575d603f`**；干净来源生成完整目录 **`GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools`**。构建 8777 退出 0，日志 `GPTWork/execution-options-package-20261118.log`；旧包保留，原生窗口未替换。包内文档为构建快照，本回执补在仓库。
+
+用户账户核对 **1658 文件/19 worker**，大小和完整 SHA256 一致，`sourceDirty=false`，回执 `GPTWork/release-win-x64-d1ad1556cf70/inventory-verification.json`。包内依赖探针 `bundle-probe-7617b9u5/verification.json` 通过，日志 `GPTWork/execution-options-bundle-probe-20261118.log`；不证明 SSH 连通或 GPU 实际可用。
+
+正式客户端冻结命令：`dotnet GPTWork/execution-options-host-final/ControlPlaneHost.Tests.dll --launch-bundle GPTWork/release-win-x64-d1ad1556cf70/AbaqusTools GPTWork/execution-options-host-d1ad1556cf70 --execution-options`。退出 0，日志 `GPTWork/execution-options-frozen-host-20261118.log`。实际包内后台通过能力核对、预览、入队、旧式编辑保留与显式撤销；待运行条目没有 attempt ID，不曾启动求解。主机等待后台正常退出，描述文件移除；独立 INP 夹具内容未变。结构化回执 **`GPTWork/execution-options-host-d1ad1556cf70/verification.json`**。没有原始 G:\Job 写入、Abaqus/GPU 求解、SSH 连接或原生窗口交互。
+
+准确续接点：本轮全部构建/测试/包内验证均已结束，无自有长任务等待。GPU/精度参数迁移和包验证已经完成，下一步继续原生/真实环境及连续三级 ODB 链验收；对照迁移合同审阅其余参数/错误路径。先只读检查现有 ODB 依赖关系，复用已有真实双目标证据；不启动新求解或重跑已通过样例代替剩余验收。GPU 独占分配/显存记账仍未实现，不将参数传递称为 GPU 调度。原生恢复问题与具体 GitHub 远端确认未获答复，不重试桌面操作或推送。周额度最后 **51%**，目标继续，未触及 15% 暂停条件。
 
 ### 2026-11-18 F027 作业结束提醒与 F023 成功响应修正（源码与完整包通过，原生待验收）
 

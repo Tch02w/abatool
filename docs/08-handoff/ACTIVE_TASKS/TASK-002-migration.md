@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F008 慢远端通信期间读取状态（源码通过，完整包待更新）
+### 2026-11-18 F008 慢远端通信期间读取状态（源码与完整包通过，原生/真实 SSH 待验）
 
 上一轮为有效进展：冻结后台/存活子进程中断验证和文档已提交 `b95c39b`。本轮继续完整迁移合同，审查历史远端 GET 超时与连接锁后，找到独立可复现问题：远端连接/刷新/目录/传输/脚本执行持有连接锁，读取服务器状态也等待该锁。没有证据将其等同于历史 `remote-jobs` GET 偶发超时的唯一根因。
 
@@ -24,7 +24,15 @@ WinUI 资源页和状态栏使用 `RemoteServerConnection.DisplayText/StatusBarT
 - 继续复查发现，页面失败提示可能与旧的已连接状态并存；新增 `ShowRemoteActionErrorAsync` 在失败后读取后台视图，无法读取时仅将界面标为连接异常并保留原错误，不改变任务/服务器。修改前已向用户说明。最终 Release 再次 **0 警告/0 错误，13.07 秒**，64607 退出 0，`GPTWork/remote-responsive-winui-final-20261118.log`。
 - Python Ruff 首轮仅新测试导入顺序不符，已修正；源码与新测试复查通过。事件游标随发布值保留的最终调整后，7 项专项与文档合计 **51 项通过，11.21 秒**，`GPTWork/remote-responsive-docs-20261118.xml/log`，50448 已退出 0。完整包及回执随后补记。
 
-准确续接点：源码回归与构建均结束；18482 只读进程检查亦结束，无需重新扫描或启动这些任务。完成文档检查后，从干净本地提交生成新完整包，再检查清单、包内依赖和正式客户端启动/API/退出；当前可用候选仍是 `release-win-x64-d1ad1556cf70`，尚不含本节 F008 改动。真实 SSH、原生页面、连续三层工程链、目标机和具体 GitHub main 推送确认仍待完成；周额度本轮剩余 50%。
+代码、测试和同步文档已本地提交 **`6890ffaaec6a0e792502fd045b192461e75969cf`**。最终交接前壳层/文档 **79 项通过，0.14 秒**，`GPTWork/remote-responsive-handoff-20261118.xml/log`。从该干净来源生成完整目录 **`GPTWork/release-win-x64-f4d22485d254/AbaqusTools`**，12357 已退出 0，`GPTWork/remote-responsive-package-20261118.log`。用户账户核对 **1658 文件/19 worker** 的大小与 SHA256 全部一致，sourceDirty=false；回执为发布父目录 `inventory-verification.json`。
+
+包内依赖通过 `GPTWork/bundle-probe-p6825n94/verification.json`（默认配置、worker、GIF、Agg、工作簿、SSH 加密依赖和 Qt-free）。正式 C# 客户端从 `GPTWork/remote-responsive-host` 启动该包、验证资源/队列 API 并安全退出，`GPTWork/remote-responsive-frozen-host-20261118.log` 退出 0，隔离数据 `GPTWork/remote-responsive-host-f4d22485d254` 的描述文件已清除。
+
+额外冻结接口/重启检查：`.\.venv\Scripts\python.exe GPTWork/verify_remote_snapshot_bundle_20261118.py GPTWork/release-win-x64-f4d22485d254/AbaqusTools` 退出 0，`GPTWork/frozen-remote-snapshot-7f0a7826cef3/verification.json` 为 verified。两次启动均返回 busy/activity 新字段与空闲状态，保存的隔离服务器配置重启恢复一致，无旧资源、未连接 SSH、未启动求解；后台 PID 161360/180528 已确认不存在，鉴权描述文件已清除。该冻结检查不包含慢的真实 SSH；慢 I/O 响应和错误路径由源码真实 HTTP 隔离测试覆盖。
+
+发布回执更新后文档导航 **44 项通过，0.13 秒**，`GPTWork/remote-responsive-package-docs-20261118.log`；diff 空白检查通过。
+
+准确续接点：本节所有测试、构建与自有后台均已结束，最近候选改为 f4d22485d254，旧包保持不动。未生成本轮 ZIP/安装程序/GitHub 二进制 Release，未替换用户旧窗口；包内文档为构建时快照，最后验收回执在仓库补记。下一项继续对照迁移合同核对工作目录准备、归档和中断处理，先读已有证据，不重复上述已通过长任务。真实 SSH、原生页面、连续三层工程链、目标机和具体 GitHub main 推送确认仍待完成；周额度最新剩余 **48%**，未触及 15% 暂停线。
 
 ### 2026-11-18 读取目录按钮复核与冻结批量进程中断（已验证隔离场景）
 

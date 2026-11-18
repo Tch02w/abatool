@@ -1,6 +1,8 @@
 # 验收记录与已知缺口
 
-F008 状态读取响应优化：旧版在阻塞远端刷新期间 GET 连接视图超过测试的 2 秒等待界限，失败回执 `GPTWork/remote-responsive-before-20261118.xml`。独立快照发布后，新专项 7 项及远端/通知/关闭/壳层相关 **127 项通过，187.46 秒**，`GPTWork/remote-responsive-regression-20261118.xml`；C# 新增 4 项显示/旧协议兼容与既有检查通过，Release 零警告/错误。验证覆盖慢通信时读取、连接切换不沿用旧资源、错误清除忙态、返回值独立和实际命令继续串行。真实 SSH、原生资源页及完整包本轮改动仍待验证；不能据本修正宣称历史 `remote-jobs` GET 的全部偶发超时已解决。
+F008 状态读取响应优化：旧版在阻塞远端刷新期间 GET 连接视图超过测试的 2 秒等待界限，失败回执 `GPTWork/remote-responsive-before-20261118.xml`。独立快照发布后，新专项 7 项及远端/通知/关闭/壳层相关 **127 项通过，187.46 秒**，`GPTWork/remote-responsive-regression-20261118.xml`；C# 新增 4 项显示/旧协议兼容与既有检查通过，Release 零警告/错误。验证覆盖慢通信时读取、连接切换不沿用旧资源、错误清除忙态、返回值独立和实际命令继续串行。真实 SSH、原生资源页仍待验证；不能据本修正宣称历史 `remote-jobs` GET 的全部偶发超时已解决。
+
+本轮 F008 完整包为 **`GPTWork/release-win-x64-f4d22485d254/AbaqusTools`**，干净来源 `6890ffa`，1658 文件/19 worker 全摘要和用户账户可读检查通过。包内依赖回执 `GPTWork/bundle-probe-p6825n94/verification.json`，正式 C# 主机日志 `GPTWork/remote-responsive-frozen-host-20261118.log`，冻结接口/两次启动配置恢复回执 `GPTWork/frozen-remote-snapshot-7f0a7826cef3/verification.json` 均通过。PIDs 161360/180528 已结束，描述文件清除；无 SSH/求解，慢 I/O 由源码真实 HTTP 隔离夹具覆盖。最终源码专项/文档 51 项、交接前壳层/文档 79 项通过，集合重叠不累计。
 
 11 月 18 日补充 F012 冻结进程中断验收：`GPTWork/frozen-batch-interruption-691d9fb533f3/verification.json`。最新完整包的隔离后台在测试子进程仍存活时被中断；第二次启动恢复暂停批次与 `ODB_MERGE_INTERRUPTED` 子任务，继续请求明确失败，后续阶段未启动；第三次启动恢复同一失败记录。计划两阶段、仅一条子操作/一次测试命令，三份夹具摘要未变、没有发布结果。三个后台和四个已捕获后代 PID 均确认结束，未启动 Abaqus。这补充冻结进程生命周期证据，不代表真实 ODB 内容或真实 Abaqus 崩溃验收。工具及续接点见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 

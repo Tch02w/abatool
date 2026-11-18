@@ -75,11 +75,12 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         OdbList.ItemsSource = _odbItems;
-        App.Current.Session.Register(this, "odb-postprocessing", ["RootTextBox", "RecursiveCheckBox"], async () =>
+        App.Current.Session.Register(this, "odb-postprocessing", ["RootTextBox", "RecursiveCheckBox", "GroupNameTextBox", "GroupOperationComboBox"], async () =>
         {
             await WorkbenchSession.WaitForIdleAsync(() => _discoveryBusy || _postprocessRecoveryBusy, "后处理目录读取或恢复");
             if (!SaveWorkspace(forClose: true)) throw new IOException("后处理配置未能保存，关闭已取消。");
         });
+        App.Current.Session.RegisterCheckpoint("postprocess-workspace", SavePostprocessDraftAsync);
         Loaded += OnPageLoaded;
         Unloaded += (_, _) => SaveWorkspace();
         RefreshInteractionState();
@@ -384,7 +385,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async Task DiscoverAsync()
     {
-        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing) return;
+        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing || DraftPending || _draftActionBusy) return;
         var root = RootTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(root))
         {
@@ -394,6 +395,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
 
         if (!SaveWorkspace()) return;
+        Task draftSave;
+        try { draftSave = SavePostprocessDraftAsync(); }
+        catch (Exception error) { ShowWarning(error.Message, "草稿未能保存，未切换目录"); return; }
         SetDiscoveryBusy(true);
         ErrorInfoBar.IsOpen = false;
         WarningInfoBar.IsOpen = false;
@@ -405,6 +409,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         App.Current.MainWindow.ReportPageStatus("正在通过本地控制面发现 ODB…");
         try
         {
+            // Lock discovery before the first await, then finish the old root's snapshot.
+            await draftSave;
             var result = await App.Current.ControlPlane.DiscoverOdbsAsync(
                 root,
                 RecursiveCheckBox.IsChecked is not false);
@@ -459,6 +465,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
             RootTextBox.Text = result.Root;
             _lastDiscoveryRoot = result.Root;
+            if (!sameRoot) await LoadWorkspaceRecoveryAsync(result.Root, saved);
             ResultCountText.Text = $"{result.Count} 个";
             DiscoveryMetadataText.Text = $"游标 {result.EventCursor} · {FormatDiscoveryId(result.DiscoveryId)}";
             EmptyState.Visibility = result.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -523,6 +530,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void SelectExplorerOdb(ExplorerItem item)
     {
+        if (DraftPending || _draftActionBusy || _discoveryBusy) return;
         if (_odbByPath.TryGetValue(PathKey(item.Path), out var row))
         {
             OdbList.SelectedItems.Clear();
@@ -546,23 +554,17 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private bool SaveWorkspace(bool forClose = false)
     {
+        if (DraftPending || _draftActionBusy) return true;
         if (forClose && _lastDiscoveryRoot is not null && _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot)))
             throw new IOException("原后处理配置无法读取，未覆盖它；请先检查配置后再关闭。");
         if (_lastDiscoveryRoot is null || _discoveryBusy || (!forClose && (_postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing))
             || _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot))) return true;
         try
         {
-            _workspaceStore.Save(_lastDiscoveryRoot, new OdbPostprocessWorkspace
-            {
-                Output = CaptureOutputOptions(),
-                GroupMemberOrder = _groupMemberOrder.ToDictionary(pair => pair.Key, pair => pair.Value.ToList()),
-                Rows = _odbItems.Select(row => new OdbPostprocessSavedRow
-                {
-                    Path = row.Path, Group = row.ComparisonGroup,
-                    Selected = OdbList.SelectedItems.Contains(row), Draft = row.PostprocessJob?.Clone(),
-                }).ToList(),
-                Legends = _legendOverridesByGroup.ToDictionary(pair => pair.Key, pair => pair.Value.ToDictionary()),
-            });
+            var workspace = CaptureEditableWorkspace(CaptureOutputOptions());
+            _workspaceStore.Save(_lastDiscoveryRoot, workspace);
+            _workspaceBasis = OdbPostprocessDraftRecovery.Fingerprint(workspace);
+            _lastSavedOutput = workspace.Output;
             return true;
         }
         catch (Exception exception)
@@ -867,7 +869,15 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 values[row.Field] = new OdbLegendOverride { Minimum = minimum, Maximum = maximum };
             }
         };
-        var result = await dialog.ShowAsync();
+        var legendInputs = new Dictionary<string, Control>();
+        foreach (var row in rows)
+        {
+            legendInputs[row.Label + " 手动"] = row.Manual;
+            legendInputs[row.Label + " 最小值"] = row.Minimum;
+            legendInputs[row.Label + " 最大值"] = row.Maximum;
+        }
+        var result = await ShowRecoverableDialogAsync(dialog, content, "图例范围", groupName,
+            new { groupName, existing }, legendInputs);
         if (result == ContentDialogResult.None)
         {
             return;
@@ -876,12 +886,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         {
             _legendOverridesByGroup.Remove(groupName);
             SaveWorkspace();
+            await CompleteDialogDraftAsync("图例范围", groupName);
             ShowWarning($"“{groupName}”已恢复为自动图例范围。", "图例设置已更新");
             return;
         }
 
         _legendOverridesByGroup[groupName] = values;
         SaveWorkspace();
+        await CompleteDialogDraftAsync("图例范围", groupName);
         ShowWarning($"已保存“{groupName}”的 {values.Count} 个手动图例范围。", "图例设置已更新");
     }
 
@@ -900,7 +912,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         panel.Children.Add(new TextBlock { Text = "删除仅解除该组的成员关系和分组设置，不删除 ODB 或已有结果。", TextWrapping = TextWrapping.Wrap });
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = "管理对比组", Content = panel,
             PrimaryButtonText = "重命名", SecondaryButtonText = "删除分组", CloseButtonText = "取消" };
-        var result = await dialog.ShowAsync();
+        var result = await ShowRecoverableDialogAsync(dialog, panel, "管理分组", "当前目录", names,
+            new() { ["原组名"] = selector, ["新名称"] = nameBox });
         if (result == ContentDialogResult.None) return;
         var oldName = SelectedText(selector);
         if (result == ContentDialogResult.Secondary)
@@ -908,7 +921,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             var confirmation = new ContentDialog { XamlRoot = XamlRoot, Title = "删除对比组？",
                 Content = $"解除“{oldName}”的分组关系；原始 ODB 和已生成结果保持不变。",
                 PrimaryButtonText = "删除分组", CloseButtonText = "取消" };
-            if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+            {
+                await CompleteDialogDraftAsync("管理分组", "当前目录");
+                return;
+            }
         }
         try
         {
@@ -919,6 +936,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             UpdateExplorer();
             RefreshInteractionState();
             SaveWorkspace();
+            await CompleteDialogDraftAsync("管理分组", "当前目录");
         }
         catch (ArgumentException exception) { ShowWarning(exception.Message, "无法更新对比组"); }
     }
@@ -957,9 +975,34 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         panel.Children.Add(buttons);
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = "组内成员顺序",
             Content = panel, PrimaryButtonText = "保存", CloseButtonText = "取消" };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        Dictionary<string, string> CaptureOrders() => drafts.ToDictionary(p => "顺序：" + p.Key,
+            p => string.Join("\n", p.Value.Select(row => row.Path)));
+        var initialOrders = CaptureOrders();
+        void RestoreOrders(IReadOnlyDictionary<string, string> stored)
+        {
+            var restored = new Dictionary<string, string[]>();
+            foreach (var pair in drafts)
+            {
+                if (!stored.TryGetValue("顺序：" + pair.Key, out var value)) throw new InvalidDataException("草稿缺少组内顺序，未套用旧输入。");
+                var paths = value.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                var known = pair.Value.Select(row => PathKey(row.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (paths.Length != known.Count || paths.Select(PathKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() != known.Count
+                    || paths.Any(path => !known.Contains(PathKey(path)))) throw new InvalidDataException("组内成员已变化，未套用旧顺序。");
+                restored[pair.Key] = paths;
+            }
+            foreach (var pair in restored)
+            {
+                var items = drafts[pair.Key];
+                var byPath = items.ToDictionary(row => PathKey(row.Path), StringComparer.OrdinalIgnoreCase);
+                items.Clear();
+                foreach (var path in pair.Value) items.Add(byPath[PathKey(path)]);
+            }
+        }
+        if (await ShowRecoverableDialogAsync(dialog, panel, "组内顺序", "当前目录", initialOrders,
+            new() { ["对比组"] = selector }, CaptureOrders, RestoreOrders) != ContentDialogResult.Primary) return;
         foreach (var pair in drafts) _groupMemberOrder[pair.Key] = pair.Value.Select(row => row.Path).ToList();
         SaveWorkspace();
+        await CompleteDialogDraftAsync("组内顺序", "当前目录");
     }
 
     private async void OnConfigureClicked(object sender, RoutedEventArgs e)
@@ -982,6 +1025,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         {
             row.UpdatePostprocessJob(draft);
             SaveWorkspace();
+            await CompleteDialogDraftAsync("提取参数", PathKey(row.Path));
             SelectedPlanText.Text = $"已更新 {row.Name} 的提取参数";
             RefreshInteractionState();
         }
@@ -1092,7 +1136,16 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             validationMessage.Visibility = error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             args.Cancel = error.Length > 0;
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        var inputControls = new Dictionary<string, Control>
+        {
+            ["起始分析步"] = startStep, ["结束分析步"] = endStep, ["帧方式"] = frameMode,
+            ["手动帧序号"] = manualFrames, ["加载方向"] = direction, ["加载节点集"] = loadSet,
+            ["桩体类型"] = pileType, ["桩体集合"] = pileDisplay, ["混凝土集合"] = concrete,
+            ["钢构件集合"] = steel, ["土体集合"] = soil, ["配筋"] = reinforcement,
+            ["纵筋集合"] = rebar, ["纵筋材料"] = material, ["纵筋直径"] = diameter, ["断裂前帧"] = prefracture,
+        };
+        if (await ShowRecoverableDialogAsync(dialog, fields, "提取参数", PathKey(row.Path),
+            new { current, scan.Steps, scan.AssemblyNodeSets, scan.AssemblyElementSets }, inputControls) != ContentDialogResult.Primary)
         {
             return null;
         }
@@ -1729,6 +1782,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     {
         _discoveryBusy = busy;
         DiscoveryProgress.IsActive = busy;
+        DiscoveryProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         DiscoverButtonText.Text = busy ? "正在发现" : "发现 ODB";
         RefreshInteractionState();
     }
@@ -1747,7 +1801,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
-        var idle = !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !UpgradeBlocksEditing;
+        var idle = !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !UpgradeBlocksEditing && !DraftPending && !_draftActionBusy;
+        RefreshDraftActions();
         var hasItems = _odbItems.Count > 0;
         var selectedCount = OdbList.SelectedItems.Count;
         var selectedRows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();

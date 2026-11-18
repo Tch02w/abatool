@@ -31,7 +31,7 @@ XAML_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
 def test_postprocess_legend_errors_keep_the_dialog_and_draft() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
     editor = page.split("private async void OnLegendClicked", 1)[1].split("private async void OnManageGroupsClicked", 1)[0]
-    handler, after = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("await dialog.ShowAsync()", 1)
+    handler, after = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("await ShowRecoverableDialogAsync(", 1)
     assert "maximum <= minimum" in handler and "args.Cancel = true" in handler
     assert "input.Focus(FocusState.Programmatic)" in handler and "SaveWorkspace()" not in handler
     assert "_legendOverridesByGroup[groupName] = values" in after
@@ -40,7 +40,7 @@ def test_postprocess_legend_errors_keep_the_dialog_and_draft() -> None:
 def test_postprocess_invalid_editor_input_keeps_dialog_open() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
     editor = page.split("private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync", 1)[1]
-    handler = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("if (await dialog.ShowAsync()", 1)[0]
+    handler = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("if (await ShowRecoverableDialogAsync(", 1)[0]
     assert "string.IsNullOrWhiteSpace(manualFrames.Text)" in handler
     assert "double.IsFinite(diameter.Value)" in handler
     assert "double.IsFinite(prefracture.Value)" in handler
@@ -796,7 +796,8 @@ def test_postprocess_execution_uses_isolated_group_identity() -> None:
     assert "Standalone = group.Standalone" in page
     assert "!group.Standalone && _legendOverridesByGroup.TryGetValue" in page
     assert "OdbComparisonGroups.OrderMembers(group.Members," in page
-    assert "GroupMemberOrder = _groupMemberOrder.ToDictionary" in page
+    drafts = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.Drafts.cs").read_text(encoding="utf-8")
+    assert "GroupMemberOrder = _groupMemberOrder.ToDictionary" in drafts
     xaml = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").read_text(encoding="utf-8")
     assert 'Click="OnGroupOrderClicked"' in xaml
     assert 'Click="OnManageGroupsClicked"' in xaml

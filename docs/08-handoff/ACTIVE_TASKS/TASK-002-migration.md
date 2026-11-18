@@ -1,5 +1,23 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · F001/F022 后处理工作区及未确认弹窗草稿
+
+从3d9ab94继续本轮草稿实现，保留既有改动。新增 `OdbPostprocessDraftRecovery`、`OdbPostprocessingPage.Drafts.cs`、`OdbPostprocessingPage.DialogDrafts.cs`；正式工作区保存复用捕获函数，结果图与后处理共用 `RecoveryDraftFile<T>` 串行磁盘写入。原始输出字符串及四类弹窗（提取参数、图例、分组管理、组内顺序）接入日常和会话结束检查点。未确认填写不转为业务提交；根目录、正式配置及最近发现的源身份不符时只能查看/保留副本。恢复准备新行且清除结构有效性；输入恢复异常尝试回滚，保留原件及副本；弹窗保留/恢复期间阻止关闭竞态。切换目录前等待旧草稿写盘。
+
+用户追加按钮问题已核实：ResultBrowser的「读取目录」已有空闲Collapsed、颜色绑定和内容居中；本轮将相同规则应用到后处理「发现 ODB」，消除闲置圆环占位。没有启动原生窗口或用旧候选冒充本轮渲染验收。
+
+实际失败与修复：初次构建 `GPTWork/postprocess-draft-build-20261118.log`（35919退出1）发现StackPanel没有IsEnabled，改为待恢复时收起正文、禁用确认；第二次构建 `postprocess-draft-build-20261118-02.log` 及首次专项编译发现只读显示属性被赋值，改为从基础元数据计算。最终构建 `postprocess-draft-build-20261118-03.log`，92660退出0，18.33秒、0警告/错误，输出 `GPTWork/winui-postprocess-draft-20261118`；不是完整发布包。
+
+专项 `GPTWork/postprocess-draft-checks-20261118-02.log`：38项通过，实际JSON证据目录同名无.log；验证原文、不可变捕获、正式配置不变、目录/配置/文件大小/mtime/列表冲突、结构失效、损坏/超限/占用保护、逐字节副本、串行清除和重试。该专项只使用ODB路径元数据，没有创建ODB。`postprocess-draft-existing-checks-20261118.log`：174项既有后处理检查通过；`postprocess-shared-graph-checks-20261118.log`：16项既有结果图草稿检查通过。
+
+初次相关Python回归 `GPTWork/postprocess-draft-regression-20261118.log`：41通过、1失败，31505退出1。失败为壳层静态检查仍查找直接ShowAsync，已同步到恢复包装入口；业务验证条件不放宽。最终相关回归含文档 `GPTWork/postprocess-draft-regression-final-20261118.log` / `.xml`：91项通过24.24秒，9657退出0；包含正式客户端真实HTTP关闭及结果图检查。所有测试TEMP/TMP、basetemp、输出均位于G:项目GPTWork，无用户ODB移动、无Abaqus求解、无原生或实际关机操作。
+
+最终审阅补充数值回填原文/有限数值核对、发现目录首个await前锁定按钮和缺失组内顺序拒绝，避免控件归一化丢失半填文字及等待磁盘时重入。最终构建回执 `GPTWork/postprocess-draft-build-delivery-20261118.log`，81301退出0，0警告/错误；旧构建/失败记录保留。Ruff和差异空白检查通过；当前全部构建和相关回归句柄已结束。
+
+收尾检查 `GPTWork/postprocess-draft-docs-final-20261118.log`：85项通过0.22秒（49项文档、35项壳层及1项页面登记，与前述91项重叠，不累计）。最终构建耗时12.93秒；全部句柄已结束，无待收回进程。
+
+准确续接点：本轮代码、测试和文档一起本地提交，提交号以实际Git为准；之后从干净提交更新完整目录和安装候选。旧6d5279845a23目录包和cfa638b65fa8安装器不含4f135a7/3d9ab94及本轮源码；保留旧包。原生恢复/主题/显示比例及四类弹窗交互待验，完整迁移不标完成。原生恢复和具体GitHub远端确认仍未收到，不操作/推送。
+
 ## 2026-11-18 · F001/F012 结果图独立草稿恢复
 
 开始于干净4f135a7。上一轮是实际源码/测试/文档提交进展，继续从复杂草稿缺口推进，未重复已通过按钮/GIF或安装验收。先说明独立草稿、匹配基线后恢复编辑、正式保存继续版本检查的方案。新增`OdbResultGraphDraftStore`/`OdbResultGraphDraft`、`OdbResultGraphEditor.Recovery.cs`和三种恢复入口；`WorkbenchSession.RegisterCheckpoint`让基本草稿与独立草稿分别尝试写入。捕获在UI线程同步完成，后续仅磁盘任务，不调用后台提交。

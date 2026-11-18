@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F001/F022后处理恢复草稿：38项专项（`GPTWork/postprocess-draft-checks-20261118-02.log`）、174项既有后处理（`postprocess-draft-existing-checks-20261118.log`）、16项共享结果图（`postprocess-shared-graph-checks-20261118.log`）通过；最终WinUI构建0警告/错误（`postprocess-draft-build-delivery-20261118.log`）。相关Python初轮41通过/1静态定位失败，更新后91项通过24.24秒（`postprocess-draft-regression-final-20261118.log` / `.xml`，含49项文档）。本轮补齐工作区/四类弹窗源码，下方“尚缺”只描述历史阶段。原生数值输入/关闭恢复、按钮实际显示和新完整打包仍待验；本轮测试只在G:项目GPTWork，不移动用户ODB。详细失败和句柄结束记录见TASK-002顶部。
+
 F001/F012结果图独立恢复：最终16项JSON/状态/文件检查通过（`GPTWork/graph-draft-checks-20261118-02.log`），65项相关回归通过13.41秒（`GPTWork/graph-draft-regression-20261118.log`、`.xml`），其中生产C#客户端对真实隔离HTTP核对本地草稿不提交、版本变化拒绝覆盖、原草稿保留；最终WinUI构建0警告/错误（`GPTWork/winui-graph-draft-build-final-20261118.log`），49项文档通过。原生恢复及完整包未验收，详细工作区/弹窗草稿尚缺。本轮仅G:测试JSON/占位ODB，不移动用户ODB；用户新约束禁止后续C:ODB验证目标，历史跨卷记录不授权复用。
 
 F001源码新增每两秒登记字段检查点、串行后台写入、失败提示与OS会话结束专用入口。7项既有持久化及15项新状态/磁盘检查通过（`GPTWork/session-end-checks-20261118-02.log`）；真实输入快照不可变、64次顺序、未变化不写、文件丢失重建、失败重试、取消/重复/超时均覆盖。98项相关回归含49文档通过22.58秒（`GPTWork/session-end-regression-20261118.log`及`.xml`），最终WinUI构建0警告/错误；句柄均结束。模拟消息没有发送给原生窗口，没有实际关机；既有完整包/安装器尚未更新。复杂工作区/结果图草稿覆盖和原生恢复仍缺，准确回执见TASK-002顶部。

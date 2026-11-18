@@ -46,10 +46,13 @@
                     Grid.Column="2"
                     Margin="0,24,0,0"
                     Click="OnDiscoverClicked"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
                     Style="{StaticResource AccentButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ProgressRing x:Name="DiscoveryProgress" Width="16" Height="16" IsActive="False" />
-                        <TextBlock x:Name="DiscoverButtonText" Text="发现 ODB" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <ProgressRing x:Name="DiscoveryProgress" Width="16" Height="16" IsActive="False"
+                            Visibility="Collapsed" Foreground="{Binding Foreground, ElementName=DiscoverButton}" />
+                        <TextBlock x:Name="DiscoverButtonText" Text="发现 ODB" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
                 <Button
@@ -82,6 +85,13 @@
         <StackPanel Grid.Row="1" Spacing="8">
             <InfoBar x:Name="ErrorInfoBar" IsClosable="True" IsOpen="False" Severity="Error" Title="操作失败" />
             <InfoBar x:Name="WarningInfoBar" IsClosable="True" IsOpen="False" Severity="Warning" Title="操作提示" />
+            <InfoBar x:Name="WorkspaceRecoveryInfoBar" IsClosable="False" IsOpen="False" Severity="Warning" Title="发现后处理恢复草稿">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="RestoreWorkspaceDraftButton" Content="恢复编辑" Click="OnRestoreWorkspaceDraftClicked" />
+                    <Button x:Name="PreviewWorkspaceDraftButton" Content="查看草稿" Click="OnPreviewWorkspaceDraftClicked" />
+                    <Button x:Name="PreserveWorkspaceDraftButton" Content="保留副本并忽略" Click="OnPreserveWorkspaceDraftClicked" />
+                </StackPanel>
+            </InfoBar>
         </StackPanel>
 
         <Grid Grid.Row="2" ColumnSpacing="12">

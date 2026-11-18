@@ -75,7 +75,7 @@ public sealed class OdbPostprocessWorkspaceStore(string directory)
         return state;
     }
 
-    private static void Validate(OdbPostprocessWorkspace state)
+    internal static void Validate(OdbPostprocessWorkspace state)
     {
         if (state.Version != 1 || state.Rows is null || state.Legends is null || state.Output is null
             || state.GroupMemberOrder is null

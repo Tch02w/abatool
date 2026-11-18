@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F008/F010 新完整目录 **`GPTWork/release-win-x64-a7e34c128937/AbaqusTools`**（干净 `7e09e1a`）已通过用户账户 1655 文件/19 worker 摘要、包内依赖和当前正式 C# 主机启动/API/退出；独立连接文件已清理。本轮检查均已结束，旧原生窗口未替换。下面源码阶段“完整包待构建”由本回执补齐；真实 SSH、MPI、原生操作和其他迁移缺口仍在，见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
 2026-11-18 F008/F010 持久恢复：扩展 `remote-recovery-broad-20261118.xml` 为 291 通过/1 失败（结果提取取消路径 HTTP 被 Windows 中止）；随后 `remote-recovery-final-20261118.xml` 54 项通过，覆盖该路径。实际 PowerShell 双后台进程检查 `remote-recovery-process-20261118.xml` 1 项通过（15.83 秒），启动回执丢失后退出旧后台、任务仍存活、新后台接回原 PID、启动计数 1、最终稳定成功，回执 `GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`。C# 6 项恢复显示与原有主机检查通过。此证据是本机真实脚本/进程，不是 SSH、MPI 或原生页面验收；新完整包待构建。见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下为前阶段记录。
 
 最后记录字段保护及不可读控制专项后，`remote-recovery-delivery-20261118.xml` **81 项通过，127.54 秒**，包含恢复、服务器、传输、关闭和 42 项文档检查；最终 Release 零警告/错误（13.56 秒），所有修改 Python Ruff 通过。两个测试后台和实际 launcher/helper 已确认结束。完整包另验，不把构建代替发布验收。

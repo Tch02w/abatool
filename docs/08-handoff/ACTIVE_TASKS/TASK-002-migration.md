@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F008/F010 持久恢复与重连（源码验证通过，完整包验证中）
+### 2026-11-18 F008/F010 持久恢复与重连（源码与完整包通过，真实 SSH/原生待验收）
 
 改动前已说明方案：本地保存任务阶段，服务器保存提交回执；断线或后台重启只核对原任务，不重发启动。固定服务器地址、账户、指纹及工作目录范围，记录中不保存认证秘密。已实现 `remote_job_journal.py`、`remote_job_recovery.py`，接入远端服务/HTTP 和 WinUI 状态；离线取消持久保存，写入失败不启动新任务，损坏记录不伪装空历史。功能说明、索引、使用手册、README、接口说明、架构与 ADR 0012 已同步。
 
@@ -20,7 +20,9 @@
 - `tests/control_plane/test_remote_recovery_process.py` 独立运行：1 项通过，15.83 秒，52078 退出 0。实际 PowerShell 启动独立 cmd/等待 helper，丢失启动响应后令测试后台直接退出；新后台通过原回执接回原进程，启动计数 1，最终稳定成功。证据 `GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`，两个后台 211336/209488、launcher 209732、helper 197880 已检查均不存在；未操作用户进程。属于本机传输替身下的实际脚本/进程验证，无 SSH/Abaqus。
 - 最后补充未核对状态控制禁用、损坏字段保护及路径规范化后，恢复/服务器/传输/关闭/文档专项 `remote-recovery-delivery-20261118.xml` **81 项通过，127.54 秒**（53536 退出 0，含 42 项文档）。Ruff 修改文件全部通过。新 C# 恢复显示 6 项及既有主机检查通过，日志 `remote-recovery-host-tests-20261118.log`。最终 Release `remote-recovery-winui-final-20261118.log` 0 警告/错误，13.56 秒，43049 退出 0。正式主机测试客户端输出 `GPTWork/remote-recovery-host-client`，已成功生成。
 
-准确续接点：代码与文档待本地提交后生成干净完整目录包，核对清单、包内诊断和正式主机；本轮测试/构建均已结束。实际 SSH、MPI、原生页面仍待验收，不自动替换旧窗口。GitHub push 仍等待先前自动审批所要求的具体远端确认，没有重试推送。
+代码、测试与文档已本地提交 **`7e09e1ab9da7f24df018051d23575733cfad0b25`**，基于该干净提交构建完整目录 **`GPTWork/release-win-x64-a7e34c128937/AbaqusTools`**，构建 4997 退出 0，日志 `remote-recovery-package-20261118.log`。用户账户核对 **1655 文件/19 worker**，大小及 SHA256 全一致，`sourceDirty=false`；清单回执为发布父目录 `inventory-verification.json`。包内依赖回执 `bundle-probe-13o2g9iw/verification.json`，正式当前 C# 主机日志 `GPTWork/remote-recovery-host-20261118.log`，均通过启动/接口/安全退出。独立数据 `GPTWork/remote-recovery-host-a7e34c128937`，连接文件已由后台清除。包内文档为构建快照，本回执在仓库补记。
+
+准确续接点：本轮测试、构建、清单、包内诊断和正式主机均已结束；实际 SSH、MPI、原生页面及其他迁移缺口仍待验收。旧窗口未替换，未启动求解。下轮优先核对原生业务/剩余迁移合同；本轮恢复测试已通过，无需重复。GitHub push 仍等待先前自动审批所要求的具体远端确认，没有重试推送。周额度最后剩余 **55%**，未达到 15% 暂停条件，目标仍在进行。
 
 ### 2026-11-18 F010 完成证据与日志增量（源码与完整包通过，远端恢复待完善）
 

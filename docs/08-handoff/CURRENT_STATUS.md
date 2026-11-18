@@ -1,10 +1,12 @@
 # 当前状态与接续点
 
-更新于 2026-11-18。F008/F010 连接中断/持久恢复已实现，专项及本机真实 PowerShell 跨后台进程恢复通过，最新改动的完整发布包待构建验证。F005/F007 真实 Standard 主/子进程只读证据、内存历史、关闭/草稿及真实兄弟双目标证据保留。整体迁移、原生业务、真实 SSH/并发负载、三层连续链及目标机器验收未完成。详细状态见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+更新于 2026-11-18。F008/F010 连接中断/持久恢复已实现，专项及本机真实 PowerShell 跨后台进程恢复、新完整目录包均通过。F005/F007 真实 Standard 主/子进程只读证据、内存历史、关闭/草稿及真实兄弟双目标证据保留。整体迁移、原生业务、真实 SSH/并发负载、三层连续链及目标机器验收未完成。详细状态见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 ## 工作区事实
 
-本轮 F008/F010 保存任务阶段、固定服务器身份与提交回执；断线/重启只接回原作业，离线取消先保存，记录损坏或保存失败显式保护。扩展 291 通过/1 项 Windows HTTP 断连失败；随后远端/提取专项 54 项通过，C# 新增 6 项显示检查与原有主机检查通过。实际双后台进程检查验证丢回执后退出、任务存活、恢复同一 PID、单次启动及稳定完成，`GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`。无 SSH/求解，原生操作待验收。下面完整包均属于前阶段，不含本轮恢复。周额度本轮读取剩余 56%。
+最新完整目录 **`GPTWork/release-win-x64-a7e34c128937/AbaqusTools`**，干净来源 **`7e09e1a`**，含本轮远端恢复、先前按钮居中和 GIF 两种模式。用户账户核对 1655 文件/19 worker、包内依赖及当前正式 C# 主机启动/API/安全退出全部通过。全部自有检查已结束，旧窗口未替换；没有真实 SSH、原生业务操作或求解验收。最新周额度剩余 **55%**；GitHub push 仍待先前要求的具体远端确认。下文不同包路径为历史阶段，不作为最新入口。
+
+本轮 F008/F010 保存任务阶段、固定服务器身份与提交回执；断线/重启只接回原作业，离线取消先保存，记录损坏或保存失败显式保护。扩展 291 通过/1 项 Windows HTTP 断连失败；随后远端/提取专项 54 项通过，C# 新增 6 项显示检查与原有主机检查通过。实际双后台进程检查验证丢回执后退出、任务存活、恢复同一 PID、单次启动及稳定完成，`GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`。无 SSH/求解，原生操作待验收。
 
 最后恢复/服务器/传输/关闭/文档专项 **81 项通过**（含文档 42），最终 Release 零警告/错误。所有本轮测试和构建已结束；两个测试后台、launcher 和 helper 均已确认不存在。准确命令、原失败和下一步完整包验证见 TASK-002。
 
@@ -35,7 +37,7 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
 
 | 范围 | 当前结论 | 下一动作 |
 |---|---|---|
-| F010 远端作业 | 完成确认、日志增量、持久记录/断线重连/离线取消已实现；专项和本机双后台真实 PowerShell 恢复通过 | 最终完整包、真实 SSH/原生操作、MPI |
+| F010 远端作业 | 完成确认、日志增量、持久记录/断线重连/离线取消已实现；专项、本机双后台真实 PowerShell 恢复及新完整包通过 | 真实 SSH/原生操作、MPI |
 | F004/F005/F007 原生调度与内存 | 共享调度/恢复已验证；内存观测/学习已接入，314 项扩展、末次 45 项、C# 显示及新冻结包真实 helper/恢复通过 | 真实 Abaqus/MPI 负载、原生页面 |
 | F001 关闭/草稿，F009 后台传输 | 后台继续/停止/取消、八页登记输入和窗口状态、同后台传输接回；222 项回归、主机/存储与新完整包关闭通过 | 原生关闭重开/保存失败/跨屏和真实 SSH |
 | F016 结构目录 | 已实现，有真实 GJA 目录与测试证据 | 原生选择与旧缓存重扫验证 |
@@ -60,7 +62,7 @@ GIF 支持「统一帧率 / 统一时长」。11 月 18 日复核四份 GJA、GJ
    F013 两组真实合并证据为 `GPTWork/merge-real-fv8_supj/verification.json`，单步恢复和最终包证据见 TASK-002。无需重跑已通过样本；F012 计划/阶段已迁移至后台，完整控制面最新 208 项通过，真实双目标已验收；待三层连续链及原生操作。
 2. 人工样例截面指派已修复，六组实体实际 Abaqus 解析校核通过；证据 `GPTWork/real-odb-validation/known-region-fumxjvn1/verification.json`，不要重跑已完成排查。
 3. 本次真实恢复证据：`GPTWork/real-odb-validation/region-delivery-zfmk0ni6/verification-resumed-2.json`，三组均成功且源全文件 SHA256 未变。生产源保护为大小/mtime/采样摘要，不称完整文件验证。旧 CSV schema 差异已明确校核并保留失败记录，不需重跑已完成三组。
-4. 最新完整目录候选为 `GPTWork/release-win-x64-b0e12f955ac4/AbaqusTools/AbaqusTools.WinUI.exe`，包含后处理/GIF、读取按钮修正、F012/F013 恢复、F001 关闭/草稿及本轮共享调度，已确认用户账户可读取全部包文件。启动前需正常退出旧候选窗口；此前无法通过桌面工具激活旧窗口，新包原生页面未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
+4. 最新完整目录候选为 `GPTWork/release-win-x64-a7e34c128937/AbaqusTools/AbaqusTools.WinUI.exe`，包含后处理/GIF、读取按钮修正、结果恢复、关闭/草稿、共享调度/内存及本轮远端恢复；用户账户读取和后台接口已验证。启动前需正常退出旧候选窗口；此前无法通过桌面工具激活旧窗口，新包原生页面未验收。历史真实表格回执 `GPTWork/result-browser-verification-20261117/verification.json` 保留有效。
 5. 最新数字控件回执 `GPTWork/winui-numberbox-preview-checks/verification-preview-matched.json` 与同名 .exit.txt：35 项通过、exit 0，包含外观几何、主题切换、数值语义、帮助 Header、占位与焦点状态。它不覆盖业务页布局、日志拖选或帮助弹层悬停。参数说明悬停 180ms 打开、按钮/提示区内保持、离开两区 240ms 关闭，保留点击/键盘，无“知道了”；14px 小圆问号保留 28px 热区。用户按 Esc 停止 Computer Use 后已停止 UI 操作，业务页验收未完成；详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 6. 持续同步文档；后续目录清理与剩余迁移保留任务索引，不能挤占当前后处理交付。
 

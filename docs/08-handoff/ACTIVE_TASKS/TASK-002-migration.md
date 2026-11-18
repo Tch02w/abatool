@@ -18,6 +18,8 @@
 
 收尾文档检查：项目.venv执行 `pytest tests/common/test_documentation_navigation.py -q --basetemp=GPTWork/pytest-explorer-docs-20261118`，49 passed in 0.12s，日志/XML为 `GPTWork/explorer-docs-20261118.log` / `.xml`。Git差异空白检查通过；全套历史回归未重复执行。最终Git身份以实际提交/远端核对为准，不预写推送成功。
 
+实际Git收尾：31文件提交 `4cb0503b98a3d7d4fa73d8a0a6d29035424ca95b`，`git push origin main` 成功，句柄79466后续退出0；`git ls-remote origin refs/heads/main`与本地完整哈希一致，当时工作区干净。本段为推送后补充，不把源码同步等同于完整迁移/原生CSV验收完成。
+
 ## 2026-11-18 · 补齐合同中的侧栏收起与恢复
 
 从已推送的 1c19ef7 接续。合同阶段6要求侧栏收起/恢复，原实现固定占280 DIP且没有入口。先向用户说明方案：顶部按钮与Ctrl+B切换，保留页面/输入/选择/后台工作，记住状态并动态计算最小宽度。随后新增MainWindow.ExplorerVisibility.cs及标题栏ToggleButton，隐藏现有浏览器并将列宽置0；不重建页面或后台。关闭/新建锁定期间禁止切换，隐藏时将焦点移出浏览器。ExplorerVisible使用现有草稿保存流程，旧配置缺失字段默认true，新建作业克隆状态时保留。窗口客户区下限从固定1250改为显示1250/收起970 DIP，导航宽度944保持，高度/DPI/工作区cap保持。

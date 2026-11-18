@@ -135,6 +135,20 @@ public sealed class JobQueueItem
     [JsonPropertyName("archiveError")]
     public string ArchiveError { get; init; } = string.Empty;
 
+    [JsonIgnore]
+    public bool HasPublishedArchive => !string.IsNullOrWhiteSpace(ArchiveDestination)
+        && ArchiveStatus is "已归档" or "已归档，清理未完成";
+
+    [JsonIgnore]
+    public string ArchiveDetailsDisplay => string.IsNullOrWhiteSpace(ArchiveStatus) ? string.Empty
+        : $"归档：{ArchiveStatus}"
+          + (HasPublishedArchive ? $"\n目录：{ArchiveDestination}" : "\n请核对计算目录和归档提示；未发布目录不能作为完整归档")
+          + (string.IsNullOrWhiteSpace(ArchiveError) ? string.Empty : $"\n说明：{ArchiveError}");
+
+    [JsonIgnore]
+    public string ResultMessageDisplay => string.IsNullOrWhiteSpace(ArchiveStatus)
+        || Message.Contains(ArchiveStatus, StringComparison.Ordinal) ? Message : $"{Message} · {ArchiveStatus}";
+
     [JsonPropertyName("elapsed")]
     public string Elapsed { get; init; } = string.Empty;
 

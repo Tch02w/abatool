@@ -28,6 +28,7 @@ from modules.submitter.constants import (
     STATUS_WAITING_DEPENDENCY,
     TERMINAL_STATUSES,
 )
+from modules.submitter.local_archive import archive_published
 from modules.submitter.local_job_execution import (
     LocalJobExecutionResult,
     LocalJobProcessController,
@@ -468,7 +469,8 @@ class LocalQueueRuntimeManager:
                         ready_ids.append(item.item_id)
                     else:
                         item.status = STATUS_WAITING_DEPENDENCY
-                        item.message = f"前置作业已完成，但未找到 ODB：{dependency.job_name}"
+                        item.message = (f"前置归档需核对完整性：{dependency.job_name}" if dependency.archive_status
+                                        else f"前置作业已完成，但未找到 ODB：{dependency.job_name}")
                     continue
                 if dependency.status in ACTIVE_STATUSES or dependency.status in {
                     STATUS_PENDING_RUN,
@@ -489,11 +491,14 @@ class LocalQueueRuntimeManager:
     @staticmethod
     def _dependency_odb_path(item: QueueItem) -> str:
         candidates = []
-        if item.archive_destination:
+        if archive_published(item.archive_status, item.archive_destination):
             candidates.append(Path(item.archive_destination) / f"{item.job_name}.odb")
-        if item.effective_work_dir:
+        elif item.archive_destination:
+            # Legacy partial moves can split ODB and restart files across roots.
+            return ""
+        elif item.effective_work_dir:
             candidates.append(Path(item.effective_work_dir) / f"{item.job_name}.odb")
-        if item.inp_path:
+        if not item.archive_destination and item.inp_path:
             candidates.append(Path(item.inp_path).parent / f"{item.job_name}.odb")
         for path in candidates:
             if path.is_file() and not path.with_suffix(".lck").exists():
@@ -523,6 +528,9 @@ class LocalQueueRuntimeManager:
                 item.status = STATUS_STARTING
                 item.message = "正在准备本机执行环境"
                 item.active_job_key = item.item_id
+                item.archive_destination = ""
+                item.archive_status = ""
+                item.archive_error = ""
                 item.rss_bytes = 0
                 item.memory_peak_bytes = 0
                 item.memory_sample_count = 0
@@ -749,9 +757,9 @@ class LocalQueueRuntimeManager:
                 item.message = message
                 if effective_work_dir:
                     item.effective_work_dir = effective_work_dir
-                if archive_destination:
+                if clear_active or archive_destination:
                     item.archive_destination = archive_destination
-                if archive_status:
+                if clear_active or archive_status:
                     item.archive_status = archive_status
                 item.archive_error = archive_error
                 if clear_active:

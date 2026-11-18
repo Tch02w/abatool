@@ -22,3 +22,4 @@ Current records:
 - [0011-native-memory-observation.md](0011-native-memory-observation.md)
 - [0012-durable-remote-tracking.md](0012-durable-remote-tracking.md)
 - [0013-durable-job-notifications.md](0013-durable-job-notifications.md)
+- [0014-verified-local-archive-publication.md](0014-verified-local-archive-publication.md)

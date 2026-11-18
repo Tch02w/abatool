@@ -15,6 +15,7 @@ from modules.submitter.constants import (
     STATUS_FAILED,
     STATUS_TERMINATED,
 )
+from modules.submitter.local_archive import archive_published
 
 from .contracts import ApiProblem, utc_now_text
 from .operation_journal import OperationJournal
@@ -95,7 +96,8 @@ class JobNotificationManager:
                 detail += "；归档未完成：" + result.archive_error
             self.publish(source="local", execution_id=record.attempt_id, job_id=item.item_id,
                          job_name=item.job_name, status=LOCAL_TERMINAL[result.status], message=detail,
-                         work_directory=result.archive_destination or result.work_dir)
+                         work_directory=result.archive_destination if archive_published(result.archive_status, result.archive_destination)
+                         else result.work_dir)
 
     def remote_finished(self, operation):
         if operation.request.notify and operation.status in {"succeeded", "failed", "cancelled"}:
@@ -118,8 +120,10 @@ class JobNotificationManager:
         for item in items:
             if item.complete_notify and item.attempt_id and item.submitted_at >= self.since and item.status in LOCAL_TERMINAL:
                 self.publish(source="local", execution_id=item.attempt_id, job_id=item.item_id, job_name=item.job_name,
-                             status=LOCAL_TERMINAL[item.status], message=item.message,
-                             work_directory=item.archive_destination or item.effective_work_dir)
+                             status=LOCAL_TERMINAL[item.status],
+                             message=item.message + ("；归档问题：" + item.archive_error if item.archive_error else ""),
+                             work_directory=item.archive_destination if archive_published(item.archive_status, item.archive_destination)
+                             else item.effective_work_dir)
         # Remote history may be independently unreadable; do not hide local notifications.
         try:
             snapshots = remote_manager.list_snapshots()

@@ -66,3 +66,5 @@ OdbPostprocessingPage → ControlPlaneHost → server.py
 | 节点式重启动 | 计算图与结果图分离；参考 [ADR 0004](../submitter/adr/0004-separate-restart-computation-and-result-materialization.md) |
 
 精确功能文件见 [功能索引](../03-features/FUNCTION_INDEX.md)。本页描述架构，不证明迁移已完成。
+
+本机归档在 Qt-free 执行层先复制校验再发布，求解与归档分别报告状态；目录清理只在发布后进行。归档中断恢复尚待完成，设计取舍见 [ADR 0014](../submitter/adr/0014-verified-local-archive-publication.md)。

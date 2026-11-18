@@ -132,6 +132,7 @@ try
     ControlPlaneLaunchChecks.Run();
     WorkbenchSessionChecks.Run();
     MemoryPresentationChecks.Run();
+    ArchivePresentationChecks.Run();
     RemoteRecoveryChecks.Run();
     RemoteServerSnapshotChecks.Run();
     JobNotificationChecks.Run();

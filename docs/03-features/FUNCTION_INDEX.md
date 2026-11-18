@@ -57,6 +57,8 @@
 
 ## 跨功能修改提示
 
+- F005/F011/F027 归档发布与清理：`modules/submitter/local_archive.py` / `archive_job_files`、`archive_published`；`modules/submitter/local_job_execution.py` / `_completed_result`；`local_queue_runtime.py` / `_dependency_odb_path`、`_update_queue_item` 与通知目录选择联动。C# `JobQueueItem.HasPublishedArchive`、`ArchiveDetailsDisplay`、`ResultMessageDisplay` 供概览/队列使用。测试 `tests/submitter/test_local_archive.py`、`tests/control_plane/test_local_archive_api.py`、`tests/winui_host/ArchivePresentationChecks.cs`；[归档规则与恢复缺口](LOCAL_ARCHIVE.md)。
+
 - F003/F005/F010 的结束提醒统一交给 F027；新增/改动终态时核对不会对未知/活动状态发结束提醒。远端请求 notify 省略默认 true，关闭选项必须在恢复后仍有效。
 - F008 连接视图响应：`modules/control_plane/remote_servers.py` / `snapshot`、`_communication`、`_publish_snapshot_locked`；`winui/AbaqusTools.WinUI/Services/RemoteServerContracts.cs` / `RemoteServerConnection.DisplayText`、`StatusBarText`；资源页 `RefreshRemoteSnapshotInBackgroundAsync` 忙时只读快照。检查为 `tests/control_plane/test_remote_server_responsiveness.py` 和 `tests/winui_host/RemoteServerSnapshotChecks.cs`；身份校验与网络命令仍由原连接锁保护。
 

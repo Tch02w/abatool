@@ -206,6 +206,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         {
             CurrentJobTitleText.Text = "Job: 未选择";
             StatusSummaryText.Text = "未运行";
+            ArchiveStatusText.Visibility = Visibility.Collapsed;
             ProgressSummaryText.Text = "—";
             RuntimeProgressBar.Value = 0;
             ElapsedSummaryText.Text = "00:00:00";
@@ -234,6 +235,9 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
         CurrentJobTitleText.Text = $"Job: {item.JobName}";
         StatusSummaryText.Text = string.IsNullOrWhiteSpace(item.Status) ? "未知" : item.Status;
+        ArchiveStatusText.Text = item.ArchiveStatus;
+        ArchiveStatusText.Visibility = string.IsNullOrWhiteSpace(item.ArchiveStatus) ? Visibility.Collapsed : Visibility.Visible;
+        ToolTipService.SetToolTip(ArchiveStatusText, item.ArchiveDetailsDisplay);
         var progress = operation?.Progress ?? 0;
         ProgressSummaryText.Text = operation is null
             ? "—"
@@ -263,6 +267,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     {
         CurrentJobTitleText.Text = $"Remote Job: {operation.Request.JobName}";
         StatusSummaryText.Text = operation.StatusDisplay;
+        ArchiveStatusText.Visibility = Visibility.Collapsed;
         ProgressSummaryText.Text = string.IsNullOrWhiteSpace(operation.Phase)
             ? $"{operation.Percent}%"
             : operation.Phase;
@@ -523,6 +528,8 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         var header =
             $"状态：{item.Status}\r\n调度：{item.SchedulingDisplay}\r\n消息：{item.Message}\r\n"
             + $"Core：{item.CoresDisplay}\r\n内存配置：{item.Memory}";
+        if (!string.IsNullOrWhiteSpace(item.ArchiveDetailsDisplay))
+            header += "\r\n" + item.ArchiveDetailsDisplay;
         if (operation is null)
         {
             return header;
@@ -718,7 +725,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private static string? ResolveWorkDirectory(JobQueueItem item)
     {
-        if (!string.IsNullOrWhiteSpace(item.ArchiveDestination)
+        if (item.HasPublishedArchive
             && Directory.Exists(item.ArchiveDestination))
         {
             return item.ArchiveDestination;

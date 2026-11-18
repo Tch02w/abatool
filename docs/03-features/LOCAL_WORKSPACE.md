@@ -25,7 +25,7 @@
 
 源码回归包括：已存在 LCK 时字节和路径保持、前置缺失、错误参数、取消、复制失败、源变化、同文件输入、真实 NTFS junction/硬链接、临时文件碰撞；实际 Windows 回显进程验证含空格/`&` 的 INP 是一个参数。真实 HTTP 测试验证拒绝原因、失败持久恢复和禁止自动重试。均使用 GPTWork 下微小夹具，未修改原始工程数据、未启动 Abaqus 求解。
 
-归档尚未改造：当前按文件移动可能中途失败，归档异常与求解成功尚需在界面上明确区分，部分归档路径不得作为完整 Restart 依赖证明。下一步需先提出安全归档方案，再补足跨卷/部分失败/恢复和实际业务验收。不能把本阶段通过写成整个提交、归档或 WinUI 迁移完成。
+归档已改为复制校验后完整发布，独立报告归档结果；崩溃恢复/独立重试、跨卷负载和实际业务验收仍待完成，详见 [归档说明](LOCAL_ARCHIVE.md)。不能把本阶段通过写成整个提交、归档或 WinUI 迁移完成。
 
 源码入口：`modules/submitter/local_workspace.py` 的 `LocalWorkspacePlan`、`plan_workspace`、`prepare_workspace`、`check_existing_results`；`modules/submitter/local_job_execution.py` 的 `execute_local_job`、`LocalJobProcessController.start`；`modules/submitter/command.py`。
 

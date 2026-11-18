@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import subprocess
 import threading
 import time
@@ -30,6 +29,7 @@ from .constants import (
 )
 from .cpu_policy import validate_local_cpus
 from .execution_options import validate_execution_options
+from .local_archive import ARCHIVE_EXTENSIONS, archive_job_files
 from .local_workspace import (
     RESTART_EXTENSIONS,
     WorkspacePreparationCancelled,
@@ -53,22 +53,6 @@ ProgressCallback = Callable[[str, str, int, str], None]
 LOGGER = logging.getLogger(__name__)
 EXISTING_RESULT_EXTENSIONS = (".odb", ".sta")
 RESTART_DEPENDENCY_EXTENSIONS = RESTART_EXTENSIONS
-ARCHIVE_EXTENSIONS = (
-    ".inp",
-    ".odb",
-    ".sta",
-    ".msg",
-    ".dat",
-    ".log",
-    ".com",
-    ".prt",
-    ".sim",
-    ".res",
-    ".mdl",
-    ".stt",
-    ".fil",
-    ".pac",
-)
 
 
 @dataclass(frozen=True)
@@ -137,19 +121,6 @@ def _unique_backup_path(path: Path) -> Path:
     return candidate
 
 
-def _unique_destination(root: Path, job_name: str) -> Path:
-    destination = root / job_name
-    if not destination.exists():
-        return destination
-    tag = datetime.now(UTC).astimezone().strftime("%Y%m%d_%H%M%S")
-    candidate = root / f"{job_name}_{tag}"
-    index = 1
-    while candidate.exists():
-        candidate = root / f"{job_name}_{tag}_{index}"
-        index += 1
-    return candidate
-
-
 def _prepare_existing_results(work_dir: Path, job_name: str, policy: str) -> None:
     check_existing_results(work_dir, job_name, policy)
     existing = [
@@ -197,25 +168,23 @@ def _execution_command(item: QueueItem, prepared_inp: Path, oldjob_arg: str, *, 
 def _archive_result(
     item: QueueItem,
     work_dir: Path,
+    **kwargs,
 ) -> tuple[str, str, str]:
-    if not item.archive_dir:
-        return "", "", ""
-    root = Path(item.archive_dir).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    destination = _unique_destination(root, item.job_name)
-    try:
-        if item.cleanup_after_archive and item.calculation_root_dir:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(work_dir), str(destination))
-        else:
-            destination.mkdir(parents=True, exist_ok=False)
-            for extension in ARCHIVE_EXTENSIONS:
-                source = work_dir / f"{item.job_name}{extension}"
-                if source.is_file():
-                    shutil.move(str(source), str(destination / source.name))
-    except OSError as exc:
-        return str(destination), "归档失败", str(exc)
-    return str(destination), "已归档", ""
+    return archive_job_files(item, work_dir, **kwargs)
+
+
+def _completed_result(item, work_dir, command, message, controller, progress):
+    def report(detail, copied, total):
+        percent = 92 + min(6, int(6 * copied / max(1, total)))
+        _emit(progress, "archiving", "计算已完成，正在归档", percent, detail)
+
+    if item.archive_dir:
+        report("正在检查归档目录", 0, 1)
+    destination, status, error = _archive_result(
+        item, work_dir, cancelled=lambda: controller.cancel_requested, progress=report)
+    if status:
+        message += "；" + status
+    return LocalJobExecutionResult(STATUS_COMPLETED, message, str(work_dir), command, destination, status, error)
 
 
 def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) -> None:
@@ -396,16 +365,8 @@ def execute_local_job(
             if latest_status == "完成" and not active:
                 terminal_stable += 1
                 if terminal_stable >= 3 or runtime_completion_ready(run, evidence):
-                    destination, archive_status, archive_error = _archive_result(item, work_dir)
-                    return LocalJobExecutionResult(
-                        STATUS_COMPLETED,
-                        latest_detail or "Abaqus 作业已完成",
-                        str(work_dir),
-                        command,
-                        destination,
-                        archive_status,
-                        archive_error,
-                    )
+                    return _completed_result(item, work_dir, command, latest_detail or "Abaqus 作业已完成",
+                                             controller, progress)
 
             launcher_finished_at = run.get("launcher_finished_monotonic")
             if (
@@ -430,16 +391,8 @@ def execute_local_job(
                     baseline,
                 )
                 if file_status == "完成":
-                    destination, archive_status, archive_error = _archive_result(item, work_dir)
-                    return LocalJobExecutionResult(
-                        STATUS_COMPLETED,
-                        file_detail or "Abaqus 作业已完成",
-                        str(work_dir),
-                        command,
-                        destination,
-                        archive_status,
-                        archive_error,
-                    )
+                    return _completed_result(item, work_dir, command, file_detail or "Abaqus 作业已完成",
+                                             controller, progress)
                 return LocalJobExecutionResult(
                     STATUS_UNKNOWN,
                     file_detail or "launcher 已退出，但未获得足够的求解完成证据",
@@ -452,6 +405,7 @@ def execute_local_job(
 
 
 __all__ = [
+    "ARCHIVE_EXTENSIONS",
     "LocalJobExecutionResult",
     "LocalJobProcessController",
     "execute_local_job",

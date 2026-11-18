@@ -134,7 +134,7 @@
                                     <TextBlock Text="{Binding Index}" /><TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding JobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="2" Text="{Binding InpPath}" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Column="3" Text="{Binding JobType}" /><TextBlock Grid.Column="4" Text="{Binding OldjobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="5" Text="{Binding CoresDisplay}" />
                                     <TextBlock Grid.Column="6" Text="{Binding RuntimeMemoryDisplay}" ToolTipService.ToolTip="{Binding MemoryDetailsDisplay}" /><TextBlock Grid.Column="7" Text="{Binding PriorityDisplay}" /><TextBlock Grid.Column="8" Text="{Binding SchedulingDisplay}" />
-                                    <TextBlock Grid.Column="9" FontWeight="SemiBold" Text="{Binding Status}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="10" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="9" FontWeight="SemiBold" Text="{Binding Status}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="10" Text="{Binding ResultMessageDisplay}" ToolTipService.ToolTip="{Binding ArchiveDetailsDisplay}" TextTrimming="CharacterEllipsis" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>

@@ -14,6 +14,8 @@
 
 `GET /api/v1/remote-servers` 的 `connection` 新增可选 `busy`（布尔，旧后台缺省 false）和 `activity`（可读状态文本，空闲为空）。远端 I/O 执行期间返回最近完整发布的状态，不等待连接锁；资源值沿用原采样时间，并明确为上次读取。连接切换时 `status=connecting`、`resource=null`，不沿用旧机器资源。操作完成/失败/需确认指纹后发布对应状态并清除 busy。服务器命令 POST 返回本次操作的最终快照，仍遵守身份/指纹/活动任务校验。只读返回值与内部资源独立，事件游标随对应完整快照发布。
 
+`POST /api/v1/remote-server-commands` 的 `refresh` / `disconnect` 可附已有结构的非敏感 `profile`，含主机、端口、用户名、指纹、计算目录、Abaqus命令与允许目录。后台在同一通信锁内用server_identity核对当前连接，再执行动作；不匹配返回409 `REMOTE_CONNECTION_CHANGED`，不刷新/断开其他服务器。WinUI新入口携带发起时身份；旧客户端省略profile的调用保持兼容。配置名称不是身份替代，密码或私钥内容不随此请求发送。
+
 ### GPU 与精度补充（2026-11-18，F028）
 
 本机草稿/入队 draft、远端预览/创建增加可选 `gpuCount`（null 或 0–1024 整数）、`explicitPrecision`（default/off/explicit/both/constraint）、`outputPrecision`（default/single/full）。缺省均沿用环境，GPU=0 明确关闭；拒绝布尔、小数 GPU 及未知/null 精度。错误 400 `INVALID_EXECUTION_OPTIONS`。Explicit 双精度配单个用户子程序 .obj/.o 同样在启动前拒绝。

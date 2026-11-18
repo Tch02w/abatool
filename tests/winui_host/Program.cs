@@ -13,6 +13,26 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 1 && args[0] == "--command-state-checks")
+    {
+        WorkbenchCommandChecks.Run();
+        return 0;
+    }
+    if (args.Length == 2 && args[0] is "--command-state-api" or "--command-target-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        try
+        {
+            if (args[0] == "--command-target-api") await WorkbenchCommandChecks.RunTargetApiAsync(host);
+            else await WorkbenchCommandChecks.RunApiAsync(host);
+        }
+        finally { await host.DetachForCloseAsync(); }
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--new-job-reset-checks")
     {
         await NewJobDraftResetChecks.RunAsync(args[1]);

@@ -15,6 +15,7 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Notifications.cs" Link="ControlPlaneHost.Notifications.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/WorkbenchSessionStore.cs" Link="WorkbenchSessionStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/NewJobDraftReset.cs" Link="NewJobDraftReset.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/WorkbenchCommandState.cs" Link="WorkbenchCommandState.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/SystemSessionEndState.cs" Link="SystemSessionEndState.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbResultGraphDraftStore.cs" Link="OdbResultGraphDraftStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/RecoveryDraftFile.cs" Link="RecoveryDraftFile.cs" />

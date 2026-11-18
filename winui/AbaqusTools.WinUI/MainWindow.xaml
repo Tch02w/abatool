@@ -55,15 +55,16 @@
                     </MenuBarItem>
                     <MenuBarItem Title="作业(J)">
                         <MenuFlyoutItem Click="OnQueueMenuClicked" Text="管理队列" />
-                        <MenuFlyoutItem Click="OnStartQueueMenuClicked" Text="开始本机队列" />
-                        <MenuFlyoutItem Click="OnStopQueueMenuClicked" Text="停止后续调度" />
+                        <MenuFlyoutItem x:Name="StartQueueMenuItem" IsEnabled="False" Click="OnStartQueueMenuClicked" Text="开始本机队列" />
+                        <MenuFlyoutItem x:Name="StopQueueMenuItem" IsEnabled="False" Click="OnStopQueueMenuClicked" Text="停止后续调度" />
+                        <MenuFlyoutItem x:Name="TerminateQueueMenuItem" IsEnabled="False" Click="OnTerminateQueueMenuClicked" Text="终止所选运行中作业…" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Name="JobNotificationsMenuItem" Click="OnOpenNotificationCenter" Text="结束提醒" />
                     </MenuBarItem>
                     <MenuBarItem Title="服务器(S)">
                         <MenuFlyoutItem Click="OnComputeResourcesMenuClicked" Text="连接 / 配置" />
-                        <MenuFlyoutItem Click="OnRefreshResourcesMenuClicked" Text="刷新资源" />
-                        <MenuFlyoutItem Click="OnDisconnectServerMenuClicked" Text="断开远端连接" />
+                        <MenuFlyoutItem x:Name="RefreshRemoteMenuItem" IsEnabled="False" Click="OnRefreshResourcesMenuClicked" Text="刷新远端资源" />
+                        <MenuFlyoutItem x:Name="DisconnectRemoteMenuItem" IsEnabled="False" Click="OnDisconnectServerMenuClicked" Text="断开远端连接" />
                     </MenuBarItem>
                     <MenuBarItem Title="后处理(P)">
                         <MenuFlyoutItem Click="OnPostprocessingMenuClicked" Text="当前作业送入后处理" />

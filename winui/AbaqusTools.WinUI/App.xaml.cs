@@ -17,6 +17,7 @@ public partial class App : Application
 
     public ControlPlaneHost ControlPlane { get; }
     public WorkbenchSession Session { get; } = new();
+    public WorkbenchCommandState Commands { get; } = new();
     public Task PendingResultFileOperation { get; set; } = Task.CompletedTask;
 
     public MainWindow MainWindow => _mainWindow

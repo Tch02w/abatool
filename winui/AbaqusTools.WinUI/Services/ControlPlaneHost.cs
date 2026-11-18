@@ -546,6 +546,15 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             new RemoteServerCommandRequest { Action = "disconnect" },
             cancellationToken);
 
+    public Task<RemoteServersSnapshot> RefreshRemoteServerForProfileAsync(RemoteServerProfile profile,
+        CancellationToken cancellationToken = default) => ExecuteRemoteServerCommandAsync(
+            new RemoteServerCommandRequest { Action = "refresh", Profile = profile }, cancellationToken,
+            timeout: TimeSpan.FromSeconds(30));
+
+    public Task<RemoteServersSnapshot> DisconnectRemoteServerForProfileAsync(RemoteServerProfile profile,
+        CancellationToken cancellationToken = default) => ExecuteRemoteServerCommandAsync(
+            new RemoteServerCommandRequest { Action = "disconnect", Profile = profile }, cancellationToken);
+
     private async Task<RemoteServersSnapshot> ExecuteRemoteServerCommandAsync(
         RemoteServerCommandRequest request,
         CancellationToken cancellationToken,

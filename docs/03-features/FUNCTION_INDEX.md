@@ -98,3 +98,5 @@ F026 安装/升级/卸载：`packaging/build_installer.py` / `verified_bundle`�
 - 列表刷新/勾选/浏览器选择检查 F002/F004/F022，不仅调整 XAML。
 - 通用提取字段改动检查 F016/F018/F019/F021 及 C# DTO；当前源文件只读保护不能移除。
 - 新增/更名/移动文件或功能时，按 [持续维护工作流](../05-development/WORKFLOW.md) 更新本表及对应测试。
+
+F001/F004/F005/F008共用操作状态：`winui/AbaqusTools.WinUI/Services/WorkbenchCommandState.cs` / CanStartQueue、CanStopQueue、CanTerminateSelected、CanUseRemote、RemoteObservationIsCurrent；`winui/AbaqusTools.WinUI/MainWindow.Commands.cs` / RunQueueMenuAsync、RunRemoteMenuAsync、RefreshCommandSnapshotsAsync。页面复用JobQueuePage.StartQueueAsync/StopQueueAsync/TerminateSelectedAsync、ComputeResourcesPage.RefreshConnectedServerAsync/DisconnectAsync。`modules/control_plane/remote_servers.py`在通信锁内核对刷新/断开所附profile；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / RefreshRemoteServerForProfileAsync、DisconnectRemoteServerForProfileAsync传递身份。测试 `tests/winui_host/WorkbenchCommandChecks.cs`（--command-state-checks、--command-state-api、--command-target-api）、`tests/winui_host/test_shutdown_api.py`、`tests/control_plane/test_remote_servers_api.py`；设计与原生验收边界见[ADR0020](../submitter/adr/0020-shared-workbench-command-state.md)。

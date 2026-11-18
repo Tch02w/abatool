@@ -20,6 +20,7 @@ public sealed partial class MainWindow
 
     private void SetCloseInteractionEnabled(bool enabled)
     {
+        App.Current.Commands.SetLocked(!enabled);
         WindowMenuBar.IsEnabled = enabled;
         ShellNavigation.IsEnabled = enabled;
     }

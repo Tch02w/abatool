@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(ControlPlaneHost controlPlane)
     {
         InitializeComponent();
+        App.Current.Commands.Changed += UpdateCommandMenus;
         _controlPlane = controlPlane;
         _fallbackExplorerAdapter = new ProjectExplorerAdapter(
             controlPlane,
@@ -75,6 +76,7 @@ public sealed partial class MainWindow : Window
 
     public void ApplyRemoteServerSnapshot(RemoteServersSnapshot snapshot)
     {
+        App.Current.Commands.ApplyRemote(snapshot);
         RemoteStatusText.Text = snapshot.Connection.StatusBarText;
         RemoteStatusText.Foreground = snapshot.Connection.Status == "connected" && !snapshot.Connection.IsBusy
             ? (Brush)Application.Current.Resources["AbaqusSuccessBrush"]
@@ -102,6 +104,7 @@ public sealed partial class MainWindow : Window
         }
 
         _resourceRefreshBusy = true;
+        App.Current.Commands.SetLocalRefreshBusy(true);
         try
         {
             var snapshot = await _controlPlane.GetLocalResourceAsync();
@@ -123,6 +126,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _resourceRefreshBusy = false;
+            App.Current.Commands.SetLocalRefreshBusy(false);
         }
 
     }
@@ -155,7 +159,7 @@ public sealed partial class MainWindow : Window
     private async void OnResourceTimerTick(object? sender, object e)
     {
         if (App.Current.Session.IsClosing) return;
-        await Task.WhenAll(RefreshLocalResourceNowAsync(), RefreshJobNotificationsAsync());
+        await Task.WhenAll(RefreshLocalResourceNowAsync(), RefreshJobNotificationsAsync(), RefreshCommandSnapshotsAsync());
     }
 
     private async void OnRootLoaded(object sender, RoutedEventArgs e)
@@ -175,6 +179,7 @@ public sealed partial class MainWindow : Window
             await _controlPlane.EnsureReadyAsync();
             await RefreshLocalResourceNowAsync();
             await RefreshJobNotificationsAsync();
+            await RefreshCommandSnapshotsAsync();
             if (!App.Current.Session.IsClosing) _resourceTimer.Start();
         }
         catch (ControlPlaneException exception)
@@ -397,20 +402,19 @@ public sealed partial class MainWindow : Window
 
     private async void OnStartQueueMenuClicked(object sender, RoutedEventArgs args)
     {
-        NavigateToRoute("job-queue");
-        if (ContentFrame.Content is JobQueuePage page)
-        {
-            await page.StartQueueAsync();
-        }
+        await RunQueueMenuAsync(() => App.Current.Commands.CanStartQueue, page => page.StartQueueAsync());
     }
 
     private async void OnStopQueueMenuClicked(object sender, RoutedEventArgs args)
     {
-        NavigateToRoute("job-queue");
-        if (ContentFrame.Content is JobQueuePage page)
-        {
-            await page.StopQueueAsync();
-        }
+        await RunQueueMenuAsync(() => App.Current.Commands.CanStopQueue, page => page.StopQueueAsync());
+    }
+
+    private async void OnTerminateQueueMenuClicked(object sender, RoutedEventArgs args)
+    {
+        var selected = App.Current.Commands.SelectedActiveIds.ToHashSet(StringComparer.Ordinal);
+        await RunQueueMenuAsync(() => App.Current.Commands.CanTerminateSelected
+            && selected.SetEquals(App.Current.Commands.SelectedActiveIds), page => page.TerminateSelectedAsync());
     }
 
     private void OnComputeResourcesMenuClicked(object sender, RoutedEventArgs args)
@@ -420,20 +424,12 @@ public sealed partial class MainWindow : Window
 
     private async void OnRefreshResourcesMenuClicked(object sender, RoutedEventArgs args)
     {
-        NavigateToRoute("compute-resources");
-        if (ContentFrame.Content is ComputeResourcesPage page)
-        {
-            await page.RefreshSelectedAsync();
-        }
+        await RunRemoteMenuAsync(disconnect: false);
     }
 
     private async void OnDisconnectServerMenuClicked(object sender, RoutedEventArgs args)
     {
-        NavigateToRoute("compute-resources");
-        if (ContentFrame.Content is ComputeResourcesPage page)
-        {
-            await page.DisconnectAsync();
-        }
+        await RunRemoteMenuAsync(disconnect: true);
     }
 
     private void OnPostprocessingMenuClicked(object sender, RoutedEventArgs args)
@@ -609,6 +605,7 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _windowClosed = true;
+        App.Current.Commands.Changed -= UpdateCommandMenus;
         DisposeSessionSaving();
         AppWindow.Changed -= OnAppWindowChanged;
         if (_sizeLimitXamlRoot is not null)

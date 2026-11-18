@@ -80,6 +80,43 @@ def test_new_job_reset_confirms_and_persists_before_replacing_inputs(tmp_path, c
     assert "16 new-job reset checks passed" in result.stdout
 
 
+def test_shared_command_state_rejects_stale_busy_and_mismatched_targets(close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--command-state-checks"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "26 shared command-state checks passed" in result.stdout
+
+
+def test_command_state_observation_never_refreshes_or_disconnects_remote(tmp_path, close_client):
+    manager = FakeRemoteManager()
+    with running_control_plane(tmp_path, remote_manager=manager, server_profiles_path=tmp_path / "profiles.json") as runtime:
+        _connect(runtime)
+        before = (manager.connected_name, manager.refresh_count, len(manager.requests))
+        result = subprocess.run(
+            ["dotnet", str(close_client), "--command-state-api", str(runtime.descriptor_path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "4 production-client/live-HTTP command-state checks passed" in result.stdout
+        assert (manager.connected_name, manager.refresh_count, len(manager.requests)) == before
+
+
+def test_command_target_is_checked_by_backend_before_refresh_or_disconnect(tmp_path, close_client):
+    manager = FakeRemoteManager()
+    with running_control_plane(tmp_path, remote_manager=manager, server_profiles_path=tmp_path / "profiles.json") as runtime:
+        _connect(runtime)
+        result = subprocess.run(
+            ["dotnet", str(close_client), "--command-target-api", str(runtime.descriptor_path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "5 production-client/live-HTTP target identity checks passed" in result.stdout
+        assert manager.refresh_count == 1
+        assert not manager.connected_name
+
+
 def test_production_client_lists_and_preserves_active_transfer(tmp_path, close_client):
     started, release = threading.Event(), threading.Event()
 

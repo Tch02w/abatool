@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from modules.submitter.remote_connection import (
     HostKeyConfirmationRequired,
     ServerConnectionRequest,
@@ -187,6 +189,32 @@ def profile_payload() -> dict[str, Any]:
 
 def command(action: str, **values: Any) -> dict[str, Any]:
     return {"schemaVersion": 1, "action": action, **values}
+
+
+@pytest.mark.parametrize("action", ["refresh", "disconnect"])
+@pytest.mark.parametrize(("field", "value"), [
+    ("host", "10.0.0.99"), ("hostFingerprint", "SHA256:other-server"), ("computeRoot", r"D:\OtherRoot"),
+])
+def test_refresh_and_disconnect_reject_changed_server_identity(tmp_path, action, field, value):
+    manager = FakeRemoteManager()
+    profile = profile_payload()
+    profile["hostFingerprint"] = "SHA256:test-server"
+    with running_control_plane(tmp_path, remote_manager=manager, server_profiles_path=tmp_path / "profiles.json") as runtime:
+        connected = api_request(runtime, "/api/v1/remote-server-commands", method="POST",
+                                payload=command("connect", profile=profile, credentials={"password": "temporary"}))
+        assert connected[0] == 200
+        expected = {**profile, field: value}
+        rejected = api_request(runtime, "/api/v1/remote-server-commands", method="POST",
+                               payload=command(action, profile=expected))
+        assert rejected[0] == 409, json_response(rejected)
+        assert json_response(rejected)["error"]["code"] == "REMOTE_CONNECTION_CHANGED"
+        assert manager.connected_name == profile["profileName"]
+        assert manager.refresh_count == 0
+        accepted = api_request(runtime, "/api/v1/remote-server-commands", method="POST",
+                               payload=command(action, profile=profile))
+        assert accepted[0] == 200, json_response(accepted)
+        assert manager.refresh_count == (1 if action == "refresh" else 0)
+        assert manager.connected_name == (profile["profileName"] if action == "refresh" else "")
 
 
 def test_connection_requires_confirmation_then_persists_only_verified_profile(

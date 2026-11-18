@@ -53,6 +53,7 @@ public sealed partial class MainWindow
 
     private Task SaveForSystemSessionEnd()
     {
+        App.Current.Commands.SetLocked(true);
         _shutdownStarted = true;
         _draftTimer.Stop();
         _resourceTimer.Stop();

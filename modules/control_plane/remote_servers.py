@@ -257,6 +257,12 @@ class RemoteServerService:
             "deleteProfile": "正在删除服务器配置",
         }.get(action, "正在处理服务器配置")
         with self._communication(activity):
+            if action in {"refresh", "disconnect"} and payload.get("profile") is not None:
+                expected = server_identity(_profile_from_payload(payload["profile"]))
+                try:
+                    self._verify_profile_locked(expected)
+                except RemoteConnectionError as exc:
+                    raise ApiProblem(409, "REMOTE_CONNECTION_CHANGED", str(exc)) from exc
             if action == "saveProfile":
                 self._save_profile(_profile_from_payload(payload.get("profile")))
             elif action == "deleteProfile":

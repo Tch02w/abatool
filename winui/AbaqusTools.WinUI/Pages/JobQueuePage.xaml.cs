@@ -19,12 +19,17 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private int? _lastRuntimeParallel;
     private string? _lastRuntimePolicy;
     private string? _pendingFormalSelectionId;
+    private TaskCompletionSource _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public JobQueuePage()
     {
         InitializeComponent();
         CandidateList.ItemsSource = _candidates;
         FormalQueueList.ItemsSource = _queueItems;
+        FormalQueueList.SelectionChanged += (_, _) => App.Current.Commands.SelectQueueItems(
+            FormalQueueList.SelectedItems.OfType<JobQueueItem>().Select(item => item.ItemId));
+        App.Current.Commands.Changed += UpdateCommandButtons;
+        UpdateCommandButtons();
         _queueExplorerAdapter = new QueueExplorerAdapter(
             App.Current.ControlPlane,
             () => PickFolderAsync("选择队列工作目录"),
@@ -45,15 +50,23 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync();
-        if (App.Current.Session.IsClosing) return;
-        await RefreshRuntimeAsync(showError: false);
-        _runtimeTimer.Start();
+        var ready = _menuReady;
+        try
+        {
+            await RefreshAsync();
+            if (App.Current.Session.IsClosing || !IsLoaded) return;
+            await RefreshRuntimeAsync(showError: false);
+            if (IsLoaded && !App.Current.Session.IsClosing) _runtimeTimer.Start();
+        }
+        finally { ready.TrySetResult(); }
     }
+
+    public Task WaitForMenuReadyAsync() => _menuReady.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         _runtimeTimer.Stop();
+        _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async void OnRuntimeTimerTick(
@@ -257,7 +270,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     public async Task StartQueueAsync()
     {
-        if (_busy)
+        if (!App.Current.Commands.CanStartQueue)
         {
             return;
         }
@@ -295,7 +308,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     public async Task StopQueueAsync()
     {
-        if (_busy)
+        if (!App.Current.Commands.CanStopQueue)
         {
             return;
         }
@@ -325,21 +338,21 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     }
 
     private async void OnTerminateQueueItemsClicked(object sender, RoutedEventArgs e)
-    {
-        var selected = RequireFormalSelection();
-        if (selected is null
-            || !await ConfirmAsync(
-                "终止所选运行中作业？",
-                "将向 Abaqus 发送 terminate，并等待 LCK 与求解进程退出后写回终止状态。"))
-        {
-            return;
-        }
+        => await TerminateSelectedAsync();
 
-        SetBusy(true, "正在发送终止请求…");
+    public async Task TerminateSelectedAsync()
+    {
+        if (!App.Current.Commands.CanTerminateSelected) return;
+        var selected = App.Current.Commands.SelectedActiveIds;
+        SetBusy(true);
         try
         {
+            var names = string.Join("、", _queueItems.Where(item => selected.Contains(item.ItemId)).Select(item => item.JobName));
+            if (!await ConfirmAsync("终止所选运行中作业？",
+                $"作业：{names}\n\n将向所选的 {selected.Count} 个运行中作业发送 Abaqus terminate，并等待 LCK 与求解进程退出后写回终止状态。")) return;
+            App.Current.MainWindow.ReportPageStatus("正在发送终止请求…");
             var runtime = await App.Current.ControlPlane.TerminateLocalQueueItemsAsync(
-                selected.Select(item => item.ItemId).ToArray());
+                selected);
             ApplyRuntime(runtime);
             ShowSuccess(
                 "终止请求已发送",
@@ -599,10 +612,11 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         }
 
         _runtimeRefreshBusy = true;
+        var revision = App.Current.Commands.QueueRevision;
         try
         {
             var runtime = await App.Current.ControlPlane.GetLocalQueueRuntimeAsync();
-            ApplyRuntime(runtime);
+            if (App.Current.Commands.QueueObservationIsCurrent(revision)) ApplyRuntime(runtime);
         }
         catch (ControlPlaneException exception)
         {
@@ -610,6 +624,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             {
                 ShowError(exception.ToDisplayMessage());
             }
+            if (App.Current.Commands.QueueObservationIsCurrent(revision)) App.Current.Commands.InvalidateQueue();
         }
         catch (Exception exception)
         {
@@ -617,6 +632,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             {
                 ShowError(exception.Message);
             }
+            if (App.Current.Commands.QueueObservationIsCurrent(revision)) App.Current.Commands.InvalidateQueue();
         }
         finally
         {
@@ -626,6 +642,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private void ApplyRuntime(LocalQueueRuntimeSnapshot runtime)
     {
+        App.Current.Commands.ApplyQueue(runtime);
         ApplySnapshot(runtime.Queue);
         SchedulerInfoBar.Message = runtime.SchedulerMessage;
         SchedulerInfoBar.IsOpen = !string.IsNullOrWhiteSpace(runtime.SchedulerMessage);
@@ -652,11 +669,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
                 break;
             }
         }
-        StartQueueButton.IsEnabled = !runtime.Active;
-        StopQueueButton.IsEnabled = runtime.Active;
-        TerminateQueueItemsButton.IsEnabled = runtime.ActiveItemIds.Count > 0;
-        ParallelLimitNumberBox.IsEnabled = !runtime.Active;
-        ExistingResultPolicyComboBox.IsEnabled = !runtime.Active;
+        UpdateCommandButtons();
         if (runtime.Active)
         {
             App.Current.MainWindow.ReportPageStatus(
@@ -755,6 +768,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private void SetBusy(bool busy, string? status = null)
     {
         _busy = busy;
+        App.Current.Commands.SetQueueBusy(busy);
+        UpdateCommandButtons();
         RefreshQueueButton.IsEnabled = !busy;
         AddCurrentInputButton.IsEnabled = !busy;
         AddCandidateFilesButton.IsEnabled = !busy;
@@ -770,6 +785,16 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private JobQueueItem[] SelectedFormalItems() =>
         FormalQueueList.SelectedItems.OfType<JobQueueItem>().ToArray();
+
+    private void UpdateCommandButtons()
+    {
+        var commands = App.Current.Commands;
+        StartQueueButton.IsEnabled = commands.CanStartQueue;
+        StopQueueButton.IsEnabled = commands.CanStopQueue;
+        TerminateQueueItemsButton.IsEnabled = commands.CanTerminateSelected;
+        ParallelLimitNumberBox.IsEnabled = commands.CanEditQueueOptions;
+        ExistingResultPolicyComboBox.IsEnabled = commands.CanEditQueueOptions;
+    }
 
     private HashSet<string> CaptureSelectedFormalItemIds() =>
         SelectedFormalItems()

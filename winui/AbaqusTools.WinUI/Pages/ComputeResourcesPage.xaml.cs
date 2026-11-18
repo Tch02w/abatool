@@ -16,12 +16,14 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private bool _busy;
     private bool _backgroundRefreshBusy;
     private readonly ResourceExplorerAdapter _explorerAdapter;
+    private TaskCompletionSource _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ObservableCollection<ResourceNodeRow> ResourceNodes { get; } = [];
 
     public ComputeResourcesPage()
     {
         InitializeComponent();
+        App.Current.Commands.Changed += UpdateButtons;
         _explorerAdapter = new ResourceExplorerAdapter(
             RefreshSelectedAsync,
             SelectExplorerResource);
@@ -48,30 +50,44 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     public void ShowResourceError(string message)
     {
-        RefreshButton.IsEnabled = true;
+        UpdateButtons();
         LocalStatusText.Text = "资源读取失败";
         ShowError(message);
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        var ready = _menuReady;
         if (App.Current.MainWindow.LatestLocalResource is { } local)
         {
             ApplySnapshot(local);
         }
-        await LoadRemoteSnapshotAsync();
-        if (!App.Current.Session.IsClosing) _remoteRefreshTimer.Start();
+        try { await LoadRemoteSnapshotAsync(); }
+        finally { ready.TrySetResult(); }
+        if (!IsLoaded || App.Current.Session.IsClosing) return;
+        _remoteRefreshTimer.Start();
         await RecoverTransfersAsync();
+    }
+
+    public Task WaitForMenuReadyAsync() => _menuReady.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+    public bool SelectConnectedServer(string profile)
+    {
+        var row = ResourceNodes.FirstOrDefault(row => row.Key == $"remote:{profile}");
+        if (row is null) return false;
+        ResourceList.SelectedItem = row;
+        return true;
     }
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         _remoteRefreshTimer.Stop();
+        _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async void OnRemoteRefreshTimerTick(object? sender, object e)
     {
-        if (App.Current.Session.IsClosing) return;
+        if (App.Current.Session.IsClosing || App.Current.Commands.Locked) return;
         if (_busy || _backgroundRefreshBusy ||
             (_remoteSnapshot.Connection.Status != "connected" && !_remoteSnapshot.Connection.IsBusy))
         {
@@ -88,16 +104,22 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
 
         _backgroundRefreshBusy = true;
+        App.Current.Commands.SetRemoteRefreshBusy(true);
+        var revision = App.Current.Commands.RemoteRevision;
         try
         {
             // While another operation owns the SSH session, observe its published
             // state instead of adding another resource command behind it.
             var observing = _remoteSnapshot.Connection.IsBusy;
-            var snapshot = observing
+            var expected = App.Current.Commands.ConnectedProfile;
+            var snapshot = observing || expected is null
                 ? await App.Current.ControlPlane.GetRemoteServersAsync(CancellationToken.None)
-                : await App.Current.ControlPlane.RefreshRemoteServerAsync(CancellationToken.None);
-            ApplyRemoteSnapshot(snapshot);
-            if (!observing) App.Current.MainWindow.ReportPageStatus("远端资源已刷新");
+                : await App.Current.ControlPlane.RefreshRemoteServerForProfileAsync(expected, CancellationToken.None);
+            if (revision == App.Current.Commands.RemoteRevision && !_busy)
+            {
+                ApplyRemoteSnapshot(snapshot);
+                if (!observing) App.Current.MainWindow.ReportPageStatus("远端资源已刷新");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -105,11 +127,13 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
-            await ShowRemoteActionErrorAsync(exception);
+            if (revision == App.Current.Commands.RemoteRevision && !_busy)
+                await ShowRemoteActionErrorAsync(exception);
         }
         finally
         {
             _backgroundRefreshBusy = false;
+            App.Current.Commands.SetRemoteRefreshBusy(false);
         }
     }
 
@@ -120,15 +144,22 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     public async Task RefreshSelectedAsync()
     {
-        if (ResourceList.SelectedItem is ResourceNodeRow { IsLocal: false, IsConnected: true })
+        var commands = App.Current.Commands;
+        if (ResourceList.SelectedItem is ResourceNodeRow { IsLocal: false })
         {
-            await RunRemoteActionAsync(
-                App.Current.ControlPlane.RefreshRemoteServerAsync,
-                "远端资源已刷新");
+            if (SelectedRemoteProfile() is { } profile) await RefreshConnectedServerAsync(profile);
             return;
         }
+        if (!commands.CanRefreshLocal) return;
         await App.Current.MainWindow.RefreshLocalResourceNowAsync();
         await LoadRemoteSnapshotAsync();
+    }
+
+    public async Task RefreshConnectedServerAsync(RemoteServerProfile expected)
+    {
+        if (!App.Current.Commands.CanUseSelectedRemote(expected.ProfileName)) return;
+        await RunRemoteActionAsync(token => App.Current.ControlPlane.RefreshRemoteServerForProfileAsync(expected, token),
+            "远端资源已刷新");
     }
 
     private async void OnAddServerClicked(object sender, RoutedEventArgs e)
@@ -171,10 +202,12 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         await DisconnectAsync();
     }
 
-    public async Task DisconnectAsync()
+    public async Task DisconnectAsync(RemoteServerProfile? expected = null)
     {
+        expected ??= SelectedRemoteProfile();
+        if (expected is null || !App.Current.Commands.CanUseSelectedRemote(expected.ProfileName)) return;
         await RunRemoteActionAsync(
-            App.Current.ControlPlane.DisconnectRemoteServerAsync,
+            token => App.Current.ControlPlane.DisconnectRemoteServerForProfileAsync(expected, token),
             "远端服务器已断开");
     }
 
@@ -428,6 +461,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
+            App.Current.Commands.InvalidateRemote();
             ShowError(exception.Message);
         }
         finally
@@ -779,7 +813,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             result == ContentDialogResult.Primary);
     }
 
-    private void ApplyRemoteSnapshot(RemoteServersSnapshot snapshot)
+    public void ApplyRemoteSnapshot(RemoteServersSnapshot snapshot)
     {
         _remoteSnapshot = snapshot;
         RemoteSummaryText.Text = $"{snapshot.Profiles.Count} 个配置";
@@ -902,13 +936,16 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private void UpdateButtons()
     {
+        var commands = App.Current.Commands;
+        commands.SetResourceBusy(_busy);
         var row = ResourceList.SelectedItem as ResourceNodeRow;
         var isRemote = row is { IsLocal: false };
-        RefreshButton.IsEnabled = !_busy;
+        var connected = commands.CanUseSelectedRemote(SelectedRemoteProfile()?.ProfileName);
+        RefreshButton.IsEnabled = isRemote ? connected : commands.CanRefreshLocal;
         AddServerButton.IsEnabled = !_busy;
         ConnectButton.IsEnabled = !_busy && isRemote && row is { IsConnected: false };
         EditButton.IsEnabled = !_busy && isRemote;
-        DisconnectButton.IsEnabled = !_busy && row is { IsLocal: false, IsConnected: true };
+        DisconnectButton.IsEnabled = connected;
         DeleteButton.IsEnabled = !_busy && isRemote && row is { IsConnected: false };
         BrowseFilesButton.IsEnabled = !_busy && row is { IsLocal: false, IsConnected: true };
         UploadFileButton.IsEnabled = !_busy && row is { IsLocal: false, IsConnected: true };

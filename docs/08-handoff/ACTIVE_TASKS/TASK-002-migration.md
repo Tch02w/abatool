@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 当前作业路由进入完整候选与安装验证
+
+从干净22e47f61bd17f1077de69c920c1bace67516ef26继续，上一轮实际完成代码/测试/文档及GitHub main同步。本轮使用项目解释器、G: TEMP/TMP运行build_release.py --no-restore，50985退出0，生成 `GPTWork/release-win-x64-e3274f974142/AbaqusTools`。来源22e47f6、sourceDirty=false；1670清单文件、19 worker，含清单355028418字节，manifest SHA256 `32ea575cffc356e7354e2da65557585e2aa3adeb7c764afdf92aec12eb37a75d`。对比d5f9e76完整目录，无新增/移除路径，17项文件变化；完整摘要/禁止模型与Qt/虚拟环境混入均通过，回执 `GPTWork/job-route-release-verification-20261118/inventory.json`。源码祖先核对d5f9e76。
+
+包内依赖探针退出0，`bundle-probe-blysp6b0/verification.json`（位于上述验证目录）验证默认配置、19 worker、GIF、Agg、xlsx预览、SSH加密和Qt-free；正式C#主机 `GPTWork/job-route-release-host-20261118/ControlPlaneHost.Tests.exe` 构建0警告/错误0.57秒，针对新包启动/资源与队列API/正常退出通过（frozen-host.log），descriptor确认移除。没有传--odb，没有运行Abaqus或用户SSH，没有打开应用窗口。
+
+正式标识候选 `GPTWork/installer-win-x64-fa6e79921794/AbaqusTools-0.1.0-win-x64-setup.exe`，负载/安装器均为干净22e47f6；1671安装项，125595242字节，SHA256 `6981145356bf544d08c7c359e52d9c7c730041688d59e00f8c1bb0c82d138514`，payloadId为22e47f61bd17-32ea575cffc3。安装器摘要、来源、PE架构核对通过，引导器0x14c、应用/后台0x8664；签名NotSigned。回执installer-artifact.json/installer-signature.json在上述验证目录。
+
+使用同一新负载构建独立测试身份候选d43eaffd9617，与保留的旧7c874d3测试包b7f81001e859运行正式verify_installer.py，22060退出0。`GPTWork/installer-lifecycle-c027e16d589d/verification.json` verified：陌生目录及链接祖先拒绝、中文空格目录初装/全摘要、活动自有后台拒绝升级与卸载、正常退出后升级保留旧版本与用户文件、开始菜单目标更新、安装后正式主机API/退出、卸载清除登记/快捷方式并保留用户文件，全部通过。forcedCleanupPids/remainingOwnedPids为空，registrationRemaining=null。新旧安装包和历史产物保留；正式标识没有安装到用户默认目录，不代表原生向导/无开发环境目标机验收。测试身份和正式候选的payloadId/清单摘要已核对一致。
+
+收尾文档导航49项与安装清单11项共60项通过0.31秒，`GPTWork/job-route-release-verification-20261118/docs-installer.log` / `.xml`；差异空白检查通过。仅更新发布回执文档，产品负载仍来自干净22e47f6，不为文档再生成相同安装包。
+
+准确续接点：本轮所有构建、探针、主机和生命周期句柄均已终态；文档提交并推送后核对远端实际HEAD，不重跑相同候选。下一独立缺口已只读定位：ResultBrowserPage.xaml.cs的OnExportClicked既没有导出忙碌保护，也没有把异步复制登记到PendingResultFileOperation，而关闭协议仅等待后者；重复点击/关闭时可能与未完成导出冲突，部分失败也只报通用错误。下一轮先说明进度、取消、部分结果与关闭等待方案，再接入共享文件操作边界。原生暂停、真实SSH/三级链/目标机/签名仍待；整体目标active，禁止C:ODB且未移动用户文件。
+
 ## 2026-11-18 · F001/F005/F014 当前作业结果路由
 
 从干净6676e074cec25c974b016f1e8f78a8ad232272ac继续；上一轮检查、目录/安装候选验证及推送是实际进展，最终文档推送已完成且远端main与本地一致。先核对modules/routes.py和workspace.py旧版语义、WinUI两个菜单同一只切页入口及现有LoadOdbPathAsync，再向用户说明方案后实现。新增JobPostprocessTarget/JobPostprocessRoute与MainWindow.Postprocessing，从当前队列/概览/本地草稿解析；重新读运行快照、核对运行批次；已发布归档缺失不回退旧副本，活动/未确认/锁定/缺失/多选/远端分别提示。远端不自动下载，不启动求解。

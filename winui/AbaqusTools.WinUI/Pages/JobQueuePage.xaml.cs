@@ -786,6 +786,14 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private JobQueueItem[] SelectedFormalItems() =>
         FormalQueueList.SelectedItems.OfType<JobQueueItem>().ToArray();
 
+    public JobPostprocessTarget CapturePostprocessTarget()
+    {
+        var rows = SelectedFormalItems();
+        if (rows.Length != 1)
+            throw new InvalidOperationException("请在正式队列中选中一个作业，再送入后处理。");
+        return JobPostprocessTarget.Local(rows[0]);
+    }
+
     private void UpdateCommandButtons()
     {
         var commands = App.Current.Commands;

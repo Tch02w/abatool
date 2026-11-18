@@ -33,6 +33,9 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     public IWorkbenchExplorerAdapter ExplorerAdapter => _workspaceExplorerAdapter;
     public bool IsDraftBusy => _previewBusy || _submitBusy;
 
+    public JobPostprocessTarget PostprocessTarget => JobPostprocessTarget.Draft(
+        InputPathTextBox.Text, JobNameTextBox.Text, IsRemote);
+
     public void ApplyNewJobReset()
     {
         // Change mode before paths: the mode handler clears incompatible paths.

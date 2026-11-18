@@ -46,6 +46,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private bool _postprocessBusy;
     private bool _cancelRequested;
     private bool _recoveryAttempted;
+    private Task? _initialLoadTask;
     private string? _activeOperationId;
     private string? _activeAttemptId;
     private long _lastOperationVersion = -1;
@@ -88,39 +89,65 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
-    public async Task LoadOdbPathAsync(string path)
+    public async Task<bool> LoadOdbPathAsync(string path, Func<bool>? canApply = null)
     {
-        if (_postprocessBusy)
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        try
         {
-            ShowWarning("当前后处理正在执行或状态待确认，请完成原操作后再切换 ODB。", "不能切换 ODB");
-            return;
+            // Session restoration and operation recovery must finish before applying a route.
+            // Observe the existing load; do not start a second recovery after a timeout.
+            while (_initialLoadTask is null || !_initialLoadTask.IsCompleted)
+            {
+                if (canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
+                if (DateTime.UtcNow >= deadline)
+                    throw new InvalidOperationException("后处理页面仍在加载或恢复原操作，请稍后重试；原操作没有重新启动。");
+                await Task.Delay(50);
+            }
+            await _initialLoadTask;
         }
-        if (UpgradeBlocksEditing)
+        catch (Exception error)
         {
-            ShowWarning("升级尚未结束或状态未确认，请先恢复查看当前任务。", "不能切换 ODB");
-            return;
+            if (canApply?.Invoke() is not false) ShowWarning(error.Message, "不能切换 ODB");
+            return false;
         }
-        if (!string.Equals(Path.GetExtension(path), ".odb", StringComparison.OrdinalIgnoreCase))
+        if (!IsLoaded || canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
+        if (_discoveryBusy || _postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing
+            || _postprocessRecoveryBusy || DraftPending || _draftActionBusy)
         {
-            return;
+            ShowWarning("请先完成当前读取、检查、后处理或升级操作，并处理待恢复的草稿，再切换 ODB。", "不能切换 ODB");
+            return false;
         }
-
-        var directory = Path.GetDirectoryName(path);
-        if (string.IsNullOrWhiteSpace(directory))
+        if (!Path.IsPathFullyQualified(path) || !string.Equals(Path.GetExtension(path), ".odb", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            ShowWarning("请选择完整的本地 ODB 文件路径。", "不能切换 ODB");
+            return false;
         }
-
-        RootTextBox.Text = directory;
-        await DiscoverAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        if (!await DiscoverCoreAsync(directory, canApply)) return false;
+        if (DraftPending)
+        {
+            ShowWarning("该目录存在待恢复草稿，请先选择恢复或保留当前配置，再选择要处理的作业。", "已读取目录，尚未切换选择");
+            return false;
+        }
         if (_odbByPath.TryGetValue(PathKey(path), out var row))
         {
+            OdbList.SelectedItems.Clear();
             OdbList.SelectedItem = row;
             OdbList.ScrollIntoView(row);
+            return true;
         }
+        ShowWarning($"目录已读取，但未找到请求的 ODB：{path}。请核对文件是否已移动或被扫描规则排除。", "未能定位作业 ODB");
+        return false;
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        _initialLoadTask ??= InitializePageAsync();
+        try { await _initialLoadTask; }
+        catch (Exception error) { ShowWarning(error.Message, "后处理页面恢复未完成"); }
+    }
+
+    private async Task InitializePageAsync()
     {
         try
         {
@@ -383,21 +410,23 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task DiscoverAsync()
+    private async Task DiscoverAsync() => await DiscoverCoreAsync();
+
+    private async Task<bool> DiscoverCoreAsync(string? requestedRoot = null, Func<bool>? canApply = null)
     {
-        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing || DraftPending || _draftActionBusy) return;
-        var root = RootTextBox.Text.Trim();
+        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing || DraftPending || _draftActionBusy) return false;
+        var root = (requestedRoot ?? RootTextBox.Text).Trim();
         if (string.IsNullOrWhiteSpace(root))
         {
             ShowError("请选择或输入 ODB 根目录。", "无法发现 ODB");
             RootTextBox.Focus(FocusState.Programmatic);
-            return;
+            return false;
         }
 
-        if (!SaveWorkspace()) return;
+        if (!SaveWorkspace()) return false;
         Task draftSave;
         try { draftSave = SavePostprocessDraftAsync(); }
-        catch (Exception error) { ShowWarning(error.Message, "草稿未能保存，未切换目录"); return; }
+        catch (Exception error) { ShowWarning(error.Message, "草稿未能保存，未切换目录"); return false; }
         SetDiscoveryBusy(true);
         ErrorInfoBar.IsOpen = false;
         WarningInfoBar.IsOpen = false;
@@ -411,9 +440,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         {
             // Lock discovery before the first await, then finish the old root's snapshot.
             await draftSave;
+            if (canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
             var result = await App.Current.ControlPlane.DiscoverOdbsAsync(
                 root,
                 RecursiveCheckBox.IsChecked is not false);
+            if (canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
 
             var sameRoot = _lastDiscoveryRoot is not null
                 && string.Equals(PathKey(_lastDiscoveryRoot), PathKey(result.Root), StringComparison.OrdinalIgnoreCase);
@@ -481,6 +512,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             App.Current.MainWindow.ReportPageStatus(
                 result.Count == 0 ? "扫描完成 · 未发现 ODB" : $"扫描完成 · 发现 {result.Count} 个 ODB");
             UpdateExplorer();
+            return canApply?.Invoke() is not false && !App.Current.Session.IsClosing;
         }
         catch (ControlPlaneException exception)
         {
@@ -501,6 +533,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             SetDiscoveryBusy(false);
             SaveWorkspace();
         }
+        return false;
     }
 
     private void UpdateExplorer()

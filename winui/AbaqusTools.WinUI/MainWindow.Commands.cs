@@ -17,6 +17,7 @@ public sealed partial class MainWindow
         TerminateQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanTerminateSelected;
         RefreshRemoteMenuItem.IsEnabled = !_menuCommandBusy && commands.CanUseRemote;
         DisconnectRemoteMenuItem.IsEnabled = !_menuCommandBusy && commands.CanUseRemote;
+        CurrentJobPostprocessingMenuItem.IsEnabled = !_menuCommandBusy && !commands.Locked;
     }
 
     private Task RefreshCommandSnapshotsAsync() => Task.WhenAll(RefreshQueueCommandSnapshotAsync(), RefreshRemoteCommandSnapshotAsync());

@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+2026-11-18最新源码补齐当前作业后处理路由：30项生产路径检查、四种归档状态的正式C#客户端/真实HTTP定位与发现、111项相关回归（含49文档）和174项既有后处理通过，最终WinUI构建0警告/错误。仅使用G:路由字节夹具且文件前后相同，不是实际ODB内容或原生菜单验收。d5f9e76完整候选尚不含本轮路由变更；精确日志和后续候选更新见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
+
 最新完整目录为 `GPTWork/release-win-x64-2c491d8001f9/AbaqusTools`（干净d5f9e76）：1670文件/19worker完整摘要、包内依赖、正式主机启动/API/正常退出通过，证据 `GPTWork/command-release-verification-20261118`。安装候选cc6a49dda23f的负载/安装器同源、摘要/PE架构核对通过，NotSigned，尚未实际安装新负载。包含新建及菜单变更；下方7c874d3候选与隔离生命周期均属前一阶段。本轮获用户明确授权并成功推送d5f9e76到GitHub main；准确回执见TASK-002顶部，整体迁移仍未完成。
 
 F001/F004/F005/F008共享菜单状态及远端身份：26项状态检查通过（包含于正式客户端包装），20项服务器/客户端定向回归64.40秒（`GPTWork/command-target-regression-20261118.log` / `.xml`）、其余92项相关回归12.58秒含49文档（`GPTWork/command-state-regression-final-20261118.log` / `.xml`）通过。正式客户端只读观察4项、目标身份5项使用真实本机HTTP与替身SSH；不称真实远端验收。初次55通过/1后台刷新工具栏约束失败已保留，拆分后台忙碌后保持原检查；最终WinUI构建0警告/错误15.24秒（command-state-winui-build-delivery-20261118.log）。原生及新完整候选仍待，详见TASK-002顶部与ADR0020。

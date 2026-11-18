@@ -67,7 +67,7 @@
                         <MenuFlyoutItem x:Name="DisconnectRemoteMenuItem" IsEnabled="False" Click="OnDisconnectServerMenuClicked" Text="断开远端连接" />
                     </MenuBarItem>
                     <MenuBarItem Title="后处理(P)">
-                        <MenuFlyoutItem Click="OnPostprocessingMenuClicked" Text="当前作业送入后处理" />
+                        <MenuFlyoutItem x:Name="CurrentJobPostprocessingMenuItem" Click="OnCurrentJobPostprocessingMenuClicked" Text="当前作业送入后处理" />
                         <MenuFlyoutItem Click="OnPostprocessingMenuClicked" Text="打开 ODB 后处理" />
                         <MenuFlyoutItem Click="OnResultBrowserMenuClicked" Text="打开结果浏览" />
                     </MenuBarItem>

@@ -286,7 +286,8 @@ public sealed partial class MainWindow : Window
             NavigateToRoute("odb-postprocessing");
             if (ContentFrame.Content is OdbPostprocessingPage postprocessingPage)
             {
-                await postprocessingPage.LoadOdbPathAsync(item.Path);
+                await postprocessingPage.LoadOdbPathAsync(item.Path,
+                    () => !App.Current.Commands.Locked && ReferenceEquals(ContentFrame.Content, postprocessingPage));
             }
         }
     }

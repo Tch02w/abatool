@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · F001/F005/F014 当前作业结果路由
+
+从干净6676e074cec25c974b016f1e8f78a8ad232272ac继续；上一轮检查、目录/安装候选验证及推送是实际进展，最终文档推送已完成且远端main与本地一致。先核对modules/routes.py和workspace.py旧版语义、WinUI两个菜单同一只切页入口及现有LoadOdbPathAsync，再向用户说明方案后实现。新增JobPostprocessTarget/JobPostprocessRoute与MainWindow.Postprocessing，从当前队列/概览/本地草稿解析；重新读运行快照、核对运行批次；已发布归档缺失不回退旧副本，活动/未确认/锁定/缺失/多选/远端分别提示。远端不自动下载，不启动求解。
+
+LoadOdbPathAsync改为等待已有初始化/恢复、返回真实定位结果；DiscoverCoreAsync接受目标目录和页面有效性回调，先保留旧工作区，再请求发现，不在忙碌/待恢复草稿时改RootTextBox。扫描失败保留列表，结果缺失不报告成功，目标工作区草稿待选择时不自动选中行。菜单等待期间核对页面与源选择，侧栏ODB入口也带有效性保护。
+
+首轮专项5项通过7.96秒（`GPTWork/job-route-tests-20261118.log` / `.xml`），包括28项生产路径检查，以及4种归档状态各2项正式C#客户端/真实本机HTTP路由与发现检查；不同输入名/运行名、中文空格目录，前后文件字节完全一致。仅G:字节夹具，不是有效Abaqus ODB，不声称模型提取通过。WinUI初次构建22875退出0，0警告/错误21.86秒，`GPTWork/job-route-winui-build-20261118.log`，输出 `GPTWork/winui-job-route-20261118`。后续侧栏保护、提示清理、壳层接线测试和文档更新后，需完成最终相关回归与构建。
+
+相关回归72655退出0，111项通过18.14秒（`GPTWork/job-route-regression-20261118.log` / `.xml`），包含正式主机关闭/草稿/菜单/路由、36项壳层、登记字段、发现、旧路径规则及49文档检查。既有后处理174项检查通过（`GPTWork/job-route-postprocess-checks-20261118.log`）。中间最终构建25288退出0，0警告/错误14.45秒；复查补充规范化等价绝对输入路径，避免含“.”时跳过已有运行记录，并验证后台不可用时不回退旧结果。专项10424退出0，5项通过9.39秒（`GPTWork/job-route-delivery-20261118.log` / `.xml`），其中路径检查从28增至30，四种归档HTTP场景不变，与111项重叠不累计。交付构建31872退出0，0警告/错误13.88秒（`GPTWork/job-route-winui-build-delivery-20261118.log`）；Ruff与差异检查通过。所有测试/构建句柄已终态。
+
+收尾文档导航49项通过0.09秒（`GPTWork/job-route-docs-20261118.log`）；功能索引、功能说明、Wiki、版本日志、验证与交接已同步，路径检查只核对记录来源，不检查ODB内容。当前实际周额度剩余19%，未到用户15%暂停线。
+
+准确续接点：代码/测试/必要文档一起提交并按已授权范围同步GitHub，提交号以实际核对为准。下一步从干净提交更新完整目录与安装候选，并核对包内依赖/主机和来源；d5f9e76完整候选尚不含本轮变更，不冒称已进入安装包。原生操作仍因用户Esc暂停，真实SSH/三级工程链/目标机/签名缺口未解除。验证所有临时和ODB输出仅G:项目GPTWork，没有移动用户ODB。整体目标继续active，不能因路径和构建通过改称完整迁移完成。
+
 ## 2026-11-18 · d5f9e76完整候选及用户授权推送
 
 本轮菜单/目标保护源码已提交d5f9e76615f4e312d4297e7514dea1e75d879a4f。从干净提交运行build_release.py --no-restore，34265退出0，生成 `GPTWork/release-win-x64-2c491d8001f9/AbaqusTools`。完整核对1670清单文件/19worker，含清单355000481字节，manifest SHA256 `42c108007dccc0b6b647159e390d46c5adab368f256a55b569921812e4c18031`；相对c245b91545d7新增ADR0020、无移除路径、20项变化，无ODB/INP/Qt/虚拟环境混入。`GPTWork/command-release-verification-20261118/inventory.json` verified，核对0492fbc为祖先。

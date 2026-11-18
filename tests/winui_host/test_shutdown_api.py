@@ -12,6 +12,43 @@ from tests.control_plane.test_postprocessing_api import _scan_payload, _settings
 from tests.control_plane.test_remote_transfers_api import FakeRemoteManager, _connect
 
 
+def test_job_postprocess_route_respects_attempt_archive_and_missing_results(tmp_path, close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--job-route-checks", str(tmp_path / "routes")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "30 job postprocess route checks passed" in result.stdout
+
+
+@pytest.mark.parametrize("archive_status", ["", "已归档", "已归档，清理未完成", "归档失败"])
+def test_production_job_route_and_discovery_use_published_result_location(tmp_path, close_client, archive_status):
+    from modules.submitter.models import QueueItem
+    from modules.submitter.queue_store import save_joblist_state
+
+    source, work, archive = (tmp_path / name for name in ("输入目录", "计算 目录", "归档 目录"))
+    for directory in (source, work, archive):
+        directory.mkdir()
+        (directory / "实际运行名.odb").write_bytes(directory.name.encode("utf-8"))
+    inp = source / "不同输入名.inp"
+    inp.write_text("*Heading\n", encoding="utf-8")
+    item = QueueItem(inp_path=str(inp), source_inp_path=str(inp), job_name="实际运行名",
+                     status="已完成", effective_work_dir=str(work), archive_destination=str(archive),
+                     archive_status=archive_status, attempt_id="completed-attempt", cores=1)
+    joblist = tmp_path / "joblist.json"
+    save_joblist_state([], [item], joblist)
+    before = {file: file.read_bytes() for file in tmp_path.rglob("*.odb")}
+    expected = archive if archive_status in {"已归档", "已归档，清理未完成"} else work
+    with running_control_plane(tmp_path, joblist_path=joblist) as runtime:
+        result = subprocess.run(
+            ["dotnet", str(close_client), "--job-route-api", str(runtime.descriptor_path), str(expected / "实际运行名.odb")],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "2 production-client/live-HTTP job route checks passed" in result.stdout
+    assert {file: file.read_bytes() for file in tmp_path.rglob("*.odb")} == before
+
+
 @pytest.fixture(scope="module")
 def close_client(tmp_path_factory):
     if shutil.which("dotnet") is None:

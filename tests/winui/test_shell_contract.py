@@ -53,6 +53,25 @@ def _named_element(root: ET.Element, name: str) -> ET.Element:
     return next(element for element in root.iter() if element.attrib.get(XAML_NAME) == name)
 
 
+def test_current_job_route_is_distinct_and_does_not_replace_pending_workspace():
+    shell = ET.parse(WINUI_ROOT / "MainWindow.xaml").getroot()
+    assert _named_element(shell, "CurrentJobPostprocessingMenuItem").attrib["Click"] == "OnCurrentJobPostprocessingMenuClicked"
+    route = (WINUI_ROOT / "MainWindow.Postprocessing.cs").read_text(encoding="utf-8")
+    assert "JobPostprocessRoute.ResolveAsync" in route
+    assert "target != CaptureCurrentJobTarget()" in route
+    assert "ReferenceEquals(origin, ContentFrame.Content)" in route
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    loader = page.split("public async Task<bool> LoadOdbPathAsync", 1)[1].split("private async void OnPageLoaded", 1)[0]
+    assert "await _initialLoadTask" in loader
+    assert "DraftPending" in loader and "_compatibilityBusy" in loader
+    assert "RootTextBox.Text =" not in loader
+    assert "if (!await DiscoverCoreAsync(directory, canApply)) return false" in loader
+    assert "未能定位作业 ODB" in loader
+    discovery = page.split("private async Task<bool> DiscoverCoreAsync", 1)[1].split("private void UpdateExplorer", 1)[0]
+    before_apply = discovery.split("DiscoverOdbsAsync", 1)[1].split("OdbList.SelectedItems.Clear()", 1)[0]
+    assert "canApply?.Invoke() is false" in before_apply
+
+
 def test_native_upgrade_entry_confirmation_and_recovery_wiring() -> None:
     root = ET.parse(WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").getroot()
     for name, handler in [

@@ -18,6 +18,8 @@ F005/F011跨卷与文件内中断验收：`packaging/verify_archive_recovery.py`
 
 上述归档验收的 `--parallel-recovery` 使用 `tests/winui_host/ArchivePresentationChecks.cs` / `RunApi` 核对单槽位忙碌拒绝；调度验收的 `--distinct-held` 使用261个独立源路径，入口仍为 `packaging/verify_scheduler_load.py` / `verify`。两者只扩展验收工具，不改变产品API。
 
+F001/F005/F014当前作业路由：`winui/AbaqusTools.WinUI/MainWindow.Postprocessing.cs` / CaptureCurrentJobTarget、OnCurrentJobPostprocessingMenuClicked；`winui/AbaqusTools.WinUI/Services/JobPostprocessRoute.cs` / ResolveAsync、Resolve；JobQueuePage.CapturePostprocessTarget、JobOverviewPage.PostprocessTarget、NewJobPage.PostprocessTarget提供选择。`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` / LoadOdbPathAsync、InitializePageAsync、DiscoverCoreAsync保护首次恢复、草稿与失败。测试 `tests/winui_host/JobPostprocessRouteChecks.cs`（--job-route-checks、--job-route-api）、`tests/winui_host/test_shutdown_api.py`、`tests/winui/test_shell_contract.py`；规则见[后处理说明](POSTPROCESSING.md)。
+
 ## 壳层、提交、调度、远程
 
 F001 日常草稿与系统会话结束：`MainWindow.Session.cs` / `OnDraftTimerTick`、`SaveForSystemSessionEnd`，`Services/WorkbenchSession.cs` / `SaveDraftAsync`，`Services/WorkbenchSessionStore.cs` / `SaveAsync`，`Services/SystemSessionEndState.cs` / `TryHandle`，`Services/SystemSessionEndHook.cs`。上述源码均位于 `winui/AbaqusTools.WinUI/`。测试为 `tests/winui_host/SystemSessionEndChecks.cs`（`--session-checks`）及既有 `WorkbenchSessionChecks.cs`；原生 HWND 接线和业务恢复仍待验收。普通关闭与 OS 结束的边界见 [ADR 0017](../submitter/adr/0017-periodic-drafts-and-system-session-end.md)。

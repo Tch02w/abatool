@@ -53,6 +53,11 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _jobExplorerAdapter;
 
+    public JobPostprocessTarget? PostprocessTarget => _currentEntry?.LocalItem is { } local
+        ? JobPostprocessTarget.Local(local)
+        : _currentEntry?.RemoteOperation is { } remote
+            ? new("remote", remote.OperationId, "", remote.Request.JobName, remote.Request.InputPath) : null;
+
     public async Task<bool> SelectNotificationJobAsync(JobNotification notification)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);

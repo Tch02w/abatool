@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
 
     internal void RestoreWorkspace()
     {
+        ApplyExplorerVisibility();
         // Explorer attachment can synchronously call page code that needs App.MainWindow.
         // App must publish this fully constructed window before restoring any page.
         SelectRoute(App.Current.Session.State.LastRoute);
@@ -544,7 +545,8 @@ public sealed partial class MainWindow : Window
                 ShellNavigation.ActualHeight - ContentFrame.ActualHeight);
             var minimum = WindowLayoutConstraints.MinimumOuterSize(scale,
                 _restoredFrameWidthDip, _restoredFrameHeightDip,
-                display.WorkArea.Width, display.WorkArea.Height, navigationHeight);
+                display.WorkArea.Width, display.WorkArea.Height, navigationHeight,
+                explorerVisible: App.Current.Session.State.ExplorerVisible);
             if (presenter.PreferredMinimumWidth != minimum.Width)
             {
                 presenter.PreferredMinimumWidth = minimum.Width;

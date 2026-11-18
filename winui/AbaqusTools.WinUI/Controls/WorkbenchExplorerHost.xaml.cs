@@ -14,6 +14,8 @@ public sealed partial class WorkbenchExplorerHost : UserControl
     private CancellationTokenSource? _refreshCancellation;
     private int _generation;
     private bool _manualRefreshBusy;
+    private bool _synchronizingTree;
+    private int _snapshotApplyQueued;
 
     public WorkbenchExplorerHost()
     {
@@ -102,24 +104,23 @@ public sealed partial class WorkbenchExplorerHost : UserControl
 
     private void OnAdapterSnapshotChanged(object? sender, EventArgs e)
     {
-        if (!ReferenceEquals(sender, _adapter))
+        if (!ReferenceEquals(sender, _adapter)
+            || Interlocked.Exchange(ref _snapshotApplyQueued, 1) != 0)
         {
             return;
         }
-        void ApplyCurrentSnapshot()
+        // Selection can synchronously publish a new snapshot. Leave the native
+        // TreeView event before modifying nodes, and coalesce to the newest snapshot.
+        if (!DispatcherQueue.TryEnqueue(() =>
         {
-            if (ReferenceEquals(sender, _adapter) && _adapter is { } current)
+            Interlocked.Exchange(ref _snapshotApplyQueued, 0);
+            if (_adapter is { } current)
             {
                 ApplySnapshot(current.Snapshot);
             }
-        }
-        if (DispatcherQueue.HasThreadAccess)
+        }))
         {
-            ApplyCurrentSnapshot();
-        }
-        else
-        {
-            DispatcherQueue.TryEnqueue(ApplyCurrentSnapshot);
+            Interlocked.Exchange(ref _snapshotApplyQueued, 0);
         }
     }
 
@@ -152,15 +153,40 @@ public sealed partial class WorkbenchExplorerHost : UserControl
                 .Cast<ExplorerItem>()
                 .ToArray();
 
-        SynchronizeNodes(ExplorerTree.RootNodes, items, _snapshot.ContextKey);
-        ExplorerEmptyPanel.Visibility = ExplorerTree.RootNodes.Count == 0
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        ExplorerTree.Visibility = ExplorerTree.RootNodes.Count == 0
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        RestoreSelection(_snapshot.ContextKey);
+        var wasSynchronizing = _synchronizingTree;
+        _synchronizingTree = true;
+        try
+        {
+            // Tree updates and restoring a selection can raise SelectionChanged.
+            // They render the latest snapshot; they must not reissue page commands.
+            // Clear before removing a selected native node, while it still belongs
+            // to the tree. Setting SelectedNode after detaching it is not safe.
+            if (ExplorerTree.SelectedNode?.Content is ExplorerItem selected
+                && (!_selectedByContext.TryGetValue(_snapshot.ContextKey, out var selectedId)
+                    || !string.Equals(selected.StableId, selectedId, StringComparison.Ordinal)
+                    || !ContainsItem(items, selectedId)))
+            {
+                ExplorerTree.SelectedNode = null;
+            }
+            SynchronizeNodes(ExplorerTree.RootNodes, items, _snapshot.ContextKey);
+            ExplorerEmptyPanel.Visibility = ExplorerTree.RootNodes.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            ExplorerTree.Visibility = ExplorerTree.RootNodes.Count == 0
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            RestoreSelection(_snapshot.ContextKey);
+        }
+        finally
+        {
+            _synchronizingTree = wasSynchronizing;
+        }
+        UpdateSelectionDetails();
     }
+
+    private static bool ContainsItem(IEnumerable<ExplorerItem> items, string stableId) =>
+        items.Any(item => string.Equals(item.StableId, stableId, StringComparison.Ordinal)
+            || ContainsItem(item.Children, stableId));
 
     private TreeViewNode CreateNode(ExplorerItem item, string contextKey)
     {
@@ -219,12 +245,10 @@ public sealed partial class WorkbenchExplorerHost : UserControl
 
     private void RestoreSelection(string contextKey)
     {
-        if (!_selectedByContext.TryGetValue(contextKey, out var stableId))
-        {
-            return;
-        }
-        var node = FindNode(ExplorerTree.RootNodes, stableId);
-        if (node is not null)
+        var node = _selectedByContext.TryGetValue(contextKey, out var stableId)
+            ? FindNode(ExplorerTree.RootNodes, stableId)
+            : null;
+        if (!ReferenceEquals(ExplorerTree.SelectedNode, node))
         {
             ExplorerTree.SelectedNode = node;
         }
@@ -329,22 +353,31 @@ public sealed partial class WorkbenchExplorerHost : UserControl
         TreeView sender,
         TreeViewSelectionChangedEventArgs args)
     {
-        if (_adapter is null
-            || _snapshot is null
-            || ExplorerTree.SelectedNode?.Content is not ExplorerItem item)
+        if (_synchronizingTree) return;
+        UpdateSelectionDetails();
+        if (_adapter is not null && _snapshot is not null
+            && ExplorerTree.SelectedNode?.Content is ExplorerItem item)
+        {
+            if (_selectedByContext.TryGetValue(_snapshot.ContextKey, out var previous)
+                && string.Equals(previous, item.StableId, StringComparison.Ordinal)) return;
+            _selectedByContext[_snapshot.ContextKey] = item.StableId;
+            _adapter.Select(item);
+        }
+    }
+
+    private void UpdateSelectionDetails()
+    {
+        if (_snapshot is null || ExplorerTree.SelectedNode?.Content is not ExplorerItem item)
         {
             ExplorerSelectionCard.Visibility = Visibility.Collapsed;
             return;
         }
-
-        _selectedByContext[_snapshot.ContextKey] = item.StableId;
         ExplorerSelectionTitleText.Text = item.Title;
         ExplorerSelectionSubtitleText.Text = item.Subtitle;
         ExplorerSelectionStatusText.Text = item.Status;
         ExplorerSelectionCard.Visibility = item.Kind == ExplorerItemKind.Group
             ? Visibility.Collapsed
             : Visibility.Visible;
-        _adapter.Select(item);
     }
 
     private async void OnTreeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)

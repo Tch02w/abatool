@@ -12,6 +12,15 @@ try
         "The resource-page columns must dominate the navigation and responsive form width");
     Check(WindowLayoutConstraints.MinimumClientHeight() == 690,
         "Height must reserve shell chrome and two useful table viewports, not a full scrolling page");
+    Check(WindowLayoutConstraints.MinimumClientWidthFor(false) == 970,
+        "Hiding the explorer must release its width while preserving page and navigation minima");
+    Check(WindowLayoutConstraints.MinimumOuterSize(1.25, 16, 16, 2560, 1440, explorerVisible: false)
+        == new WindowLayoutConstraints.PixelSize(1233, 883),
+        "Hidden explorer minima must still include nonclient extents and round at current DPI");
+    Check(WindowLayoutConstraints.ClampToMinimum(986, 706,
+        WindowLayoutConstraints.MinimumOuterSize(1, 16, 16, 1920, 1080, explorerVisible: true))
+        == new WindowLayoutConstraints.PixelSize(1266, 706),
+        "Showing the explorer in a narrow restored window must expand only the required dimension");
     var normal = Size(1, 1920, 1080);
     Check(normal == new WindowLayoutConstraints.PixelSize(1266, 706),
         "100% DPI must include measured nonclient dimensions once");
@@ -42,7 +51,7 @@ try
     Rejects(() => Size(1, 0, 1080));
     Rejects(() => WindowLayoutConstraints.MinimumOuterSize(1, -1, 16, 1920, 1080));
     VerifyLayoutSources();
-    Console.WriteLine("13 window layout checks passed (DIP formulas, DPI, work-area caps, startup clamp, source dimensions)");
+    Console.WriteLine("16 window layout checks passed (sidebar visibility, DIP formulas, DPI, work-area caps, startup clamp, source dimensions)");
 }
 catch (Exception exception)
 {

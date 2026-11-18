@@ -1,8 +1,26 @@
-# 运行日志阅读与数字输入交互
+# 工作台布局、运行日志与数字输入
+
+## 浏览侧栏选择与刷新（F002/F021）
+
+结果浏览实际点击暴露“恢复选择 → 重新读取 → 更新侧栏 → 再恢复选择”的递归链，旧窗口栈溢出退出。浏览器现在将快照应用排入界面队列，等当前TreeView选择事件结束后执行；连续更新合并到最新快照，过期适配器的通知不作用于新页面。同步树和恢复选区期间只更新显示，不调用页面选择命令；同一上下文/稳定编号的重复通知不再次读取。
+
+被选节点消失时先清除原生选区再移除节点，并收起旧详情；节点重新出现可按记忆恢复选区。结果页对同一ScopeTree节点及同一范围对象也保持幂等，主动“读取目录”/筛选/刷新仍可正常执行。原有记录、预览、取消、失败和分页约定不变。
+
+实现为 `winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs` / OnAdapterSnapshotChanged、ApplyFilter、RestoreSelection、OnTreeSelectionChanged，以及同项目 `Pages/ResultBrowserPage.xaml.cs` / SelectExplorerItem、OnScopeSelectionChanged。`tests/winui_explorer/Explorer.Tests.csproj` 直接加载生产控件，9项原生控件检查通过，包括连续100次快照和移除/恢复/再次选择。真实业务页CSV预览/导出需另验，详见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
 
 首次启动按“创建并登记主窗口 → 恢复上次页面与草稿 → 显示窗口”执行。页面侧栏可以立即访问已经登记的主窗口；修复了从计算资源页恢复时残留“主窗口尚未创建”的错误。资源真实读取失败仍显示，不因这项顺序调整而隐藏。修复后的资源首次加载、CPU=4草稿恢复和Ctrl+7/8切页已有有限原生证据，布局与鼠标验收单独记录。
 
 更新：2026-11-18。关联 F001、F005、F025，以及数字输入涉及的 F003/F004/F007/F008/F022。任务状态见 [TASK-004](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+
+## 浏览侧栏收起与恢复（F001/F002）
+
+顶部菜单右侧的“侧栏”按钮或 Ctrl+B 切换左侧浏览器。收起只隐藏同一个浏览器并释放其列宽，不重新创建页面、不清空输入与选择、不取消后台工作；切页仍按原规则更新浏览器上下文。按钮的辅助名称与提示说明当前动作，关闭/新建锁定期间禁止切换。自动快捷键提示仍关闭，Ctrl+B 说明只属于这个按钮，不附着到整页。
+
+`WorkbenchSessionState.ExplorerVisible` 随现有两秒草稿检查点和正常关闭保存，旧配置缺失此字段时默认显示。“文件 → 新建作业”保留这个偏好；损坏配置与写入失败仍使用既有保护和错误提示，不覆盖原件。没有单独的确认或取消弹窗，再次点击即可恢复。
+
+显示侧栏时客户区最小宽 1250 DIP，收起后为 970 DIP，均保留八页导航和计算资源页的宽度要求。收起不会主动缩小现有窗口；在窄窗口重新显示时，只扩大不足的尺寸，仍受当前屏幕工作区限制。最小高度、缩放和最大化规则不变。
+
+源码入口为 `winui/AbaqusTools.WinUI/MainWindow.ExplorerVisibility.cs` 的 `SetExplorerVisibility` / `ApplyExplorerVisibility`，尺寸入口为同项目 `Services/WindowLayoutConstraints.cs` 的 `MinimumClientWidthFor`。54 项相关回归、16 项尺寸检查以及实际新建页 Ctrl+B、CPU=6 保留、正常关闭后同一配置重开恢复通过。鼠标按钮、提示视觉、窗口拖动到最小值和跨屏仍待验，当前为开发发布输出 `GPTWork/winui-sidebar-20261118`；完整安装候选 d4fc4c7 尚不含此项。
 
 ## 关闭、后台继续与草稿（F001/F003/F004/F009）
 
@@ -95,6 +113,8 @@ NumberBox 继续负责解析、验证、步进、自动化和上下限，保留 
 ## 最小窗口尺寸（F001）
 
 `winui/AbaqusTools.WinUI/Services/WindowLayoutConstraints.cs` 计算客户区最小宽度：max(8×118 导航宽，280 目录+48 页面边距+600/310 资源列+12 列间隔，280+48+34 卡片边距+108 标签+10 间距+160 数字框)=1250 DIP。高度保留固定壳层和两个队列的可用视口，每卡片保留三行控制、一行表头及一行数据；默认客户区下限 690 DIP，不把全部可滚动内容高度当作窗口下限。
+
+以上1250是侧栏显示时的值；收起后去掉两个页面公式中的280目录宽，导航公式保持944，结果为970 DIP。16项尺寸检查覆盖隐藏、重显及其DPI换算；实际最小尺寸拖动与跨屏不由公式测试替代。
 
 `winui/AbaqusTools.WinUI/MainWindow.xaml.cs` 使用 GetDpiForWindow/96 转物理像素，加入正常态 Size−ClientSize 测得的非客户区尺寸，向上取整后逐维限制到当前显示器 WorkArea。通过 OverlappedPresenter.PreferredMinimumWidth/Height 约束，不替换 presenter，不禁止缩放/最大化/最小化；启动或恢复态小于下限时扩大，跨显示器/缩放变化时重算，关闭时解除事件。标题栏物理 Insets 同步转 DIP。小屏高 DPI 下优先保证窗口不会大于工作区，此时宽表/固定页面是否仍需滚动另作原生验收。
 

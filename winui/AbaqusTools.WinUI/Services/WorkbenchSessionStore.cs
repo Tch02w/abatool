@@ -15,6 +15,7 @@ public sealed class WorkbenchSessionState
 {
     public int SchemaVersion { get; set; } = 1;
     public string LastRoute { get; set; } = "new-job";
+    public bool ExplorerVisible { get; set; } = true;
     public WorkbenchWindowState Window { get; set; } = new();
     public Dictionary<string, Dictionary<string, string>> Pages { get; set; } = [];
 }

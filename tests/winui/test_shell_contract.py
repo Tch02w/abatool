@@ -386,7 +386,7 @@ def test_reported_workbench_layout_regressions_stay_fixed() -> None:
     assert {item.attrib["MinWidth"] for item in navigation_items} == {"118"}
     assert _named_element(shell_root, "ShellNavigation").attrib["KeyboardAcceleratorPlacementMode"] == "Hidden"
     shortcuts = shell_root.findall(".//xaml:NavigationView.KeyboardAccelerators/xaml:KeyboardAccelerator", XAML_NAMESPACE)
-    assert {item.attrib["Key"] for item in shortcuts} == {"Number7", "Number8"}
+    assert {item.attrib["Key"] for item in shortcuts} == {"B", "Number7", "Number8"}
 
     output_settings = _named_element(odb_root, "OutputSettingsExpander")
     assert output_settings.attrib["HorizontalAlignment"] == "Stretch"

@@ -407,7 +407,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         if (item.Kind == ExplorerItemKind.ResultScope
             && _treeNodes.TryGetValue(item.Path, out var node))
         {
-            ScopeTree.SelectedNode = node;
+            if (!ReferenceEquals(ScopeTree.SelectedNode, node)) ScopeTree.SelectedNode = node;
             ExpandAncestors(node);
             return;
         }
@@ -459,7 +459,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        _selectedScope = sender.SelectedNode?.Content as ResultScopeNode;
+        var scope = sender.SelectedNode?.Content as ResultScopeNode;
+        if (ReferenceEquals(_selectedScope, scope)) return;
+        _selectedScope = scope;
         await RefreshSelectedScopeAsync();
     }
 

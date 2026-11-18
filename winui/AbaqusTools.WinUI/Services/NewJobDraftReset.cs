@@ -21,6 +21,7 @@ public sealed class NewJobDraftReset
         var next = new WorkbenchSessionState
         {
             SchemaVersion = source.SchemaVersion, LastRoute = Route,
+            ExplorerVisible = source.ExplorerVisible,
             Window = new() { X = source.Window.X, Y = source.Window.Y, Width = source.Window.Width,
                 Height = source.Window.Height, Maximized = source.Window.Maximized },
             Pages = source.Pages.ToDictionary(pair => pair.Key, pair => new Dictionary<string, string>(pair.Value)),

@@ -1,5 +1,35 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 实际结果选择崩溃与侧栏刷新修复
+
+侧栏收尾时CUA库存不再包含保留的结果窗口5178004；原生70244已结束，后台33100/子165996仍存活，不能称正常退出。`GPTWork/native-result-records-20261118/result-browser/application.log` 首行为 `Stack overflow.`，反复出现 RestoreSelection → OnTreeSelectionChanged → SelectExplorerItem → OnScopeSelectionChanged → RefreshSelectedScopeAsync/ClearResults → UpdateExplorer → ApplySnapshot。问题在旧d4fc4c7同源业务实现中，不是仅工具点击失败。完整安装候选ddd54a85dcf8/3fcfb102d9d4尚未包含修复，保留追溯但不得称结果选择可用。
+
+先说明改进思路，再修改F002/F021：快照统一入界面队列并合并为最新一份，不在原生选择事件内同步改树；同步树/恢复选区时屏蔽业务选择命令，重复稳定编号不再通知。选中节点将被移除时先清选再移除；更新详情与业务回调拆开，保留上下文选区记忆。结果页也不重复设置同一节点/重复读取同一范围对象。主动读取、筛选和刷新仍有效，不修改后端提取和索引算法。
+
+新增 `tests/winui_explorer` 直接编译生产侧栏，在测试自身离屏窗口检查真实TreeView事件（不操纵业务窗口）。最终9项通过、进程211564退出0：初次附加不发选择、选择后同步发布/重排不递归、详情跟随、连续100快照保留选区、节点移除/回来、换上下文/返回、下一次选择只发一次。回执 `GPTWork/explorer-control-checks-20261118/verification.json`。过程失败保留：初次移除节点检查失败；一次83892退出0xC0000005且没有新通过回执；改为移除前清选后前8项通过，最后一次选择仍失败。事件诊断显示测试须完成重新附加后的布局，Measure/Arrange/UpdateLayout后9项及退出通过。不将旧失败回执算通过，也不将最后这个测试布局问题直接认定业务缺陷。
+
+原生检查构建首次18616因默认NuGet源不可达/缺缓存退出1，改用现有G: `GPTWork/nuget-release-packages` 的RestorePackagesPath/RestoreSources后通过；最终日志 `GPTWork/explorer-control-checks-build-layout-20261118.log`。工作台最后发布输出 `GPTWork/winui-explorer-fixed-20261118`，退出0，日志 `GPTWork/winui-explorer-fixed-verified-20261118.log`，冻结后台未改。项目.venv执行 `pytest tests/winui/test_shell_contract.py tests/control_plane/test_results_api.py -q --basetemp=GPTWork/pytest-explorer-fixed-20261118`，39 passed in 3.02s，日志/XML `GPTWork/explorer-fixed-tests-20261118.log` / `.xml`。结果项目首次no-restore因新artifacts目录无assets失败，本地源恢复后6项回收路径、10项异步生命周期及表格预览通过，日志 `GPTWork/explorer-result-lifecycle-final-20261118.log`。另直接运行已构建正式主机 `--session-checks GPTWork/sidebar-session-checks-20261118`，会话存储9项/系统结束和异步草稿15项通过，日志 `GPTWork/sidebar-session-checks-20261118.log`；这组与下方54项pytest分别执行，不混计。
+
+崩溃遗留后台按PID/创建时间/路径确认归属后，通过正式C#关闭API的idle模式正常退出；无强杀、无停止求解请求，两个自有进程确认结束、描述符移除，回执 `GPTWork/native-result-records-20261118/result-browser/crash-recovery.json`。两份已知日常配置摘要不变，原CSV与失败日志保留。
+
+修复后真实窗口4718784已打开，原生198808（创建1795011120.529678）、后台51160（创建1795011121.0676794）及子221524；路径 `GPTWork/native-explorer-fixed-20261118/result-browser`。4范围已读取，无启动错误；工具Tab后仍读到搜索框焦点，不能证明已选记录。已请用户在新窗口点“模型甲”再选load_point_raw.csv确认表格与稳定性。当前等回复，不自动关闭或重复启动；`GPTWork/native_explorer_fixed_20261118.py` 的capture/finish可核对原句柄，launch已执行不能重复。
+
+准确续接点：原生控件9项及回归不代表业务CSV预览/导出通过，先观察保留窗口的用户操作。鼠标/截图、八页完整业务、真实SSH/GPU/MPI、三级工程链与目标机仍待。原生验证未创建/移动ODB或启动求解；回归占位模型仅在G:隔离目录。侧栏与崩溃修复均在开发输出，完整安装候选应在业务复核后更新。整体目标保持active。
+
+收尾文档检查：项目.venv执行 `pytest tests/common/test_documentation_navigation.py -q --basetemp=GPTWork/pytest-explorer-docs-20261118`，49 passed in 0.12s，日志/XML为 `GPTWork/explorer-docs-20261118.log` / `.xml`。Git差异空白检查通过；全套历史回归未重复执行。最终Git身份以实际提交/远端核对为准，不预写推送成功。
+
+## 2026-11-18 · 补齐合同中的侧栏收起与恢复
+
+从已推送的 1c19ef7 接续。合同阶段6要求侧栏收起/恢复，原实现固定占280 DIP且没有入口。先向用户说明方案：顶部按钮与Ctrl+B切换，保留页面/输入/选择/后台工作，记住状态并动态计算最小宽度。随后新增MainWindow.ExplorerVisibility.cs及标题栏ToggleButton，隐藏现有浏览器并将列宽置0；不重建页面或后台。关闭/新建锁定期间禁止切换，隐藏时将焦点移出浏览器。ExplorerVisible使用现有草稿保存流程，旧配置缺失字段默认true，新建作业克隆状态时保留。窗口客户区下限从固定1250改为显示1250/收起970 DIP，导航宽度944保持，高度/DPI/工作区cap保持。
+
+实际检查：`dotnet run --project tests/winui_layout/WindowLayout.Tests.csproj --artifacts-path GPTWork/build-window-layout-tests --no-restore`，退出0，16项通过，日志 `GPTWork/sidebar-layout-tests-20261118.log`。项目.venv执行 `pytest tests/winui/test_shell_contract.py tests/winui/test_session_bindings.py tests/winui_host/test_shutdown_api.py -q`，首次1失败/53通过：快捷键精确集合仍只期待Number7/Number8，补入B后重跑54 passed in 18.26s，句柄2415退出0；最终basetemp为 `GPTWork/pytest-sidebar-final-20261118`，日志/XML `GPTWork/sidebar-tests-final-20261118.log` / `.xml`。其中包含新建重置16项生产类子检查；会话存储9项另外执行，命令和结果见本文件最新节。旧配置兼容及新建保留隐藏偏好均已覆盖。
+
+`dotnet publish winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 --no-restore -o GPTWork/winui-sidebar-20261118` 已生成实际可运行输出，日志同名.log。原发布64594/首次pytest9675句柄续接时已不可用，未盲目重启；不补造其退出回执。复制ddd54a85dcf8完整包中未修改的冻结后台以做原生验证；这是开发发布输出，不称干净完整包。首次检查误查resources.pri，实际应用资源索引为AbaqusTools.WinUI.pri，已核对；不是缺资源。
+
+真实新建页使用 `GPTWork/native-sidebar-20261118/profile`，初始隐藏侧栏/CPU4/原草稿名。首窗口221296（创建1795009904.4774575），后台182828/子15420；CUA看到“显示浏览侧栏”且无Explorer节点。Ctrl+B后出现浏览器及“收起浏览侧栏”，CPU4/名称保留；真实NumberBox改6，Ctrl+B隐藏后仍为6。一次setValue遇到“user input was detected”而未执行，重新观察CPU4后再输入，成功读到6。正常Alt+F4保存隐藏与CPU6，原生和后台全部结束；同一配置重开210924（创建1795010058.513379），后台188420/子199696，真实看到侧栏隐藏、原名、CPU6。再正常关闭，库存确认无本轮窗口，两组PID/创建时间与子进程均结束，描述符移除，两份已知日常JSON摘要不变。准确回执 `GPTWork/native-sidebar-20261118/first/verification.json` 与 `restored/verification.json`，启动/capture/finish辅助入口 `GPTWork/native_sidebar_20261118.py`。
+
+准确续接点：侧栏源码、键盘及同一配置重开已验证；鼠标按钮、视觉对齐、实际拖动最小尺寸、跨屏/主题和有任务切换仍待。54项相关检查和16项尺寸不代表八页完整验收。当前完整包ddd54a85dcf8/安装器3fcfb102d9d4仍为d4fc4c7，尚不含本项；无需为相同证据反复打包。此前结果CSV用户协助窗口70244保留，不与本轮已关闭测试混淆，未自动关闭或重新启动。原生检查没有创建/移动ODB、没有启动求解，相关回归占位文件仅在G:隔离目录。整体目标仍active，文档检查与最终Git回执在收尾记录。
+
 ## 2026-11-18 · 首次加载修复已进入干净完整包，结果预览等待交互确认
 
 上一轮d4fc4c7源码与文档已实际推送main；本轮从该干净提交接续。项目.venv执行 `packaging/build_release.py --no-restore`，22686退出0，目录 `GPTWork/release-win-x64-ddd54a85dcf8/AbaqusTools`。完整清单1687文件、19 worker、15应用资源，含清单357464197字节，manifest SHA256 `933eb6aacd5e7a94427227fad22028d68d5c24ded4865c88a0c3456222c493fc`，WinUI DLL SHA256 `0d1370991d0e81bc5a5de5c1415c345f2cdadddc448d803e21108bcccc0530cd`。摘要/文件集合、无ODB/INP/Qt/虚拟环境混入、干净来源均核对通过；`GPTWork/firstload-release-verification-20261118/inventory.json`。包内 `--check-bundle` 探针 `bundle-probe-eh407xfr/verification.json` 同父目录，默认配置/19worker/GIF/Agg/xlsx/SSH加密/Qt-free通过，未连接SSH或启动Abaqus。

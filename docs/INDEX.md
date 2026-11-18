@@ -30,7 +30,7 @@
 | 远端完成确认、数据检查和日志去重 | [远端作业说明](03-features/REMOTE_JOBS.md) |
 | 完整结果批量执行、共享祖先与重启继续 | [批量结果说明](03-features/ODB_RESULT_BATCH.md) |
 | ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |
-| 日志选择刷新、数字输入及参数说明（F005/F025/F028） | [界面交互说明](03-features/UI_INTERACTION.md) |
+| 侧栏、选择刷新、日志、数字输入及参数说明（F001/F002/F005/F021/F025/F028） | [界面交互说明](03-features/UI_INTERACTION.md) |
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
 | Windows 完整目录包、运行诊断和发布限制 | [发布构建](05-development/RELEASE.md) |
 | Windows 安装、升级、卸载与数据保留 | [安装说明](05-development/INSTALLATION.md) |

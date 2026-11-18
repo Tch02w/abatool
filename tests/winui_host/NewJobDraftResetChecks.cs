@@ -13,7 +13,7 @@ internal static class NewJobDraftResetChecks
         }
         WorkbenchSessionState Draft() => new()
         {
-            LastRoute = "result-browser", Window = new() { X = 42, Width = 1400 },
+            LastRoute = "result-browser", ExplorerVisible = false, Window = new() { X = 42, Width = 1400 },
             Pages = new()
             {
                 ["new-job"] = new()
@@ -71,7 +71,8 @@ internal static class NewJobDraftResetChecks
             && loaded.Pages["new-job"]["UseSsdCheckBox"] == "true"
             && loaded.Pages["new-job"]["ArchiveRootTextBox"] == @"G:\archive", "Resource draft was changed");
         Check(loaded.Pages["odb-merge"]["OriginalOdbTextBox"] == @"G:\merge\original.odb"
-            && loaded.Window.X == 42 && loaded.Window.Width == 1400 && loaded.LastRoute == "new-job",
+            && loaded.Window.X == 42 && loaded.Window.Width == 1400 && loaded.LastRoute == "new-job"
+            && !loaded.ExplorerVisible,
             "Independent page/window or route lost");
 
         source = Draft();

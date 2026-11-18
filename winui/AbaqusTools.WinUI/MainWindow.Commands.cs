@@ -12,6 +12,7 @@ public sealed partial class MainWindow
     private void UpdateCommandMenus()
     {
         var commands = App.Current.Commands;
+        ExplorerToggleButton.IsEnabled = !commands.Locked;
         StartQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStartQueue;
         StopQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStopQueue;
         TerminateQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanTerminateSelected;

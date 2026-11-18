@@ -23,6 +23,7 @@
                     <ColumnDefinition x:Name="TitleBarLeftInsetColumn" Width="0" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition x:Name="TitleBarRightInsetColumn" Width="0" />
                 </Grid.ColumnDefinitions>
@@ -73,9 +74,25 @@
                     </MenuBarItem>
                 </MenuBar>
 
+                <ToggleButton
+                    x:Name="ExplorerToggleButton"
+                    Grid.Column="3"
+                    Height="28"
+                    MinWidth="52"
+                    Margin="8,0,8,0"
+                    Padding="8,0"
+                    VerticalAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    IsChecked="True"
+                    Content="侧栏"
+                    Click="OnExplorerToggleClicked"
+                    AutomationProperties.Name="收起浏览侧栏"
+                    ToolTipService.ToolTip="收起浏览侧栏 (Ctrl+B)" />
+
                 <Grid
                     x:Name="TitleBarDragRegion"
-                    Grid.Column="3"
+                    Grid.Column="4"
                     Background="Transparent" />
             </Grid>
         </Border>
@@ -145,6 +162,10 @@
                 SelectionChanged="OnNavigationSelectionChanged">
                 <NavigationView.KeyboardAccelerators>
                     <KeyboardAccelerator
+                        Invoked="OnExplorerAcceleratorInvoked"
+                        Key="B"
+                        Modifiers="Control" />
+                    <KeyboardAccelerator
                         Invoked="OnPostprocessingAcceleratorInvoked"
                         Key="Number7"
                         Modifiers="Control" />
@@ -182,7 +203,7 @@
 
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition x:Name="ExplorerColumn" Width="280" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 

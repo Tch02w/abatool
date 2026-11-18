@@ -26,3 +26,4 @@ Current records:
 - [0015-external-scan-snapshot-merge.md](0015-external-scan-snapshot-merge.md)
 - [0016-versioned-per-user-installer.md](0016-versioned-per-user-installer.md)
 - [0017-periodic-drafts-and-system-session-end.md](0017-periodic-drafts-and-system-session-end.md)
+- [0018-result-graph-recovery-drafts.md](0018-result-graph-recovery-drafts.md)

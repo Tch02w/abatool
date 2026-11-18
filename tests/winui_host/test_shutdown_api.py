@@ -60,6 +60,17 @@ def test_production_close_client_against_live_http_backend(tmp_path, close_clien
             release.set()
 
 
+def test_production_graph_draft_never_commits_or_overwrites_a_newer_revision(tmp_path, close_client):
+    with running_control_plane(tmp_path) as runtime:
+        completed = subprocess.run(
+            ["dotnet", str(close_client), "--graph-draft-api", str(runtime.descriptor_path), str(tmp_path / "draft")],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+        )
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+        assert "4 production-client/live-HTTP graph draft checks passed" in completed.stdout
+        assert api_request(runtime, "/healthz")[0] == 200
+
+
 def test_production_client_lists_and_preserves_active_transfer(tmp_path, close_client):
     started, release = threading.Event(), threading.Event()
 

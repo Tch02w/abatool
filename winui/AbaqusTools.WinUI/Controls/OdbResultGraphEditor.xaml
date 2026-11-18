@@ -27,7 +27,16 @@
                     <Button x:Name="ReloadGraphButton" Content="重新读取" MinWidth="88" HorizontalContentAlignment="Center" Click="OnReloadClicked" />
                 </StackPanel>
             </Grid>
-            <InfoBar x:Name="GraphInfoBar" Grid.Row="1" IsOpen="False" IsClosable="True" />
+            <StackPanel Grid.Row="1" Spacing="6">
+                <InfoBar x:Name="GraphRecoveryInfoBar" IsOpen="False" IsClosable="False" Title="发现未保存的结果图" Severity="Warning">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button x:Name="RestoreGraphDraftButton" Content="恢复编辑" Click="OnRestoreGraphDraftClicked" />
+                        <Button x:Name="PreviewGraphDraftButton" Content="查看草稿" Click="OnPreviewGraphDraftClicked" />
+                        <Button x:Name="PreserveGraphDraftButton" Content="保留副本并忽略" Click="OnPreserveGraphDraftClicked" />
+                    </StackPanel>
+                </InfoBar>
+                <InfoBar x:Name="GraphInfoBar" IsOpen="False" IsClosable="True" />
+            </StackPanel>
             <Grid Grid.Row="2" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

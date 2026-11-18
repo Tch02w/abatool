@@ -33,6 +33,8 @@ F001 日常草稿与系统会话结束：`MainWindow.Session.cs` / `OnDraftTimer
 
 ## 重启动与结果合并（不同模型，不混用）
 
+F001/F012结果图独立恢复草稿：`winui/AbaqusTools.WinUI/Controls/OdbResultGraphEditor.Recovery.cs` / `SaveDraftCheckpointAsync`、`OnRestoreGraphDraftClicked`；`Services/OdbResultGraphDraftStore.cs`（同一WinUI项目）/ `OdbResultGraphDraft.Matches`、`SaveAsync`、`ArchiveAndClearAsync`；`WorkbenchSession.RegisterCheckpoint`纳入日常/会话结束保存。测试 `tests/winui_host/ResultGraphDraftChecks.cs` 的 `--graph-draft-checks`、`--graph-draft-api`，真实HTTP包装 `tests/winui_host/test_shutdown_api.py` / `test_production_graph_draft_never_commits_or_overwrites_a_newer_revision`；[ADR0018](../submitter/adr/0018-result-graph-recovery-drafts.md)。
+
 | ID / 功能 | UI 入口 | 业务实现 / 定位符号 | 首选测试 |
 |---|---|---|---|
 | F011 计算重启动链、依赖检查 | `winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml.cs` | `modules/control_plane/restart_chains.py`；`read_restart_chains`；`modules/submitter/restart_dependency.py` | `tests/control_plane/test_restart_chains_api.py`、`tests/submitter/test_restart_dependency.py` |

@@ -13,6 +13,22 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 3 && args[0] == "--graph-draft-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        try { await ResultGraphDraftChecks.RunApiAsync(host, args[1], args[2]); }
+        finally { await host.DetachForCloseAsync(); }
+        return 0;
+    }
+    if (args.Length == 2 && args[0] == "--graph-draft-checks")
+    {
+        await ResultGraphDraftChecks.RunAsync(args[1]);
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--session-checks")
     {
         WorkbenchSessionChecks.Run();

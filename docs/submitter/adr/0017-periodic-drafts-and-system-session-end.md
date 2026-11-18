@@ -14,6 +14,8 @@ Implemented in source, 2026-11-18; pure state/store checks and WinUI build pass.
 
 ## Limits and verification
 
+The result-graph gap is subsequently addressed by [ADR 0018](0018-result-graph-recovery-drafts.md) through disk-only checkpoint participants. Detailed postprocessing workspaces and unconfirmed dialogs remain separate pending work.
+
 The two-second interval is best effort; a busy UI thread can delay capture. The final budget bounds waiting for disk, not all UI capture time, and cannot guarantee a final write on a hung disk or immediate termination. No claim of power-loss recovery is made. Existing complete release/installer candidates do not contain this source change until rebuilt.
 
 `tests/winui_host/SystemSessionEndChecks.cs` runs the production message state and store using synthetic messages, a held task, and real files in a fresh evidence directory. It does not call OS shutdown APIs, create a native window, or establish HWND integration acceptance. Existing shutdown HTTP tests continue to verify ordinary-close task ownership independently.

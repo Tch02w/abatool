@@ -11,6 +11,8 @@
 
 - 项目目录 `G:\PythonProject\abaqusTool`，控制面 Python 必须使用本项目 `.venv\Scripts\python.exe`；Abaqus worker 使用 Abaqus 自带解释器。
 - 原始 `G:\Job` 模型只读；不得修改原始 INP/ODB、启动新求解来代替验收。测试副本和生成物放在 `GPTWork`。
+- 验证功能时禁止向 C: 盘写入任何 ODB 文件，包括临时 ODB、占位文件、复制件和跨卷验收输出。相关测试的 TEMP/TMP 与输出目录设到本项目 G: 盘 `GPTWork`，执行前核对实际解析路径；历史 C: 盘跨卷回执不授权继续使用该目标。
+- 可以直接只读访问其他盘中已获授权的 ODB；缺目录权限时只申请所需目录访问。未经用户明确同意，不移动用户的 ODB 文件，不以迁移、整理或验收为由自行搬移。
 - 不修改 `G:\PythonProject\AbaqusODBPostProcessor` 集成仓库或其未提交内容。
 - 保持 WinUI / Qt-free Python 控制面 / Abaqus worker 边界，遵循 [现有 ADR](docs/submitter/adr/README.md)。未完成迁移验收前保留 PySide6 对照与回滚入口。
 - 不能把工字钢/钢管几何外形当作梁单元。按 ODB 实际单元类型、集合与输出定义选算法。人工梁样例不代表用户模型含梁单元。

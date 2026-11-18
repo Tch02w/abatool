@@ -11,6 +11,7 @@ public sealed class WorkbenchSession
         public bool Restored { get; set; }
     }
     private readonly Dictionary<string, Entry> _pages = [];
+    private readonly Dictionary<string, Func<Task>> _checkpoints = [];
     private readonly WorkbenchSessionStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AbaqusTools", "workbench-session.json"));
     public WorkbenchSessionState State { get; }
@@ -60,8 +61,24 @@ public sealed class WorkbenchSession
         await SaveDraftAsync(window);
     }
 
+    // Each callback must capture UI state synchronously and return disk-only work.
+    public void RegisterCheckpoint(string key, Func<Task> captureAndSave) => _checkpoints[key] = captureAndSave;
+
     // No network, page save callbacks or operation waits: suitable for routine checkpoints.
     public Task SaveDraftAsync(WorkbenchWindowState window)
+    {
+        var writes = new List<Task>();
+        try { CapturePageDrafts(window); writes.Add(_store.SaveAsync(State)); }
+        catch (Exception error) { writes.Add(Task.FromException(error)); }
+        foreach (var capture in _checkpoints.Values)
+        {
+            try { writes.Add(capture()); }
+            catch (Exception error) { writes.Add(Task.FromException(error)); }
+        }
+        return Task.WhenAll(writes);
+    }
+
+    private void CapturePageDrafts(WorkbenchWindowState window)
     {
         foreach (var (route, entry) in _pages)
         {
@@ -83,7 +100,6 @@ public sealed class WorkbenchSession
             State.Pages[route] = values;
         }
         State.Window = window;
-        return _store.SaveAsync(State);
     }
 
     public void ResumeAfterCancelledClose()

@@ -34,6 +34,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
     {
         InitializeComponent();
         _initialized = true;
+        InitializeDraftRecovery();
         Loaded += OnEditorLoaded;
         RefreshInteractionState();
     }
@@ -66,6 +67,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
             var snapshot = await App.Current.ControlPlane.SaveOdbResultGraphAsync(
                 _savedSnapshot.Revision, OutputDirectoryTextBox.Text.Trim(), _nodes.Select(CloneNode).ToArray());
             ApplySnapshot(snapshot);
+            await SaveDraftCheckpointAsync();
         }
         finally { _requestBusy = false; RefreshInteractionState(); }
     }
@@ -147,6 +149,8 @@ public sealed partial class OdbResultGraphEditor : UserControl
                 OutputDirectoryTextBox.Text.Trim(),
                 _nodes.Select(CloneNode).ToArray());
             ApplySnapshot(snapshot);
+            try { await SaveDraftCheckpointAsync(); }
+            catch (Exception error) { ShowError("正式图已保存，但恢复草稿未能更新", error); return; }
             ShowState("结果合并图已保存", "生成前会检查所选路径中的 ODB 和输出位置。", InfoBarSeverity.Success);
         }
         catch (Exception exception)
@@ -168,34 +172,33 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
-        if (HasUnsavedChanges)
+        _requestBusy = true;
+        RefreshInteractionState();
+        try
         {
-            _requestBusy = true;
-            RefreshInteractionState();
-            try
+            if (HasUnsavedChanges)
             {
                 var confirmed = await ConfirmAsync(
                     "放弃未保存的编辑？",
-                    "重新读取会用已保存的结果合并图替换当前草稿。",
+                    "先保留草稿副本，再用已保存的结果合并图替换当前编辑。",
                     "放弃并重新读取");
-                if (!confirmed)
-                {
-                    return;
-                }
+                if (!confirmed) return;
+                var saving = SaveDraftCheckpointAsync();
+                // No timer may recreate the discarded checkpoint while reload awaits HTTP.
+                _checkpointPaused = true;
+                await saving;
+                await _recoveryStore.ArchiveAndClearAsync();
             }
-            catch (Exception exception)
-            {
-                ShowError("无法重新读取", exception);
-                return;
-            }
-            finally
-            {
-                _requestBusy = false;
-                RefreshInteractionState();
-            }
+            ApplySnapshot(await App.Current.ControlPlane.GetOdbResultGraphAsync());
+            ShowState("结果合并图已读取", "选择节点编辑文件，保存后可生成完整结果。", InfoBarSeverity.Informational);
         }
-
-        await LoadGraphAsync();
+        catch (Exception error) { ShowError("无法重新读取，当前编辑仍保留", error); }
+        finally
+        {
+            _checkpointPaused = false;
+            _requestBusy = false;
+            RefreshInteractionState();
+        }
     }
 
     private void ApplySnapshot(OdbResultGraphSnapshot snapshot)
@@ -703,7 +706,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     private OdbResultGraphNode? SelectedNode => _nodes.FirstOrDefault(node => node.NodeId == _selectedNodeId);
 
-    private bool CanEdit => _initialized && _savedSnapshot is not null && !_requestBusy && !_executionBusy;
+    private bool CanEdit => _initialized && _savedSnapshot is not null && !_requestBusy && !_executionBusy && !RecoveryPending;
 
     private void RefreshInteractionState()
     {
@@ -713,6 +716,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
         }
 
         var selected = SelectedNode;
+        RefreshDraftRecovery();
         SaveGraphButton.IsEnabled = CanEdit && HasUnsavedChanges;
         ReloadGraphButton.IsEnabled = !_requestBusy && !_executionBusy;
         AddRootButton.IsEnabled = CanEdit && _nodes.Count < MaximumNodes;
@@ -724,7 +728,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
         OutputDirectoryTextBox.IsEnabled = CanEdit;
         ChooseOutputButton.IsEnabled = CanEdit;
         InspectorFields.IsEnabled = CanEdit && selected is not null;
-        GraphCanvas.IsHitTestVisible = !_requestBusy && !_executionBusy;
+        GraphCanvas.IsHitTestVisible = CanEdit;
         GenerateSelectedButton.IsEnabled = CanEdit && !HasUnsavedChanges && (_targets.Count > 0 || selected is not null);
         GenerateLeavesButton.IsEnabled = CanEdit && !HasUnsavedChanges && _nodes.Count > 0;
         var generationHint = HasUnsavedChanges ? "请先保存当前编辑，再检查并生成结果。" : "已勾选时使用勾选目标；未勾选时使用当前编辑节点。";

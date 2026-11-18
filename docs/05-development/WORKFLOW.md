@@ -25,6 +25,18 @@ Start-Process .\winui\AbaqusTools.WinUI\bin\Debug\net10.0-windows10.0.26100.0\wi
 
 ## 验证命令
 
+用户于2026-11-18追加验证边界：**禁止向C:盘放置任何ODB文件，未经明确同意不得移动用户ODB**。可直接只读访问其他盘中已获授权的目录，缺访问权限时仅申请对应目录。所有ODB测试副本/占位文件/生成结果和测试临时目录均使用G:盘GPTWork；历史C:盘跨卷验收记录仅作历史证据，不能照搬为下一次命令。每个执行会话在运行测试前设置并核对TEMP/TMP（变量不跨工具调用继承）：
+
+```powershell
+$verificationTemp = Join-Path (Get-Location) ('GPTWork/temp-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $verificationTemp | Out-Null
+$env:TEMP = $verificationTemp
+$env:TMP = $verificationTemp
+.\.venv\Scripts\python.exe -c "import tempfile; print(tempfile.gettempdir())"
+```
+
+上例须从本项目G:盘工作目录执行，并为pytest指定新的G:盘`--basetemp`。审查脚本显式目标和Abaqus工作目录，不能只设置环境变量就假定全部输出合规。应用JSON配置仍可位于LocalApplicationData；本限制针对验证时的ODB文件放置与用户原件移动，不擅自改动产品可选目录功能。
+
 pytest 默认只收集 `tests` 内的检查，忽略 GPTWork、虚拟环境和构建输出。指定验收范围时仍可传入明确的测试路径。
 
 原生操作未获恢复时，整套回归需设置 `QT_QPA_PLATFORM=offscreen` 并排除 `tests/submitter/test_native_window_startup.py`；该文件会主动移除此环境变量并打开窗口，不能默认为无界面检查。排除项须记录为待验。测试临时目录使用 GPTWork 新建子目录，避免复用基目录覆盖旧回执。HTTP 夹具 `running_control_plane` 默认将队列、服务器配置和结果图放到各自 `tmp_path`；重复同一路径仍验证持久恢复，显式传入路径优先。不让 Qt 测试留下的共享队列干扰退出检查。

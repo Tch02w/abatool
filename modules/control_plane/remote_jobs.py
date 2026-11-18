@@ -6,8 +6,9 @@ import base64
 import json
 import ntpath
 import threading
+import time
 from collections.abc import Mapping
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,9 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
+from .remote_job_journal import server_identity
 from .remote_job_monitoring import RemoteCompletionState, new_tail_lines
+from .remote_job_recovery import REQUEST_NAMES, RemoteJobRecovery
 from .remote_servers import RemoteServerService
 from .shutdown_guard import OperationShutdownGuard
 
@@ -130,7 +133,7 @@ class RemoteJobRequest:
     datacheck: bool
 
     @classmethod
-    def from_payload(cls, payload: Mapping[str, Any]) -> RemoteJobRequest:
+    def from_payload(cls, payload: Mapping[str, Any], *, validate_local_files=True) -> RemoteJobRequest:
         allowed = {
             "schemaVersion",
             "clientRequestId",
@@ -204,7 +207,7 @@ class RemoteJobRequest:
             memory=memory,
             datacheck=_flag(payload, "datacheck"),
         )
-        if request.input_mode == "upload":
+        if request.input_mode == "upload" and validate_local_files:
             for name, value in (
                 ("inputPath", request.input_path),
                 ("oldjobPath", request.oldjob_path),
@@ -253,14 +256,21 @@ class RemoteJobOperation:
     completion: RemoteCompletionState = field(default_factory=RemoteCompletionState)
     log_tails: dict[str, str] = field(default_factory=dict)
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    server_identity: dict = field(default_factory=dict)
+    launch_state: str = "preparing"
+    tracking_state: str = "preparing"
+    persistence_warning: str = ""
+    last_saved_at: float = 0
 
 
-class RemoteJobOperationManager(OperationShutdownGuard):
+class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
     """Create, monitor and cooperatively control remote Abaqus jobs."""
 
     shutdown_kind = 'remote.job'
+    _operation_type = RemoteJobOperation
+    _request_type = RemoteJobRequest
 
-    def __init__(self, events: EventStore, service: RemoteServerService) -> None:
+    def __init__(self, events: EventStore, service: RemoteServerService, journal_path=None) -> None:
         self._events = events
         self._service = service
         self._lock = threading.RLock()
@@ -270,33 +280,58 @@ class RemoteJobOperationManager(OperationShutdownGuard):
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="remote-job")
         self._stop_event = threading.Event()
         self._closed = False
+        self._init_recovery(journal_path)
 
     def create(self, request: RemoteJobRequest) -> dict[str, Any]:
         with self._lock:
             if self._closed or self._shutdown_reserved:
                 raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "控制面正在关闭")
+            self._check_history()
             existing_id = self._client_requests.get(request.client_request_id)
             if existing_id is not None:
                 existing = self._operations[existing_id]
                 if existing.request.signature != request.signature:
                     raise ApiProblem(409, "IDEMPOTENCY_CONFLICT", "请求标识已用于不同远端作业")
                 return self._snapshot_locked(existing)
-            operation = RemoteJobOperation(request)
+        # Never hold the job lock while waiting for a service lock held by an
+        # upload callback. Pin identity again inside every remote service call.
+        from dataclasses import asdict
+        RemoteJobRequest.from_payload({"schemaVersion": 1, **{REQUEST_NAMES[key]: value for key, value in asdict(request).items()}})
+        identity = server_identity(self._service.connected_profile())
+        with self._lock:
+            if self._closed or self._shutdown_reserved or self._storage_error:
+                raise ApiProblem(503, "REMOTE_JOB_STORAGE_UNAVAILABLE", "后台关闭中或记录未保存，无法提交远端作业")
+            if request.client_request_id in self._client_requests:
+                existing = self._operations[self._client_requests[request.client_request_id]]
+                if existing.request.signature != request.signature:
+                    raise ApiProblem(409, "IDEMPOTENCY_CONFLICT", "请求标识已用于不同远端作业")
+                return self._snapshot_locked(existing)
+            operation = RemoteJobOperation(request, server_identity=identity)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id
+            try:
+                self._persist_locked(operation, required=True)
+            except ApiProblem:
+                operation.status, operation.phase = FAILED, "提交前记录保存失败，未发送远端命令"
+                self._persist_locked(operation)
+                raise
             self._emit_locked(operation, "remote.job.queued")
-            self._futures[operation.operation_id] = self._executor.submit(
-                self._run,
-                operation.operation_id,
-            )
+            try:
+                self._submit_locked(operation)
+            except RuntimeError as exc:
+                operation.status, operation.phase = FAILED, "远端提交线程未启动，未发送命令"
+                operation.error = {"code": "REMOTE_JOB_DISPATCH_FAILED", "message": str(exc)}
+                self._touch_locked(operation, "remote.job.dispatch.failed")
             return self._snapshot_locked(operation)
 
     def get(self, operation_id: str) -> dict[str, Any]:
         with self._lock:
+            self._check_history()
             return self._snapshot_locked(self._require_locked(operation_id))
 
     def list_snapshots(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         with self._lock:
+            self._check_history()
             return [
                 self._snapshot_locked(operation)
                 for operation in reversed(tuple(self._operations.values()))
@@ -310,18 +345,33 @@ class RemoteJobOperationManager(OperationShutdownGuard):
             operation = self._require_locked(operation_id)
             if operation.status in TERMINAL_STATUSES:
                 return self._snapshot_locked(operation)
+            previous_control = (operation.cancel_event.is_set(), operation.status, operation.phase)
             if action == "cancel":
                 operation.cancel_event.set()
                 operation.status = CANCELLING
                 operation.phase = "正在请求 Abaqus 温和终止"
             else:
-                if not operation.work_directory:
+                if not operation.work_directory or operation.tracking_state != "tracking":
                     raise ApiProblem(409, "REMOTE_JOB_NOT_STARTED", "远端作业尚未启动")
-                self._execute_control(operation, action)
-                operation.paused = action == "pause"
-                operation.phase = "已暂停" if operation.paused else "运行中"
+                # The network call below happens outside the manager lock.
             operation.updated_at = utc_now_text()
             operation.version += 1
+            try:
+                self._persist_locked(operation, required=True)
+            except ApiProblem:
+                if action == "cancel":
+                    if not previous_control[0]:
+                        operation.cancel_event.clear()
+                    operation.status, operation.phase = previous_control[1:]
+                raise
+        if action != "cancel":
+            self._execute_control(operation, action)
+            with self._lock:
+                if operation.status not in TERMINAL_STATUSES:
+                    operation.paused = action == "pause"
+                    operation.phase = "已暂停" if operation.paused else "运行中"
+                self._persist_locked(operation)
+        with self._lock:
             self._emit_locked(operation, f"remote.job.{action}")
             return self._snapshot_locked(operation)
 
@@ -331,6 +381,9 @@ class RemoteJobOperationManager(OperationShutdownGuard):
             self._stop_event.set()
         # Closing the desktop app must not terminate remote solver jobs.
         self._executor.shutdown(wait=False, cancel_futures=True)
+        wait(tuple(self._futures.values()), timeout=2)
+        self._maintenance.join(timeout=2)
+        self._close_journal_if_idle()
 
     def _run(self, operation_id: str) -> None:
         with self._lock:
@@ -347,8 +400,11 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 operation.status = CANCELLED
                 operation.phase = "远端作业已取消"
                 self._touch_locked(operation, "remote.job.cancelled")
-        except (RemoteConnectionError, OSError, ValueError) as exc:
+        except (RemoteConnectionError, OSError, ValueError, ApiProblem) as exc:
             with self._lock:
+                if operation.launch_state != "preparing":
+                    self._tracking_lost(operation, exc)
+                    return
                 operation.status = FAILED
                 operation.phase = "远端作业失败"
                 operation.error = {
@@ -358,15 +414,60 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 self._append_log_locked(operation, operation.error["message"])
                 self._touch_locked(operation, "remote.job.failed")
 
+    def _tracking_lost(self, operation, error):
+        operation.status = CANCELLING if operation.cancel_event.is_set() else RUNNING
+        operation.tracking_state = "reconnecting"
+        operation.phase = "连接中断或回执未确认，请连接原服务器继续核对；不会重复提交"
+        operation.error = {"code": "REMOTE_JOB_TRACKING_INTERRUPTED", "message": str(error)}
+        operation.completion.signature = ""
+        operation.completion.stable_inactive_polls = 0
+        self._touch_locked(operation, "remote.job.tracking.interrupted")
+
+    def _resume(self, operation_id):
+        operation = self._operations[operation_id]
+        try:
+            if operation.launch_state != "started":
+                result = self._run_json_script(_recover_launch_script(), {
+                    "work_directory": operation.work_directory, "operation_id": operation.operation_id,
+                }, expected_profile=operation.server_identity)
+                if result.get("state") != "started":
+                    with self._lock:
+                        operation.tracking_state = "submission_unknown"
+                        operation.phase = "启动回执尚未确认，请在原服务器核对；未重复提交"
+                        self._persist_locked(operation)
+                    self._stop_event.wait(3)
+                    return
+                with self._lock:
+                    self._accept_start(operation, result)
+            self._monitor(operation)
+        except (RemoteConnectionError, OSError, ValueError) as exc:
+            with self._lock:
+                self._tracking_lost(operation, exc)
+
+    def _accept_start(self, operation, payload):
+        if (payload.get("operation_id") != operation.operation_id or payload.get("state") != "started"
+                or int(payload.get("process_id") or 0) <= 0 or not payload.get("process_start_ticks")):
+            raise RemoteConnectionError("远端启动回执不完整，未重复提交")
+        operation.process_id = int(payload["process_id"])
+        operation.process_start_ticks = str(payload["process_start_ticks"])
+        operation.launch_state, operation.tracking_state = "started", "tracking"
+        operation.status = RUNNING
+        operation.error = None
+        self._persist_locked(operation)
+
     def _prepare_and_start(self, operation: RemoteJobOperation) -> None:
-        profile = self._service.connected_profile()
+        profile = self._service.connected_profile(operation.server_identity)
         if not profile.compute_root:
             raise RemoteConnectionError("服务器配置缺少计算根目录。")
+        work_directory = ntpath.join(profile.compute_root, operation.request.job_name + "_" + operation.operation_id)
         workspace_payload = self._run_json_script(
             _workspace_script(),
-            {"compute_root": profile.compute_root, "job_name": operation.request.job_name},
+            {"compute_root": profile.compute_root, "job_name": operation.request.job_name, "operation_id": operation.operation_id},
+            expected_profile=operation.server_identity,
         )
-        work_directory = self._service.validate_remote_path(str(workspace_payload["work_directory"]))
+        returned = self._service.validate_remote_path(str(workspace_payload["work_directory"]), operation.server_identity)
+        if ntpath.normcase(returned) != ntpath.normcase(work_directory):
+            raise RemoteConnectionError("远端目录与本次任务身份不一致")
         with self._lock:
             operation.work_directory = work_directory
             operation.files = {
@@ -395,6 +496,15 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 48,
             )
 
+        with self._lock:
+            if operation.cancel_event.is_set() or self._stop_event.is_set():
+                raise RemoteTransferCancelled("提交前已取消")
+            operation.launch_state = "intent"
+            try:
+                self._persist_locked(operation, required=True)
+            except ApiProblem:
+                operation.launch_state = "preparing"
+                raise
         start_payload = self._run_json_script(
             _start_job_script(),
             {
@@ -407,11 +517,12 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 "cpus": operation.request.cpus,
                 "memory": operation.request.memory,
                 "datacheck": operation.request.datacheck,
+                "operation_id": operation.operation_id,
             },
+            expected_profile=operation.server_identity,
         )
         with self._lock:
-            operation.process_id = int(start_payload.get("process_id") or 0)
-            operation.process_start_ticks = str(start_payload.get("process_start_ticks") or "")
+            self._accept_start(operation, start_payload)
             operation.status = RUNNING
             operation.phase = "远端 Abaqus 运行中"
             operation.percent = 50
@@ -449,14 +560,16 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 overwrite=True,
                 progress=progress,
                 cancel_requested=operation.cancel_event.is_set,
+                expected_profile=operation.server_identity,
             )
             return local.name
 
-        validated = self._service.validate_remote_path(source)
+        validated = self._service.validate_remote_path(source, operation.server_identity)
         name = ntpath.basename(validated)
         self._run_json_script(
             _copy_remote_file_script(),
             {"source": validated, "destination": ntpath.join(work_directory, name)},
+            expected_profile=operation.server_identity,
         )
         return name
 
@@ -467,7 +580,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
         work_directory: str,
     ) -> None:
         if operation.request.input_mode == "existing":
-            validated = self._service.validate_remote_path(oldjob_path)
+            validated = self._service.validate_remote_path(oldjob_path, operation.server_identity)
             source_directory = ntpath.dirname(validated)
             source_stem = ntpath.splitext(ntpath.basename(validated))[0]
             self._run_json_script(
@@ -478,6 +591,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                     "work_directory": work_directory,
                     "extensions": list(RESTART_DEPENDENCY_EXTENSIONS),
                 },
+                expected_profile=operation.server_identity,
             )
             return
         source = Path(oldjob_path).expanduser().resolve()
@@ -495,6 +609,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 overwrite=True,
                 progress=lambda _done, _total: None,
                 cancel_requested=operation.cancel_event.is_set,
+                expected_profile=operation.server_identity,
             )
             with self._lock:
                 operation.percent = 30 + round(8 * index / max(1, len(total_files)))
@@ -505,9 +620,6 @@ class RemoteJobOperationManager(OperationShutdownGuard):
         while True:
             if self._stop_event.is_set():
                 return
-            if operation.cancel_event.is_set() and not terminate_sent:
-                self._execute_control(operation, "cancel")
-                terminate_sent = True
             snapshot = self._run_json_script(
                 _job_status_script(),
                 {
@@ -515,9 +627,22 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                     "job_name": operation.request.job_name,
                     "process_id": operation.process_id,
                     "process_start_ticks": operation.process_start_ticks,
+                    "operation_id": operation.operation_id,
                 },
+                expected_profile=operation.server_identity or None,
             )
+            # A lost terminate acknowledgement must not make us resend control
+            # forever after the original job has already ended.
+            if (operation.cancel_event.is_set() and not terminate_sent and snapshot.get("probe_complete") is True
+                    and (snapshot.get("process_active") is True or snapshot.get("lock_exists") is True)):
+                self._execute_control(operation, "cancel")
+                terminate_sent = True
             with self._lock:
+                tracking_state = "tracking" if snapshot.get("probe_complete") is True else "unverified"
+                tracking_changed = operation.tracking_state != tracking_state
+                operation.tracking_state = tracking_state
+                operation.error = None
+                evidence_before = (operation.completion.error_seen, operation.completion.termination_seen)
                 for source in ("sta", "log", "dat", "msg"):
                     self._merge_log_tail_locked(operation, str(snapshot.get(source + "_tail") or ""), source)
                 status, phase, error = operation.completion.observe(snapshot,
@@ -528,27 +653,35 @@ class RemoteJobOperationManager(OperationShutdownGuard):
                 operation.updated_at = utc_now_text()
                 operation.version += 1
                 if status in TERMINAL_STATUSES:
+                    operation.tracking_state = "finished"
                     operation.percent = 100 if status == SUCCEEDED else min(operation.percent, 99)
                     operation.error = {"code": error, "message": phase} if error else None
                     self._touch_locked(operation, f"remote.job.{status}")
                     return
                 operation.percent = min(95, max(operation.percent, 55))
+                if (tracking_changed or time.monotonic() - operation.last_saved_at >= 5
+                    or evidence_before != (operation.completion.error_seen, operation.completion.termination_seen)):
+                    self._persist_locked(operation)
             self._stop_event.wait(1)
 
     def _execute_control(self, operation: RemoteJobOperation, action: str) -> None:
-        profile = self._service.connected_profile()
+        profile = self._service.connected_profile(operation.server_identity)
         abaqus_action = {"cancel": "terminate", "pause": "suspend", "resume": "resume"}[action]
-        self._run_json_script(
+        result = self._run_json_script(
             _control_job_script(),
             {
                 "abaqus_command": profile.abaqus_command or "abaqus.bat",
                 "work_directory": operation.work_directory,
                 "job_name": operation.request.job_name,
                 "action": abaqus_action,
+                "operation_id": operation.operation_id,
             },
+            expected_profile=operation.server_identity,
         )
+        if result.get("exit_code") != 0:
+            raise RemoteConnectionError("远端控制命令未成功，不能据此确认暂停或终止")
 
-    def _run_json_script(self, script: str, config: Mapping[str, Any]) -> dict[str, Any]:
+    def _run_json_script(self, script: str, config: Mapping[str, Any], *, expected_profile=None) -> dict[str, Any]:
         payload = base64.b64encode(
             json.dumps(config, ensure_ascii=False).encode("utf-8")
         ).decode("ascii")
@@ -561,7 +694,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
             "$config=$configJson|ConvertFrom-Json\n"
             + script
         )
-        output = self._service.execute_powershell(wrapped, timeout=45)
+        output = self._service.execute_powershell(wrapped, timeout=45, expected_profile=expected_profile)
         try:
             result = json.loads(output.strip())
         except json.JSONDecodeError as exc:
@@ -579,6 +712,7 @@ class RemoteJobOperationManager(OperationShutdownGuard):
     def _touch_locked(self, operation: RemoteJobOperation, kind: str) -> None:
         operation.updated_at = utc_now_text()
         operation.version += 1
+        self._persist_locked(operation)
         self._emit_locked(operation, kind)
 
     def _emit_locked(self, operation: RemoteJobOperation, kind: str) -> None:
@@ -640,6 +774,8 @@ class RemoteJobOperationManager(OperationShutdownGuard):
             "files": dict(operation.files),
             "error": operation.error,
             "eventCursor": operation.event_cursor,
+            "trackingState": operation.tracking_state,
+            "persistenceWarning": operation.persistence_warning or None,
         }
 
 
@@ -647,10 +783,9 @@ def _workspace_script() -> str:
     return r"""
 $root=[string]$config.compute_root
 if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw '服务器计算根目录不存在。' }
-$base=Join-Path $root ([string]$config.job_name)
+$base=Join-Path $root (([string]$config.job_name)+'_'+([string]$config.operation_id))
 $candidate=$base
-$index=2
-while (Test-Path -LiteralPath $candidate) { $candidate="${base}_$index"; $index++ }
+if (Test-Path -LiteralPath $candidate) { throw '本次任务目录已经存在，请核对原任务，不自动复用。' }
 $created=New-Item -ItemType Directory -Path $candidate -ErrorAction Stop
 [ordered]@{ work_directory=[string]$created.FullName } | ConvertTo-Json -Compress
 """
@@ -679,6 +814,19 @@ foreach ($extension in @($config.extensions)) {
 
 def _start_job_script() -> str:
     return r"""
+$receipt=Join-Path ([string]$config.work_directory) '.abaqus-tools-launch.json'
+if (Test-Path -LiteralPath $receipt) {
+    $existing=Get-Content -LiteralPath $receipt -Raw -ErrorAction Stop | ConvertFrom-Json
+    if ([string]$existing.operation_id -ne [string]$config.operation_id) { throw '启动回执属于另一任务。' }
+    $existing | ConvertTo-Json -Compress
+    return
+}
+# Claim before launching. A partial/uncertain claim never permits another start.
+$claim=[IO.File]::Open($receipt,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+try {
+    $bytes=[Text.Encoding]::UTF8.GetBytes(([ordered]@{operation_id=[string]$config.operation_id;state='starting'}|ConvertTo-Json -Compress))
+    $claim.Write($bytes,0,$bytes.Length); $claim.Flush($true)
+} finally { $claim.Dispose() }
 $arguments=@("job=$($config.job_name)","input=$($config.input_name)","ask_delete=OFF")
 if ([int]$config.cpus -gt 0) { $arguments += "cpus=$($config.cpus)" }
 if ([string]$config.memory) { $arguments += "memory=$($config.memory)" }
@@ -690,7 +838,21 @@ $command='call "'+([string]$config.abaqus_command -replace '"','""')+'" '+($quot
 $process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru
 try { $started=$process.StartTime.ToUniversalTime().Ticks.ToString() }
 catch { if (-not $process.HasExited) { throw }; $started='exited' }
-[ordered]@{ process_id=[int]$process.Id; process_start_ticks=$started } | ConvertTo-Json -Compress
+$result=[ordered]@{ operation_id=[string]$config.operation_id; state='started'; process_id=[int]$process.Id; process_start_ticks=$started }
+$temporary=$receipt+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+[IO.File]::WriteAllText($temporary,($result|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+[IO.File]::Replace($temporary,$receipt,[NullString]::Value)
+$result | ConvertTo-Json -Compress
+"""
+
+
+def _recover_launch_script() -> str:
+    return r"""
+$receipt=Join-Path ([string]$config.work_directory) '.abaqus-tools-launch.json'
+if (-not (Test-Path -LiteralPath $receipt -PathType Leaf)) { @{state='unknown'}|ConvertTo-Json -Compress; return }
+$existing=Get-Content -LiteralPath $receipt -Raw -ErrorAction Stop | ConvertFrom-Json
+if ([string]$existing.operation_id -ne [string]$config.operation_id) { throw '启动回执与原任务不一致。' }
+$existing|ConvertTo-Json -Compress
 """
 
 
@@ -699,6 +861,14 @@ def _job_status_script() -> str:
 $job=[string]$config.job_name
 $work=[string]$config.work_directory
 $complete=$true
+if ([string]$config.operation_id) {
+    try {
+        $receipt=Get-Content -LiteralPath (Join-Path $work '.abaqus-tools-launch.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ([string]$receipt.operation_id -ne [string]$config.operation_id -or $receipt.state -ne 'started' -or
+            [string]$receipt.process_id -ne [string]$config.process_id -or
+            [string]$receipt.process_start_ticks -ne [string]$config.process_start_ticks) { $complete=$false }
+    } catch { $complete=$false }
+}
 $active=$false
 $locked=$false
 $expected=[string]$config.process_start_ticks
@@ -744,6 +914,8 @@ foreach ($extension in @('sta','log','dat','msg')) {
 
 def _control_job_script() -> str:
     return r"""
+$receipt=Get-Content -LiteralPath (Join-Path ([string]$config.work_directory) '.abaqus-tools-launch.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+if ([string]$receipt.operation_id -ne [string]$config.operation_id) { throw '拒绝控制不属于原任务的目录。' }
 $argument=([string]$config.action)+' job='+([string]$config.job_name)
 $command='call "'+([string]$config.abaqus_command -replace '"','""')+'" '+$argument
 $process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru -Wait

@@ -248,10 +248,12 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private void ApplyRemoteJob(RemoteJobOperationSnapshot operation)
     {
         CurrentJobTitleText.Text = $"Remote Job: {operation.Request.JobName}";
-        StatusSummaryText.Text = RemoteStatusDisplay(operation.Status);
+        StatusSummaryText.Text = operation.StatusDisplay;
         ProgressSummaryText.Text = string.IsNullOrWhiteSpace(operation.Phase)
             ? $"{operation.Percent}%"
             : operation.Phase;
+        if (!string.IsNullOrWhiteSpace(operation.PersistenceWarning))
+            ProgressSummaryText.Text += $" · {operation.PersistenceWarning}";
         RuntimeProgressBar.Value = operation.Percent;
         var elapsed = (operation.IsTerminal ? operation.UpdatedAt : DateTimeOffset.Now)
             - operation.CreatedAt;
@@ -276,13 +278,12 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             ? $"阶段：{operation.Phase}\r\n状态：{operation.Status}"
             : string.Join("\r\n", operation.Logs));
         PauseResumeButton.Content = operation.Paused ? "恢复" : "暂停";
-        PauseResumeButton.IsEnabled = !operation.IsTerminal
-            && operation.Status == "running";
+        PauseResumeButton.IsEnabled = operation.CanPauseResume;
         TerminateButton.IsEnabled = !operation.IsTerminal
             && operation.Status is "starting" or "running";
         SetRemoteOutputButtons(operation);
         App.Current.MainWindow.ReportPageStatus(
-            $"远端作业 · {operation.Request.JobName} · {RemoteStatusDisplay(operation.Status)}");
+            $"远端作业 · {operation.Request.JobName} · {operation.StatusDisplay}");
     }
 
     private bool IsInteractingWithRuntimeLog =>
@@ -735,17 +736,6 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         return $"运行中 {running} · 完成 {completed} · 异常 {abnormal}";
     }
 
-    private static string RemoteStatusDisplay(string status) => status switch
-    {
-        "queued" => "等待远端执行",
-        "starting" => "正在准备",
-        "running" => "远端运行中",
-        "cancelling" => "正在终止",
-        "succeeded" => "已完成",
-        "cancelled" => "已取消",
-        "failed" => "失败",
-        _ => "未知",
-    };
 }
 
 public sealed class JobOverviewEntry

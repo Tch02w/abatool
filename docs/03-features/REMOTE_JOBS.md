@@ -1,4 +1,4 @@
-# 远端作业与完成确认（F010）
+# 远端作业、完成确认与恢复（F008/F010）
 
 WinUI 的「新建作业」通过已连接且已确认指纹的 Windows SSH 服务器提交；「作业概览」显示进度、日志与控制操作。输入选择上传本地文件或使用允许目录内的远端文件；请求包括作业名、INP、可选 oldjob/Fortran、CPU、内存及数据检查选项。完整入口与服务器配置见 [使用手册](../repowiki/user-guide.md)。
 
@@ -16,16 +16,34 @@ WinUI 的「新建作业」通过已连接且已确认指纹的 Windows SSH 服�
 - 错误输出对应 `ABAQUS_REMOTE_ERROR`，非本次请求导致的终止对应 `REMOTE_JOB_TERMINATED`；都需要先确认进程和文件已结束。
 - 取消使用 Abaqus 温和终止，保持取消中直到稳定确认，不以“命令已发出”代替“作业已结束”。关闭仍复用受管任务检查，不因收到完成文本提前释放活动任务。
 
+## 断线、重启与持久记录
+
+每个新任务先将输入、阶段、取消意图及非秘密服务器身份写入控制面连接文件旁的 `remote-jobs.sqlite3`。沿用单后台持有锁和 SQLite 事务；记录不包含密码、私钥内容或口令。工作目录是 `<computeRoot>/<jobName>_<operationId>`，避免重试创建另一份作业。
+
+启动前先持久保存 intent；服务器通过独占创建 `.abaqus-tools-launch.json` 认领本次启动，再写入 operation ID、launcher PID 和创建时间。重复启动请求只返回原回执。后台重启或启动响应丢失后只读取原回执、原目录和进程，不重发启动命令、不重新上传文件。已上传的本地输入即使移走，也不影响原任务跟踪或相同请求的查询；不同参数复用请求 ID 仍拒绝。
+
+- **提交前中断**：尚处 preparing 的任务标记 `REMOTE_PREPARATION_INTERRUPTED`，不会自动重新提交。需要运行时，由用户明确发起新的请求。
+- **提交后断线或重启**：任务保持活动，显示“等待重连核对”。在「计算资源」连接原服务器后自动核对；固定主机、端口、用户名、指纹、计算根目录、允许目录和 Abaqus 命令。其他服务器/范围拒绝接管。认证仍通过既有登录流程，不从任务记录恢复密码。
+- **回执缺失或停在 starting**：显示“提交状态待核对”，保留活动状态；服务器可能在认领与启动/写回执之间退出，不能据此重新发起计算。需检查原目录、日志及实际进程；当前没有“强制认定未启动”入口。
+- **身份/输出暂不可读**：显示“等待状态核对”，继续观察，禁用暂停/恢复。取消意图可保存，但在完整探测前不发控制命令。
+- **离线取消**：先保存取消意图，重连后确认原任务仍活跃才发温和终止；已结束则直接做稳定确认。终止响应丢失不导致向已结束任务反复发送命令。
+- **保存失败**：显示记录警告，继续观察已运行任务；禁止新提交和整体安全关闭，定时重试保存，不重试计算。新取消若保存失败，返回错误，不把未保存请求当已接受。
+- **损坏或被其他后台占用的历史**：保留原文件，历史/新提交返回 `REMOTE_JOB_HISTORY_UNAVAILABLE`，不显示为空历史。应保留后台并检查磁盘、占用与原文件，不删除记录来绕过保护。
+
+重要阶段立即保存，平稳轮询最多每 5 秒保存一次，避免每秒重写所有历史；每条任务独立更新。恢复日志重叠基线和明确错误/终止证据，但稳定次数从零重新核对。关闭界面不会隐式终止远端求解。设计理由见 [ADR 0012](../submitter/adr/0012-durable-remote-tracking.md)。
+
 ## 当前边界与后续迁移
 
 上述进程判断覆盖本次 launcher，锁文件辅助判断异步求解；尚未完成远端全部 MPI/脱离 launcher 的子进程身份核对。没有声称独立并发负载或真实 SSH/Abaqus 验收已经完成。
 
-远端操作目前仍在后台内存内保存；后台重启后不会恢复这些记录。传输/SSH 命令异常目前使操作显示失败，但不能据此断言已经启动的远端求解也停止。连接中断后的持续跟踪、重连和持久恢复仍需完善，关闭后台不自动结束远端求解。不能因为本节完成判断修复就宣布 F010 或全迁移整体完成。
+仅从本功能版本开始提交的任务有持久记录；升级前只存在旧后台内存中的远端任务无法自动重建。独立文件传输仍采用原来的生命周期，不承诺跨后台恢复。实际 SSH、凭据重输、WinUI 点击和远端 MPI 尚待验收，不能因为本机进程恢复通过就宣布 F010 或全迁移整体完成。
 
 ## 定位与验证
 
 - 业务入口：`modules/control_plane/remote_jobs.py` / `RemoteJobOperationManager`，启动/状态 PowerShell 由 `_start_job_script`、`_job_status_script` 生成。
 - 确认算法：`modules/control_plane/remote_job_monitoring.py` / `RemoteCompletionState.observe`、`new_tail_lines`。
+- 持久记录与恢复：`modules/control_plane/remote_job_journal.py` / `RemoteJobJournal`、`server_identity`；`modules/control_plane/remote_job_recovery.py` / `RemoteJobRecovery`。服务器身份核对与实际命令共用连接锁，避免核对后切换服务器。
 - 原生入口：`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs`、`winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs`，无新增 UI 布局或公共必填 DTO 字段。
 - `tests/control_plane/test_remote_job_monitoring.py` 覆盖缺输出、完成但仍运行/有锁、签名变化、错误优先、不可读、数据检查、终止、日志重叠及生产 PowerShell 在本机的实际探测/快速启动。它只启动隔离 cmd 夹具，不是远端或求解验收。
 - API、服务器、传输和关闭测试见 `tests/control_plane/test_remote_jobs_api.py`、`tests/control_plane/test_remote_servers_api.py`、`tests/control_plane/test_remote_transfers_api.py`、`tests/control_plane/test_shutdown_guard.py`、`tests/control_plane/test_shutdown_protocol.py`。实际结果与续接点见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+- `tests/control_plane/test_remote_job_recovery.py` 覆盖断线、丢启动回执、重新登录、后台重建、离线取消、历史损坏和保存失败；`tests/control_plane/test_remote_recovery_process.py` 实际执行生产 PowerShell、后台进程退出/重启、原任务续接和单次启动，只使用 GPTWork 本机夹具，无 SSH/求解。`tests/winui_host/RemoteRecoveryChecks.cs` 检查状态文案、旧 DTO 兼容和控制禁用。

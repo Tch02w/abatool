@@ -10,7 +10,7 @@ from pathlib import Path
 
 class OperationJournal:
     def __init__(self, path: Path, *, table: str, validator):
-        if table not in {"merge_operations", "batch_operations"}:
+        if table not in {"merge_operations", "batch_operations", "remote_operations"}:
             raise ValueError("Unknown operation journal table")
         self._table = table
         self._validate = validator

@@ -145,7 +145,7 @@ def test_monitor_keeps_guard_active_and_only_appends_new_remote_log_lines():
             calls.append((operation.status, list(operation.logs)))
 
     manager._stop_event = NoWait()
-    manager._run_json_script = lambda *_args: next(sequence)
+    manager._run_json_script = lambda *_args, **_kwargs: next(sequence)
     try:
         manager._monitor(operation)
         assert len(calls) == 4 and all(status == "running" for status, _logs in calls)
@@ -178,8 +178,9 @@ def test_production_powershell_probe_observes_real_files_and_pid_identity(tmp_pa
         encoded = base64.b64encode(json.dumps(config).encode()).decode()
         script.write_text(template.replace("{config}", encoded) + _job_status_script(), encoding="utf-8-sig")
         result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                                 "-File", str(script)], capture_output=True, text=True, timeout=20, check=True,
+                                 "-File", str(script)], capture_output=True, text=True, timeout=20, check=False,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
+        assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
 
     (tmp_path / "case.log").write_text("Abaqus JOB case COMPLETED", encoding="ascii")
@@ -203,9 +204,9 @@ def test_production_powershell_probe_observes_real_files_and_pid_identity(tmp_pa
 @pytest.mark.skipif(sys.platform != "win32", reason="Production remote starter is Windows PowerShell")
 def test_production_start_and_monitor_fast_fixture_without_solver(tmp_path):
     command = tmp_path / "fixture command.cmd"
-    command.write_text('@echo off\necho Abaqus JOB case COMPLETED>case.log\nexit /b 0\n', encoding="ascii")
+    command.write_text('@echo off\necho called>>calls.txt\necho Abaqus JOB case COMPLETED>case.log\nexit /b 0\n', encoding="ascii")
     config = {"work_directory": str(tmp_path), "job_name": "case", "abaqus_command": str(command),
-              "input_name": "fixture.inp", "cpus": 1, "memory": "90%", "datacheck": True}
+              "input_name": "fixture.inp", "cpus": 1, "memory": "90%", "datacheck": True, "operation_id": "a" * 32}
 
     def run(body):
         encoded = base64.b64encode(json.dumps(config).encode()).decode()
@@ -213,8 +214,9 @@ def test_production_start_and_monitor_fast_fixture_without_solver(tmp_path):
         script.write_text("$ErrorActionPreference='Stop'\n$config=[Text.Encoding]::UTF8.GetString("
             f"[Convert]::FromBase64String('{encoded}'))|ConvertFrom-Json\n" + body, encoding="utf-8-sig")
         result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                                 "-File", str(script)], capture_output=True, text=True, timeout=20, check=True,
+                                 "-File", str(script)], capture_output=True, text=True, timeout=20, check=False,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
+        assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
 
     start = run(_start_job_script())
@@ -227,3 +229,5 @@ def test_production_start_and_monitor_fast_fixture_without_solver(tmp_path):
             break
         time.sleep(.1)
     assert result[0] == "succeeded"
+    assert run(_start_job_script()) == start
+    assert (tmp_path / "calls.txt").read_text().splitlines() == ["called"]

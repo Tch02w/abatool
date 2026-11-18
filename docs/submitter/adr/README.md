@@ -20,3 +20,4 @@ Current records:
 - [0009-reversible-workbench-close.md](0009-reversible-workbench-close.md)
 - [0010-native-shared-local-scheduler.md](0010-native-shared-local-scheduler.md)
 - [0011-native-memory-observation.md](0011-native-memory-observation.md)
+- [0012-durable-remote-tracking.md](0012-durable-remote-tracking.md)

@@ -6,6 +6,8 @@
 
 ### 远端完成确认补充（2026-11-18，F010）
 
+持久恢复补充：快照新增可选 `trackingState`（preparing/tracking/reconnecting/submission_unknown/unverified/finished/interrupted）和 `persistenceWarning`。启动后 SSH 失败不再返回终态失败，而保持 running/cancelling；重连后核对原回执与原任务。历史错误返回 503 `REMOTE_JOB_HISTORY_UNAVAILABLE`；保存错误返回 503 `REMOTE_JOB_STORAGE_UNAVAILABLE`，不启动新计算。preparing 阶段后台重启返回 failed / `REMOTE_PREPARATION_INTERRUPTED`，明确没有自动提交；线程提交失败为 `REMOTE_JOB_DISPATCH_FAILED`。同一 `clientRequestId`、同参数跨后台返回原操作，不重新要求已上传本地源文件存在；新请求仍验证本地文件。活动作业只允许连接相同的固定服务器身份/路径范围，存在活动传输时仍拒绝切换/重连，返回 409 `REMOTE_SESSION_BUSY`。取消先持久保存，未核对时暂缓远端控制；暂停/恢复在非 tracking 状态返回 409 `REMOTE_JOB_NOT_STARTED`。细节见 [ADR 0012](submitter/adr/0012-durable-remote-tracking.md)。
+
 `remote-jobs` 的公开 DTO 结构保持兼容。收到成功文本后仍为 running（取消请求期间 cancelling），phase 说明正在确认，须 launcher/锁已停止且四种输出签名连续 3 次稳定才终结。数据检查不再凭进程连续消失判成功；稳定 5 次无成功证据返回 failed / `REMOTE_JOB_EXIT_UNCONFIRMED`。错误与非请求终止优先于成功，代码分别为 `ABAQUS_REMOTE_ERROR`、`REMOTE_JOB_TERMINATED`；不可读探测继续活动并重置确认。内部探针增加 launcher 创建时间、probe_complete、output_signature、DAT/MSG 尾部；它们不是新增公共请求字段。细节与连接中断/重启限制见 [远端作业说明](03-features/REMOTE_JOBS.md)。
 
 ### 本机调度补充（2026-11-18，F004/F005）

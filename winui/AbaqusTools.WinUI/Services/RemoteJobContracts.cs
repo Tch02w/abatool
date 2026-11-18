@@ -110,6 +110,29 @@ public sealed class RemoteJobOperationSnapshot
     [JsonPropertyName("eventCursor")]
     public long EventCursor { get; init; }
 
+    [JsonPropertyName("trackingState")]
+    public string TrackingState { get; init; } = string.Empty;
+
+    [JsonPropertyName("persistenceWarning")]
+    public string? PersistenceWarning { get; init; }
+
+    [JsonIgnore]
+    public bool CanPauseResume => !IsTerminal && Status == "running"
+        && TrackingState is "" or "tracking";
+
+    [JsonIgnore]
+    public string StatusDisplay => !IsTerminal && TrackingState is "reconnecting" or "submission_unknown" or "unverified"
+        ? TrackingState switch
+        {
+            "reconnecting" => "等待重连核对", "submission_unknown" => "提交状态待核对", _ => "等待状态核对",
+        }
+        : Status switch
+        {
+            "queued" => "等待远端执行", "starting" => "正在准备", "running" => "远端运行中",
+            "cancelling" => "正在终止", "succeeded" => "已完成", "cancelled" => "已取消",
+            "failed" => "失败", _ => "未知",
+        };
+
     [JsonIgnore]
     public bool IsTerminal => Status is "succeeded" or "failed" or "cancelled";
 }

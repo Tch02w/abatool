@@ -18,6 +18,8 @@
 
 ## 后处理数据流
 
+远端作业：`RemoteJobOperationManager → RemoteJobJournal / RemoteJobRecovery → RemoteServerService → Windows PowerShell`。启动 intent 本地持久化，服务器独占提交回执约束单次启动；恢复仅观察原身份，凭据不入任务记录。连接锁同时保护身份核对和命令执行。实现、未确认窗口和测试边界见 [远端说明](../03-features/REMOTE_JOBS.md) 与 [ADR 0012](../submitter/adr/0012-durable-remote-tracking.md)。
+
 ```text
 OdbPostprocessingPage → ControlPlaneHost → server.py
     ├─ discovery.py → ODB 路径与文件状态

@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+2026-11-18 F008/F010 持久恢复：扩展 `remote-recovery-broad-20261118.xml` 为 291 通过/1 失败（结果提取取消路径 HTTP 被 Windows 中止）；随后 `remote-recovery-final-20261118.xml` 54 项通过，覆盖该路径。实际 PowerShell 双后台进程检查 `remote-recovery-process-20261118.xml` 1 项通过（15.83 秒），启动回执丢失后退出旧后台、任务仍存活、新后台接回原 PID、启动计数 1、最终稳定成功，回执 `GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`。C# 6 项恢复显示与原有主机检查通过。此证据是本机真实脚本/进程，不是 SSH、MPI 或原生页面验收；新完整包待构建。见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。以下为前阶段记录。
+
+最后记录字段保护及不可读控制专项后，`remote-recovery-delivery-20261118.xml` **81 项通过，127.54 秒**，包含恢复、服务器、传输、关闭和 42 项文档检查；最终 Release 零警告/错误（13.56 秒），所有修改 Python Ruff 通过。两个测试后台和实际 launcher/helper 已确认结束。完整包另验，不把构建代替发布验收。
+
 F010 最终候选 **`GPTWork/release-win-x64-b2bb97c3929a/AbaqusTools`**（干净 `11ee6ff`）已通过用户账户 1654 文件/19 worker、包内依赖和正式主机启动/API/退出；所有本轮测试/构建已结束。回执见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。下段源码阶段“新包待验证”已由此回执补齐，真实 SSH/原生/持久恢复的缺口仍在。
 
 11 月 18 日本轮 F010 修复数据检查无输出误成功、完成文本提前终结，以及重复追加远端日志；区分 DAT/MSG 警告诊断与明确错误。最终远端/服务器/传输/关闭相关 **50 项通过**，`GPTWork/remote-confirm-final3-20261118.xml`，包括实际本机执行生产 PowerShell 启动/探测脚本，未连接 SSH 或调用求解。F005/F007 对已运行 GJA-13_V40D 的三个只读快照覆盖主进程和真实求解子进程，回执 `GPTWork/live-solver-memory-045301de9317/verification.json`；首轮扫描 13.43 秒冷启动延迟仍需关注。新 F010 完整包待验证，迁移远端恢复和真实场景仍有缺口，见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。

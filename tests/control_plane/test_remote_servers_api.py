@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 import json
+import ntpath
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,7 @@ class FakeRemoteManager:
         self.connected_name = ""
         self.refresh_count = 0
         self._profile = None
+        self.receipts = {}
 
     def connect(self, request: ServerConnectionRequest) -> dict[str, Any]:
         self.requests.append(request)
@@ -76,10 +80,16 @@ class FakeRemoteManager:
 
     def execute_powershell(self, script: str, *, timeout: float = 30) -> str:
         del timeout
+        match = re.search(r"FromBase64String\('([^']+)'\)", script)
+        config = json.loads(base64.b64decode(match[1])) if match else {}
         if "$base=Join-Path" in script:
-            return json.dumps({"work_directory": r"D:\Abaqus_Cal\case"})
+            return json.dumps({"work_directory": ntpath.join(config["compute_root"], config["job_name"] + "_" + config["operation_id"])})
         if "process_id=[int]$process.Id" in script:
-            return json.dumps({"process_id": 4321, "process_start_ticks": "1234"})
+            result = {"process_id": 4321, "process_start_ticks": "1234", "state": "started", "operation_id": config["operation_id"]}
+            self.receipts[config["work_directory"]] = result
+            return json.dumps(result)
+        if "$existing|ConvertTo-Json -Compress" in script:
+            return json.dumps(self.receipts.get(config["work_directory"], {"state": "unknown"}))
         if "process_active=$active" in script:
             return json.dumps(
                 {

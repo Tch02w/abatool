@@ -405,7 +405,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if target.path == "/api/v1/remote-jobs" and not target.query:
-                request = RemoteJobRequest.from_payload(self._read_json_object())
+                request = RemoteJobRequest.from_payload(self._read_json_object(), validate_local_files=False)
                 self._send_json(
                     HTTPStatus.ACCEPTED,
                     self.context.remote_job_manager.create(request),
@@ -700,7 +700,11 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             active_transfers = self.context.remote_transfer_manager.list_snapshots(
                 active_only=True
             )
-            if active_jobs or active_transfers:
+            same_server_reconnect = not active_jobs or (
+                request_payload.get("action") == "connect" and not active_transfers
+                and self.context.remote_job_manager.can_reconnect(request_payload)
+            )
+            if active_transfers or (active_jobs and not same_server_reconnect):
                 raise ApiProblem(
                     409,
                     "REMOTE_SESSION_BUSY",
@@ -1310,6 +1314,7 @@ class ControlPlaneRuntime:
         remote_job_manager = RemoteJobOperationManager(
             event_history,
             remote_server_service,
+            self.descriptor_path.with_name("remote-jobs.sqlite3"),
         )
         odb_result_graph_service = OdbResultGraphService(odb_result_graph_path)
         odb_result_batch_manager = OdbResultBatchManager(

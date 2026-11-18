@@ -22,6 +22,7 @@ from modules.submitter.remote_models import ServerProfileDraft
 
 from .contracts import SCHEMA_VERSION, ApiProblem
 from .events import EventStore
+from .remote_job_journal import server_identity
 
 SERVER_PROFILES_PATH = APP_DATA_DIR / "server_profiles.json"
 AUTHENTICATION_MODES = frozenset({"用户名/密码", "SSH Agent", "SSH 私钥"})
@@ -274,8 +275,10 @@ class RemoteServerService:
         overwrite: bool,
         progress: Callable[[int, int], None],
         cancel_requested: Callable[[], bool],
+        expected_profile: dict | None = None,
     ) -> dict[str, Any]:
         with self._lock:
+            self._verify_profile_locked(expected_profile)
             if direction == "upload":
                 return self._manager.upload_file(
                     source,
@@ -294,20 +297,48 @@ class RemoteServerService:
                 )
         raise ApiProblem(400, "INVALID_TRANSFER_DIRECTION", "文件传输方向无效")
 
-    def connected_profile(self) -> ServerProfileDraft:
+    def connected_profile(self, expected_profile: dict | None = None) -> ServerProfileDraft:
         with self._lock:
+            if self._connection_status != "connected":
+                raise RemoteConnectionError("连接不可用，请在计算资源中重新连接原服务器。")
+            self._verify_profile_locked(expected_profile)
             profile = self._manager.connected_profile
             if profile is None:
                 raise RemoteConnectionError("尚未连接服务器。")
             return profile
 
-    def execute_powershell(self, script: str, *, timeout: float = 30) -> str:
+    def execute_powershell(self, script: str, *, timeout: float = 30, expected_profile: dict | None = None) -> str:
         with self._lock:
-            return self._manager.execute_powershell(script, timeout=timeout)
+            self._verify_profile_locked(expected_profile)
+            try:
+                return self._manager.execute_powershell(script, timeout=timeout)
+            except RemoteConnectionError as exc:
+                self._connection_status = "error"
+                self._resource = None
+                self._last_error = str(exc)
+                raise
 
-    def validate_remote_path(self, remote_path: str) -> str:
+    def validate_remote_path(self, remote_path: str, expected_profile: dict | None = None) -> str:
         with self._lock:
+            self._verify_profile_locked(expected_profile)
             return self._manager.validate_remote_path(remote_path)
+
+    def _verify_profile_locked(self, expected):
+        if expected is not None and (self._connection_status != "connected" or self._manager.connected_profile is None
+                or server_identity(self._manager.connected_profile) != expected):
+            raise RemoteConnectionError("请重新连接本任务原服务器、指纹及计算目录；未向其他服务器发送命令。")
+
+    def requested_identity(self, payload):
+        with self._lock:
+            profile = (_profile_from_payload(payload["profile"]) if payload.get("profile") is not None
+                       else self._profiles.get(_text(payload, "profileName", required=True)))
+            if profile is None:
+                raise ApiProblem(404, "REMOTE_PROFILE_NOT_FOUND", "服务器配置不存在")
+            identity = server_identity(profile)
+            confirmed = normalize_fingerprint(_text(payload, "confirmFingerprint"))
+            if confirmed:
+                identity["fingerprint"] = confirmed
+            return identity
 
     def close(self) -> None:
         with self._lock:

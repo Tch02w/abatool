@@ -99,6 +99,7 @@ try
     ControlPlaneLaunchChecks.Run();
     WorkbenchSessionChecks.Run();
     MemoryPresentationChecks.Run();
+    RemoteRecoveryChecks.Run();
     Console.WriteLine("11 host process lifecycle checks passed.");
     return 0;
 }

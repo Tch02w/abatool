@@ -6,6 +6,22 @@
 
 ## 接续顺序
 
+### 2026-11-18 F008/F010 持久恢复与重连（源码验证通过，完整包验证中）
+
+改动前已说明方案：本地保存任务阶段，服务器保存提交回执；断线或后台重启只核对原任务，不重发启动。固定服务器地址、账户、指纹及工作目录范围，记录中不保存认证秘密。已实现 `remote_job_journal.py`、`remote_job_recovery.py`，接入远端服务/HTTP 和 WinUI 状态；离线取消持久保存，写入失败不启动新任务，损坏记录不伪装空历史。功能说明、索引、使用手册、README、接口说明、架构与 ADR 0012 已同步。
+
+当前验证：`GPTWork/remote-recovery-first-20261118.xml` 为 1 失败/31 通过，真实 PowerShell 发现 `File.Replace` 的 `$null` 备份参数绑定为空路径；已改 `[NullString]::Value`，失败目录保留，夹具 PID 217996 已检查结束。第二轮 `remote-recovery-second-20261118.xml` 32 项通过，52.78 秒。Release `remote-recovery-winui-20261118.log` 零警告/错误。扩展 `remote-recovery-broad-20261118.xml` 291 通过/1 失败，295.27 秒：`test_manager_commits_successful_worker_only_if_not_cancelled[True]` HTTP 连接被 Windows 中止；57716 已退出 1，未重复启动。下一步专项复核此失败、补未核对状态的控制禁用、真实本机 PowerShell 恢复夹具、同步文档并构建。未连接 SSH 或操作用户求解。
+
+本轮复核“读取目录”按钮：左侧是加载圆环；已有源码空闲 Collapsed、文本居中、加载圆环跟随按钮前景色，既有修正保留。GIF 两模式已实现，真实原生页面视觉和操作继续待验收。周额度本轮读取剩余 56%，未触发用户 15% 暂停条件。
+
+后续验证已经完成：
+
+- `.venv/Scripts/python.exe -m pytest tests/control_plane/test_remote_job_recovery.py tests/control_plane/test_remote_job_monitoring.py tests/control_plane/test_region_extraction_api.py -q --basetemp=GPTWork/pytest-remote-recovery-final --junitxml=GPTWork/remote-recovery-final-20261118.xml`：54 项通过，57.97 秒，91551 退出 0，包含扩展中失败的提取取消路径。未复现该 Windows 连接中止，不声称为它修改过产品代码。
+- `tests/control_plane/test_remote_recovery_process.py` 独立运行：1 项通过，15.83 秒，52078 退出 0。实际 PowerShell 启动独立 cmd/等待 helper，丢失启动响应后令测试后台直接退出；新后台通过原回执接回原进程，启动计数 1，最终稳定成功。证据 `GPTWork/pytest-remote-recovery-process/test_real_launcher_survives_ba0/verification.json`，两个后台 211336/209488、launcher 209732、helper 197880 已检查均不存在；未操作用户进程。属于本机传输替身下的实际脚本/进程验证，无 SSH/Abaqus。
+- 最后补充未核对状态控制禁用、损坏字段保护及路径规范化后，恢复/服务器/传输/关闭/文档专项 `remote-recovery-delivery-20261118.xml` **81 项通过，127.54 秒**（53536 退出 0，含 42 项文档）。Ruff 修改文件全部通过。新 C# 恢复显示 6 项及既有主机检查通过，日志 `remote-recovery-host-tests-20261118.log`。最终 Release `remote-recovery-winui-final-20261118.log` 0 警告/错误，13.56 秒，43049 退出 0。正式主机测试客户端输出 `GPTWork/remote-recovery-host-client`，已成功生成。
+
+准确续接点：代码与文档待本地提交后生成干净完整目录包，核对清单、包内诊断和正式主机；本轮测试/构建均已结束。实际 SSH、MPI、原生页面仍待验收，不自动替换旧窗口。GitHub push 仍等待先前自动审批所要求的具体远端确认，没有重试推送。
+
 ### 2026-11-18 F010 完成证据与日志增量（源码与完整包通过，远端恢复待完善）
 
 上一轮完成内存观测和冻结包，属于有效进展。本轮先只读观察既有 GJA-13_V40D：主进程 86340（创建时间 1794888177.9505272）及子进程 196820 被识别，三次快照均与独立 psutil 读取的进程树/创建时间一致，观测 RSS 与同一快照求和完全一致；最后 20514975744 字节。回执 `GPTWork/live-solver-memory-045301de9317/verification.json`，脚本 `GPTWork/audit_live_memory_20261118.py`，执行句柄 25063 已结束。扫描首轮 13.43 秒，后两轮 0.258/0.298 秒。未控制或终止用户作业，没有启动求解；这证明单个真实 Standard/SMP 子进程覆盖，不覆盖 MPI、并发资源准入或原生显示。

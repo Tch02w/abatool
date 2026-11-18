@@ -59,7 +59,7 @@ def test_remote_upload_job_runs_to_a_confirmed_terminal_state(tmp_path: Path) ->
 
         assert snapshot["status"] == "succeeded"
         assert snapshot["percent"] == 100
-        assert snapshot["workDirectory"] == r"D:\Abaqus_Cal\case"
+        assert snapshot["workDirectory"] == "D:\\Abaqus_Cal\\case_" + operation_id
         assert snapshot["files"]["odb"].endswith(r"\case.odb")
         assert any("COMPLETED SUCCESSFULLY" in line for line in snapshot["logs"])
 

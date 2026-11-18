@@ -115,6 +115,9 @@
                             </ComboBox>
                         </Grid>
                     </Grid>
+                    <Expander Header="GPU 与精度（可选）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                        <controls:ExecutionOptionsEditor x:Name="ExecutionOptionsPanel" />
+                    </Expander>
                 </StackPanel>
             </Border>
 

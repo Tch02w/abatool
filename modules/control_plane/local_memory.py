@@ -33,6 +33,9 @@ def memory_profile_key(item):
     if not files:
         return ""
     data = (files, item.cores, item.abaqus_command, item.run_mode, item.datacheck_only)
+    # Preserve old/default history keys; explicit overrides have separate profiles.
+    if item.gpu_count is not None or item.explicit_precision != "default" or item.output_precision != "default":
+        data += (item.gpu_count, item.explicit_precision, item.output_precision)
     return hashlib.sha256(json.dumps(data, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 

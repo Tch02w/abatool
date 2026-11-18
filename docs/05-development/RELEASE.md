@@ -70,3 +70,5 @@
 前一阶段完整目录为 `GPTWork/release-win-x64-b53b0f4ca2b4/AbaqusTools`，来源干净提交 `aa0420f`，新增九类受管工作及线程收尾的退出保护，保留 GIF 两种播放模式和读取目录按钮修正。用户账户核对 1648 文件/19 worker，正式主机启动、资源/队列 API、安全退出与包内依赖检查通过。冻结任务检查使用隔离等待命令，证明运行中与停止调度后的收尾均阻止后台退出，结束后退出预留拒绝新任务；没有运行 Abaqus 或真实 SSH。准确回执与两次验收脚本失败记录见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 新包尚未完成原生业务页和无开发环境目标机器验收；没有覆盖仍打开的旧程序，也没有发布新 ZIP、安装程序或二进制 Release。GitHub 源码推送仍等待具体远端确认。
+
+F028 提交参数的冻结验证：正式 C# 主机 `--launch-bundle <完整目录> <GPTWork隔离数据> --execution-options`，在包内后台执行预览、入队、旧式编辑保留和明确撤销参数，再核对正常退出；只保存微小 INP 夹具，不启动求解。实际本机/远端 Windows 参数回显由 `tests/control_plane/test_execution_options.py` 单独验证。

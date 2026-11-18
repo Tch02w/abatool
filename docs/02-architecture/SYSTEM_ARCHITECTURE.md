@@ -18,6 +18,8 @@
 
 作业提醒：本机/远端终态回调 → `JobNotificationManager` → 独立 SQLite → 全局 WinUI 提醒区。执行身份去重，已读必须保存确认；待保存提醒参与联合退出检查。旧作业历史补查不持有提醒锁，避免与完成回调形成反向锁顺序。原生仅负责显示和确认，不能自行推断作业成功。见 [提醒说明](../03-features/JOB_NOTIFICATIONS.md) 与 [ADR 0013](../submitter/adr/0013-durable-job-notifications.md)。
 
+F028 提交参数由 Qt-free `execution_options.py` 统一校验和生成；WinUI 共用编辑区与契约传递 GPU/计算精度/输出精度，本机与远端使用相同枚举及默认语义。参数进入持久记录、请求幂等身份和内存历史键，原默认键不变。它尚不是 GPU 资源分配器。详见 [提交选项](../03-features/EXECUTION_OPTIONS.md)。
+
 ## 后处理数据流
 
 远端作业：`RemoteJobOperationManager → RemoteJobJournal / RemoteJobRecovery → RemoteServerService → Windows PowerShell`。启动 intent 本地持久化，服务器独占提交回执约束单次启动；恢复仅观察原身份，凭据不入任务记录。连接锁同时保护身份核对和命令执行。实现、未确认窗口和测试边界见 [远端说明](../03-features/REMOTE_JOBS.md) 与 [ADR 0012](../submitter/adr/0012-durable-remote-tracking.md)。

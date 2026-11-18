@@ -7,6 +7,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 以下是功能范围，不代表全部迁移验收已经完成。当前后处理可运行核心与剩余缺口见 [交接状态](docs/08-handoff/CURRENT_STATUS.md)；后续开发先从 [功能定位索引](docs/03-features/FUNCTION_INDEX.md) 找到代码与测试。
 
 - 新建本机或远程作业，校验路径和资源参数并预览实际 Abaqus 命令。
+- WinUI 新建作业和队列编辑可配置 GPU、Explicit 计算精度及 ODB 场输出精度；默认沿用环境，预览/本机/远端共用校验和参数，持久恢复保留选择。没有 GPU 独占分配，真实加速与原生操作仍待验收。见 [选项说明](docs/03-features/EXECUTION_OPTIONS.md)。
 - 扫描候选 INP、管理正式队列，按优先级、CPU/绝对内存及依赖分配本机作业；后台重启保留身份并核对，未知状态不重复提交；[调度和恢复边界](docs/03-features/LOCAL_SCHEDULING.md)。
 - 观测本机作业的进程内存，区分当前占用、峰值和估计；结合历史及安全余量分配资源，多作业共享扫描。[内存口径与限制](docs/03-features/MEMORY_MONITORING.md)。
 - 查看作业日志与 STA/MSG/DAT，管理本机和远端计算资源及文件传输。

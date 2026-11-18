@@ -6,6 +6,26 @@
 
 ## 接续顺序
 
+### 2026-11-18 F028 GPU 与精度（源码通过，最终构建与完整包待验）
+
+上一轮为实质进展：F027 与 F023 已本地提交并完成完整包/真实 helper 验证。本轮对照合同补齐 GPU/精度输入；修改前向用户说明共用编辑区、默认不覆盖环境、共享预览/执行校验及持久恢复方案。依据 Abaqus 2025 执行文档，区分 GPU、Explicit 计算精度和 ODB 场输出精度，不将其合并成模糊“高精度”开关。
+
+已写入共享模型/命令、控制面草稿/队列、远端启动/恢复/幂等签名、独立内存历史条件和 WinUI 共用编辑区；新建作业草稿保留原始输入，坏草稿必须明确恢复默认。队列设置可撤销覆盖，旧客户端省略字段不清除新值。显式双精度+单个目标文件在副本/备份前拒绝。范围与未实现 GPU 独占分配见 [F028](../../03-features/EXECUTION_OPTIONS.md)。
+
+实际验证（集合重叠，不累计）：
+
+- 初轮既有相关测试 **35 项通过，112.14 秒**，`GPTWork/execution-options-first-20261118.xml/log`（4280 已退出 0）。
+- 首次 WinUI 构建因新编辑区 Grid.SetColumn 参数用 UIElement 而非 FrameworkElement 失败，`GPTWork/execution-options-winui-first-20261118.log`，51904 已退出 1；改正后 Release **0 警告/0 错误，15.38 秒**，`GPTWork/execution-options-winui-final-20261118.log`（2119 退出 0）。随后添加了坏草稿保留与明确重置，需再构建。
+- 新专项 **17 项通过，14.35 秒**，`GPTWork/execution-options-new-20261118.xml/log`（52292 退出 0），含实际 Windows cmd/生产 PowerShell 参数传递；使用退出夹具，没有启动求解。
+- C# 新增 **11 项**契约/草稿及已有主机检查通过，`GPTWork/execution-options-host-tests-20261118.log`；客户端输出 `GPTWork/execution-options-host-client`。
+- 最后扩展 **138 项通过，178.86 秒**，`GPTWork/execution-options-final-20261118.xml/log`（80626 已退出 0），临时目录 `GPTWork/pytest-execution-options-final`。覆盖本轮 19 项、正式 C# HTTP 预览/入队/保留/撤销、内存键、调度、远端完成/恢复、队列、执行器和界面绑定。实际 Windows 本机/远端命令仅执行参数回显并退出，已核对自有进程退出；未调用求解或真实 SSH。
+
+最后补充版本能力 `job.execution-options-v1`：新客户端只向支持的同一后台发送该组预览/提交/编辑参数；旧后台保留运行，新请求返回明确升级提示，不尝试自动替换或关闭。旧后台无 POST 副作用及正式客户端正向检查、文档导航 **46 项通过，4.01 秒**，`GPTWork/execution-options-capability-20261118.xml/log`（含文档 44 项）。此前末次原始字段草稿/API/文档集合 45 项通过，`GPTWork/execution-options-delivery-20261118.xml/log`。坏草稿补丁 Release 零警告/错误，14.60 秒，`GPTWork/execution-options-winui-delivery-20261118.log`；能力检查后的构建原句柄 63945。所有修改 Python 文件 Ruff 和 diff 空白检查通过。
+
+最后能力检查后的 Release **0 警告/0 错误，13.03 秒**，`GPTWork/execution-options-winui-capability-20261118.log`（63945 退出 0）。当前正式主机测试客户端输出 `GPTWork/execution-options-host-final`，构建及全部契约/生命周期检查通过，日志 `GPTWork/execution-options-host-final-20261118.log`；包验证分支新增 `--execution-options`。最终文档导航 **44 项通过，0.15 秒**，`GPTWork/execution-options-docs-final-20261118.log`。全部自有测试和构建结束，最新周额度 **51%**。下一步是本地提交和完整包，不重复已通过测试。
+
+准确续接点：上述全部测试句柄已结束。本轮尚未提交和构建完整包；先检查最后能力门禁的 Release、文档导航及代码审阅，再本地提交、干净来源打包，核对文件/依赖和正式客户端的包内提交参数。不要重复已通过的长测试。原生操作恢复未获答复，仍不操作旧窗口；真实 GPU/精度求解及 GPU 资源调度不能由这些测试证明。GitHub push 原自动审批拒绝未解除。周额度本轮开始 52%，未达暂停条件。
+
 ### 2026-11-18 F027 作业结束提醒与 F023 成功响应修正（源码与完整包通过，原生待验收）
 
 对照迁移合同发现 F003 的“结束提醒”保存到 QueueItem，但原生界面/控制面没有消费；旧 Qt 的 `notify_job_finished` 为每个作业打开消息框。改动前已说明新方案：后台确认终态后持久保存、按执行身份去重、跨页集中查看，使用非阻塞提醒，点击定位对应执行。用户此前 Esc 停止 UI 操作，本轮已询问是否可以恢复原生验收，尚未得到答复；先继续代码/后台验证。

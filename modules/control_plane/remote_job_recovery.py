@@ -14,7 +14,7 @@ from .compatibility import FAILED, RUNNING, TERMINAL_STATUSES
 from .contracts import ApiProblem
 from .remote_job_journal import RemoteJobJournal
 
-REQUEST_NAMES = {"client_request_id": "clientRequestId", "job_name": "jobName", "input_mode": "inputMode",
+REQUEST_NAMES = {"gpu_count": "gpuCount", "explicit_precision": "explicitPrecision", "output_precision": "outputPrecision", "client_request_id": "clientRequestId", "job_name": "jobName", "input_mode": "inputMode",
                  "input_path": "inputPath", "oldjob_path": "oldjobPath", "fortran_path": "fortranPath",
                  "cpus": "cpus", "memory": "memory", "datacheck": "datacheck", "notify": "notify"}
 

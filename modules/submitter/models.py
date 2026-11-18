@@ -26,6 +26,9 @@ class QueueItem:
     fortran_path: str = ""
     cores: int = 0
     memory: str = ""
+    gpu_count: int | None = None
+    explicit_precision: str = "default"
+    output_precision: str = "default"
     interactive: bool = False
     datacheck_only: bool = False
     complete_notify: bool = False

@@ -402,7 +402,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         bool useSsdCalculation,
         string calculationRootDir,
         string archiveDir,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ExecutionOptionsValues? executionOptions = null)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -418,6 +419,9 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 InpFile = inpFile.Trim(),
                 JobName = jobName.Trim(),
                 Cpus = cpus,
+                GpuCount = executionOptions?.GpuCount,
+                ExplicitPrecision = executionOptions?.ExplicitPrecision ?? "default",
+                OutputPrecision = executionOptions?.OutputPrecision ?? "default",
                 MemoryValue = memoryValue.Trim(),
                 MemoryUnit = memoryUnit.Trim(),
                 OldjobPath = oldjobPath.Trim(),
@@ -1382,7 +1386,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         int priority,
         string oldjobPath,
         string fortranPath,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        ExecutionOptionsValues? executionOptions = null) =>
         ExecuteJobQueueCommandAsync(
             new JobQueueCommandRequest
             {
@@ -1390,6 +1395,9 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 ItemId = itemId.Trim(),
                 JobName = jobName.Trim(),
                 Cores = cores,
+                GpuCount = executionOptions is null ? null : JsonSerializer.SerializeToElement(executionOptions.GpuCount),
+                ExplicitPrecision = executionOptions?.ExplicitPrecision,
+                OutputPrecision = executionOptions?.OutputPrecision,
                 Memory = memory.Trim(),
                 Priority = priority,
                 OldjobPath = oldjobPath.Trim(),
@@ -1468,7 +1476,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         bool useSsdCalculation,
         string calculationRootDir,
         string archiveDir,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        ExecutionOptionsValues? executionOptions = null) =>
         ExecuteJobQueueCommandAsync(
             new JobQueueCommandRequest
             {
@@ -1478,6 +1487,9 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                     InpFile = inpFile.Trim(),
                     JobName = jobName.Trim(),
                     Cpus = cpus,
+                    GpuCount = executionOptions?.GpuCount,
+                    ExplicitPrecision = executionOptions?.ExplicitPrecision ?? "default",
+                    OutputPrecision = executionOptions?.OutputPrecision ?? "default",
                     MemoryValue = memoryValue.Trim(),
                     MemoryUnit = memoryUnit.Trim(),
                     OldjobPath = oldjobPath.Trim(),
@@ -2023,6 +2035,17 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string responseLabel,
         CancellationToken cancellationToken)
     {
+        if (requestBody is LocalJobDraftPreviewRequest or RemoteJobRequest
+            || requestBody is JobQueueCommandRequest command && (command.Draft is not null
+                || command.GpuCount.HasValue || command.ExplicitPrecision is not null || command.OutputPrecision is not null))
+        {
+            var health = await SendJsonRequestAsync<HealthResponse>(descriptor, HttpMethod.Get, "/healthz", null,
+                "提交参数能力", cancellationToken);
+            if (health.SchemaVersion != 1 || health.InstanceId != descriptor.InstanceId
+                || health.Capabilities?.Contains("job.execution-options-v1", StringComparer.Ordinal) != true)
+                throw new ControlPlaneException("当前连接的后台版本不支持这组提交参数。请先让现有作业安全结束并正常关闭旧后台，再启动新版；没有提交或更改作业。",
+                    code: "EXECUTION_OPTIONS_UNSUPPORTED");
+        }
         using var request = new HttpRequestMessage(method, BuildEndpoint(descriptor, relativePath));
         if (requestBody is not null)
         {

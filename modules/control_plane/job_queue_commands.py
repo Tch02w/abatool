@@ -34,6 +34,10 @@ from modules.submitter.constants import (
     TERMINAL_STATUSES,
 )
 from modules.submitter.cpu_policy import validate_local_cpus
+from modules.submitter.execution_options import (
+    parse_execution_options,
+    validate_execution_options,
+)
 from modules.submitter.external_job_scan_core import (
     collect_known_external_jobs,
     merge_external_scan_results,
@@ -545,7 +549,7 @@ class JobQueueService:
         allowed = {
             "itemId",
             "jobName",
-            "cores",
+            "cores", "gpuCount", "explicitPrecision", "outputPrecision",
             "memory",
             "priority",
             "oldjobPath",
@@ -664,7 +668,7 @@ class JobQueueService:
         allowed = {
             "itemId",
             "jobName",
-            "cores",
+            "cores", "gpuCount", "explicitPrecision", "outputPrecision",
             "memory",
             "priority",
             "oldjobPath",
@@ -812,6 +816,13 @@ class JobQueueService:
             raise ApiProblem(409, "QUEUE_ITEM_NOT_EDITABLE", "当前状态不允许编辑该作业")
 
     def _apply_edits(self, item: QueueItem, payload: Mapping[str, Any]) -> None:
+        try:
+            execution = parse_execution_options({"gpuCount": item.gpu_count,
+                "explicitPrecision": item.explicit_precision, "outputPrecision": item.output_precision, **payload})
+        except ValueError as exc:
+            raise ApiProblem(400, "INVALID_EXECUTION_OPTIONS", str(exc)) from exc
+        item.gpu_count, item.explicit_precision, item.output_precision = (
+            execution.gpu_count, execution.explicit_precision, execution.output_precision)
         if "jobName" in payload:
             item.job_name = _text(payload, "jobName")
         if "cores" in payload:
@@ -869,6 +880,7 @@ class JobQueueService:
             return
         try:
             validate_local_cpus(item.cores, item.abaqus_command)
+            validate_execution_options(item)
         except ValueError as exc:
             item.valid = False
             item.message = str(exc)

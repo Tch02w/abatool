@@ -80,6 +80,10 @@ public sealed class JobQueueItem
     [JsonPropertyName("fortranPath")]
     public string FortranPath { get; init; } = string.Empty;
 
+    [JsonPropertyName("gpuCount")] public int? GpuCount { get; init; }
+    [JsonPropertyName("explicitPrecision")] public string ExplicitPrecision { get; init; } = "default";
+    [JsonPropertyName("outputPrecision")] public string OutputPrecision { get; init; } = "default";
+
     [JsonPropertyName("cores")]
     public int Cores { get; init; }
 
@@ -244,6 +248,13 @@ internal sealed class JobQueueCommandRequest
     [JsonPropertyName("cores")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Cores { get; init; }
+
+    [JsonPropertyName("gpuCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? GpuCount { get; init; }
+    [JsonPropertyName("explicitPrecision"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExplicitPrecision { get; init; }
+    [JsonPropertyName("outputPrecision"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OutputPrecision { get; init; }
 
     [JsonPropertyName("memory")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -38,7 +38,7 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 
 ## 数字步进与参数说明（F025）
 
-用户最终选择右侧并排的下/上折线箭头、数字居中。16 处输入统一使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
+用户最终选择右侧并排的下/上折线箭头、数字居中。原有 16 处输入及 GPU 编辑区两个入口统一使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
 
 | 文件 | 控件 | 修复前模式 |
 |---|---|---|
@@ -54,7 +54,7 @@ NumberBox 继续负责解析、验证、步进、自动化和上下限，保留 
 
 `tests/winui/test_shell_contract.py` 已移除旧 Hidden/Compact 契约。`tests/winui_numberbox/NumberBox.Tests.csproj` 在自身离屏 WinUI 窗口加载实际生产控件，检查原生步进、未提交文字、动态 CPU 限制、0/−1、空值、分数面积和 0.0001 小数；实际检查数和最新外观验证见任务记录。图例范围、内存和切面表达式仍是 TextBox，不自动改为普通步进数值。
 
-`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs` 在参数标签旁提供 14 DIP 问号，保留最小 28 DIP 悬停/点击区域。`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs` 为 16 处数字输入提供 13 类说明。悬停 180 ms 打开；停留在按钮或整个提示区（含内边距）时保持；离开两者 240 ms 后关闭，避免跨越间隙时闪退。不显示“知道了”按钮。点击和 Enter 仍可打开，Escape 可关闭；键盘打开时不因鼠标不在附近而立即消失。提示正文可选取；无重复原生 ToolTip。卸载页面清理计时器，修改说明时重置旧弹层状态，自动关闭动画中重新进入可恢复，显式 Escape 不自动重开。
+`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs` 在参数标签旁提供 14 DIP 问号，保留最小 28 DIP 悬停/点击区域。`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs` 原有数字输入提供 13 类说明，新增 GPU/计算精度/场输出精度三类说明。悬停 180 ms 打开；停留在按钮或整个提示区（含内边距）时保持；离开两者 240 ms 后关闭，避免跨越间隙时闪退。不显示“知道了”按钮。点击和 Enter 仍可打开，Escape 可关闭；键盘打开时不因鼠标不在附近而立即消失。提示正文可选取；无重复原生 ToolTip。卸载页面清理计时器，修改说明时重置旧弹层状态，自动关闭动画中重新进入可恢复，显式 Escape 不自动重开。
 
 参数语义与当前源码保持一致：CPU=0 是不传 cpus 参数（Abaqus 默认值），不是全部 CPU；预期纵筋数只作核对；纵筋切面容差判断穿越/端点归属，不是切片厚度或实体积分精度；参考面积留空按单元读 ODB，手动填值覆盖选中桁架面积；钢筋直径只在缺少面积时回退；断裂前帧手动值为跨分析步拼接的总序号；毫米图片尺寸不保证固定印刷 DPI；队列优先级标记不等于当前本机调度自动按数值排序。
 
@@ -75,3 +75,7 @@ NumberBox 继续负责解析、验证、步进、自动化和上下限，保留 
 `winui/AbaqusTools.WinUI/MainWindow.xaml.cs` 使用 GetDpiForWindow/96 转物理像素，加入正常态 Size−ClientSize 测得的非客户区尺寸，向上取整后逐维限制到当前显示器 WorkArea。通过 OverlappedPresenter.PreferredMinimumWidth/Height 约束，不替换 presenter，不禁止缩放/最大化/最小化；启动或恢复态小于下限时扩大，跨显示器/缩放变化时重算，关闭时解除事件。标题栏物理 Insets 同步转 DIP。小屏高 DPI 下优先保证窗口不会大于工作区，此时宽表/固定页面是否仍需滚动另作原生验收。
 
 `tests/winui_layout/WindowLayout.Tests.csproj` 直接测试生产尺寸计算，覆盖 100%/125%/150%/200% 缩放、独立工作区裁剪、启动钳制、有效尺寸保持、输入校验与源码布局约束。构建或独立检查不代替跨显示器拖动、窗口恢复和实际业务页视觉验收。
+
+## GPU 与精度编辑区（F028）
+
+新建作业与正式队列编辑共用 `winui/AbaqusTools.WinUI/Controls/ExecutionOptionsEditor.cs`，位于可展开区域。标签、问号与右侧输入按固定标签列对齐；GPU 采用相同 WorkbenchNumberBox 模板。队列长表单增加滚动容器，保存前校验失败保留对话框及当前输入。新建作业的原始数字文本与选项由 WorkbenchSession 登记保存；无效自定义草稿保留原字符串，只有明确恢复默认后才允许替换。语义和实际证据见 [提交选项说明](EXECUTION_OPTIONS.md)，原有 35 项控件自身原生证据不覆盖新增业务编辑区。

@@ -14,6 +14,7 @@ from modules.submitter.command import (
     validate_options,
 )
 from modules.submitter.cpu_policy import validate_local_cpus
+from modules.submitter.execution_options import parse_execution_options
 from modules.submitter.job_draft import LocalJobDraft
 
 from .contracts import SCHEMA_VERSION, ApiProblem
@@ -22,7 +23,7 @@ _FIELDS = {
     "schemaVersion",
     "inpFile",
     "jobName",
-    "cpus",
+    "cpus", "gpuCount", "explicitPrecision", "outputPrecision",
     "memoryValue",
     "memoryUnit",
     "oldjobPath",
@@ -100,6 +101,10 @@ class LocalJobDraftPreviewRequest:
                 )
             return value
 
+        try:
+            execution = parse_execution_options(payload)
+        except ValueError as exc:
+            raise ApiProblem(400, "INVALID_EXECUTION_OPTIONS", str(exc)) from exc
         cpus = integer("cpus", 0)
         try:
             validate_local_cpus(cpus, text("abaqusCommand", "abaqus"))
@@ -132,6 +137,9 @@ class LocalJobDraftPreviewRequest:
                 inp_file=text("inpFile"),
                 job_name=text("jobName"),
                 cpus=cpus,
+                gpu_count=execution.gpu_count,
+                explicit_precision=execution.explicit_precision,
+                output_precision=execution.output_precision,
                 memory_value=text("memoryValue"),
                 memory_unit=memory_unit,
                 oldjob_path=text("oldjobPath"),

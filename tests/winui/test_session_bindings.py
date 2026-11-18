@@ -23,7 +23,7 @@ def test_all_eight_page_draft_bindings_resolve_to_supported_inputs():
         for field in re.findall(r'"([^"]+)"', fields):
             assert field in controls, (route, field)
             assert controls[field].tag.rsplit("}", 1)[-1] in {
-                "TextBox", "NumberBox", "WorkbenchNumberBox", "ComboBox", "CheckBox"}, (route, field)
+                "TextBox", "NumberBox", "WorkbenchNumberBox", "ComboBox", "CheckBox", "ExecutionOptionsEditor"}, (route, field)
             assert not re.search(r"password|token|credential", field, re.IGNORECASE)
             count += 1
     assert routes == {"new-job", "job-queue", "job-overview", "compute-resources", "restart-chain",

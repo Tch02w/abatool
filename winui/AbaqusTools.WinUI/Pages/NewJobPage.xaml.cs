@@ -25,7 +25,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
             ["JobNameTextBox", "InputPathTextBox", "OldjobPathTextBox", "FortranPathTextBox",
              "ExecutionLocationComboBox", "UseSsdCheckBox", "CalculationRootTextBox", "ArchiveRootTextBox",
              "AbaqusCommandTextBox", "MemoryValueTextBox", "MemoryUnitComboBox", "CpuNumberBox",
-             "PriorityComboBox", "InteractiveCheckBox", "DatacheckCheckBox", "NotifyCheckBox", "MaxParallelNumberBox"],
+             "ExecutionOptionsPanel", "PriorityComboBox", "InteractiveCheckBox", "DatacheckCheckBox", "NotifyCheckBox", "MaxParallelNumberBox"],
             () => WorkbenchSession.WaitForIdleAsync(() => _previewBusy || _submitBusy, "作业提交或检查"));
         Loaded += OnPageLoaded;
     }
@@ -254,7 +254,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
                 NumberValue(MaxParallelNumberBox, 1),
                 UseSsdCheckBox.IsChecked is true,
                 CalculationRootTextBox.Text,
-                ArchiveRootTextBox.Text);
+                ArchiveRootTextBox.Text, executionOptions: ExecutionOptionsPanel.ReadValue());
             if (!string.IsNullOrWhiteSpace(preview.EffectiveJobName)
                 && string.IsNullOrWhiteSpace(JobNameTextBox.Text))
             {
@@ -336,7 +336,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
                 NumberValue(MaxParallelNumberBox, 1),
                 UseSsdCheckBox.IsChecked is true,
                 CalculationRootTextBox.Text,
-                ArchiveRootTextBox.Text);
+                ArchiveRootTextBox.Text, executionOptions: ExecutionOptionsPanel.ReadValue());
             DraftInfoBar.Title = "已加入正式队列";
             DraftInfoBar.Message = result.Message;
             DraftInfoBar.Severity = InfoBarSeverity.Success;
@@ -436,6 +436,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         var memory = string.IsNullOrWhiteSpace(memoryValue)
             ? string.Empty
             : memoryValue + ComboText(MemoryUnitComboBox, "%");
+        var execution = ExecutionOptionsPanel.ReadValue();
         return new RemoteJobRequest
         {
             ClientRequestId = Guid.NewGuid().ToString("N"),
@@ -445,6 +446,9 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
             OldjobPath = OldjobPathTextBox.Text.Trim(),
             FortranPath = FortranPathTextBox.Text.Trim(),
             Cpus = NumberValue(CpuNumberBox, 0),
+            GpuCount = execution.GpuCount,
+            ExplicitPrecision = execution.ExplicitPrecision,
+            OutputPrecision = execution.OutputPrecision,
             Memory = memory,
             Datacheck = DatacheckCheckBox.IsChecked is true,
             Notify = NotifyCheckBox.IsChecked is true,

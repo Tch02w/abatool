@@ -22,11 +22,12 @@
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
 | 本机优先级、资源准入、后台重启与未知状态 | [本机调度说明](03-features/LOCAL_SCHEDULING.md) |
 | 作业内存占用、估计来源及采样失败 | [内存观测说明](03-features/MEMORY_MONITORING.md) |
+| GPU、Explicit 计算精度和 ODB 场输出精度 | [提交选项说明](03-features/EXECUTION_OPTIONS.md) |
 | 作业结束提醒、未读恢复与批量已读 | [作业提醒说明](03-features/JOB_NOTIFICATIONS.md) |
 | 远端完成确认、数据检查和日志去重 | [远端作业说明](03-features/REMOTE_JOBS.md) |
 | 完整结果批量执行、共享祖先与重启继续 | [批量结果说明](03-features/ODB_RESULT_BATCH.md) |
 | ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |
-| 日志选择刷新、16 处数字输入及参数说明（F005/F025） | [界面交互说明](03-features/UI_INTERACTION.md) |
+| 日志选择刷新、数字输入及参数说明（F005/F025/F028） | [界面交互说明](03-features/UI_INTERACTION.md) |
 | 开发/测试/文件整理约定 | [维护工作流](05-development/WORKFLOW.md) |
 | Windows 完整目录包、运行诊断和发布限制 | [发布构建](05-development/RELEASE.md) |
 | 哪些验收已通过，证据证明什么 | [验收记录与缺口](06-testing/VALIDATION.md) |

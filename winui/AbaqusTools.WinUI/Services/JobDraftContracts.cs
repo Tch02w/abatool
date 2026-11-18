@@ -13,6 +13,10 @@ internal sealed class LocalJobDraftPreviewRequest
     [JsonPropertyName("jobName")]
     public string JobName { get; init; } = string.Empty;
 
+    [JsonPropertyName("gpuCount")] public int? GpuCount { get; init; }
+    [JsonPropertyName("explicitPrecision")] public string ExplicitPrecision { get; init; } = "default";
+    [JsonPropertyName("outputPrecision")] public string OutputPrecision { get; init; } = "default";
+
     [JsonPropertyName("cpus")]
     public int Cpus { get; init; }
 

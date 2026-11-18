@@ -4,6 +4,12 @@
 
 ## 启动与就绪
 
+### GPU 与精度补充（2026-11-18，F028）
+
+本机草稿/入队 draft、远端预览/创建增加可选 `gpuCount`（null 或 0–1024 整数）、`explicitPrecision`（default/off/explicit/both/constraint）、`outputPrecision`（default/single/full）。缺省均沿用环境，GPU=0 明确关闭；拒绝布尔、小数 GPU 及未知/null 精度。错误 400 `INVALID_EXECUTION_OPTIONS`。Explicit 双精度配单个用户子程序 .obj/.o 同样在启动前拒绝。
+
+队列更新省略字段保持原值；gpuCount:null 和精度 default 撤销覆盖。队列投影与远端 request 快照公开三字段；远端恢复缺字段的旧记录取默认。同请求 ID 改变任一选项为请求冲突。三项进入非默认内存历史键，但不构成 GPU 独占调度；详见 [F028](03-features/EXECUTION_OPTIONS.md)。
+
 ### 作业结束提醒补充（2026-11-18，F027）
 
 健康能力 `job.notifications-v1`。`GET /api/v1/job-notifications` 返回 `schemaVersion=1`、`unreadCount`、最多 50 条未读 `items`、可空的 `persistenceWarning`；每条含 `id/source/executionId/jobId/jobName/status/message/workDirectory/observedAt/read`，按记录时间倒序。`observedAt` 是记录/恢复观察时间。`status` 仅为 succeeded/failed/cancelled；未知、断线和活动状态不作为结束。
@@ -349,3 +355,5 @@ data: {"schemaVersion":1,"sequence":2,"eventId":"...","occurredAt":"...","aggreg
 ```
 
 检查范围为批量结果、单步合并、升级、本机队列/作业、后处理、兼容性、索引、远端传输和远端作业，以及尚未保存的结束提醒（已保存未读不阻止退出）。任何管理器活动、线程未收尾或持久记录不可确认时拒绝整体预留；返回非空 `operations` 或 `safeToStop:false`，其他管理器仍可使用。运行状态未知时可能直接返回错误，新客户端同样保留后台。新客户端必须校验 `scope`，不能将旧版只覆盖 ODB 的成功响应视为允许结束整个后台。健康能力为 `controlPlane.shutdown.all-workers-v1`。关闭交互、同步命令协调与完整 Prepare/Commit/Abort 不在本接口完成范围，见 [ADR 0008](submitter/adr/0008-all-worker-shutdown-fence.md)。
+
+后台能力为 `job.execution-options-v1`。正式客户端在发送这组参数前核对同一后台实例的能力；连接旧后台时明确提示安全退出旧后台后更新，不发送预览/提交/编辑 POST，不自动停止原作业或替换其后台。

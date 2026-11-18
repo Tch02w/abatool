@@ -616,7 +616,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "job.notifications-v1", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "job.execution-options-v1", "job.notifications-v1", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,

@@ -5,6 +5,9 @@ internal static class ParameterHelpText
 {
     public static string ForTopic(string topic) => topic switch
     {
+        "gpu-count" => "未勾选指定时沿用 Abaqus 环境配置；勾选后 0 关闭 GPU，正整数指定加速器数量。仅用于支持的 Abaqus/Standard 求解器和硬件。MPI 下为跨主机总数。\n\n此处不会检测兼容性或自动分配独占 GPU；多个作业可能共用设备。",
+        "explicit-precision" => "仅控制 Abaqus/Explicit 的计算精度，不改变 Standard 求解精度。默认不覆盖环境配置。分析双精度只影响分析；预处理和分析双精度同时影响两者；仅约束双精度只影响约束相关计算。\n\n双精度可能增加计算时间和内存，不能补救模型或网格误差。",
+        "output-precision" => "控制写入 ODB 的场输出精度，和求解计算精度不同。Standard 全精度适用于节点和单元场输出；Explicit 双精度节点输出还需匹配计算精度设置，单元场输出不支持双精度。历史输出仍为单精度。\n\n全精度可能增大 ODB；默认沿用环境配置。",
         "cpu" => "单个求解作业使用的 CPU 数。0 表示不传 cpus 参数，由 Abaqus 使用自身默认配置，不代表使用全部 CPU。\n\n本机上限随 Abaqus 版本变化；与同时运行几个作业是两个设置。",
         "queue-parallel" => "允许同时运行的本机队列作业数。每个作业仍使用各自的 CPU 和内存设置；需要同时运行多个作业且机器资源足够时再增大。",
         "postprocess-parallel" => "同时处理 ODB 的工作数上限，用于并行读取结构和提取结果，上限为本机逻辑线程数。\n\n它不是单个求解作业的 CPU 数；每项工作另占内存，内存不足时应减少。",

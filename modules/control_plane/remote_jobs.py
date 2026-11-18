@@ -15,6 +15,10 @@ from typing import Any
 from uuid import uuid4
 
 from modules.submitter.command import validate_job_name, validate_memory_argument
+from modules.submitter.execution_options import (
+    execution_arguments,
+    parse_execution_options,
+)
 from modules.submitter.local_job_execution import RESTART_DEPENDENCY_EXTENSIONS
 from modules.submitter.remote_connection import (
     RemoteConnectionError,
@@ -75,6 +79,7 @@ def preview_remote_job(
         arguments.append(f"cpus={request.cpus}")
     if request.memory:
         arguments.append(f"memory={request.memory}")
+    arguments.extend(execution_arguments(request))
     if request.oldjob_path:
         oldjob_name = (
             Path(request.oldjob_path).stem
@@ -132,6 +137,9 @@ class RemoteJobRequest:
     memory: str
     datacheck: bool
     notify: bool = True
+    gpu_count: int | None = None
+    explicit_precision: str = "default"
+    output_precision: str = "default"
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any], *, validate_local_files=True) -> RemoteJobRequest:
@@ -146,7 +154,7 @@ class RemoteJobRequest:
             "cpus",
             "memory",
             "datacheck",
-            "notify",
+            "notify", "gpuCount", "explicitPrecision", "outputPrecision",
         }
         unknown = sorted(set(payload) - allowed)
         missing = sorted(
@@ -191,6 +199,10 @@ class RemoteJobRequest:
         input_mode = _text(payload, "inputMode", required=True)
         if input_mode not in REMOTE_INPUT_MODES:
             raise ApiProblem(400, "INVALID_REMOTE_INPUT_MODE", "远端输入模式无效")
+        try:
+            execution = parse_execution_options(payload)
+        except ValueError as exc:
+            raise ApiProblem(400, "INVALID_EXECUTION_OPTIONS", str(exc)) from exc
         cpus = payload.get("cpus")
         if isinstance(cpus, bool) or not isinstance(cpus, int) or not 0 <= cpus <= 1024:
             raise ApiProblem(400, "INVALID_REMOTE_JOB_CPUS", "CPU 数必须在 0–1024 之间")
@@ -206,6 +218,9 @@ class RemoteJobRequest:
             oldjob_path=_text(payload, "oldjobPath"),
             fortran_path=_text(payload, "fortranPath"),
             cpus=cpus,
+            gpu_count=execution.gpu_count,
+            explicit_precision=execution.explicit_precision,
+            output_precision=execution.output_precision,
             memory=memory,
             datacheck=_flag(payload, "datacheck"),
             notify=_flag(payload, "notify", True),
@@ -235,7 +250,7 @@ class RemoteJobRequest:
             self.cpus,
             self.memory,
             self.datacheck,
-            self.notify,
+            self.notify, self.gpu_count, self.explicit_precision, self.output_precision,
         )
 
 
@@ -520,6 +535,7 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
                 "oldjob_name": oldjob_name,
                 "fortran_name": fortran_name,
                 "cpus": operation.request.cpus,
+                "execution_arguments": execution_arguments(operation.request),
                 "memory": operation.request.memory,
                 "datacheck": operation.request.datacheck,
                 "operation_id": operation.operation_id,
@@ -772,6 +788,9 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
                 "memory": operation.request.memory,
                 "datacheck": operation.request.datacheck,
                 "notify": operation.request.notify,
+                "gpuCount": operation.request.gpu_count,
+                "explicitPrecision": operation.request.explicit_precision,
+                "outputPrecision": operation.request.output_precision,
             },
             "phase": operation.phase,
             "percent": operation.percent,
@@ -838,6 +857,10 @@ try {
 $arguments=@("job=$($config.job_name)","input=$($config.input_name)","ask_delete=OFF")
 if ([int]$config.cpus -gt 0) { $arguments += "cpus=$($config.cpus)" }
 if ([string]$config.memory) { $arguments += "memory=$($config.memory)" }
+foreach ($argument in $config.execution_arguments) {
+    if ([string]$argument -notmatch '^(gpus=([0-9]|[1-9][0-9]{1,3})|double=(off|explicit|both|constraint)|output_precision=(single|full))$') { throw 'Invalid execution option' }
+    $arguments += [string]$argument
+}
 if ([string]$config.oldjob_name) { $arguments += "oldjob=$($config.oldjob_name)" }
 if ([string]$config.fortran_name) { $arguments += "user=$($config.fortran_name)" }
 if ([bool]$config.datacheck) { $arguments += 'datacheck' }

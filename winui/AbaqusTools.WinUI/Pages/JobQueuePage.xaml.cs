@@ -413,6 +413,12 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             Text = item.FortranPath,
             PlaceholderText = "可选",
         };
+        var executionEditor = new Controls.ExecutionOptionsEditor();
+        try { executionEditor.SetValue(new ExecutionOptionsValues { GpuCount = item.GpuCount,
+            ExplicitPrecision = item.ExplicitPrecision, OutputPrecision = item.OutputPrecision }); }
+        catch (ControlPlaneException error) { ShowNotice("作业参数无效", error.Message); return; }
+        ExecutionOptionsValues? executionOptions = null;
+        var validationText = new TextBlock { TextWrapping = TextWrapping.Wrap };
         var panel = new StackPanel { Spacing = 10, Width = 520 };
         panel.Children.Add(jobNameBox);
         panel.Children.Add(coresBox);
@@ -420,14 +426,21 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         panel.Children.Add(priorityBox);
         panel.Children.Add(oldjobBox);
         panel.Children.Add(fortranBox);
+        panel.Children.Add(new Expander { Header = "GPU 与精度（可选）", Content = executionEditor,
+            HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
+        panel.Children.Add(validationText);
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = $"编辑 {item.JobName}",
-            Content = panel,
+            Content = new ScrollViewer { Content = panel, MaxHeight = 540, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
             PrimaryButtonText = "保存",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
+        };
+        dialog.PrimaryButtonClick += (_, args) => {
+            try { executionOptions = executionEditor.ReadValue(); }
+            catch (Exception error) { args.Cancel = true; validationText.Text = error.Message; }
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
@@ -443,7 +456,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
                 memoryBox.Text,
                 NumberValue(priorityBox),
                 oldjobBox.Text,
-                fortranBox.Text),
+                fortranBox.Text, executionOptions: executionOptions),
             "正在保存作业设置…");
     }
 

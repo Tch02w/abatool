@@ -18,6 +18,9 @@ class LocalJobDraft:
     cpus: int = 0
     memory_value: str = ""
     memory_unit: str = "%"
+    gpu_count: int | None = None
+    explicit_precision: str = "default"
+    output_precision: str = "default"
     oldjob_path: str = ""
     fortran_path: str = ""
     interactive: bool = False
@@ -38,6 +41,9 @@ class LocalJobDraft:
             inp_file=self.inp_file.strip(),
             job_name=self.effective_job_name(),
             cpus=int(self.cpus),
+            gpu_count=self.gpu_count,
+            explicit_precision=self.explicit_precision,
+            output_precision=self.output_precision,
             oldjob_path=self.oldjob_path.strip(),
             for_file=self.fortran_path.strip(),
             interactive=bool(self.interactive),
@@ -73,6 +79,9 @@ class LocalJobDraft:
         item.oldjob_name = derive_oldjob_name(item.oldjob_path)
         item.fortran_path = self.fortran_path.strip()
         item.cores = int(self.cpus)
+        item.gpu_count = self.gpu_count
+        item.explicit_precision = self.explicit_precision
+        item.output_precision = self.output_precision
         item.memory = memory
         item.interactive = bool(self.interactive)
         item.datacheck_only = bool(self.datacheck)

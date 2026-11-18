@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .constants import DEFAULT_CPUS, JOB_NAME_PATTERN, MAX_CPUS, STATUS_STARTING
+from .execution_options import execution_arguments, validate_execution_options
 from .models import QueueItem
-
 
 MEMORY_OPTIONS = ("%", "GB", "MB")
 
@@ -28,6 +28,9 @@ class SubmitOptions:
     memory_unit: str = "%"
     abaqus_command: str = "abaqus"
     ask_delete_off: bool = False
+    gpu_count: int | None = None
+    explicit_precision: str = "default"
+    output_precision: str = "default"
 
 
 def derive_job_name(inp_file: str) -> str:
@@ -132,6 +135,8 @@ def build_abaqus_command(options: SubmitOptions) -> str:
     if memory:
         parts.append(f"memory={memory}")
 
+    parts.extend(execution_arguments(options))
+
     if options.ask_delete_off:
         parts.append("ask_delete=OFF")
 
@@ -146,6 +151,10 @@ def build_abaqus_command(options: SubmitOptions) -> str:
 
 def validate_options(options: SubmitOptions) -> tuple[bool, str]:
     """Validate a submit request."""
+    try:
+        validate_execution_options(options)
+    except ValueError as exc:
+        return False, str(exc)
     if not options.inp_file:
         return False, "请先选择 INP 文件。"
     if not Path(options.inp_file).exists():
@@ -195,6 +204,9 @@ def queue_item_to_options(
         inp_file=item.inp_path,
         job_name=item.job_name or derive_job_name(item.inp_path),
         cpus=int(item.cores or 0),
+        gpu_count=item.gpu_count,
+        explicit_precision=item.explicit_precision,
+        output_precision=item.output_precision,
         oldjob_path=item.oldjob_path,
         for_file=item.fortran_path,
         interactive=item.interactive,
@@ -229,6 +241,9 @@ def build_direct_submit_queue_item(
         oldjob_path=options.oldjob_path,
         fortran_path=options.for_file,
         cores=options.cpus,
+        gpu_count=options.gpu_count,
+        explicit_precision=options.explicit_precision,
+        output_precision=options.output_precision,
         memory=memory,
         interactive=options.interactive,
         datacheck_only=options.datacheck,

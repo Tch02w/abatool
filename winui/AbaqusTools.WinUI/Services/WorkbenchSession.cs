@@ -36,6 +36,7 @@ public sealed class WorkbenchSession
                 if (!values.TryGetValue(name, out var value)) continue;
                 switch (page.FindName(name))
                 {
+                    case Controls.ExecutionOptionsEditor execution: execution.RestoreDraft(value); break;
                     case TextBox text: text.Text = value; break;
                     case NumberBox number: number.Text = value; break;
                     case ComboBox combo when int.TryParse(value, out var index) && index >= 0 && index < combo.Items.Count:
@@ -60,6 +61,7 @@ public sealed class WorkbenchSession
             {
                 values[name] = entry.Page.FindName(name) switch
                 {
+                    Controls.ExecutionOptionsEditor execution => execution.CaptureDraft(),
                     TextBox text => text.Text,
                     NumberBox number => number.Text,
                     ComboBox combo => combo.SelectedIndex.ToString(),

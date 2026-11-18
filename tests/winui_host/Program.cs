@@ -13,6 +13,16 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length is 3 or 4 && args[0] == "--execution-options-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        await ExecutionOptionChecks.RunApi(host, args[2], args.Length == 4 && args[3] == "unsupported");
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--notifications-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
@@ -39,7 +49,8 @@ try
         await CheckBatchApi(args[1], args[2], args[3], recover: args[0] == "--batch-recover-api");
         return 0;
     }
-    if ((args.Length == 3 || (args.Length == 5 && args[3] == "--odb")) && args[0] == "--launch-bundle")
+    if ((args.Length == 3 || (args.Length == 5 && args[3] == "--odb")
+        || (args.Length == 4 && args[3] == "--execution-options")) && args[0] == "--launch-bundle")
     {
         Environment.SetEnvironmentVariable("ABAQUS_TOOLS_ROOT", Path.GetFullPath(args[1]));
         Environment.SetEnvironmentVariable("ABAQUS_TOOLS_PYTHON", null);
@@ -58,6 +69,12 @@ try
             throw new Exception("Host launched an unexpected control-plane executable");
         await host.GetLocalResourceAsync();
         await host.GetLocalQueueRuntimeAsync();
+        if (args.Length == 4)
+        {
+            var fixture = Path.Combine(Path.GetFullPath(args[2]), "client_case.inp");
+            await File.WriteAllTextAsync(fixture, "*Heading\nSubmission parameter fixture; no solver.\n");
+            await ExecutionOptionChecks.RunApi(host, fixture);
+        }
         if (args.Length == 5)
         {
             var source = Path.GetFullPath(args[4]);
@@ -117,6 +134,7 @@ try
     MemoryPresentationChecks.Run();
     RemoteRecoveryChecks.Run();
     JobNotificationChecks.Run();
+    ExecutionOptionChecks.Run();
     Console.WriteLine("11 host process lifecycle checks passed.");
     return 0;
 }

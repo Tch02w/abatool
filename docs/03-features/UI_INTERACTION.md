@@ -6,7 +6,7 @@
 
 被选节点消失时先清除原生选区再移除节点，并收起旧详情；节点重新出现可按记忆恢复选区。结果页对同一ScopeTree节点及同一范围对象也保持幂等，主动“读取目录”/筛选/刷新仍可正常执行。原有记录、预览、取消、失败和分页约定不变。
 
-实现为 `winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs` / OnAdapterSnapshotChanged、ApplyFilter、RestoreSelection、OnTreeSelectionChanged，以及同项目 `Pages/ResultBrowserPage.xaml.cs` / SelectExplorerItem、OnScopeSelectionChanged。`tests/winui_explorer/Explorer.Tests.csproj` 直接加载生产控件，9项原生控件检查通过，包括连续100次快照和移除/恢复/再次选择。真实业务页CSV预览/导出需另验，详见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
+实现为 `winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs` / OnAdapterSnapshotChanged、ApplyFilter、RestoreSelection、OnTreeSelectionChanged，以及同项目 `Pages/ResultBrowserPage.xaml.cs` / SelectExplorerItem、OnScopeSelectionChanged。`tests/winui_explorer/Explorer.Tests.csproj` 直接加载生产控件，9项原生控件检查通过，包括连续100次快照和移除/恢复/再次选择。真实业务页已由用户操作及CUA核对单CSV的50行3列预览、80行完整导出和空闲退出；取消、部分失败、大文件和回收站仍待，详见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
 
 首次启动按“创建并登记主窗口 → 恢复上次页面与草稿 → 显示窗口”执行。页面侧栏可以立即访问已经登记的主窗口；修复了从计算资源页恢复时残留“主窗口尚未创建”的错误。资源真实读取失败仍显示，不因这项顺序调整而隐藏。修复后的资源首次加载、CPU=4草稿恢复和Ctrl+7/8切页已有有限原生证据，布局与鼠标验收单独记录。
 

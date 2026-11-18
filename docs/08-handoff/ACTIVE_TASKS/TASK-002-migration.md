@@ -1,5 +1,31 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 用户操作确认CSV预览、完整导出与正常退出
+
+用户确认修复窗口选择“模型甲 → load_point_raw.csv”可显示表格且窗口正常。CUA随后独立读到模型甲已索引、1个结果/正式索引、预览前50行3列Time/RF3/U3，最后预览行4.9、661.5、−12.25。此前等待预览的198808窗口记录已更新为本段通过范围。
+
+准备独立G:导出目录后，用户执行“更多 → 导出所选 → 导出到此目录”并确认完成；CUA独立观察页面和状态栏均为“导出完成 · 1个文件”。实际文件 `GPTWork/native-explorer-fixed-20261118/export-acceptance/data/load_point_raw.csv` 与源完全一致：80数据行、3列、1408字节，SHA256 `63e922178c77476032ba7f10d4c9feba5259efda32a261cfb81f3ebfba93c717`，源未改，目标仅1文件且无临时半成品。注意预览上限50不等于导出只有50行。回执 `GPTWork/native-explorer-fixed-20261118/export-verification.json`。
+
+正常Alt+F4后，CUA库存确认窗口消失；原生198808/后台51160/子221524按PID及创建时间均结束，描述符移除，两份日常配置摘要不变。进程回执 `GPTWork/native-explorer-fixed-20261118/result-browser/verification.json`，用户确认/CUA/文件/退出汇总 `GPTWork/native-explorer-fixed-20261118/verification-summary.json`。没有创建/移动ODB、没有启动求解。
+
+准确续接点：无待处理用户问题、无仍活跃本轮测试窗口。单CSV的修复后实际业务路径已验证，可以更新完整目录/安装候选；原生取消、部分失败、大文件、回收站、完整八页与目标机仍待，不据这一个文件扩大完成范围。保留全部旧失败和测试现场。
+
+## 2026-11-18 · 当前源码完整回归、Qt回滚入口与交接入口校正
+
+上一目标轮属于实际进展：4cb0503补齐侧栏并修复结果选择栈溢出，源码与回执f57570f已经推送。此次从干净f57570f接续；没有改变生产源码，重点补齐该版本全量自动回归并清理交接入口的过期状态。
+
+项目.venv执行 `python -X utf8 -m pytest tests -q --ignore=tests/submitter/test_native_window_startup.py --tb=short --basetemp=GPTWork/pytest-explorer-full-20261118 --junitxml=GPTWork/explorer-full-20261118.xml`。TEMP/TMP和两类应用数据目录指向 `GPTWork/explorer-full-temp-20261118`，Qt为offscreen。句柄63520退出0，**1008 passed、9 subtests passed，441.34秒**，日志 `GPTWork/explorer-full-20261118.log`。JUnit记录1017含9子检查，不能另算1017普通测试或叠加旧979结果。运行时工作区只修改README/docs，源码身份仍为4cb0503。
+
+排除的 `tests/submitter/test_native_window_startup.py` 在已获原生授权下单独执行：独立TEMP/TMP与应用配置 `GPTWork/qt-native-rollback-temp-20261118`，basetemp `GPTWork/pytest-qt-native-rollback-20261118`，日志/XML `GPTWork/qt-native-rollback-20261118.log` / `.xml`。该测试用真实Qt后端构造MainWindow、show并自行关闭；**1 passed in 3.38s，退出0**。只证明PySide6回滚入口原生启动，不等于旧版全业务或WinUI鼠标验收；没有加载日常队列或启动求解。
+
+XML/日志和退出码交叉核对，当前可读取环境的Python/.NET/测试进程中无这两组独立TEMP归属的残留；两份已知日常JSON摘要不变。汇总 `GPTWork/explorer-full-verification-20261118.json`。结果业务窗口198808/后台51160/子221524按原创建时间和路径仍存活，未自动关闭，用户CSV预览确认尚未到达。
+
+交接修正：CURRENT_STATUS改成唯一当前版本/入口/活动进程/续接表，旧产物和失败保留在本任务历史。COMPLETION_AUDIT当前行更新为4cb0503和d4fc4c7已知缺陷；VALIDATION原有阶段记录明确标历史，不再让旧“最新”和70244存活描述冒充当前。F002主索引补原生控件项目入口。README明确安装候选未含结果选择修复；RepoWiki测试示例使用G: GPTWork和独立应用配置，移除旧648/195计数。WORKFLOW统一x64构建与启动目录，`dotnet msbuild ... -getProperty:TargetPath -p:Configuration=Debug -p:Platform=x64` 实际返回bin/x64/Debug，已据此校正路径；没有为核对路径另启动工作台。
+
+准确续接点：无新的代码缺陷由本轮自动检查复现。不要重跑1008项或重复打相同安装包来代替外部验收；优先等待当前业务窗口“模型甲 → load_point_raw.csv”表格确认，再检查导出/取消/关闭。截图/鼠标、八页完整交互、真实SSH/GPU/MPI、连续三级工程ODB、无开发环境目标机仍未取得完整证据。整体目标active，不改称完成。
+
+整理后的文档路径检查49 passed in 0.12s；项目.venv命令 `pytest tests/common/test_documentation_navigation.py -q --basetemp=GPTWork/pytest-full-regression-docs-20261118`，日志/XML为 `GPTWork/full-regression-docs-20261118.log` / `.xml`。本轮仅README/docs变更，代码、测试源码和用户模型未改动。
+
 ## 2026-11-18 · 实际结果选择崩溃与侧栏刷新修复
 
 侧栏收尾时CUA库存不再包含保留的结果窗口5178004；原生70244已结束，后台33100/子165996仍存活，不能称正常退出。`GPTWork/native-result-records-20261118/result-browser/application.log` 首行为 `Stack overflow.`，反复出现 RestoreSelection → OnTreeSelectionChanged → SelectExplorerItem → OnScopeSelectionChanged → RefreshSelectedScopeAsync/ClearResults → UpdateExplorer → ApplySnapshot。问题在旧d4fc4c7同源业务实现中，不是仅工具点击失败。完整安装候选ddd54a85dcf8/3fcfb102d9d4尚未包含修复，保留追溯但不得称结果选择可用。

@@ -7,8 +7,8 @@
 ```powershell
 cd G:\PythonProject\abaqusTool
 .\.venv\Scripts\python.exe --version
-dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -c Debug
-Start-Process .\winui\AbaqusTools.WinUI\bin\Debug\net10.0-windows10.0.26100.0\win-x64\AbaqusTools.WinUI.exe
+dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -c Debug -p:Platform=x64
+Start-Process .\winui\AbaqusTools.WinUI\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AbaqusTools.WinUI.exe
 ```
 
 最后一行是用户主动启动可见应用的命令。开发验证不要自动关闭已有窗口来替换文件。实际 Abaqus 验收当前使用 `D:\SIMULIA\Commands\abaqus.bat`，需在新机器核实安装和许可，不假定该路径通用。

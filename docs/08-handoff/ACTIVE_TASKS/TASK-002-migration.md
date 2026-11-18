@@ -6,7 +6,7 @@
 
 ## 接续顺序
 
-### 2026-11-18 F005 归档发布与独立结果（源码通过，完整包待验；恢复/重试未完成）
+### 2026-11-18 F005 归档发布与独立结果（源码/完整包通过；专门恢复/重试未完成）
 
 上一轮工作目录保护及完整包为实质进展，提交 `4f40281`/`67809ed`、e3e69bc08715 候选已复核。本轮读取实际代码发现：不清理选项仍逐文件 move；归档根目录 mkdir 在异常保护外；旧失败目的地可能优先用于 Restart。修改前已向用户说明目标盘暂存、完整复制校验、一次发布、发布后可选清理及独立状态的方案，并告知额外空间和校验时间。
 
@@ -23,7 +23,17 @@
 - C# 新增 6 项归档展示/旧协议兼容及既有主机测试通过，`GPTWork/archive-host-20261118.log`，输出 `GPTWork/archive-host-build`。WinUI Release **0 警告/0 错误，20.74 秒**，39371 已退出 0，`GPTWork/archive-winui-20261118.log`。未操作被用户停止验收的原生窗口。
 - Ruff 初稿报告导入、异常边界、公开常量及 subprocess.check；修正为显式公开常量、记录归档异常和显式 check=False，最终通过。文档导航 **47 项通过，0.09 秒**，`GPTWork/archive-docs-20261118.log`；diff 空白检查通过。完整包待补记。
 
-准确续接点：上述检查/构建已结束，未提交本轮改动或构建新完整包。先完成文档导航与新包中正式执行器的归档/持久恢复验证，再处理专门的中断归档恢复与独立重试入口；不能以重算替代归档重试。目前后台在归档/清理中崩溃仍走原有状态未知/待确认流程，发布清单保留但未自动接续。真实跨卷、大文件负载及原生外观未验证。用户恢复原生操作和具体 GitHub main 推送确认仍未收到；不重试桌面操作或推送。周额度最近剩余 **46%**，未触及 15% 暂停线。
+已本地提交 **`1f295df20d1aa962b7e6f0aaf621d8de7931ba6d`**，从干净来源构建完整目录 **`GPTWork/release-win-x64-2c2808add94d/AbaqusTools`**，90143 已退出 0，`GPTWork/archive-package-20261118.log`。用户账户核对 **1662 文件/19 worker**，全部大小/SHA256 一致、sourceDirty=false，回执为该发布父目录 `inventory-verification.json`。旧包保留。
+
+完整包证据：
+
+- 依赖/默认配置/worker/GIF/Agg/工作簿/SSH 加密/Qt-free 通过，`GPTWork/bundle-probe-p4tay3kv/verification.json`，`GPTWork/archive-bundle-probe-20261118.log`。
+- 本轮正式 C# 客户端 `GPTWork/archive-host-build/Debug/net10.0/ControlPlaneHost.Tests.exe --launch-bundle GPTWork/release-win-x64-2c2808add94d/AbaqusTools GPTWork/archive-host-2c2808add94d` 启动、资源/队列 API、安全退出通过，`GPTWork/archive-frozen-host-20261118.log` 退出 0，描述文件清除。
+- `.\.venv\Scripts\python.exe GPTWork/verify_archive_bundle_20261118.py GPTWork/release-win-x64-2c2808add94d/AbaqusTools` 退出 0，59586 结束，`GPTWork/frozen-archive-5538576f393c/verification.json` verified。使用非工程微小夹具和项目 Python 回显命令，正式冻结本机执行器完成两项作业：完整归档/清理成功、坏归档根失败且计算结果保留。最终清单逐文件摘要相符，两个原始 INP 摘要不变；两次后台启动恢复同一执行身份和归档状态，提醒保留问题及正确目录，开始请求 409，无自动重算。只有两次夹具命令，没有 Abaqus 求解；PID 180684/183268（后台）和 151404/192388（夹具）均确认结束，鉴权描述文件清除。此次不是归档过程中后台崩溃后自动接续的证明。
+
+最终回执同步后，文档导航 **47 项通过，0.17 秒**，`GPTWork/archive-package-docs-20261118.log`，diff 空白检查通过。
+
+准确续接点：本节全部检查、构建和自有进程已结束，新候选为 2c2808add94d，包内文档为构建时快照，最终回执在仓库补记。下一项处理专门的中断归档恢复与独立重试入口；不能以重算替代归档重试。目前后台在归档/清理中崩溃仍走原有状态未知/待确认流程，发布清单保留但未自动接续。真实跨卷、大文件负载及原生外观未验证。没有替换旧窗口或生成 ZIP/安装程序/GitHub Release，具体 GitHub main 推送及原生恢复确认仍未收到，不重试。周额度最新剩余 **45%**，未触及 15% 暂停线。
 
 ### 2026-11-18 F003/F005 工作目录准备保护（源码与完整包通过，归档/原生待验）
 

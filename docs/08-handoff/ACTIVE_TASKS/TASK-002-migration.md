@@ -1,5 +1,17 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 实际发布启动暴露 XAML 资源漏打包
+
+上一轮源码修复/文档 a52c480 已推送且工作区干净，属于实际进展。本轮从该干净提交构建目录 `GPTWork/release-win-x64-73c34ceec193/AbaqusTools`，88337 退出0；1672文件/19worker摘要通过，manifest SHA256 `e6505ebf85f274f363b82136c77ea8813b5c857061bfa18db1e725bfbe7529b3`。包内依赖与正式C#后台启动/API/退出通过，`GPTWork/profile-release-verification-20261118`。正式标识安装器4f1e14d5fb6f与测试标识65d84fb9d6b7编译通过；旧f4a53d0a13f4→新65d84fb9d6b7隔离生命周期 `GPTWork/installer-lifecycle-8381c0a1ae9c/verification.json` 通过、52410退出0、无残留登记/进程。**这些检查没有覆盖原生窗口，随后发现该负载仍不可运行，不能作为交付候选。**
+
+从已授权可见桌面实际启动完整包，原生116860退出且无窗口/后台描述符。先确认已结束再分别获取退出码与异常详情，诊断实例179340/193752/209796均退出 `0xc000027b`；启动钩子只记录G:异常，不改产品/系统设置、不创建ODB。`native/first-chance-details.log` 定位 `MainWindow.InitializeComponent`：XamlParseException，HRESULT802B000A，RestrictedDescription为 `Cannot locate resource from 'ms-appx:///MainWindow.xaml'`。完整包无任何应用XBF/PRI，而开发构建和Release构建bin有15个对应资源。此前摘要检查只能证明“清单所列文件完整”，不能发现清单本身遗漏应用资源。
+
+向用户说明改为“SDK本次生成资源明确参与publish + 目录包/安装器双门槛”后实现：csproj `PublishWorkbenchXamlResources` 使用 `GeneratedXamlDest` 和应用PRI、保持相对路径；不扫描旧bin复制任意历史文件。`build_installer.py` 新增 required_winui_resources/verify_winui_resources，`build_release.py` 在清单前调用；缺失和空文件都失败，即使清单本身自洽。测试20项通过0.27秒，`GPTWork/publish-resources-tests-final-20261118.log`；初版19项日志保留。升级验证仅显式 `--legacy-old` 可读旧测试负载历史清单，新负载仍严格，安装器生成不暴露此例外。
+
+修复后的 `dotnet publish ... -c Release -r win-x64 --self-contained true -p:Platform=x64 --no-restore -o GPTWork/winui-publish-resources-fixed-20261118` 成功、55014退出0，15个应用资源齐全；日志同名`.log`。复制未改的冻结后台到此独立新输出用于定位，不修改73c34ceec193失败包。新原生219984/窗口25363264/包内后台220692，移除源码Python相关环境后，实际新建页名称/CPU=4恢复，Ctrl+7后处理空目录无误报，Ctrl+8结果页恢复根目录并读到1个范围；Alt+F4后窗口、后台及子进程158352均退出，描述符移除，日常两份JSON摘要未变。`GPTWork/profile-release-verification-20261118/native/fixed-publish-verification.json` 标记 limited-native；它是修复发布输出加原冻结后台，不冒称干净最终完整包。
+
+准确续接点：本轮构建、安装验证和所有已记录自有原生/后台均终态；Ruff和差异检查通过。收尾文档导航49项与安装门槛20项共69 passed，0.62秒，`GPTWork/release-resources-docs-tests-20261118.log` / `.xml`。提交代码/测试/说明后，由干净源码生成最终完整目录及安装候选，按新门槛核对并实际启动。缺资源旧目录/安装器保留但撤出可运行候选，旧后台/导出/安装检查只保留原范围证据。不得向C:放ODB；没有移动模型或启动求解。八页鼠标/截图、真实工程/SSH/三级链/无SDK目标机/签名仍未验，目标active。
+
 ## 2026-11-18 · 恢复原生验收、隔离配置与启动提示修复
 
 用户已恢复整体目标，明确答复“允许恢复桌面验收”，并确认窗口正常显示。此前额度暂停和 Esc 暂停是历史状态，本轮不再据此停止。由干净 58bdfca 继续；原生验收仅使用 `GPTWork/native-acceptance-20261118-a`，没有创建/移动 ODB 或启动求解。

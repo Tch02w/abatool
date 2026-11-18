@@ -14,12 +14,28 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_ID = "AbaqusTools.Workbench.WinUI3"
 
 
+def required_winui_resources() -> tuple[str, ...]:
+    """Include every current page/control, rather than checking the launcher alone."""
+    project = ROOT / "winui/AbaqusTools.WinUI"
+    sources = sorted(path for directory in (project, project / "Pages", project / "Controls")
+                     for path in directory.glob("*.xaml"))
+    return ("AbaqusTools.WinUI.pri", *(path.relative_to(project).with_suffix(".xbf").as_posix()
+                                      for path in sources))
+
+
+def verify_winui_resources(bundle: Path) -> None:
+    for relative in required_winui_resources():
+        path = bundle / relative
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"Missing or empty compiled WinUI resource: {relative}")
+
+
 def digest(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def verified_bundle(bundle: Path) -> tuple[dict, dict[str, dict]]:
+def verified_bundle(bundle: Path, *, require_ui_resources: bool = True) -> tuple[dict, dict[str, dict]]:
     manifest_path = bundle / "release-manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if (manifest.get("schemaVersion") != 1 or manifest.get("architecture") != "win-x64"
@@ -49,6 +65,8 @@ def verified_bundle(bundle: Path) -> tuple[dict, dict[str, dict]]:
     for required in ("AbaqusTools.WinUI.exe", "control-plane/AbaqusTools.ControlPlane.exe"):
         if required not in entries:
             raise ValueError(f"Missing required executable: {required}")
+    if require_ui_resources:
+        verify_winui_resources(bundle)
     entries = dict(entries)
     entries["release-manifest.json"] = {"bytes": manifest_path.stat().st_size, "sha256": digest(manifest_path)}
     return manifest, entries

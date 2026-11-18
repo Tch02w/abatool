@@ -80,16 +80,20 @@ def run(arguments, log_path, owners, *, environment=None, timeout=180):
         return process.returncode
 
 
-def installed_hashes(target, report):
+def installed_hashes(target, report, *, require_ui_resources=True):
     payload = target / "versions" / report["payloadId"]
-    manifest, entries = verified_bundle(payload)
+    manifest, entries = verified_bundle(payload, require_ui_resources=require_ui_resources)
     assert manifest["sourceCommit"] == report["bundleSourceCommit"]
     assert entries["release-manifest.json"]["sha256"] == report["bundleManifestSha256"]
 
 
-def verify(old_report, new_report, host):
+def verify(old_report, new_report, host, *, legacy_old=False):
     reports = [json.loads(path.read_text(encoding="utf-8")) for path in (old_report, new_report)]
     old, new = reports
+    # Old test installers predate the XAML publishing fix. Only their exact
+    # historical inventory may be accepted; new payloads always use the full gate.
+    verified_bundle(Path(old["bundle"]), require_ui_resources=not legacy_old)
+    verified_bundle(Path(new["bundle"]))
     for report in reports:
         assert report["testOnly"] and report["status"] == "compiled"
         assert report["appId"].startswith(APP_ID + ".Test.")
@@ -107,7 +111,7 @@ def verify(old_report, new_report, host):
     owners = OwnedProcesses()
     report = {"status": "running", "work": str(work), "target": str(target), "appId": new["appId"],
               "oldInstaller": str(old_report), "newInstaller": str(new_report), "steps": [],
-              "solverStarted": False, "nativeWindowOpened": False}
+              "solverStarted": False, "nativeWindowOpened": False, "legacyOldInventoryOnly": legacy_old}
     print(f"VERIFICATION_DIRECTORY={work}", flush=True)
 
     def step(name):
@@ -161,7 +165,7 @@ def verify(old_report, new_report, host):
         step("junction ancestor refused without writing its target")
         assert install(old, target, "install-old") == 0
         assert Path(registered(new["appId"])).resolve() == target.resolve()
-        installed_hashes(target, old)
+        installed_hashes(target, old, require_ui_resources=not legacy_old)
         check_shortcut(old, "old")
         keep = target / "用户保留数据.txt"
         keep.write_bytes(b"user content is not an installer payload")
@@ -182,13 +186,13 @@ def verify(old_report, new_report, host):
             assert install(new, target, "upgrade-busy") != 0
             assert uninstall("uninstall-busy") != 0
             assert backend.poll() is None and keep.read_bytes() == b"user content is not an installer payload"
-            installed_hashes(target, old)
+            installed_hashes(target, old, require_ui_resources=not legacy_old)
             assert not (target / "versions" / new["payloadId"]).exists()
             step("live owned backend blocks upgrade and uninstall without termination")
             assert run([host, "--close-api", descriptor, "idle"], work / "backend-close.log", owners) == 0
             assert backend.wait(timeout=20) == 0
         assert install(new, target, "upgrade-new") == 0
-        installed_hashes(target, old)
+        installed_hashes(target, old, require_ui_resources=not legacy_old)
         installed_hashes(target, new)
         check_shortcut(new, "new")
         assert keep.read_bytes() == b"user content is not an installer payload"
@@ -202,8 +206,8 @@ def verify(old_report, new_report, host):
         assert keep.read_bytes() == b"user content is not an installer payload"
         assert not (target / "versions").exists()
         step("uninstall removes registered versions and registration while retaining user file")
-        for item in reports:
-            verified_bundle(Path(item["bundle"]))
+        verified_bundle(Path(old["bundle"]), require_ui_resources=not legacy_old)
+        verified_bundle(Path(new["bundle"]))
         report["status"] = "verified"
     except Exception as error:
         report.update(status="failed", error=f"{type(error).__name__}: {error}")
@@ -224,5 +228,7 @@ if __name__ == "__main__":
     parser.add_argument("old_report", type=Path)
     parser.add_argument("new_report", type=Path)
     parser.add_argument("host", type=Path)
+    parser.add_argument("--legacy-old", action="store_true",
+                        help="Verify historical old test payload inventory without claiming complete UI resources; new payload stays strict")
     args = parser.parse_args()
-    verify(args.old_report, args.new_report, args.host.resolve())
+    verify(args.old_report, args.new_report, args.host.resolve(), legacy_old=args.legacy_old)

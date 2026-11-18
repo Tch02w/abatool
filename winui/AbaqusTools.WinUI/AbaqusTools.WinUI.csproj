@@ -24,4 +24,26 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
   </ItemGroup>
+
+  <!-- The unpackaged SDK copies XAML/PRI to build output, but does not include
+       these application resources in dotnet publish's resolved file list. -->
+  <Target Name="PublishWorkbenchXamlResources" AfterTargets="ComputeFilesToPublish"
+          DependsOnTargets="Prep_ComputeProcessXamlFiles">
+    <Error Condition="!Exists('%(GeneratedXamlDest.Identity)')"
+           Text="Compiled application XAML is missing: %(GeneratedXamlDest.Identity)" />
+    <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')"
+           Text="Application resource index is missing: $(TargetDir)$(AssemblyName).pri" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(GeneratedXamlDest)">
+        <RelativePath>$([MSBuild]::MakeRelative('$(TargetDir)', '%(FullPath)'))</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(TargetDir)$(AssemblyName).pri">
+        <RelativePath>$(AssemblyName).pri</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

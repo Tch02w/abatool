@@ -6,7 +6,7 @@ F003/F025 CPU 恢复顺序：`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml` / C
 
 F014/F021 初始空目录：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` 和 `winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.xaml.cs` 的浏览器自动刷新在未选目录时不调用发现接口；显式发现/读取仍校验。F003 新建页不再常驻显示“功能接入状态”，保留实际成功/失败提示。
 
-F026 当前完整负载来自干净129b257，目录bbb1a83a8997、正式标识安装候选b1639b2aeb30，含可取消结果导出；1671文件/19worker摘要、依赖/正式主机及包内实际DLL的24项导出检查通过。相同负载测试身份生命周期e2b22336049c通过；正式身份未实际安装、NotSigned。准确回执见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部，候选入口见[当前状态](../08-handoff/CURRENT_STATUS.md)，原生与目标机仍待。
+F026 发布资源修复：`winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj` / PublishWorkbenchXamlResources；`packaging/build_installer.py` / required_winui_resources、verify_winui_resources，`packaging/build_release.py` 调用门槛。`tests/common/test_installer_manifest.py` 共20项，包括自洽清单仍缺资源的拒绝。此前129b257及a52c480目录包缺应用XBF/PRI，不能作为可运行候选；原生失败和修复发布输出的启动证据见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。规则见[发布构建](../05-development/RELEASE.md)，准确新入口见[当前状态](../08-handoff/CURRENT_STATUS.md)。
 
 F001/F022 后处理恢复草稿：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` / `SavePostprocessDraftAsync`、`OnRestoreWorkspaceDraftClicked`；同目录 `OdbPostprocessingPage.DialogDrafts.cs` / `ShowRecoverableDialogAsync` 覆盖提取参数、图例、管理分组和组内顺序。服务 `winui/AbaqusTools.WinUI/Services/OdbPostprocessDraftRecovery.cs` / `Matches`、`PrepareRows`、`Fingerprint`；共用磁盘写入迁至 `Services/RecoveryDraftFile.cs`（同一WinUI项目），结果图存储继承它。测试 `tests/winui_postprocess/PostprocessDraftChecks.cs`（`--draft-checks`）、既有后处理与结果图专项、`tests/winui/test_shell_contract.py`；边界见 [ADR0019](../submitter/adr/0019-postprocess-recovery-drafts.md)。
 

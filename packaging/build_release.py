@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+from build_installer import verify_winui_resources
 from release_inventory import write_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,7 @@ def main() -> None:
     for relative in required:
         if not (bundle / relative).is_file():
             raise RuntimeError(f"Missing required release file: {relative}")
+    verify_winui_resources(bundle)
     forbidden = [p for p in bundle.rglob("*") if p.name.lower() in {"pyside6", "shiboken6", ".venv"}]
     if forbidden:
         raise RuntimeError(f"Unexpected development/Qt dependency: {forbidden}")

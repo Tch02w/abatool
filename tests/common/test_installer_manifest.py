@@ -15,7 +15,8 @@ SPEC.loader.exec_module(installer)
 def bundle(tmp_path):
     root = tmp_path / "中文 空格 {payload}"
     entries = {}
-    for relative in ("AbaqusTools.WinUI.exe", "control-plane/AbaqusTools.ControlPlane.exe", "docs/readme.txt"):
+    for relative in ("AbaqusTools.WinUI.exe", "control-plane/AbaqusTools.ControlPlane.exe", "docs/readme.txt",
+                     *installer.required_winui_resources()):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"Installer fixture; not an executable")
@@ -52,7 +53,7 @@ def test_render_uses_versioned_payload_and_exact_hashes(bundle, tmp_path):
     report = installer.render(bundle, output, "0.1.0", test_id="abcdef123456")
     script = (output / "installer.iss").read_text(encoding="utf-8-sig")
     assert report["testOnly"] and report["appId"].endswith(".Test.abcdef123456")
-    assert report["fileCount"] == 4
+    assert report["fileCount"] == 4 + len(installer.required_winui_resources())
     assert "{{payload}" in script
     for entry in json.loads((bundle / "release-manifest.json").read_text())["files"].values():
         assert f"VerifyInstalledFile('{entry['sha256']}')" in script
@@ -66,3 +67,33 @@ def test_render_uses_versioned_payload_and_exact_hashes(bundle, tmp_path):
 def test_version_cannot_inject_or_overflow(bundle, tmp_path, version):
     with pytest.raises(ValueError):
         installer.render(bundle, tmp_path / "output", version)
+
+
+@pytest.mark.parametrize("resource", [
+    "AbaqusTools.WinUI.pri", "MainWindow.xbf", "Pages/NewJobPage.xbf", "Controls/WorkbenchNumberBoxResources.xbf",
+])
+@pytest.mark.parametrize("fault", ["missing", "empty"])
+def test_self_consistent_manifest_cannot_hide_missing_ui_resources(bundle, resource, fault):
+    manifest_path = bundle / "release-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    path = bundle / resource
+    if fault == "missing":
+        path.unlink()
+        del manifest["files"][resource]
+    else:
+        path.write_bytes(b"")
+        manifest["files"][resource] = {"bytes": 0, "sha256": installer.digest(path)}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="compiled WinUI resource"):
+        installer.verified_bundle(bundle)
+
+
+def test_legacy_inventory_verification_cannot_build_an_incomplete_installer(bundle, tmp_path):
+    path = bundle / "release-manifest.json"
+    manifest = json.loads(path.read_text())
+    (bundle / "MainWindow.xbf").unlink()
+    del manifest["files"]["MainWindow.xbf"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    installer.verified_bundle(bundle, require_ui_resources=False)
+    with pytest.raises(ValueError, match="compiled WinUI resource"):
+        installer.render(bundle, tmp_path / "legacy-output", "0.1.0", test_id="abcdef123456")

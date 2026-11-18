@@ -1,5 +1,15 @@
 # Windows 发布构建（F026）
 
+## 应用资源发布门槛（2026-11-18）
+
+真实目录包启动发现既有 `dotnet publish` 没有收集本应用的 XBF 和 PRI，主窗口加载报 `Cannot locate resource from 'ms-appx:///MainWindow.xaml'`，退出 `0xc000027b`。旧目录/安装候选的摘要、依赖、后台和安装生命周期通过只证明这些范围，**不证明原生程序能启动**。缺少应用资源的旧候选保留追溯，撤出可运行候选；准确新入口见当前状态。
+
+`winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj` 的 `PublishWorkbenchXamlResources` 在 `ComputeFilesToPublish` 后把 SDK 本次生成的 `GeneratedXamlDest` 与应用 PRI 加入发布列表，保持相对目录；源编译资源缺失即失败，不用历史输出目录的宽泛通配复制。`packaging/build_release.py` 在生成清单前检查资源，`packaging/build_installer.py` / `verify_winui_resources` 在接受负载时再次检查。检查覆盖根目录、Pages 和 Controls 当前 XAML 对应的 XBF 及 `AbaqusTools.WinUI.pri`，当前共 15 个；空文件或与清单一致地漏列仍拒绝。新增 XAML 若放到其他目录，须同时扩展发布门槛和功能索引。
+
+`tests/common/test_installer_manifest.py` 覆盖主窗口、页面、数字控件与 PRI 的缺失/空文件，且证明旧库存读取模式不能生成缺资源安装器。清单检查不是资源语义/原生启动证明；最终候选仍须从实际发布目录启动，核对包内后台、草稿和退出。
+
+升级验收旧测试安装器时可显式使用 `packaging/verify_installer.py ... --legacy-old`：只允许旧负载按其历史清单核对，用来验证从缺资源旧候选升级；新负载始终通过完整门槛。报告记录 `legacyOldInventoryOnly=true`，不称旧负载具备完整界面资源，也不能用此开关构建新安装器。
+
 F026 已新增按用户安装、独立版本目录、活动任务拒绝、标准卸载及全摘要检查。安装器与使用步骤见[安装说明](INSTALLATION.md)；目录包仍是应用负载，安装器源码与负载源码分别记账。下方旧日期记录中的“没有安装程序”为当时状态。当前正式标识候选的准确产物见[当前状态](../08-handoff/CURRENT_STATUS.md)，不能把测试标识安装器交付用户。
 
 本页说明如何构建和验证完整目录包。**当前候选路径与准确源码提交只以 [当前状态](../08-handoff/CURRENT_STATUS.md) 为准**；正式交付需要复制整个目录，不能单独复制exe。无开发环境目标机、原生业务页面、真实SSH/MPI及工程负载仍有待验项，候选包不等于正式安装版。Abaqus及许可证由目标机提供，不随软件分发。

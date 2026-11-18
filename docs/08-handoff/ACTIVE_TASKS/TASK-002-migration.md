@@ -1,5 +1,13 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 当前完整包已实际打开，桌面输入仍受阻
+
+旧205808/213728/166276按PID与创建时间核对仍活跃，未终止。上一续接点将关闭旧窗口当成前提过于保守：新的独立WorkbenchProfile可以共存。因此先确认新profile从未启动，再启动当前完整5497f45cfec3。新原生187916（创建1795014771.4443192）、后台185836、子210388，窗口18423702。进程/隔离环境回执`GPTWork/native-density-release-20261118/result-browser/processes.json`核对后台确实来自本完整包，TEMP/TMP/submitter/postprocessor均为该G盘独立目录；application.log当前0字节。
+
+CUA库存及真实AX确认结果根恢复、4个范围读取、控制面已连接；标题菜单区已没有旧侧栏按钮，新按钮在导航内容内的浏览器摘要之后。只能证明实际启动/控件存在，不能据AX证明24 DIP视觉、折线按钮位置像素或点击行为。Ctrl+B失败，重新观察后执行窗口确实暴露的Raise也失败，均为`failed to activate captured window`；没有猜测点击坐标、系统注入或强杀。`native-observations.json`及完整包汇总已更新。
+
+已请求用户在新窗口确认顶部空白、密度与侧栏收起/展开。旧“先关闭才能打开新版”的问题不再是前提；新旧两个测试实例仍需正常收尾。收到操作结果后记录实际证据，若用户已关闭则先核对身份，再分别用`native_density_release_20261118.py finish result-browser`与`native_density_20261118.py finish result-browser`验退出/描述符/日常配置。不要再次launch已有profile。没有待轮询构建、安装或测试句柄；余下原生交互、工程SSH/三级链/目标机要求仍未完成，当前阻碍是桌面输入不可用及用户实际确认尚未到达。
+
 收尾文档检查初次48通过/1失败：CURRENT_STATUS精简后缺少约定原句“每完成一个功能”；已恢复该交付要求，最终复测见`GPTWork/density-release-docs-final-20261118.log`。安装生命周期74818已退出0，无待轮询长任务；唯一当前等待为旧密度窗口的关闭及新包视觉确认。
 
 ## 2026-11-18 · 密度修复干净完整候选与隔离安装通过

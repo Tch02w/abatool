@@ -16,11 +16,17 @@ def test_all_eight_page_draft_bindings_resolve_to_supported_inputs():
         if registration is None:
             continue
         route, fields = registration.groups()
+        ordered_fields = re.findall(r'"([^"]+)"', fields)
+        if route == "new-job":
+            # Switching to server-existing mode clears local paths. Restore that
+            # dependency first so the saved remote paths are not subsequently erased.
+            for path_field in ("InputPathTextBox", "OldjobPathTextBox", "FortranPathTextBox"):
+                assert ordered_fields.index("ExecutionLocationComboBox") < ordered_fields.index(path_field)
         assert route not in routes
         routes.add(route)
         controls = {node.get("{http://schemas.microsoft.com/winfx/2006/xaml}Name"): node
                     for node in ET.parse(source.with_suffix("")).iter()}
-        for field in re.findall(r'"([^"]+)"', fields):
+        for field in ordered_fields:
             assert field in controls, (route, field)
             assert controls[field].tag.rsplit("}", 1)[-1] in {
                 "TextBox", "NumberBox", "WorkbenchNumberBox", "ComboBox", "CheckBox", "ExecutionOptionsEditor"}, (route, field)

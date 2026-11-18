@@ -202,7 +202,7 @@ public sealed partial class MainWindow : Window
 
     private void NavigateTo(string route)
     {
-        if (_shutdownStarted) return;
+        if (_shutdownStarted || App.Current.Session.IsResettingNewJob) return;
         if (route is "odb-postprocessing" or "result-browser" || WorkbenchPages.ContainsKey(route))
             App.Current.Session.State.LastRoute = route;
         if (route == "odb-postprocessing")
@@ -288,6 +288,7 @@ public sealed partial class MainWindow : Window
 
     public void NavigateToRoute(string route)
     {
+        if (_shutdownStarted || App.Current.Session.IsResettingNewJob) return;
         var item = ShellNavigation.MenuItems
             .OfType<NavigationViewItem>()
             .FirstOrDefault(entry => string.Equals(entry.Tag?.ToString(), route, StringComparison.Ordinal));
@@ -327,6 +328,7 @@ public sealed partial class MainWindow : Window
 
     private void SelectRoute(string route)
     {
+        if (_shutdownStarted || App.Current.Session.IsResettingNewJob) return;
         var item = ShellNavigation.MenuItems
             .OfType<NavigationViewItem>()
             .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, route, StringComparison.Ordinal));
@@ -336,9 +338,56 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnNewJobMenuClicked(object sender, RoutedEventArgs args)
+    private async void OnNewJobMenuClicked(object sender, RoutedEventArgs args)
     {
-        SelectRoute("new-job");
+        var session = App.Current.Session;
+        if (_shutdownStarted || _sessionEnd.IsEnding || session.IsResettingNewJob) return;
+        var page = session.GetRestoredPage(NewJobDraftReset.Route) as NewJobPage;
+        if (page?.IsDraftBusy is true)
+        {
+            ReportPageStatus("请等待作业提交或命令预览结束后再新建");
+            return;
+        }
+        var focusNewJob = false;
+        SetCloseInteractionEnabled(false);
+        try
+        {
+            var result = await session.ResetNewJobAsync(CaptureWindowState(), async () =>
+            {
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = Content.XamlRoot, Title = "新建作业",
+                    Content = CloseText("清空当前作业名称、INP、重启动依赖和子程序路径，并回到本机执行？\n\nCPU、内存等常用设置会保留，已有队列和运行任务不受影响。"),
+                    PrimaryButtonText = "清空并新建", CloseButtonText = "保留当前填写",
+                    DefaultButton = ContentDialogButton.Close,
+                };
+                return await dialog.ShowAsync() == ContentDialogResult.Primary;
+            }, () => page?.ApplyNewJobReset(),
+                () => !_shutdownStarted && !_sessionEnd.IsEnding && page?.IsDraftBusy is not true);
+            if (_sessionEnd.IsEnding) return;
+            if (result == NewJobResetResult.Completed)
+            {
+                UpdateSelectedInputPath(string.Empty);
+                NavigateToRoute(NewJobDraftReset.Route);
+                focusNewJob = true;
+                ReportPageStatus("已新建作业 · 常用资源设置已保留");
+            }
+            else ReportPageStatus(result == NewJobResetResult.Cancelled ? "已保留当前填写" : "当前操作尚未结束，请稍后新建");
+        }
+        catch (Exception error)
+        {
+            if (_sessionEnd.IsEnding) return;
+            ShowDraftSaveError(error.Message);
+            ReportPageStatus("新建未完成 · 请检查草稿保存错误");
+        }
+        finally
+        {
+            if (!_shutdownStarted && !_windowClosed && !_sessionEnd.IsEnding)
+            {
+                SetCloseInteractionEnabled(true);
+                if (focusNewJob && ContentFrame.Content is NewJobPage newPage) newPage.FocusNewJobInput();
+            }
+        }
     }
 
     private void OnQueueMenuClicked(object sender, RoutedEventArgs args)
@@ -588,6 +637,11 @@ public sealed partial class MainWindow : Window
     private async Task CloseWorkbenchAsync()
     {
         if (_sessionEnd.IsEnding) return;
+        if (App.Current.Session.IsResettingNewJob)
+        {
+            ReportPageStatus("请先完成新建作业确认或保存，再关闭窗口");
+            return;
+        }
         _shutdownStarted = true;
         SetCloseInteractionEnabled(false);
         _resourceTimer.Stop();

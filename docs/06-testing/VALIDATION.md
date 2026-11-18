@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F001/F003最新源码：显式新建确认/重置16项生产状态及实际JSON检查通过，既有7项持久化+15项系统会话检查通过；相关Python回归99项通过29.10秒（`GPTWork/new-job-reset-regression-20261118.log` / `.xml`，含49文档、实际HTTP关闭/图恢复及新建专项包装）。首次WinUI构建0警告/错误，最终导航忙碌保护构建及收尾见TASK-002顶部。原生确认/焦点/关闭重开未验，7c874d3完整包不含本轮菜单改动。
+
 最新完整目录 `GPTWork/release-win-x64-c245b91545d7/AbaqusTools`（干净7c874d3）：1669清单文件/19 worker完整摘要、包内依赖和正式主机启动/API/退出通过，回执 `GPTWork/draft-release-verification-20261118`。正式标识安装候选c513706de2c4来源/摘要/PE架构核对通过，NotSigned。新负载测试标识b7f81001e859与旧8a79e216e0c5的隔离生命周期 `GPTWork/installer-lifecycle-4d8a268bb72f/verification.json` verified，含中文空格路径、陌生/链接目录拒绝、活动后台拒绝、升级保留旧版本和用户文件、开始菜单更新/清除、正常卸载；无强制收尾、无残留自有进程/测试登记。
 
 最新完整无桌面回归 **979项及9子检查通过，579.98秒**，99701退出0；`GPTWork/draft-release-verification-20261118/full-suite-final.log` / `.xml`。首轮978通过/1失败/9子检查通过，模拟远端作业固定3秒等待超时；原用例独立复测通过，改为启动/监测信号并同时覆盖starting/running断开保护后模块4项及完整回归通过。产品源码未修改。测试TEMP/TMP、数据与basetemp均在G:项目GPTWork；Qt为offscreen，原生窗口启动测试排除。准确过程及限制见TASK-002顶部。

@@ -71,6 +71,15 @@ def test_production_graph_draft_never_commits_or_overwrites_a_newer_revision(tmp
         assert api_request(runtime, "/healthz")[0] == 200
 
 
+def test_new_job_reset_confirms_and_persists_before_replacing_inputs(tmp_path, close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--new-job-reset-checks", str(tmp_path / "reset")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "16 new-job reset checks passed" in result.stdout
+
+
 def test_production_client_lists_and_preserves_active_transfer(tmp_path, close_client):
     started, release = threading.Event(), threading.Event()
 

@@ -13,6 +13,11 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 2 && args[0] == "--new-job-reset-checks")
+    {
+        await NewJobDraftResetChecks.RunAsync(args[1]);
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--graph-draft-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),

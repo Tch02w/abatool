@@ -22,8 +22,8 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
             () => PickFolderAsync("选择工作目录"),
             ActivateExplorerItemAsync);
         App.Current.Session.Register(this, "new-job",
-            ["JobNameTextBox", "InputPathTextBox", "OldjobPathTextBox", "FortranPathTextBox",
-             "ExecutionLocationComboBox", "UseSsdCheckBox", "CalculationRootTextBox", "ArchiveRootTextBox",
+            ["ExecutionLocationComboBox", "JobNameTextBox", "InputPathTextBox", "OldjobPathTextBox", "FortranPathTextBox",
+             "UseSsdCheckBox", "CalculationRootTextBox", "ArchiveRootTextBox",
              "AbaqusCommandTextBox", "MemoryValueTextBox", "MemoryUnitComboBox", "CpuNumberBox",
              "ExecutionOptionsPanel", "PriorityComboBox", "InteractiveCheckBox", "DatacheckCheckBox", "NotifyCheckBox", "MaxParallelNumberBox"],
             () => WorkbenchSession.WaitForIdleAsync(() => _previewBusy || _submitBusy, "作业提交或检查"));
@@ -31,6 +31,33 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     }
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _workspaceExplorerAdapter;
+    public bool IsDraftBusy => _previewBusy || _submitBusy;
+
+    public void ApplyNewJobReset()
+    {
+        // Change mode before paths: the mode handler clears incompatible paths.
+        ExecutionLocationComboBox.SelectedIndex = 0;
+        JobNameTextBox.Text = string.Empty;
+        InputPathTextBox.Text = string.Empty;
+        OldjobPathTextBox.Text = string.Empty;
+        FortranPathTextBox.Text = string.Empty;
+        CommandPreviewTextBox.Text = string.Empty;
+        CommandPreviewExpander.IsExpanded = false;
+        DraftInfoBar.IsOpen = false;
+        ApplyExecutionMode();
+    }
+
+    public void FocusNewJobInput()
+    {
+        if (IsLoaded) InputPathTextBox.Focus(FocusState.Programmatic);
+        else Loaded += OnNewJobFocusLoaded;
+    }
+
+    private void OnNewJobFocusLoaded(object sender, RoutedEventArgs args)
+    {
+        Loaded -= OnNewJobFocusLoaded;
+        InputPathTextBox.Focus(FocusState.Programmatic);
+    }
 
     private bool IsRemote => ExecutionLocationComboBox.SelectedIndex is 1 or 2;
 
@@ -50,6 +77,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     public void LoadInputPath(string path)
     {
+        if (App.Current.Session.IsResettingNewJob) return;
         if (!string.Equals(Path.GetExtension(path), ".inp", StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -212,7 +240,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnPreviewClicked(object sender, RoutedEventArgs e)
     {
-        if (_previewBusy)
+        if (IsDraftBusy || App.Current.Session.IsResettingNewJob)
         {
             return;
         }
@@ -294,7 +322,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnSubmitClicked(object sender, RoutedEventArgs e)
     {
-        if (_submitBusy)
+        if (IsDraftBusy || App.Current.Session.IsResettingNewJob)
         {
             return;
         }
@@ -389,6 +417,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private Task ActivateExplorerItemAsync(ExplorerItem item)
     {
+        if (App.Current.Session.IsResettingNewJob) return Task.CompletedTask;
         if (item.Kind == ExplorerItemKind.InputFile)
         {
             LoadInputPath(item.Path);

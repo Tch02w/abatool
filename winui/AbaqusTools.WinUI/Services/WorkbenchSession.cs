@@ -12,11 +12,26 @@ public sealed class WorkbenchSession
     }
     private readonly Dictionary<string, Entry> _pages = [];
     private readonly Dictionary<string, Func<Task>> _checkpoints = [];
+    private readonly NewJobDraftReset _newJobReset = new();
     private readonly WorkbenchSessionStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AbaqusTools", "workbench-session.json"));
     public WorkbenchSessionState State { get; }
     public string? LoadError { get; }
     public bool IsClosing { get; private set; }
+    public bool IsResettingNewJob => _newJobReset.IsBusy;
+
+    public Page? GetRestoredPage(string route) =>
+        _pages.TryGetValue(route, out var entry) && entry.Restored ? entry.Page : null;
+
+    public Task<NewJobResetResult> ResetNewJobAsync(WorkbenchWindowState window,
+        Func<Task<bool>> confirm, Action applyPage, Func<bool> canReset) => _newJobReset.RunAsync(
+            () => { CapturePageDrafts(window); return State; }, confirm, _store.SaveAsync,
+            next =>
+            {
+                State.Pages[NewJobDraftReset.Route] = next.Pages[NewJobDraftReset.Route];
+                State.LastRoute = next.LastRoute;
+                applyPage();
+            }, () => !IsClosing && canReset());
 
     public WorkbenchSession()
     {
@@ -68,7 +83,11 @@ public sealed class WorkbenchSession
     public Task SaveDraftAsync(WorkbenchWindowState window)
     {
         var writes = new List<Task>();
-        try { CapturePageDrafts(window); writes.Add(_store.SaveAsync(State)); }
+        try
+        {
+            if (_newJobReset.PendingSave is { } resetting) writes.Add(resetting);
+            else { CapturePageDrafts(window); writes.Add(_store.SaveAsync(State)); }
+        }
         catch (Exception error) { writes.Add(Task.FromException(error)); }
         foreach (var capture in _checkpoints.Values)
         {

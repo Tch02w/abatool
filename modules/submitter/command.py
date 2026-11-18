@@ -117,7 +117,10 @@ def build_abaqus_command(options: SubmitOptions) -> str:
     parts = [f"{abaqus_command} job={options.job_name}"]
 
     if options.datacheck and options.inp_file:
-        parts.append(f"input={os.path.basename(options.inp_file)}")
+        input_name = os.path.basename(options.inp_file)
+        if re.search(r"[\s&()^]", input_name):
+            input_name = f'"{input_name}"'
+        parts.append(f"input={input_name}")
 
     oldjob_argument = (options.oldjob_arg or "").strip() or derive_oldjob_name(options.oldjob_path)
     if oldjob_argument:

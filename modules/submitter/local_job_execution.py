@@ -30,6 +30,14 @@ from .constants import (
 )
 from .cpu_policy import validate_local_cpus
 from .execution_options import validate_execution_options
+from .local_workspace import (
+    RESTART_EXTENSIONS,
+    WorkspacePreparationCancelled,
+    check_existing_results,
+    check_plan_available,
+    plan_workspace,
+    prepare_workspace,
+)
 from .models import QueueItem
 from .runtime_evidence import (
     collect_runtime_evidence,
@@ -44,19 +52,7 @@ LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[str, str, int, str], None]
 LOGGER = logging.getLogger(__name__)
 EXISTING_RESULT_EXTENSIONS = (".odb", ".sta")
-RESTART_DEPENDENCY_EXTENSIONS = (
-    ".odb",
-    ".res",
-    ".stt",
-    ".sim",
-    ".mdl",
-    ".prt",
-    ".sta",
-    ".msg",
-    ".dat",
-    ".log",
-    ".com",
-)
+RESTART_DEPENDENCY_EXTENSIONS = RESTART_EXTENSIONS
 ARCHIVE_EXTENSIONS = (
     ".inp",
     ".odb",
@@ -99,6 +95,16 @@ class LocalJobProcessController:
     def attach(self, process: subprocess.Popen[str]) -> None:
         with self._lock:
             self._process = process
+
+    def start(self, *args, **kwargs):
+        # Decide admission and register the launcher under the same cancellation
+        # lock. A cancellation already accepted cannot race into a new process.
+        with self._lock:
+            if self.cancel_requested:
+                return None
+            process = subprocess.Popen(*args, **kwargs)
+            self._process = process
+            return process
 
     def detach(self, process: subprocess.Popen[str]) -> None:
         with self._lock:
@@ -145,9 +151,7 @@ def _unique_destination(root: Path, job_name: str) -> Path:
 
 
 def _prepare_existing_results(work_dir: Path, job_name: str, policy: str) -> None:
-    lock_path = work_dir / f"{job_name}.lck"
-    if lock_path.exists():
-        raise RuntimeError(f"检测到同名 LCK 文件，拒绝重复提交：{lock_path}")
+    check_existing_results(work_dir, job_name, policy)
     existing = [
         work_dir / f"{job_name}{extension}"
         for extension in EXISTING_RESULT_EXTENSIONS
@@ -167,63 +171,21 @@ def _prepare_existing_results(work_dir: Path, job_name: str, policy: str) -> Non
         path.replace(_unique_backup_path(path))
 
 
-def _copy_restart_files(source_odb: Path, target_dir: Path) -> None:
-    for extension in RESTART_DEPENDENCY_EXTENSIONS:
-        source = source_odb.with_suffix(extension)
-        if not source.is_file():
-            continue
-        target = target_dir / source.name
-        if source.resolve() == target.resolve():
-            continue
-        if target.exists():
-            target.unlink()
-        try:
-            os.link(source, target)
-        except OSError:
-            shutil.copy2(source, target)
+def _prepare_workspace(item: QueueItem, **kwargs) -> tuple[Path, Path, str]:
+    return prepare_workspace(item, **kwargs)
 
 
-def _prepare_workspace(item: QueueItem) -> tuple[Path, Path, str]:
-    source_inp = Path(item.source_inp_path or item.inp_path).resolve()
-    if not source_inp.is_file():
-        raise FileNotFoundError(f"INP 文件不存在：{source_inp}")
-    if item.calculation_root_dir:
-        work_dir = Path(item.calculation_root_dir).resolve() / item.job_name
-        work_dir.mkdir(parents=True, exist_ok=True)
-        prepared_inp = work_dir / source_inp.name
-        shutil.copy2(source_inp, prepared_inp)
-    else:
-        prepared_inp = Path(item.inp_path).resolve()
-        work_dir = prepared_inp.parent
-
-    oldjob_arg = ""
-    if item.oldjob_path:
-        source_odb = Path(item.oldjob_path).resolve()
-        if not source_odb.is_file():
-            raise FileNotFoundError(f"Restart 前置 ODB 不存在：{source_odb}")
-        if item.calculation_root_dir:
-            _copy_restart_files(source_odb, work_dir)
-            oldjob_arg = source_odb.stem
-        else:
-            local_odb = work_dir / source_odb.name
-            oldjob_arg = (
-                source_odb.stem
-                if local_odb.resolve() == source_odb
-                else str(source_odb.with_suffix(""))
-            )
-    return prepared_inp, work_dir, oldjob_arg
-
-
-def _execution_command(item: QueueItem, prepared_inp: Path, oldjob_arg: str) -> str:
+def _execution_command(item: QueueItem, prepared_inp: Path, oldjob_arg: str, *, validation_inp=None) -> str:
     validate_local_cpus(item.cores, item.abaqus_command)
     options = queue_item_to_options(item, default_cpus=MAX_CPUS)
     options = replace(
         options,
         inp_file=str(prepared_inp),
+        for_file=str(Path(options.for_file).resolve()) if options.for_file else "",
         oldjob_arg=oldjob_arg,
         ask_delete_off=True,
     )
-    valid, message = validate_options(options)
+    valid, message = validate_options(replace(options, inp_file=str(validation_inp or prepared_inp)))
     if not valid:
         raise ValueError(message)
     command = build_abaqus_command(options)
@@ -279,12 +241,22 @@ def execute_local_job(
 ) -> LocalJobExecutionResult:
     """Execute and monitor one queue item until a defensible terminal state."""
 
+    if controller.cancel_requested:
+        return LocalJobExecutionResult(STATUS_TERMINATED, "已取消准备，未启动 Abaqus", "", "")
     _emit(progress, "preparing", "正在准备计算工作目录", 4)
     validate_local_cpus(item.cores, item.abaqus_command)
     validate_execution_options(item)
-    prepared_inp, work_dir, oldjob_arg = _prepare_workspace(item)
+    plan = plan_workspace(item, existing_result_policy)
+    command = _execution_command(item, plan.prepared_inp, plan.oldjob_arg, validation_inp=plan.source_inp)
+    try:
+        _prepared_inp, work_dir, _oldjob_arg = _prepare_workspace(
+            item, plan=plan, policy=existing_result_policy, cancelled=lambda: controller.cancel_requested)
+    except WorkspacePreparationCancelled as exc:
+        return LocalJobExecutionResult(STATUS_TERMINATED, str(exc), str(plan.work_dir), command)
+    if controller.cancel_requested:
+        return LocalJobExecutionResult(STATUS_TERMINATED, "已取消准备，未启动 Abaqus", str(work_dir), command)
     _prepare_existing_results(work_dir, item.job_name, existing_result_policy)
-    command = _execution_command(item, prepared_inp, oldjob_arg)
+    check_plan_available(plan, existing_result_policy)
     baseline = build_diagnostic_file_baseline(str(work_dir), item.job_name)
     submitted_at = time.time()
     run: dict[str, object] = {
@@ -301,7 +273,8 @@ def execute_local_job(
         log(f"工作目录：{work_dir}")
         log(f"执行命令：{command}")
     _emit(progress, "starting", "正在启动 Abaqus launcher", 10, command)
-    process = subprocess.Popen(
+    check_plan_available(plan, existing_result_policy)
+    process = controller.start(
         command,
         cwd=str(work_dir),
         shell=True,
@@ -312,7 +285,8 @@ def execute_local_job(
         errors="replace",
         bufsize=1,
     )
-    controller.attach(process)
+    if process is None:
+        return LocalJobExecutionResult(STATUS_TERMINATED, "已取消准备，未启动 Abaqus", str(work_dir), command)
     output_parts: list[str] = []
 
     def read_output() -> None:

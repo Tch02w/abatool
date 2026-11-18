@@ -21,6 +21,7 @@
 | 每个功能在哪些文件、该测什么 | [功能索引](03-features/FUNCTION_INDEX.md) |
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
 | 本机优先级、资源准入、后台重启与未知状态 | [本机调度说明](03-features/LOCAL_SCHEDULING.md) |
+| 启动前目录检查、复制保护、准备取消 | [工作目录准备](03-features/LOCAL_WORKSPACE.md) |
 | 作业内存占用、估计来源及采样失败 | [内存观测说明](03-features/MEMORY_MONITORING.md) |
 | GPU、Explicit 计算精度和 ODB 场输出精度 | [提交选项说明](03-features/EXECUTION_OPTIONS.md) |
 | 作业结束提醒、未读恢复与批量已读 | [作业提醒说明](03-features/JOB_NOTIFICATIONS.md) |

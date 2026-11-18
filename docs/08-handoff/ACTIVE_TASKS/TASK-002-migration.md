@@ -6,6 +6,24 @@
 
 ## 接续顺序
 
+### 2026-11-18 F003/F005 工作目录准备保护（源码通过，完整包待验）
+
+从已完成 F008 候选继续审查准备/归档边界。实际发现 `_prepare_workspace` 在当前作业 LCK 和取消策略判定前已复制输入及 Restart 文件；原 Restart 复制先删除旧目标，复制失败可使旧文件丢失。修改前已向用户说明先只读验证、再逐文件发布的方案及归档另行处理的边界。
+
+新增 `modules/submitter/local_workspace.py`，输入/名称/父作业/路径/子程序/执行参数/已有结果策略验证先于写入，目录链接及目标链接拒绝；单文件使用独有临时路径，复核源元信息、取消和锁后替换。临时文件仅本次拥有才可清理，同文件输入直接复用；不承诺全目录回滚和完整 SHA256。保留 `RESTART_DEPENDENCY_EXTENSIONS` 兼容别名供远端模块使用。`LocalJobProcessController.start` 将已接受取消与进程创建串行；相对子程序在改 cwd 前解析。数据检查 INP 的空白和部分 shell 特殊字符加引号，普通名字保持原输出。
+
+实际测试及失败：
+
+- 原代码 LCK 复现 **1 失败/10 deselected，0.09 秒**，目标 INP/parent.odb/parent.res 已被改写，`GPTWork/workspace-before-20261118.xml/log`。初步修复 15 项通过；后续 NTFS junction/硬链接/源变化等 23 项通过，日志分别为 `workspace-first-20261118` 和 `workspace-edge-20261118`。
+- 首轮扩展命令误写不存在的 test_command.py，未执行测试，`GPTWork/workspace-regression-20261118.log`；改用 test_job_draft.py 后 **110 项通过，137.87 秒**，`GPTWork/workspace-regression-final-20261118.xml/log`，76952 已退出 0。范围为准备、执行、草稿、CPU、GPU/精度、本机运行/调度/内存、关闭与提醒。
+- 实际 Windows 回显程序复现含空格 INP 被拆成参数：**1 失败/20 deselected，0.75 秒**，`GPTWork/workspace-command-before-20261118.xml/log`。命令修正后 32 项通过（0.95 秒），`GPTWork/workspace-command-final-20261118.xml/log`。后加含 `&` 文件名、相对子程序和临时名碰撞；没有启动 Abaqus。
+- HTTP 重启测试初稿错误期望仅有失败条目时返回 202，实际产品正确返回 **409 / NO_PENDING_LOCAL_JOBS**，首轮 **34 通过/1 失败，2.94 秒**，`GPTWork/workspace-delivery-20261118.xml/log`。修正断言保留防自动重试行为；最终 **35 项通过，11.45 秒**，`GPTWork/workspace-delivery-final-20261118.xml/log`，74162 已退出 0。覆盖 26 项准备边界、4 项执行、4 项草稿及 1 项真实 HTTP/持久恢复。真实 NTFS junction 和全部夹具位于 GPTWork，原工程未写入。
+- Ruff 初稿导入/未使用变量和 dict 构造提示已修正，最终所改源码/测试通过；diff 空白检查通过。同步文档后，文档导航/壳层契约/真实 HTTP 最终 **81 项通过，2.59 秒**，`GPTWork/workspace-docs-20261118.xml/log`，检查已结束。完整包随后补记，当前尚未运行。
+
+用户再次关注按钮及 GIF，复核 F021 生产代码：读取目录左侧为加载圆环，空闲 Collapsed、忙时随按钮前景，内容双向居中；F020 双模式和 1500×1000 四份实际 GIF 回执已有记录，本轮未重复改写。原生窗口仍未恢复操作，不把源码/既有包等同实际外观验收。
+
+准确续接点：以上测试句柄结束，无新求解/用户进程操作。先完成文档检查与新包验证，再处理归档：`_archive_result` 的 root.mkdir 在异常保护外、逐文件移动可能部分完成、空目录可能被记成功；归档失败字段与求解成功的界面提示尚需分开，`_dependency_odb_path` 也需避免优先使用部分归档。Qt `archive_finished_job_files` 对照保留。必须先说明新归档实现方案再变更。最近已验证包仍 f4d22485d254，本轮准备修复尚未打包；具体 GitHub main 推送与恢复原生交互确认仍未收到。最近周额度剩余 **47%**，未触及 15% 暂停线。
+
 ### 2026-11-18 F008 慢远端通信期间读取状态（源码与完整包通过，原生/真实 SSH 待验）
 
 上一轮为有效进展：冻结后台/存活子进程中断验证和文档已提交 `b95c39b`。本轮继续完整迁移合同，审查历史远端 GET 超时与连接锁后，找到独立可复现问题：远端连接/刷新/目录/传输/脚本执行持有连接锁，读取服务器状态也等待该锁。没有证据将其等同于历史 `remote-jobs` GET 偶发超时的唯一根因。

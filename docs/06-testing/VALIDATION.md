@@ -1,5 +1,13 @@
 # 验收记录与已知缺口
 
+最新完整目录 `GPTWork/release-win-x64-c245b91545d7/AbaqusTools`（干净7c874d3）：1669清单文件/19 worker完整摘要、包内依赖和正式主机启动/API/退出通过，回执 `GPTWork/draft-release-verification-20261118`。正式标识安装候选c513706de2c4来源/摘要/PE架构核对通过，NotSigned。新负载测试标识b7f81001e859与旧8a79e216e0c5的隔离生命周期 `GPTWork/installer-lifecycle-4d8a268bb72f/verification.json` verified，含中文空格路径、陌生/链接目录拒绝、活动后台拒绝、升级保留旧版本和用户文件、开始菜单更新/清除、正常卸载；无强制收尾、无残留自有进程/测试登记。
+
+最新完整无桌面回归 **979项及9子检查通过，579.98秒**，99701退出0；`GPTWork/draft-release-verification-20261118/full-suite-final.log` / `.xml`。首轮978通过/1失败/9子检查通过，模拟远端作业固定3秒等待超时；原用例独立复测通过，改为启动/监测信号并同时覆盖starting/running断开保护后模块4项及完整回归通过。产品源码未修改。测试TEMP/TMP、数据与basetemp均在G:项目GPTWork；Qt为offscreen，原生窗口启动测试排除。准确过程及限制见TASK-002顶部。
+
+## 分阶段验收记录
+
+以下保留各阶段执行结果和当时缺口；已由顶部新候选补齐的打包事项不再视作当前未完成。旧回归不与本轮重复累计，原生交互仍待验收。
+
 F001/F022后处理恢复草稿：38项专项（`GPTWork/postprocess-draft-checks-20261118-02.log`）、174项既有后处理（`postprocess-draft-existing-checks-20261118.log`）、16项共享结果图（`postprocess-shared-graph-checks-20261118.log`）通过；最终WinUI构建0警告/错误（`postprocess-draft-build-delivery-20261118.log`）。相关Python初轮41通过/1静态定位失败，更新后91项通过24.24秒（`postprocess-draft-regression-final-20261118.log` / `.xml`，含49项文档）。本轮补齐工作区/四类弹窗源码，下方“尚缺”只描述历史阶段。原生数值输入/关闭恢复、按钮实际显示和新完整打包仍待验；本轮测试只在G:项目GPTWork，不移动用户ODB。详细失败和句柄结束记录见TASK-002顶部。
 
 F001/F012结果图独立恢复：最终16项JSON/状态/文件检查通过（`GPTWork/graph-draft-checks-20261118-02.log`），65项相关回归通过13.41秒（`GPTWork/graph-draft-regression-20261118.log`、`.xml`），其中生产C#客户端对真实隔离HTTP核对本地草稿不提交、版本变化拒绝覆盖、原草稿保留；最终WinUI构建0警告/错误（`GPTWork/winui-graph-draft-build-final-20261118.log`），49项文档通过。原生恢复及完整包未验收，详细工作区/弹窗草稿尚缺。本轮仅G:测试JSON/占位ODB，不移动用户ODB；用户新约束禁止后续C:ODB验证目标，历史跨卷记录不授权复用。

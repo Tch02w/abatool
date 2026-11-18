@@ -24,6 +24,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 - 编辑并校验 Restart/oldjob 依赖链。
 - 异步合并 ODB，支持逐步逐帧内容校验、校验回执、无结果帧提示、持久任务记录、重启去重与中断提示，以及取消、冲突策略和失败清理；[规则与边界](docs/03-features/ODB_MERGE.md)。
 - 按独立结果图批量生成完整 ODB，后台保存计划与阶段，重启后检查并继续；[批量恢复边界](docs/03-features/ODB_RESULT_BATCH.md)。
+- 定期保留页面输入、结果图、后处理工作区及未确认弹窗草稿；恢复时先核对原配置和来源，不自动确认参数。[草稿恢复与限制](docs/03-features/POSTPROCESSING.md)。
 - 扫描与升级 ODB，按组批量提取、渲染、生成动画和工程结果。
 - 构建结果索引并预览文本、表格、图片和动画。
 - 关闭前保存页面草稿，支持后台继续、停止后关闭或取消；联合检查受管任务及线程收尾，未知状态保留后台；[退出与恢复边界](docs/03-features/UI_INTERACTION.md)。
@@ -32,7 +33,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 首次使用请按 [使用手册](docs/repowiki/user-guide.md)操作。当前版本支持分组统一云图范围、GIF 统一帧率或统一时长、结果列表分页和表格预览；结果清理位于「更多 → 移到回收站」。
 
-要求：Windows、.NET 10 SDK，以及仓库根目录的 Python 3.14 `.venv`。
+以下是源码启动方式，要求 Windows、.NET 10 SDK，以及仓库根目录的 Python 3.14 `.venv`。安装候选/完整目录携带运行库，操作与验收限制见[安装说明](docs/05-development/INSTALLATION.md)。
 
 ```powershell
 uv sync --group dev
@@ -75,9 +76,18 @@ docs/                      架构、协议、ADR 与 RepoWiki
 
 ## 开发验证
 
+从本项目G:盘目录执行，下例将临时文件放到新建GPTWork目录；禁止向C:写ODB。当前原生操作暂停，单独的可见窗口启动测试明确排除，仍属待验项。完整约定见[维护工作流](docs/05-development/WORKFLOW.md)。
+
 ```powershell
+$verificationTemp = Join-Path (Get-Location) ('GPTWork/temp-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $verificationTemp | Out-Null
+$env:TEMP = $verificationTemp
+$env:TMP = $verificationTemp
+$env:QT_QPA_PLATFORM = 'offscreen'
+$env:ABAQUS_SUBMITTER_DATA_DIR = Join-Path $verificationTemp 'submitter'
+$env:ABAQUS_POSTPROCESSOR_DATA_DIR = Join-Path $verificationTemp 'postprocessor'
 .\.venv\Scripts\python.exe -m ruff check modules\control_plane tests\control_plane tests\winui
-.\.venv\Scripts\python.exe -m pytest -q --basetemp GPTWork/pytest-full
+.\.venv\Scripts\python.exe -m pytest tests -q --ignore=tests/submitter/test_native_window_startup.py --basetemp (Join-Path $verificationTemp 'pytest')
 dotnet build .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 --no-restore
 ```
 

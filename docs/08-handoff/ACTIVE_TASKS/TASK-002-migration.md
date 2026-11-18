@@ -1,5 +1,29 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-18 · 草稿恢复后的完整候选与安装验证
+
+收尾：完整回归979项/9子检查通过；最终文档导航49项通过0.19秒，回执 `GPTWork/draft-release-verification-20261118/docs-delivery.log` / `.xml`。首次文档检查48通过/1失败（docs-final.log/xml）是把pytest节点标识写成源码路径，已拆分准确文件与函数名，没有放宽检查。README及Wiki补齐安装版/源码版启动区别，开发验证使用G:隔离目录，发布说明去掉过期“无卸载程序”描述并禁止沿用历史C:ODB目标。Ruff与差异空白检查通过；本轮仅测试和文档变更，不重建相同产品负载，不重跑已通过整套测试。最终本地提交号以实际Git为准，未推送。
+
+本轮起点为干净7c874d33c405ad7ff07fadfce03ef74020ebb41e；上一轮为实际代码/测试/文档提交进展。使用项目解释器、G:测试TEMP/TMP运行 `packaging/build_release.py --no-restore`，95809退出0，生成 `GPTWork/release-win-x64-c245b91545d7/AbaqusTools`。清单列1669文件（清单本身另计）、19 worker，含清单总字节354939886；来源7c874d3、sourceDirty=false。相比旧6d5279845a23新增5份文档、无删除路径，30文件变化。完整核对回执 `GPTWork/draft-release-verification-20261118/inventory.json`，核对4f135a7/3d9ab94均为来源祖先，无模型/Qt/虚拟环境混入。
+
+包内 `--check-bundle` 退出0，回执 `bundle-probe-nnsq4uhj/verification.json`（位于上述验证目录），验证默认配置、全部worker、GIF、Agg图表、工作簿预览、SSH加密导入和Qt-free。正式C#客户端 `--launch-bundle` 指向新包及独立G:运行目录，启动、资源/队列API、正常退出通过（`frozen-host.log`），descriptor已移除；未使用`--odb`，未调用Abaqus或SSH。
+
+正式标识安装候选 `GPTWork/installer-win-x64-c513706de2c4/AbaqusTools-0.1.0-win-x64-setup.exe`，14206退出0，125568327字节，SHA256 `eda00152065f40dfce3ff7d0688e8d3535d69cd011276ec6ae15ebac905baf38`。负载与安装器源码均为干净7c874d3；1670项安装文件校验包含release-manifest。`installer-artifact.json`核对摘要、来源、安装引导器0x14c/应用和后台0x8664；`installer-signature.json`为NotSigned。两份回执在验证目录。编译器签名复核Valid。正式标识未实际安装、未发布GitHub。
+
+新负载另编译独立测试身份 `AbaqusTools.Workbench.WinUI3.Test.202611180002`，候选b7f81001e859，96170退出0；与既有旧测试包8a79e216e0c5（负载b2cfd57）验证升级。首个普通上下文命令在读取 `HKCU/Software/Microsoft/Windows/CurrentVersion/Explorer/Shell Folders` 时WinError 2退出1，发生在创建验证目录/安装之前，非产品失败。随后经审批在正常用户上下文运行同一隔离验证，26689退出0：`GPTWork/installer-lifecycle-4d8a268bb72f/verification.json` verified。
+
+生命周期覆盖陌生目录拒绝、链接祖先拒绝、中文空格首次安装与全摘要、活动自有后台拒绝升级/卸载而不被终止、正常退出后升级且保留旧版本/用户文件、开始菜单旧/新目标、安装后正式主机启动/API/退出、卸载清除测试登记/菜单且保留用户文件。forcedCleanupPids和remainingOwnedPids均为空，registrationRemaining=null；没有剩余自有进程或测试登记，没有原生业务窗口/求解。只移除本次安装器登记的测试程序；历史包、日志和用户ODB未移动或清理。
+
+首轮完整无桌面回归：70460已退出1，978通过、1失败、9子检查通过，640.28秒，回执 `GPTWork/draft-release-verification-20261118/full-suite.log` / `.xml`。命令 `python -X utf8 -m pytest tests -q --ignore=tests/submitter/test_native_window_startup.py --tb=short --basetemp=GPTWork/pytest-draft-release-full-20261118 --junitxml=GPTWork/draft-release-verification-20261118/full-suite.xml`。TEMP/TMP及两类数据目录位于 `GPTWork/draft-release-full-temp-20261118`，QT_QPA_PLATFORM=offscreen；已核查测试中C: ODB字符串只用于命令/界面数据断言，不作为写入目标。必须开窗口的测试明确排除。
+
+失败为 `tests/control_plane/test_remote_jobs_api.py` 中 `test_active_remote_job_prevents_accidental_session_disconnect` 的固定3秒等待。只读检查其 `runtime/remote-jobs.sqlite3`：createdAt为08:31:29.845Z、updatedAt为08:31:34.836Z，最终running/tracking、launchState=started、error=null；并非已证实断开保护失效。原用例独立复测1项通过2.19秒（remote-repro.log/xml）。随后只改测试，用启动/监测Event而非持续HTTP轮询等待；显式暂停模拟启动，分别在starting与running阶段核对409/REMOTE_SESSION_BUSY及连接保留，finally释放测试门闩。该模块4项通过7.54秒（remote-gated.log/xml），Ruff通过，产品源码和发布物未改。
+
+最终完整回归99701已退出0：**979项及9子检查通过，579.98秒**。新TEMP/TMP为 `GPTWork/draft-release-full2-temp-20261118`、basetemp为 `GPTWork/pytest-draft-release-full2-20261118`，回执 `GPTWork/draft-release-verification-20261118/full-suite-final.log` / `.xml`。排除原生窗口启动测试，不计为通过；没有启动求解。普通WMI进程探针因隔离账户权限拒绝；随后只读psutil探针48697已正常退出，原pytest进程终态由70460确认，未因探针失败重启原任务。全部本轮构建、安装和完整回归句柄已结束。
+
+合同核对发现下一独立实现项：`MainWindow.xaml.cs:339`的`OnNewJobMenuClicked`仅SelectRoute。PySide6基线 `modules/submitter/main.py` / `open_submission_wizard` 会先确认当前INP/oldjob/Fortran草稿；`workbench_ui.py` / `reset_for_new_job`清空任务文件/名称、回本地执行并保留通用资源值。WinUI缺这个动作，不能将整体剩余事项只归为环境。已向用户说明将区分普通切页和明确新建，下一步补确认/重置/忙碌及恢复保护，再独立测试与文档；本轮不在完整回归过程中修改业务源码。
+
+准确续接点：本轮最终完整回归已经收回，不重跑。文档收尾后一起本地提交；下一独立实现为上述F001/F003新建动作，需等待页面草稿恢复后重置，确认取消不清除，提交/预览忙碌时拒绝，持久化失败明确保留草稿，并保留通用资源配置。现有新包来源7c874d3，本轮仅测试及文档变更，包内文档是构建时快照；后续菜单改动不冒充已经在该包中，旧包保留。原生操作与具体GitHub main远端确认未收到，未启动桌面、未推送；整体目标active，仍缺真实环境/三级工程链/目标机/签名及原生验收。16:49实际查询周额度剩余24%，未达用户此前15%暂停线。
+
 ## 2026-11-18 · F001/F022 后处理工作区及未确认弹窗草稿
 
 从3d9ab94继续本轮草稿实现，保留既有改动。新增 `OdbPostprocessDraftRecovery`、`OdbPostprocessingPage.Drafts.cs`、`OdbPostprocessingPage.DialogDrafts.cs`；正式工作区保存复用捕获函数，结果图与后处理共用 `RecoveryDraftFile<T>` 串行磁盘写入。原始输出字符串及四类弹窗（提取参数、图例、分组管理、组内顺序）接入日常和会话结束检查点。未确认填写不转为业务提交；根目录、正式配置及最近发现的源身份不符时只能查看/保留副本。恢复准备新行且清除结构有效性；输入恢复异常尝试回滚，保留原件及副本；弹窗保留/恢复期间阻止关闭竞态。切换目录前等待旧草稿写盘。

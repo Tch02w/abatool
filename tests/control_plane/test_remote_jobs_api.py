@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -133,12 +134,29 @@ def test_remote_job_rejects_invalid_names_and_unknown_controls(tmp_path: Path) -
 
 
 def test_active_remote_job_prevents_accidental_session_disconnect(tmp_path: Path) -> None:
+    class GatedActiveRemoteManager(ActiveRemoteManager):
+        def __init__(self):
+            super().__init__()
+            self.launch_requested = threading.Event()
+            self.allow_launch = threading.Event()
+            self.monitor_requested = threading.Event()
+
+        def execute_powershell(self, script: str, *, timeout: float = 30) -> str:
+            if "process_id=[int]$process.Id" in script:
+                self.launch_requested.set()
+                if not self.allow_launch.wait(15):
+                    raise TimeoutError("Test did not release the simulated launch")
+            if "process_active=$active" in script:
+                self.monitor_requested.set()
+            return super().execute_powershell(script, timeout=timeout)
+
     inp = tmp_path / "active.inp"
     inp.write_text("*Heading\n", encoding="utf-8")
+    manager = GatedActiveRemoteManager()
     with running_control_plane(
         tmp_path,
         server_profiles_path=tmp_path / "profiles.json",
-        remote_manager=ActiveRemoteManager(),
+        remote_manager=manager,
     ) as runtime:
         _connect(runtime)
         created = api_request(
@@ -160,19 +178,26 @@ def test_active_remote_job_prevents_accidental_session_disconnect(tmp_path: Path
         )
         assert created[0] == 202
 
-        deadline = time.monotonic() + 3
-        while True:
+        def check_disconnect_rejected(expected_status):
             listed = json_response(api_request(runtime, "/api/v1/remote-jobs"))
-            if listed["operations"][0]["status"] == "running":
-                break
-            assert time.monotonic() < deadline
-            time.sleep(0.01)
+            assert listed["operations"][0]["status"] == expected_status, listed
+            disconnected = api_request(
+                runtime,
+                "/api/v1/remote-server-commands",
+                method="POST",
+                payload={"schemaVersion": 1, "action": "disconnect"},
+            )
+            assert disconnected[0] == 409, json_response(disconnected)
+            assert json_response(disconnected)["error"]["code"] == "REMOTE_SESSION_BUSY"
+            assert manager.connected_name
 
-        disconnected = api_request(
-            runtime,
-            "/api/v1/remote-server-commands",
-            method="POST",
-            payload={"schemaVersion": 1, "action": "disconnect"},
-        )
-        assert disconnected[0] == 409
-        assert json_response(disconnected)["error"]["code"] == "REMOTE_SESSION_BUSY"
+        # Hold a real worker boundary instead of assuming durable startup finishes
+        # within 3 seconds. This also proves preparation cannot be disconnected.
+        try:
+            assert manager.launch_requested.wait(10), json_response(api_request(runtime, "/api/v1/remote-jobs"))
+            check_disconnect_rejected("starting")
+            manager.allow_launch.set()
+            assert manager.monitor_requested.wait(10), json_response(api_request(runtime, "/api/v1/remote-jobs"))
+            check_disconnect_rejected("running")
+        finally:
+            manager.allow_launch.set()

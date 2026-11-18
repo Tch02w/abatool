@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F026 当前完整负载来自7c874d3，目录c245b91545d7、正式标识安装候选c513706de2c4；文件/依赖/正式主机及新负载隔离安装生命周期的准确回执见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) 顶部。候选入口只以 [当前状态](../08-handoff/CURRENT_STATUS.md) 为准，原生与目标机仍待验收。
+
 F001/F022 后处理恢复草稿：`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` / `SavePostprocessDraftAsync`、`OnRestoreWorkspaceDraftClicked`；同目录 `OdbPostprocessingPage.DialogDrafts.cs` / `ShowRecoverableDialogAsync` 覆盖提取参数、图例、管理分组和组内顺序。服务 `winui/AbaqusTools.WinUI/Services/OdbPostprocessDraftRecovery.cs` / `Matches`、`PrepareRows`、`Fingerprint`；共用磁盘写入迁至 `Services/RecoveryDraftFile.cs`（同一WinUI项目），结果图存储继承它。测试 `tests/winui_postprocess/PostprocessDraftChecks.cs`（`--draft-checks`）、既有后处理与结果图专项、`tests/winui/test_shell_contract.py`；边界见 [ADR0019](../submitter/adr/0019-postprocess-recovery-drafts.md)。
 
 导航更新于 2026-11-18。路径均相对仓库根目录；编号固定，不随排序更改。下表定位入口文件及相关符号；**代码存在不代表功能已完整验收**。各项当前状态见 [当前状态](../08-handoff/CURRENT_STATUS.md)，证据见 [验收记录](../06-testing/VALIDATION.md)。

@@ -1,5 +1,7 @@
 # Windows 发布构建（F026）
 
+最新提醒补发候选为 `GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`（干净e31a358），1662文件/19worker、依赖/正式主机、新提醒补发与原归档恢复真实进程验证通过。`packaging/verify_archive_notifications.py <完整目录或--source> <ControlPlaneHost.Tests.exe>` 只中断自己的微型生产者，清除夹具队列后核对正式客户端补发/已读和第二次重启，证据见[当前状态](../08-handoff/CURRENT_STATUS.md)。以下8791f815c891为前一归档恢复候选，保留原记录。
+
 最新已验证完整目录为 `GPTWork/release-win-x64-8791f815c891/AbaqusTools`，干净源码6cb343d，1662文件/19worker、依赖、正式主机及归档中断恢复通过。前一89d3b6ab518e候选的状态读取超时和修正证据保留，详见[当前状态](../08-handoff/CURRENT_STATUS.md)及[验收记录](../06-testing/VALIDATION.md)。原生业务页面、跨卷大文件与目标机未验收，不是正式安装版。
 
 当前产物为 Windows x64 完整目录候选。必须复制整个目录；无开发环境机器验收和正式安装包评审仍需完成。Abaqus 本身和许可证由目标机器提供，不随本软件分发。

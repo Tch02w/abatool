@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+F027最新完整包 **`GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`**（干净e31a358）完成1662文件/19worker用户账户摘要、包内依赖 `GPTWork/bundle-probe-v7sw1_nd/verification.json`、正式主机启动/API/退出检查。新提醒补发 `GPTWork/archive-notice-live-2af35a395468/verification.json` 与原归档恢复 `GPTWork/archive-recovery-live-7e74fa0a82cd/verification.json` 均verified，全部自有进程结束，无Abaqus。前者验证已保存结果而未回调时结束生产者、清除队列、正式客户端补发/已读、二次重启仍已读；两者核对原输入及完整归档摘要。下方新包待验状态由本回执补齐；原生/跨卷/工程负载/目标机仍未覆盖。
+
 归档提醒最终相关回归 `GPTWork/archive-notice-delivery-20261118.xml/log` **86项通过（202.82秒）**，含5项补发/损坏/取消/缓存/元数据一致性、归档恢复/核心、通知、关闭、执行和WinUI壳层；覆盖范围不同于原生视觉验收。新完整包仍待验证，下方“最终相关检查待验证”由本项补齐。
 
 F027归档提醒补发源码：`GPTWork/archive-notice-live-5dbd1b38a22d/verification.json` verified，实际结束已保存结果但未写提醒的自有进程、删除夹具队列，新后台仍补发；正式C#客户端已读后第二次重启不重复。最终文件摘要与原INP不变、全部自有进程结束，无求解。C#14项通知/定位检查及既有主机检查通过，Release零警告/错误26.35秒。4项初轮专项通过；最终相关检查/新完整包待验证。失败与准确进程状态见TASK-002顶部，不把首轮4秒等待超时当作缺陷断言复现。

@@ -2,6 +2,10 @@
 
 ## 2026-11-18 · 归档独立提醒的崩溃补发
 
+**最终完整包回执**：本地源码提交 `e31a3583159a3e8f1822b72977d582cb6f5ce53b`，干净来源包 `GPTWork/release-win-x64-10aba0ad350a/AbaqusTools`（构建59888退出0）；用户账户1662文件/19worker摘要、依赖 `GPTWork/bundle-probe-v7sw1_nd/verification.json`、正式主机 `GPTWork/archive-notice-frozen-host-20261118.log` 均通过。冻结提醒补发 `GPTWork/archive-notice-live-2af35a395468/verification.json` 和归档恢复回归 `GPTWork/archive-recovery-live-7e74fa0a82cd/verification.json` verified：实际中断自有生产者、队列清除、正式客户端补发与已读、第二次重启保持已读；原归档恢复、完整摘要与原输入不变继续通过。所有自有实际/包装进程均已核对结束，没有Abaqus求解。文档导航47项通过，旧候选及失败回执保留。
+
+准确下一项：定向复现并修正外部扫描占用队列锁导致读取等待，扫描放到快照/写入锁之外时须拒绝合并过期执行结果。原生交互和具体GitHub远端确认仍未收到，不重问、不绕过；未执行push。下方“进行中/待验证”是过程记录，已由上述最终回执补齐；本轮不宣称原生业务操作或整体迁移完成。
+
 最终相关回归 `GPTWork/archive-notice-delivery-20261118.xml/log` **86项通过（202.82秒）**，覆盖5项新补发/缓存/保护、恢复API/核心、原求解执行、通知、关闭与WinUI壳层；22623已返回0。没有Abaqus求解。当前接续改为文档检查、本地功能提交和新完整包验证，不再等待该测试。
 
 上一轮有实质进展：归档恢复/目录观察修正与8791f815c891完整包完成验证，749d17d为交接提交。当前工作区开工时干净。本轮按用户更新后的完整迁移目标继续；目标仍包含全部功能验证、性能/界面、Wiki/README及GitHub上传，不收缩为归档局部。

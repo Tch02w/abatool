@@ -13,6 +13,9 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private LocalResourceSnapshot? _localSnapshot;
     private RemoteServersSnapshot _remoteSnapshot = new();
     private string _activeTransferId = string.Empty;
+    private bool _transferRecoveryPending = true;
+    private bool _transferObservationWarning;
+    private CancellationTokenSource _transferObservationSource = new();
     private bool _busy;
     private bool _backgroundRefreshBusy;
     private readonly ResourceExplorerAdapter _explorerAdapter;
@@ -57,6 +60,11 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        if (_transferObservationSource.IsCancellationRequested)
+        {
+            _transferObservationSource.Dispose();
+            _transferObservationSource = new();
+        }
         var ready = _menuReady;
         if (App.Current.MainWindow.LatestLocalResource is { } local)
         {
@@ -82,12 +90,20 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         _remoteRefreshTimer.Stop();
+        // Stop observing this page; the backend transfer itself keeps running.
+        _transferRecoveryPending = true;
+        _transferObservationSource.Cancel();
         _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async void OnRemoteRefreshTimerTick(object? sender, object e)
     {
-        if (App.Current.Session.IsClosing || App.Current.Commands.Locked) return;
+        if (!IsLoaded || App.Current.Session.IsClosing || App.Current.Commands.Locked) return;
+        if (!_busy && !_backgroundRefreshBusy && _transferRecoveryPending)
+        {
+            await RecoverTransfersAsync();
+            return;
+        }
         if (_busy || _backgroundRefreshBusy ||
             (_remoteSnapshot.Connection.Status != "connected" && !_remoteSnapshot.Connection.IsBusy))
         {
@@ -144,6 +160,11 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     public async Task RefreshSelectedAsync()
     {
+        if (_transferRecoveryPending)
+        {
+            await RecoverTransfersAsync();
+            if (_transferRecoveryPending) return;
+        }
         var commands = App.Current.Commands;
         if (ResourceList.SelectedItem is ResourceNodeRow { IsLocal: false })
         {
@@ -334,7 +355,13 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         {
             return null;
         }
+        if (_transferRecoveryPending)
+        {
+            ShowTransferObservationWarning("请先刷新并核对后台已有传输，避免重复提交。");
+            return null;
+        }
         _busy = true;
+        var observationToken = _transferObservationSource.Token;
         UpdateButtons();
         TransferPanel.Visibility = Visibility.Visible;
         TransferProgressBar.Value = 0;
@@ -347,37 +374,60 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
                 source,
                 destination,
                 overwrite);
-            return await ObserveTransferAsync(operation);
+            _activeTransferId = operation.OperationId;
+            _transferRecoveryPending = true;
+            return await ObserveTransferAsync(operation, observationToken);
+        }
+        catch (OperationCanceledException) when (observationToken.IsCancellationRequested || App.Current.Session.IsClosing)
+        {
+            _transferRecoveryPending = true;
+            return null;
+        }
+        catch (ControlPlaneException error) when (string.IsNullOrEmpty(_activeTransferId)
+            && error.Code is not null && !error.Retryable)
+        {
+            _transferRecoveryPending = true;
+            TransferStatusText.Text = "传输未开始";
+            ShowError(error.Message);
+            return null;
         }
         catch (Exception exception)
         {
-            TransferStatusText.Text = "文件传输失败";
-            ShowError(exception.Message);
+            // A lost creation reply or a failed read does not establish the
+            // transfer's terminal state. Recover by GET, never re-submit it.
+            _transferRecoveryPending = true;
+            ShowTransferObservationWarning(exception.Message);
             return null;
         }
         finally
         {
-            _activeTransferId = string.Empty;
             _busy = false;
             UpdateButtons();
         }
     }
 
-    private async Task<RemoteTransferOperationSnapshot> ObserveTransferAsync(RemoteTransferOperationSnapshot operation)
+    private async Task<RemoteTransferOperationSnapshot> ObserveTransferAsync(
+        RemoteTransferOperationSnapshot operation, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var direction = operation.Request.Direction;
         TransferPanel.Visibility = Visibility.Visible;
         CancelTransferButton.IsEnabled = true;
         _activeTransferId = operation.OperationId;
-        var terminal = await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
+        var terminal = operation.IsTerminal ? operation : await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
             operation.OperationId,
             snapshot =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 TransferProgressBar.Value = snapshot.Progress.Percent;
                 TransferStatusText.Text = snapshot.Progress.TotalBytes > 0
                     ? $"{(direction == "upload" ? "上传" : "下载")} {snapshot.Progress.Percent}% · {snapshot.Progress.CompletedBytes:N0} / {snapshot.Progress.TotalBytes:N0} 字节"
                     : direction == "upload" ? "正在上传…" : "正在下载…";
-            });
+            }, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        _activeTransferId = string.Empty;
+        _transferRecoveryPending = false;
+        ClearTransferObservationWarning();
         CancelTransferButton.IsEnabled = false;
         if (terminal.Status == "succeeded")
         {
@@ -401,27 +451,73 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private async Task RecoverTransfersAsync()
     {
-        if (_busy || App.Current.Session.IsClosing) return;
+        if (_busy || !IsLoaded || App.Current.Session.IsClosing) return;
+        var observationToken = _transferObservationSource.Token;
         _busy = true;
+        _transferRecoveryPending = true;
         UpdateButtons();
         try
         {
-            while (!App.Current.Session.IsClosing)
+            while (IsLoaded && !App.Current.Session.IsClosing)
             {
-                var active = await App.Current.ControlPlane.GetActiveRemoteTransfersAsync();
-                var operation = active.Operations.OrderBy(item => item.CreatedAt).FirstOrDefault();
-                if (operation is null) break;
-                await ObserveTransferAsync(operation);
+                observationToken.ThrowIfCancellationRequested();
+                // Query the known identity first: it may have finished while
+                // the page was away and therefore be absent from activeOnly.
+                var operation = !string.IsNullOrEmpty(_activeTransferId)
+                    ? await App.Current.ControlPlane.GetRemoteTransferAsync(_activeTransferId, observationToken)
+                    : (await App.Current.ControlPlane.GetActiveRemoteTransfersAsync(observationToken))
+                        .Operations.OrderBy(item => item.CreatedAt).FirstOrDefault();
+                if (operation is null)
+                {
+                    _transferRecoveryPending = false;
+                    ClearTransferObservationWarning();
+                    break;
+                }
+                await ObserveTransferAsync(operation, observationToken);
             }
         }
-        catch (OperationCanceledException) when (App.Current.Session.IsClosing) { }
-        catch (Exception error) { ShowError("后台传输状态读取失败：" + error.Message); }
+        catch (OperationCanceledException) when (observationToken.IsCancellationRequested || App.Current.Session.IsClosing)
+        {
+            _transferRecoveryPending = true;
+        }
+        catch (ControlPlaneException error) when (error.Code == "REMOTE_TRANSFER_NOT_FOUND")
+        {
+            // Transfers live in one backend instance. A replacement backend
+            // cannot establish what the old task saved; keep that uncertainty
+            // visible while allowing discovery of its own current operations.
+            _activeTransferId = string.Empty;
+            _transferRecoveryPending = true;
+            CancelTransferButton.IsEnabled = false;
+            TransferStatusText.Text = "原传输记录不可用，请核对文件";
+            ShowInfo("后台已无原传输记录，无法确认是否完成。请核对原服务器与目标文件；不会自动重传。",
+                InfoBarSeverity.Warning, "传输结果待核对");
+        }
+        catch (Exception error)
+        {
+            _transferRecoveryPending = true;
+            ShowTransferObservationWarning(error.Message);
+        }
         finally
         {
-            _activeTransferId = string.Empty;
             _busy = false;
             UpdateButtons();
         }
+    }
+
+    private void ShowTransferObservationWarning(string message)
+    {
+        TransferStatusText.Text = "传输状态暂未确认";
+        ShowInfo("暂时未能读取最新状态，将自动重试查询；不会重新提交或取消传输。\n" + message,
+            InfoBarSeverity.Warning, "正在核对传输状态");
+        _transferObservationWarning = true;
+        CancelTransferButton.IsEnabled = !string.IsNullOrEmpty(_activeTransferId);
+    }
+
+    private void ClearTransferObservationWarning()
+    {
+        if (!_transferObservationWarning) return;
+        ResourceInfoBar.IsOpen = false;
+        _transferObservationWarning = false;
     }
 
     private async Task<bool> ConfirmOverwriteAsync(string destination)
@@ -935,8 +1031,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         EditButton.IsEnabled = !_busy && isRemote;
         DisconnectButton.IsEnabled = connected;
         DeleteButton.IsEnabled = !_busy && isRemote && row is { IsConnected: false };
-        BrowseFilesButton.IsEnabled = !_busy && row is { IsLocal: false, IsConnected: true };
-        UploadFileButton.IsEnabled = !_busy && row is { IsLocal: false, IsConnected: true };
+        BrowseFilesButton.IsEnabled = !_busy && !_transferRecoveryPending && row is { IsLocal: false, IsConnected: true };
+        UploadFileButton.IsEnabled = !_busy && !_transferRecoveryPending && row is { IsLocal: false, IsConnected: true };
     }
 
     private void ShowError(string message)
@@ -950,6 +1046,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         InfoBarSeverity severity,
         string title = "计算资源")
     {
+        _transferObservationWarning = false;
         ResourceInfoBar.Title = title;
         ResourceInfoBar.Message = message;
         ResourceInfoBar.Severity = severity;

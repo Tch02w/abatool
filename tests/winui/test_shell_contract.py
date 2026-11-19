@@ -559,6 +559,23 @@ def test_compute_resource_background_refresh_keeps_toolbar_interactive() -> None
     assert "UpdateButtons();" not in background_refresh
 
 
+def test_transfer_observation_preserves_identity_and_never_resubmits_on_refresh() -> None:
+    page = (WINUI_ROOT / "Pages" / "ComputeResourcesPage.xaml.cs").read_text(encoding="utf-8")
+    unload = page.split("private void OnPageUnloaded", 1)[1].split("private async void OnRemoteRefreshTimerTick", 1)[0]
+    recovery = page.split("private async Task RecoverTransfersAsync", 1)[1].split("private void ShowTransferObservationWarning", 1)[0]
+    observer = page.split("private async Task<RemoteTransferOperationSnapshot> ObserveTransferAsync", 1)[1].split("private async Task RecoverTransfersAsync", 1)[0]
+    assert "_transferObservationSource.Cancel()" in unload
+    assert "CancelRemoteTransferAsync" not in unload
+    assert "GetRemoteTransferAsync(_activeTransferId, observationToken)" in recovery
+    assert "GetActiveRemoteTransfersAsync(observationToken)" in recovery
+    assert "StartRemoteTransferAsync" not in recovery and "CancelRemoteTransferAsync" not in recovery
+    assert "_activeTransferId = string.Empty" not in recovery.split("finally", 1)[1]
+    assert "operation.IsTerminal ? operation" in observer
+    assert "}, cancellationToken)" in observer
+    assert 'error.Code == "REMOTE_TRANSFER_NOT_FOUND"' in recovery
+    assert 'ShowError("后台传输状态读取失败' not in recovery
+
+
 def test_shell_uses_page_aware_workbench_explorer_modules() -> None:
     shell = (WINUI_ROOT / "MainWindow.xaml").read_text(encoding="utf-8")
     window = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")

@@ -13,6 +13,16 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 1 && args[0] == "--remote-observation-checks")
+    {
+        await RemoteObservationChecks.RunAsync();
+        return 0;
+    }
+    if (args.Length == 3 && args[0] == "--remote-observation-api")
+    {
+        await RemoteObservationChecks.RunApiAsync(args[1], args[2]);
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--profile-checks")
     {
         WorkbenchProfileChecks.Run(args[1]);

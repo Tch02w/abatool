@@ -1,5 +1,15 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 远端传输状态观察修复
+
+上一轮e81fcb5f99cedb7ead531a906ee6a529c3aef0bd已推送并核对远端，属于实际进展。本轮处理资源页曾出现的“后台传输状态读取失败：The operation was canceled.”：源码中三个状态GET将10秒响应限时也用于等待连接，而后台冷启动另允许25秒。新增生产C#客户端检查，持有连接门10.4秒即复现旧行为，remote-observation-before-20261119会话61751退出1，错误State-read deadline expired while only waiting for backend readiness；没有启动后台或求解。
+
+ControlPlaneHost.ReadRemoteStateAsync为服务器快照、活动传输列表及按ID查询分离30秒连接准备/10秒响应预算，内部超时返回REMOTE_STATE_TIMEOUT，外部取消仍为取消。ComputeResourcesPage保留原传输ID，切页只取消观察，重进先按ID查询终态；临时读取失败显示待确认并由原10秒定时器/主动刷新重查，不自动重新提交。明确拒绝创建、实际传输失败和后台旧记录不存在分别显示；无法确认时不虚构成功/失败。没有变更远端登录、密码、后台传输算法或HTTP协议。
+
+生产客户端6项检查已通过，remote-observation-fixed-20261119会话79699退出0；三个读取等待准备、HTTP超时分类、调用者取消及后续读取恢复。真实HTTP/替身传输集成首轮3通过/1失败（remote-observation-api-20261119.xml，会话44130退出1）：新增Python用例漏导入json_response，修正导入后单例通过，transfer-observer-cancel-fixed-20261119.xml为1通过/4.51秒。该例验证生产C#取消进度观察后原后台仍仅有一个running传输，释放替身后succeeded；不等于真实SSH断网或原生切页验收。此前37项shell检查通过；本轮新增页面接线约束随最终回归复核。
+
+开发发布remote-observation-native-20261119首次构建通过（会话88677退出0），随后补充明确创建拒绝的错误分支；最终生产构建会话7661退出0、0警告/0错误（23.13秒）。最终文档/shell/传输API/慢资源快照99项通过（9.99秒，会话85029，remote-observation-final-20261119.xml）。原表单/队列确认问题尚未收到答复，窗口9528和已登录227820保留；不重复登录或关闭其后台。准确续接点：提交修复并构建新完整候选，再继续未验业务；旧555b/9f安装候选不含此次前端观察修复，不把原生行为提前标为通过。
+
 ## 2026-11-19 · 真实合并进程存活时的后台崩溃恢复
 
 批量场景也已补验：同一工具新增--later参数，使用既有cube_base/cube_r1/cube_r2真实三级小模型，正式结果图和批量API提交两个阶段。第一阶段82%时暂停自有校验128728，强制结束后台229512；恢复后台187772显示批次suspended、原单步ODB_MERGE_INTERRUPTED。显式继续后批次failed/ODB_BATCH_FAILED，完成0/2，第二阶段childOperationId为空，无结果发布；原校验此时确实仍存活，同请求未重放。恢复校验后退出120，第三次11120仍恢复同一失败批次和单步记录；两个恢复后台均idle退出0，无记录进程残留，来源全摘要不变。会话28532退出0，回执GPTWork/real-batch-backend-crash-453005f06383/verification.json。未重新求解。

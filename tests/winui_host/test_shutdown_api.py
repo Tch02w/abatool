@@ -6,10 +6,54 @@ from pathlib import Path
 import pytest
 
 from modules.postprocessor.process_runner import ProcessCancelled
-from tests.control_plane.test_api import api_request, running_control_plane
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
 from tests.control_plane.test_local_queue_runtime_api import wait_until
 from tests.control_plane.test_postprocessing_api import _scan_payload, _settings
 from tests.control_plane.test_remote_transfers_api import FakeRemoteManager, _connect
+
+
+def test_remote_observation_separates_readiness_timeout_and_cancellation(close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--remote-observation-checks"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=65, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "6 remote observation checks passed" in result.stdout
+
+
+def test_cancelling_native_observation_keeps_original_transfer_running(tmp_path, close_client):
+    started, release = threading.Event(), threading.Event()
+
+    class Remote(FakeRemoteManager):
+        def upload_file(self, *args, **kwargs):
+            started.set()
+            assert release.wait(30)
+            assert not kwargs["cancel_requested"]()
+            return super().upload_file(*args, **kwargs)
+
+    with running_control_plane(tmp_path, remote_manager=Remote(), server_profiles_path=tmp_path / "profiles.json") as runtime:
+        try:
+            _connect(runtime)
+            payload = {"schemaVersion": 1, "clientRequestId": "observe-once", "direction": "upload",
+                       "source": str(tmp_path / "case.inp"), "destination": r"D:\Abaqus_Cal\case.inp", "overwrite": False}
+            response = api_request(runtime, "/api/v1/remote-transfers", method="POST", payload=payload)
+            assert response[0] == 202
+            operation_id = json_response(response)["operationId"]
+            assert started.wait(5)
+            result = subprocess.run(
+                ["dotnet", str(close_client), "--remote-observation-api", str(runtime.descriptor_path), operation_id],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+            listing = json_response(api_request(runtime, "/api/v1/remote-transfers"))["operations"]
+            assert len(listing) == 1 and listing[0]["operationId"] == operation_id and listing[0]["status"] == "running"
+        finally:
+            release.set()
+        wait_until(lambda: json_response(api_request(runtime, "/api/v1/remote-transfers/" + operation_id))["status"] == "succeeded")
 
 
 def test_workbench_profile_isolates_paths_and_instance_identity(tmp_path, close_client):

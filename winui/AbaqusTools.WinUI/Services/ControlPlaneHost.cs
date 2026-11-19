@@ -470,18 +470,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
     public async Task<RemoteServersSnapshot> GetRemoteServersAsync(
         CancellationToken cancellationToken = default)
     {
-        using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            _shutdownSource.Token);
-        effectiveSource.CancelAfter(TimeSpan.FromSeconds(10));
-        var descriptor = await EnsureReadyAsync(effectiveSource.Token);
-        var response = await SendJsonRequestAsync<RemoteServersSnapshot>(
-            descriptor,
-            HttpMethod.Get,
-            "/api/v1/remote-servers",
-            requestBody: null,
-            "远端服务器快照",
-            effectiveSource.Token);
+        var response = await ReadRemoteStateAsync<RemoteServersSnapshot>(
+            "/api/v1/remote-servers", "远端连接状态", cancellationToken);
         ValidateRemoteServersSnapshot(response);
         return response;
     }
@@ -647,11 +637,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     public async Task<RemoteTransferListSnapshot> GetActiveRemoteTransfersAsync(CancellationToken cancellationToken = default)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownSource.Token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(10));
-        var descriptor = await EnsureReadyAsync(timeout.Token);
-        var response = await SendJsonRequestAsync<RemoteTransferListSnapshot>(descriptor, HttpMethod.Get,
-            "/api/v1/remote-transfers?activeOnly=true", null, "后台传输列表", timeout.Token);
+        var response = await ReadRemoteStateAsync<RemoteTransferListSnapshot>(
+            "/api/v1/remote-transfers?activeOnly=true", "后台传输列表", cancellationToken);
         if (response.SchemaVersion != 1 || response.Operations is null)
             throw new InvalidDataException("后台传输列表无效。");
         foreach (var operation in response.Operations) ValidateRemoteTransferSnapshot(operation);
@@ -662,20 +649,36 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string operationId,
         CancellationToken cancellationToken = default)
     {
-        using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            _shutdownSource.Token);
-        effectiveSource.CancelAfter(TimeSpan.FromSeconds(10));
-        var descriptor = await EnsureReadyAsync(effectiveSource.Token);
-        var response = await SendJsonRequestAsync<RemoteTransferOperationSnapshot>(
-            descriptor,
-            HttpMethod.Get,
+        var response = await ReadRemoteStateAsync<RemoteTransferOperationSnapshot>(
             $"/api/v1/remote-transfers/{Uri.EscapeDataString(ValidateOperationId(operationId))}",
-            requestBody: null,
-            "远端文件传输状态",
-            effectiveSource.Token);
+            "远端文件传输状态", cancellationToken);
         ValidateRemoteTransferSnapshot(response, operationId);
         return response;
+    }
+
+    private async Task<T> ReadRemoteStateAsync<T>(string path, string label, CancellationToken cancellationToken)
+    {
+        ControlPlaneDescriptor descriptor;
+        using (var readiness = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownSource.Token))
+        {
+            // Cold startup already has a 25-second budget. Waiting for it must
+            // not consume the shorter HTTP response deadline below.
+            readiness.CancelAfter(TimeSpan.FromSeconds(30));
+            try { descriptor = await EnsureReadyAsync(readiness.Token); }
+            catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested && !_shutdownSource.IsCancellationRequested)
+            {
+                throw new ControlPlaneException("等待本地后台就绪超时，尚未确认远端状态。请刷新状态，勿重复提交任务。",
+                    code: "REMOTE_STATE_TIMEOUT", retryable: true, innerException: error);
+            }
+        }
+        using var response = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownSource.Token);
+        response.CancelAfter(TimeSpan.FromSeconds(10));
+        try { return await SendJsonRequestAsync<T>(descriptor, HttpMethod.Get, path, null, label, response.Token); }
+        catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested && !_shutdownSource.IsCancellationRequested)
+        {
+            throw new ControlPlaneException($"读取{label}超时，尚未确认最新状态。现有任务未被取消，请刷新状态，勿重复提交。",
+                code: "REMOTE_STATE_TIMEOUT", retryable: true, innerException: error);
+        }
     }
 
     public async Task<RemoteTransferOperationSnapshot> CancelRemoteTransferAsync(

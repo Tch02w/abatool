@@ -1,7 +1,5 @@
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
@@ -31,11 +29,9 @@ public sealed partial class MainWindow
     private void ApplyExplorerVisibility()
     {
         var visible = App.Current.Session.State.ExplorerVisible;
-        ExplorerToggleIcon.Glyph = visible ? "\uE76B" : "\uE76C";
-        ExplorerToggleButton.Margin = new Thickness(0, 8, visible ? 8 : 5, 0);
-        var action = visible ? "收起浏览侧栏" : "显示浏览侧栏";
-        AutomationProperties.SetName(ExplorerToggleButton, action);
-        ToolTipService.SetToolTip(ExplorerToggleButton, action + " (Ctrl+B)");
+        var focusWasExpandButton = visible && Content.XamlRoot is { } focusRoot
+            && ReferenceEquals(FocusManager.GetFocusedElement(focusRoot), ExplorerToggleButton);
+        ExplorerToggleButton.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
         if (!visible && Content.XamlRoot is { } root)
         {
             for (var element = FocusManager.GetFocusedElement(root) as DependencyObject;
@@ -48,6 +44,7 @@ public sealed partial class MainWindow
         }
         // Keep the same explorer and page instances, including selection and ongoing work.
         ExplorerHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (focusWasExpandButton) ExplorerHost.FocusCollapseButton();
         ExplorerCollapsedRail.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
         ExplorerColumn.Width = new GridLength(visible
             ? WindowLayoutConstraints.ExplorerWidth : WindowLayoutConstraints.ExplorerRailWidth);

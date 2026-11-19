@@ -22,6 +22,14 @@ public sealed partial class WorkbenchExplorerHost : UserControl
         InitializeComponent();
     }
 
+    public event RoutedEventHandler? CollapseRequested;
+
+    public void SetCollapseEnabled(bool enabled) => ExplorerCollapseButton.IsEnabled = enabled;
+
+    public void FocusCollapseButton() => ExplorerCollapseButton.Focus(FocusState.Programmatic);
+
+    private void OnCollapseClicked(object sender, RoutedEventArgs args) => CollapseRequested?.Invoke(this, args);
+
     public void Attach(IWorkbenchExplorerAdapter adapter)
     {
         if (ReferenceEquals(_adapter, adapter))

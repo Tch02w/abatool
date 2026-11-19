@@ -193,6 +193,7 @@
 
                     <controls:WorkbenchExplorerHost
                         x:Name="ExplorerHost"
+                        CollapseRequested="OnExplorerToggleClicked"
                         Width="280"
                         HorizontalAlignment="Stretch" />
 
@@ -202,13 +203,14 @@
                             BorderThickness="0,0,1,0" />
 
                     <Button x:Name="ExplorerToggleButton" Width="30" Height="30"
-                            MinWidth="0" Padding="0" Margin="0,8,8,0"
+                            MinWidth="30" MinHeight="30" Padding="0" Margin="0,8,5,0" Visibility="Collapsed"
                             HorizontalAlignment="Right" VerticalAlignment="Top"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                             Click="OnExplorerToggleClicked"
-                            AutomationProperties.Name="收起浏览侧栏"
-                            ToolTipService.ToolTip="收起浏览侧栏 (Ctrl+B)">
-                        <FontIcon x:Name="ExplorerToggleIcon" FontSize="12" Glyph="&#xE76B;" />
+                            AutomationProperties.Name="显示浏览侧栏"
+                            ToolTipService.ToolTip="显示浏览侧栏 (Ctrl+B)">
+                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                  FontSize="16" Width="16" Height="16" Glyph="&#xE76C;" />
                     </Button>
 
                     <Frame x:Name="ContentFrame" Grid.Column="1" />

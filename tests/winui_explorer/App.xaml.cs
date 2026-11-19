@@ -4,6 +4,7 @@ using AbaqusTools.WinUI.Explorer;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace ExplorerControlChecks;
 
@@ -33,6 +34,8 @@ public sealed partial class TestApp : Application
             _window.Activate();
             await loaded.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await CheckInfoBarLayoutAsync();
+            await CheckHeaderAlignmentAsync();
+            await CheckCompactTreeAsync();
             await CheckSelectionsAsync();
             Write(new { status = "passed", checks = _checks });
         }
@@ -83,6 +86,94 @@ public sealed partial class TestApp : Application
         await DispatchAsync();
     }
 
+    private async Task CheckHeaderAlignmentAsync()
+    {
+        var explorer = new WorkbenchExplorerHost { Width = 280 };
+        _root.Children.Add(explorer);
+        var refresh = (Button)explorer.FindName("ExplorerRefreshButton");
+        var collapse = (Button)explorer.FindName("ExplorerCollapseButton");
+        var primary = (Button)explorer.FindName("ExplorerPrimaryButton");
+        var subtitle = (TextBlock)explorer.FindName("ExplorerSubtitleText");
+        foreach (var hasSubtitle in new[] { false, true })
+        foreach (var hasPrimary in new[] { false, true })
+        {
+            subtitle.Text = hasSubtitle ? @"G:\验收目录\较长的结果路径" : "";
+            primary.Content = "选择目录";
+            primary.Height = 40;
+            primary.Visibility = hasPrimary ? Visibility.Visible : Visibility.Collapsed;
+            await DispatchAsync();
+            _root.UpdateLayout();
+            var refreshTop = refresh.TransformToVisual(explorer).TransformPoint(default).Y;
+            var collapseTop = collapse.TransformToVisual(explorer).TransformPoint(default).Y;
+            Check(Math.Abs(refreshTop - collapseTop) < .01
+                && refresh.ActualWidth == 30 && refresh.ActualHeight == 30
+                && collapse.ActualWidth == 30 && collapse.ActualHeight == 30,
+                $"Header buttons align at {refreshTop:F1}/{collapseTop:F1} DIP with subtitle={hasSubtitle}, primary={hasPrimary}");
+        }
+        _root.Children.Remove(explorer);
+        await DispatchAsync();
+    }
+
+    private async Task CheckCompactTreeAsync()
+    {
+        var explorer = new WorkbenchExplorerHost { Width = 280 };
+        _root.Children.Add(explorer);
+        var tree = (TreeView)explorer.FindName("ExplorerTree");
+        var nodes = Enumerable.Range(0, 6).Select(depth => new TreeViewNode
+        {
+            Content = new ExplorerItem
+            {
+                StableId = $"layout:{depth}", Title = $"Layout depth {depth}",
+                Kind = depth == 5 ? ExplorerItemKind.ResultRecord : ExplorerItemKind.ResultScope,
+                IconGlyph = depth == 5 ? "\uE8A5" : "\uE8B7",
+            },
+            IsExpanded = true,
+        }).ToArray();
+        for (var depth = 1; depth < nodes.Length; depth++) nodes[depth - 1].Children.Add(nodes[depth]);
+        tree.RootNodes.Add(nodes[0]);
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            explorer.RequestedTheme = theme;
+            await DispatchAsync();
+            _root.Measure(new Windows.Foundation.Size(400, 800));
+            _root.Arrange(new Windows.Foundation.Rect(0, 0, 400, 800));
+            _root.UpdateLayout();
+            await DispatchAsync();
+            var labels = Descendants<TextBlock>(tree)
+                .Where(label => label.Text.StartsWith("Layout depth ")).OrderBy(label => label.Text).ToArray();
+            var positions = labels.Select(label => label.TransformToVisual(explorer).TransformPoint(default).X).ToArray();
+            Check(positions.Length == 6 && positions.Zip(positions.Skip(1)).All(pair => Math.Abs(pair.Second - pair.First - 10) < .1),
+                $"{theme}: six tree levels use 10 DIP indentation: {string.Join(",", positions)}");
+            var icons = Descendants<FontIcon>(tree).ToArray();
+            Check(icons.Length == 6 && icons.Count(icon => icon.Glyph == "\uE8B7") == 5
+                && icons.Count(icon => icon.Glyph == "\uE8A5") == 1
+                && icons.All(icon => icon.FontFamily.Source.Contains("Segoe Fluent Icons")),
+                $"{theme}: folder and file glyphs bind distinctly using the symbol font");
+            nodes[0].IsExpanded = false;
+            await DispatchAsync();
+            nodes[0].IsExpanded = true;
+            await DispatchAsync();
+            _root.UpdateLayout();
+            await DispatchAsync();
+            tree.SelectedNode = nodes[^1];
+            await DispatchAsync();
+            Check(ReferenceEquals(tree.SelectedNode, nodes[^1]) && tree.ContainerFromNode(nodes[^1]) is not null,
+                $"{theme}: a deep file remains selectable after collapsing and expanding its parent");
+        }
+        _root.Children.Remove(explorer);
+        await DispatchAsync();
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T element) yield return element;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
+    }
+
     private async Task CheckSelectionsAsync()
     {
         var explorer = new WorkbenchExplorerHost();
@@ -90,6 +181,10 @@ public sealed partial class TestApp : Application
         _root.UpdateLayout();
         var adapter = new SnapshotAdapter("results");
         explorer.Attach(adapter);
+        await DispatchAsync();
+        _root.Measure(new Windows.Foundation.Size(400, 800));
+        _root.Arrange(new Windows.Foundation.Rect(0, 0, 400, 800));
+        _root.UpdateLayout();
         await DispatchAsync();
         var tree = (TreeView)explorer.FindName("ExplorerTree");
         tree.SelectionChanged += (_, args) => _selectionEvents.Add(

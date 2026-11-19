@@ -1,5 +1,32 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 侧栏按钮比例、树缩进与目录含义
+
+收尾核验：最终窗口1442068已实际加载4个范围并连接后台，AX确认“结果根目录/对比组目录/提取批次目录/模型结果目录”。原生205860、后台201772、子221920，身份回执`GPTWork/native-sidebar-final-20261119/result-browser/processes.json`，窗口保留供查看。最终23项控件与86项shell/文档检查通过（sidebar-final-regression-fixed-20261119.log）；初次最终文档检查85通过/1失败是CURRENT_STATUS漏写持续维护约定的原句，已补回，失败日志保留。没有将最终14号刷新图标宣称为用户视觉确认。
+
+用户确认按钮已对齐、树缩进正常；反馈刷新图标视觉偏大，随后澄清“模型甲”也是文件夹，先前把它误认为数据库文件。最终保留文件夹/文件的图标区分，不将模型结果目录改成数据库图标。刷新图标由默认SymbolIcon改为14号FontIcon，折线16号，共用16×16内容区域与30×30按钮；展开入口同样为16号折线。
+
+生产WorkbenchExplorerHost保留同一标题Grid，避免覆盖按钮错位。新增CompactTreeItem，仅对既有WinUI模板的MultiSelectGrid缩进绑定按10/16缩放，展开箭头左右留白14改8，图标列18改16、列间距7改5；原生选择、展开、焦点与主题模板保留。文件夹/文件显式使用系统图标字体；工作目录、后处理和合并源的实际ODB文件改为文件图标。ResultScopeNode.KindDisplay将root/group/batch/odb等内部类型显示为中文目录说明，“模型甲”下方显示“模型结果目录”，不改变路径、类型或读取算法。
+
+最终生产控件检查23项通过，PID229496退出0，回执GPTWork/sidebar-final-checks-20261119/verification.json及process.json：4项提示留白、4种标题边界、深浅主题各3项六级缩进/图标绑定/折叠后选择、9项选择刷新。六级文字X为53/63/73/83/93/103 DIP。开发发布构建GPTWork/winui-sidebar-final-publish-20261119.log通过。前一版23项/86项shell与文档回归也通过；最后文档与源码回归另见当前状态。
+
+失败记录保留：sidebar-polish-checks-20261119第一次228060的前10项通过，折叠再展开后尚未布局，ContainerFromNode为空；在展开后完成UpdateLayout后228136通过23项。短暂的独立矢量图标方案在用户澄清后撤回，sidebar-vector-checks只构建未运行，不作为交付证据。
+
+197448及后台227264/223484已正常结束；227408前端退出后后台226912/193812仍在，已核对身份与空闲状态，经正式关闭协议idle提交结束，未强杀或停止任务。两处verification.json分别验证描述符移除和两份日常JSON不变；第二处另有idle-api-close.json，不把API收尾称为原生关闭验收。更早205808/187916实例也已核验结束。
+
+准确续接：当前开发输出GPTWork/winui-sidebar-final-20261119，独立配置GPTWork/native-sidebar-final-20261119/result-browser，原生205860；用native_sidebar_final_20261119.py capture/finish核验身份，窗口关闭前不能运行finish并声称通过。旧完整5497f45cfec3/安装b4ca03cbe0c8不含本轮修复，完整包仍待重建。截图工具仍超时，用户确认范围与自动检查分别记录；禁止向C盘放ODB、未启动求解。以下为当时历史记录，当前状态以本节和CURRENT_STATUS为准。
+
+## 2026-11-19 · 密度验收确认与侧栏按钮对齐修正
+
+用户确认5497f45cfec3窗口“空白已消失，密度合适，收起展开正常”，这三项实际验收已补记，不能继续写成待确认。但用户随后截图指出刷新/收起按钮上下不齐，作为独立缺陷修复。根因是刷新按钮位于WorkbenchExplorerHost标题行，而收起按钮位于MainWindow覆盖层，分别按行中心与8 DIP上边距定位。
+
+将展开状态的ExplorerCollapseButton放进生产WorkbenchExplorerHost的同一标题Grid，与ExplorerRefreshButton共用ExplorerHeaderButtonStyle：30×30 DIP，显式最小尺寸30，垂直/内容居中，列间隔6。删除为覆盖按钮保留的右侧48 padding，恢复12。CollapseRequested事件仍由主窗口统一切换；关闭/新建锁定同步禁用两处入口。主窗口只在收起时显示40 DIP窄栏的展开按钮，不再覆盖展开状态的标题区。保留Ctrl+B、偏好、页面/输入/选择和后台任务。
+
+生产原生控件新增四种标题几何组合（有/无副标题、有/无较高的选择目录按钮），两按钮实际顶部均为11/11或13/13 DIP，尺寸均30×30。全部17项通过、39652退出0，`GPTWork/header-alignment-checks-20261119/verification-final.json`及process-final.json。初次220640退出1保留verification.json：四个几何检查通过，新增控件测试切换后旧选择检查尚未完成初始布局，未发选择事件；在该选择测试初始Attach后显式Measure/Arrange/UpdateLayout，保持原断言后全部通过。37项shell回归通过0.05秒，日志`GPTWork/header-alignment-regression-20261119.log`；发布构建`GPTWork/winui-header-alignment-publish-20261119.log`成功。新开发输出`GPTWork/winui-header-alignment-20261119`。
+
+已通过CUA正常Alt+F4关闭两旧测试窗口：205808/213728/166276及187916/185836/210388全部按身份核验结束，描述符移除，两份日常JSON未改。原native-density与native-density-release的verification.json和用户验收说明已更新。现在只有新修复测试窗口197448，后台227264、子223484，CUA窗口2294212；`GPTWork/native-header-alignment-20261119/result-browser/processes.json`。CUA见并排刷新/收起控件、结果4范围与后台连接；截图仍超时。新实例的收起/展开与退出续验中，不能将17项几何检查说成全业务截图验收。没有求解或ODB复制。
+
+
 ## 2026-11-18 · 当前完整包已实际打开，桌面输入仍受阻
 
 旧205808/213728/166276按PID与创建时间核对仍活跃，未终止。上一续接点将关闭旧窗口当成前提过于保守：新的独立WorkbenchProfile可以共存。因此先确认新profile从未启动，再启动当前完整5497f45cfec3。新原生187916（创建1795014771.4443192）、后台185836、子210388，窗口18423702。进程/隔离环境回执`GPTWork/native-density-release-20261118/result-browser/processes.json`核对后台确实来自本完整包，TEMP/TMP/submitter/postprocessor均为该G盘独立目录；application.log当前0字节。

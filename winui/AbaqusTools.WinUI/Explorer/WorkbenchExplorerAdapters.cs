@@ -693,7 +693,7 @@ internal static class WorkspaceExplorerDiscovery
             IconGlyph = kind switch
             {
                 ExplorerItemKind.InputFile => "\uE8A5",
-                ExplorerItemKind.OdbFile => "\uE8B7",
+                ExplorerItemKind.OdbFile => "\uE8A5",
                 ExplorerItemKind.UserSubroutine => "\uE943",
                 _ => "\uE7C3",
             },

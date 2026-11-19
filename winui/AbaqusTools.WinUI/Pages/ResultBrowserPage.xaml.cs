@@ -381,7 +381,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             StableId = $"result:scope:{scope.Path.ToUpperInvariant()}",
             Kind = ExplorerItemKind.ResultScope,
             Title = scope.Name,
-            Subtitle = scope.Kind,
+            Subtitle = scope.KindDisplay,
             Path = scope.Path,
             Status = scope.IndexState,
             Badge = scope.IndexStateDisplay,

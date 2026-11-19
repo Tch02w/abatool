@@ -481,7 +481,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             Subtitle = Path.GetFileName(path),
             Path = path,
             Status = File.Exists(path) ? "可用" : "等待生成",
-            IconGlyph = result ? "\uE73E" : "\uE8B7",
+            IconGlyph = result ? "\uE73E" : "\uE8A5",
         };
 
     private void SelectExplorerItem(ExplorerItem item)

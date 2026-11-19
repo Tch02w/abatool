@@ -550,7 +550,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                     Path = row.Path,
                     Status = row.CompatibilityStatus,
                     Badge = row.CompatibilityStatusDisplay,
-                    IconGlyph = "\uE8B7",
+                    IconGlyph = "\uE8A5",
                 }),
                 group.Count().ToString()))
             .ToArray();

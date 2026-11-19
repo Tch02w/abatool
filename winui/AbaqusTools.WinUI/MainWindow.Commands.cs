@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     {
         var commands = App.Current.Commands;
         ExplorerToggleButton.IsEnabled = !commands.Locked;
+        ExplorerHost.SetCollapseEnabled(!commands.Locked);
         StartQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStartQueue;
         StopQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStopQueue;
         TerminateQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanTerminateSelected;

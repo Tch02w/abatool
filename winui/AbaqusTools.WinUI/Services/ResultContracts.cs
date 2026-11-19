@@ -53,6 +53,19 @@ public sealed class ResultScopeNode
     public string IndexState { get; init; } = string.Empty;
 
     [JsonIgnore]
+    public string KindDisplay => Kind switch
+    {
+        "root" => "结果根目录",
+        "group" => "对比组目录",
+        "batch" => "提取批次目录",
+        "odb" => "模型结果目录",
+        "shared_root" => "公共数据目录",
+        "shared_odb" => "模型公共数据目录",
+        "shared_asset" => "公共数据版本目录",
+        _ => "结果目录",
+    };
+
+    [JsonIgnore]
     public string IndexStateDisplay => IndexState switch
     {
         "available" => "已索引",

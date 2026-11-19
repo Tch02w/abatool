@@ -6,6 +6,24 @@
 
     <UserControl.Resources>
         <local:NonEmptyStringToVisibilityConverter x:Key="NonEmptyStringToVisibilityConverter" />
+        <Style x:Key="ExplorerHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinWidth" Value="30" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ExplorerHeaderIconStyle" TargetType="FontIcon">
+            <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </UserControl.Resources>
 
     <Border
@@ -22,13 +40,14 @@
             </Grid.RowDefinitions>
 
             <Border
-                Padding="12,8,48,8"
+                Padding="12,8"
                 Background="{ThemeResource LayerFillColorAltBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1">
                 <Grid ColumnSpacing="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
@@ -45,18 +64,24 @@
                         x:Name="ExplorerPrimaryButton"
                         Grid.Column="1"
                         MinWidth="72"
+                        VerticalAlignment="Center"
                         HorizontalContentAlignment="Center"
                         Click="OnPrimaryActionClicked"
                         Visibility="Collapsed" />
                     <Button
                         x:Name="ExplorerRefreshButton"
                         Grid.Column="2"
-                        Width="30"
-                        Height="30"
-                        Padding="0"
+                        Style="{StaticResource ExplorerHeaderButtonStyle}"
                         Click="OnRefreshClicked"
                         ToolTipService.ToolTip="刷新当前浏览内容">
-                        <SymbolIcon Symbol="Refresh" />
+                        <FontIcon Style="{StaticResource ExplorerHeaderIconStyle}" FontSize="14" Glyph="&#xE72C;" />
+                    </Button>
+                    <Button x:Name="ExplorerCollapseButton" Grid.Column="3"
+                            Style="{StaticResource ExplorerHeaderButtonStyle}"
+                            Click="OnCollapseClicked"
+                            AutomationProperties.Name="收起浏览侧栏"
+                            ToolTipService.ToolTip="收起浏览侧栏 (Ctrl+B)">
+                        <FontIcon Style="{StaticResource ExplorerHeaderIconStyle}" Glyph="&#xE76B;" />
                     </Button>
                 </Grid>
             </Border>
@@ -78,16 +103,22 @@
                     Expanding="OnNodeExpanding"
                     SelectionChanged="OnTreeSelectionChanged"
                     SelectionMode="Single">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="local:CompactTreeItem.Enabled" Value="True" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>
                         <DataTemplate>
-                            <Grid MinHeight="34" ColumnSpacing="7">
+                            <Grid MinHeight="34" ColumnSpacing="5">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="16" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <FontIcon
                                     VerticalAlignment="Center"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     FontSize="14"
                                     Glyph="{Binding Content.IconGlyph}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">

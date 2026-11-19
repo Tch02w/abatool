@@ -23,6 +23,7 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs" Link="Controls/WorkbenchExplorerHost.xaml.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/NonEmptyStringToVisibilityConverter.cs" Link="NonEmptyStringToVisibilityConverter.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/InfoBarLayout.cs" Link="InfoBarLayout.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/CompactTreeItem.cs" Link="CompactTreeItem.cs" />
     <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml" Link="Controls/WorkbenchExplorerHost.xaml" />
   </ItemGroup>
 </Project>

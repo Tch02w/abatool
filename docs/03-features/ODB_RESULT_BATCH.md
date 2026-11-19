@@ -20,7 +20,7 @@
 
 重开后先读取正式图。「发现未保存的结果图」中，基线相同可点「恢复编辑」，随后核对并点击原「保存」。恢复后仍是未保存状态，后台继续检查版本冲突。正式版本、内容或运行环境不同则禁止直接恢复；可点「查看草稿」选取复制内容，或「保留副本并忽略」继续使用正式图。损坏草稿不会被自动覆盖。副本命名为原文件名加`.preserved-时间-唯一编号.json`，先完整写入并flush，再清除活动检查点；保留失败则不清除。主动重新读取并确认放弃编辑也先保留副本，期间暂停定期捕获，避免重建已放弃草稿。
 
-此处恢复仅针对编辑元数据，与下方批量执行恢复不同。原生按钮/键盘/重开流程待验，现有完整安装候选尚未包含新源码；详见[ADR0018](../submitter/adr/0018-result-graph-recovery-drafts.md)。
+此处恢复仅针对编辑元数据，与下方批量执行恢复不同。该实现已进入现有完整候选；原生按钮/键盘/重开完整流程仍待验，具体范围见[当前状态](../08-handoff/CURRENT_STATUS.md)和[ADR0018](../submitter/adr/0018-result-graph-recovery-drafts.md)。
 
 descriptor 同目录的 `odb-result-batches.sqlite3` 保存请求身份、不可变计划、合并选项、各阶段提交记录、子任务标识及已验证结果摘要。实际单步合并记录保存在 `odb-merge-history.sqlite3`。两者均需保留，不应单独移动、删除或覆盖。
 
@@ -40,6 +40,7 @@ descriptor 同目录的 `odb-result-batches.sqlite3` 保存请求身份、不可
 - 恢复功能有隔离测试进程真实退出、HTTP 和客户端契约检查。11 月 18 日正式 C# HTTP 客户端通过冻结后台完成 GJB-15 两个真实兄弟目标，重启后相同批次和子任务恢复，输出完整摘要不变：V20D 8 步/70 帧，U100D 12 步/63 帧（保留 4 个无结果帧步骤提示），均包含历史输出。来源副本完整摘要未变，中文含空格输出路径通过。证据 `GPTWork/real-result-batch-750883913dd9/verification.json`。
 - 11月19日按用户授权，另在G盘新建并实际计算1个C3D8实体单元的连续三级链。正式C#客户端调用当前完整包c6999a8e1c8e：先合并base+r1，再将实际中间结果与r2合并；得到2步/10帧的中间结果、3步/15帧的最终结果，逐场值/历史校验通过。两次后台启动后保持同一批次及两个子任务，输出/回执摘要不变，三个源ODB摘要不变。证据`GPTWork/sequential-result-batch-0983d4f23773/verification.json`。独立Abaqus只读检查确认各步末位移0.01/0.02/0.03、总反力10/20/30和应力10/20/30，见`GPTWork/three-restart-9ae3bd6cf4e9/source-content-verified.json`。这是实际求解的简单实体模型验收，原生点击/布局、真实Abaqus进程中断仍待。
 - 冻结后台突然退出、外部测试子进程仍存活的情况也已单独验证：重启后批次为等待继续，原单步为 `ODB_MERGE_INTERRUPTED`；尝试继续明确失败，不重放原阶段、不启动后续阶段、不发布结果。第三次启动仍恢复同一失败批次。验收工具 `packaging/verify_batch_interruption.py` 只使用微小非 ODB 夹具，不能代替真实 Abaqus 崩溃或工程连续三层链验收。回执 `GPTWork/frozen-batch-interruption-691d9fb533f3/verification.json`，所有自有测试进程已结束。
+- 11月19日另以既有cube_base→cube_r1→cube_r2真实ODB及555b完整包补验上述中断场景，不重新求解。第一阶段实际Abaqus校验进程短暂停住、后台被强制退出；重开显示等待继续，继续检查后因原子任务中断而明确失败，完成0/2、第二阶段未提交、没有结果发布。同请求不重放，第三次启动仍保持失败批次，来源摘要不变；校验进程恢复后退出120，未计为成功。所有本次进程结束，中断工作区保留。回执`GPTWork/real-batch-backend-crash-453005f06383/verification.json`。只证明这一真实三级小模型的校验阶段中断保护，原生交互、其他阶段及工程负载不能据此推定。
 
 ## 维护入口
 
@@ -49,6 +50,7 @@ descriptor 同目录的 `odb-result-batches.sqlite3` 保存请求身份、不可
 - `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.ResultBatch.cs`、`winui/AbaqusTools.WinUI/Services/OdbResultBatchContracts.cs`：批量请求和状态校验。
 - `winui/AbaqusTools.WinUI/Pages/OdbMergePage.ResultGraph.cs`：创建、读取、继续与结果显示。
 - `tests/control_plane/test_odb_result_batches.py`、`tests/control_plane/test_restart_result_plans_api.py`、`tests/winui_host/Program.cs`：恢复、拒绝重跑、数据变化、分支、取消、损坏和界面契约。
+- `packaging/verify_real_merge_backend_crash.py` / `verify`：提供--later第三个连续ODB时，通过生产批量API验证真实校验进程存活期间的后台中断、恢复后拒绝重放和后续阶段保护；所有输入/产物限定非C盘GPTWork。
 - `tests/winui_host/Program.cs` / `CheckBatchApi`：`--batch-api descriptor fixture report`及`--batch-recover-api`共用正式客户端。fixture含`sources`（三个已存在ODB绝对路径）、`outputDirectory`、`clientRequestId`；新增可选`topology: "sequential"`验证base→r1→r2、两阶段实际输入衔接及恢复去重。不填时保留原兄弟分支测试。该入口只合并已有文件，不启动求解；算例生成必须另有授权。
 
 旧 `winui/AbaqusTools.WinUI/Services/OdbResultBatchRunner.cs` 及其检查保留作迁移对照；生产批量入口不再调用它。协议入口为 `/api/v1/odb-result-batches`，支持创建/列表/按 ID 查询及 `/cancel`、`/resume`；需本机 bearer 鉴权，不发送任意可执行步骤给后台。架构决策见 [ADR 0007](../submitter/adr/0007-durable-result-batches.md)。

@@ -1,5 +1,21 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 真实合并进程存活时的后台崩溃恢复
+
+批量场景也已补验：同一工具新增--later参数，使用既有cube_base/cube_r1/cube_r2真实三级小模型，正式结果图和批量API提交两个阶段。第一阶段82%时暂停自有校验128728，强制结束后台229512；恢复后台187772显示批次suspended、原单步ODB_MERGE_INTERRUPTED。显式继续后批次failed/ODB_BATCH_FAILED，完成0/2，第二阶段childOperationId为空，无结果发布；原校验此时确实仍存活，同请求未重放。恢复校验后退出120，第三次11120仍恢复同一失败批次和单步记录；两个恢复后台均idle退出0，无记录进程残留，来源全摘要不变。会话28532退出0，回执GPTWork/real-batch-backend-crash-453005f06383/verification.json。未重新求解。
+
+保留未命中故障时序的一轮：real-batch-backend-crash-7217cd20dc0d中小模型校验187600在调用suspend前已自然结束，脚本NoSuchProcess，不能计崩溃通过。随后读取原任务确认为succeeded/2阶段完成，后台177972经idle关闭，221944等后代结束、来源不变，missed-interruption-cleanup.json确认终态后才再次测试。将暂停动作前移到已核实后代/可执行文件/工作目录后立即执行，防止遍历父进程耗尽短校验时段，才得到上述4530成功回执。
+
+上一轮修复/测试/文档提交属于实际进展，44e05c06487e937906508ad719792670bd793d95已推送且本地/远端一致，回执queue-dialog-delivery-20261119/git-verification.json。本轮补验此前尚缺的F013真实后台崩溃，并未更改生产算法、恢复规则或重建完整包。
+
+新增packaging/verify_real_merge_backend_crash.py，以555b完整包和既有GPTWork内GJB-15_U40D/U100D副本为输入、cube_base副本作为旧目标。核对来源/输出/TEMP/TMP均在G盘。执行命令：项目.venv Python运行该脚本，参数--bundle GPTWork/release-win-x64-555b572ccbfe/AbaqusTools、--original GPTWork/merge-real-fv8_supj/inputs/GJB-15_U40D.odb、--restart GPTWork/merge-real-fv8_supj/inputs/GJB-15_U100D.odb、--existing-result GPTWork/three-restart-9ae3bd6cf4e9/cube_base.odb。普通读取旧副本被ACL拒绝，提升只读访问后核实存在；未改权限或将文件移动到C盘。
+
+会话40726退出0，回执GPTWork/real-merge-backend-crash-9597d1bc621d/verification.json为verified。实际先执行restartjoin，到82%核对阶段识别自有SMAPython161188（进程身份与独立暂存脚本均保存），短暂停住以固定时序，再强制结束自有后台179304。进程161188确实存活，新后台193144替换过期描述符、恢复同一failed/ODB_MERGE_INTERRUPTED记录，retryable=false、result=null；重复同请求未重放，只有一个工作区、旧目标不变。恢复161188后其退出码120；不称校验成功，不从残留ODB推定成功。全部已记录后代结束后193144经idle协议退出0。第三次225532仍恢复同一中断记录，经idle退出0、描述符移除；remainingOwnedPids为空。三份来源和旧目标SHA256不变，未发布结果；3.7GB左右中断工作区保留，未清理历史文件。
+
+本轮已分别证明真实单步和真实小模型批量在校验阶段的后台中断保护；任意求解进程恢复、其他中断时机与原生页面交互不据此扩展。旧表单/队列窗口9528及已登录SSH窗口227820仍保留，未重复询问登录。准确续接点：本次测试没有待轮询进程；继续其他未验业务，接收已发出的表单/候选等待确认。单步恢复/文档66项通过（24.54秒，会话77602，real-backend-crash-regression-20261119.xml），批量/最终文档69项通过（32.66秒，会话37258，real-batch-crash-regression-20261119.xml），两组均含同一51项文档检查，不相加声称135项独立测试。新工具与文档随本轮提交推送，准确Git结果另记本地回执；不因验收工具/文档追加重建9a09972完整包。功能索引、安全合并说明、ADR0006及旧批量草稿过期说明已同步。
+
+新增工具的ruff检查最终通过。首轮仅报导入排序I001和未用返回变量RUF059，整理导入并将未用值记为下划线后通过；未改变已验收的执行行为。git diff --check无空白错误，ADR文件的LF/CRLF提示不影响内容。
+
 ## 2026-11-19 · 表单与队列修复完整候选
 
 9a099728b97da27a5669bf550fa6edfc4a6662f2已提交推送并核对远端。干净完整555b572ccbfe及安装候选9f4880b493e0包含本轮服务器表单、队列定向刷新/选区、官方名称与Windows字面传参修复；54项控件、211项回归、全文件摘要/15应用资源/19worker、包内依赖和冻结候选API通过。安装器未签名、未安装；原生窗口确认尚待反馈，不扩大为八页完成。准确摘要、产物和保留窗口见GPTWork/queue-dialog-delivery-20261119/verification-summary.json及[TASK-004](TASK-004-ui-interaction.md)顶部。冻结API后台219864已经idle关闭，无新求解；开发验收9528与旧已登录227820窗口保留。以下版本及窗口描述均为历史阶段，当前以本节和CURRENT_STATUS为准。

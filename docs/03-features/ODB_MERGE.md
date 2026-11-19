@@ -43,6 +43,8 @@
 
 2026-11-19使用既有GJB工程ODB副本，通过当前完整包实际验收校验阶段取消和SMAPython进程意外退出：分别显示cancelled/failed，无成功结果，既有目标及来源摘要不变；重开后台恢复原记录，不重复执行。回执`GPTWork/real-merge-interruption-74bb9bec2c53/verification.json`。工具`packaging/verify_real_merge_interruption.py`只作用于GPTWork来源及其自有后台后代；此证据覆盖实际校验worker异常，不等于后台崩溃时遗留worker、所有求解进程或原生点击验收。
 
+同日补验后台崩溃：干净9a09972完整555b包在真实GJB合并的82%校验阶段强制退出自有后台。已核实身份的SMAPython校验进程被短暂停住，保持存活直至新后台完成恢复检查，然后恢复执行。新后台将同一操作标为`ODB_MERGE_INTERRUPTED`、不可直接重试，无成功结果；同请求没有重放，原工作区保留，旧目标与三个来源完整摘要不变。第三次后台启动仍恢复同一中断记录。原校验进程恢复后退出码120（不计校验成功），所有本次自有进程最终结束；中断工作区保留供核对。证据`GPTWork/real-merge-backend-crash-9597d1bc621d/verification.json`。该项证明真实校验进程存活时的单步合并保守恢复，不等于任意求解/批量阶段或原生界面恢复已验收。
+
 ## 实现与验证入口
 
 - 计划：`modules/submitter/odb_merge_core.py` / `build_merge_plan`。
@@ -52,5 +54,6 @@
 - 持久记录：`modules/control_plane/odb_merge_journal.py` / `MergeJournal`；仅保存操作数据，不打开或修改 ODB。
 - 回归：`tests/postprocessor/test_merge_validation.py`、`tests/submitter/test_odb_merge_execution.py`、`tests/submitter/test_odb_merge.py`、`tests/control_plane/test_odb_merge_operations_api.py`。
 - 重启恢复与异常退出：`tests/control_plane/test_odb_merge_recovery.py`；原生 DTO/生命周期：`tests/winui_host/Program.cs`。
+- 真实后台崩溃验收：`packaging/verify_real_merge_backend_crash.py` / `verify`。只接受非C盘GPTWork既有包和ODB副本，核对后代PID/创建时间/可执行文件/独立暂存路径，再暂停校验进程及中断自有后台；异常仍恢复暂停进程、保存准确身份，不因超时另开任务。不清理保留的中断现场。
 
 真实模型的路径、运行结果、失败记录及尚未完成的原生验收见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。2026-11-19已按用户授权完成实际求解的简单实体三级链，两级串联合并的场/历史和独立解析值核对均通过，详见[批量任务验收](ODB_RESULT_BATCH.md)。自动化与实际 ODB 验证不替代原生页面点击验收，合并功能自身仍不启动求解。

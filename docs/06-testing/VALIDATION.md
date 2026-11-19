@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+2026-11-20新增人工证据：用户明确最新999截图是在点击“读取目录”之后，根目录为“待读取结果”、提示消失，N08步骤4的正常切换部分通过；非法目录处理仍未验。后台任务ce1bbd5ccfd04cd49e568bd144c7a80b于00:05:26（UTC+8）成功，实际请求根目录为“当前结果”。索引刷新时是否保留123和草稿提示尚待确认，不把随后显式读取的999当作误切换。截图/回执manual-read-root-20261120保存在GPTWork/native-result-context-desktop-20261119，四份源摘要不变，前台234192及后台219004/227524仍为原身份。最新待反馈问题见TASK-001顶部，下段反向输入属于此前观察。
+
+追加原生输入证据：现有7078082窗口实际加载“待读取结果”并预览CSV=999，桌面set_value成功将输入改成“当前结果”而不读取；提示保持实际目录“待读取结果”，CSV仍为999。点击刷新索引仍报coordinate input geometry is unavailable，Tab后焦点未变化，不计点击/键盘导航通过。native-index-draft-reverse.json记录此反向草稿检查，人工索引刷新仍待，未修改生产代码或重新启动。
+
 2026-11-19新增人工原生证据：用户在最新0aba结果浏览截图中将输入改为“待读取结果”，没有读取，提示明确保留实际操作目录“当前结果”；所选load_point_raw.csv预览time=0、force=123。N08步骤1通过，源CSV/XLSX四份摘要不变；截图及回执位于GPTWork/native-result-context-desktop-20261119/manual-root-draft-20261119.png/.json。用户随后澄清关闭为手动误操作，不计崩溃或索引失败；旧unexpected-close-20261119-2341.json保留最初报告，manual-close-confirmed-20261119.json记录更正。现有234192及37319仍在，N08步骤2尚未完成。首项证据不扩大为索引、导出或全页通过，下一问题见TASK-001顶部。
 
 2026-11-19阻塞复核与独立回滚启动：当前源码真实Qt主窗口构造/退出1项通过（9.25秒，会话85097退出0，GPTWork/native-rollback-current-20261119/results.xml），使用独立G盘TEMP/TMP和应用数据。现有WinUI窗口9249544仍可读但点击报coordinate input geometry is unavailable，重新定位激活报failed to activate captured window，远端未连接；同一输入障碍已连续至少三轮。212240消失没有可用应用日志/对应Windows错误事件，关闭原因仍未知，未补记正常退出。完整验收受阻，不等于后台功能失败或迁移完成；恢复条件见TASK-002顶部。

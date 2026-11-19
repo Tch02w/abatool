@@ -1,18 +1,18 @@
 # 当前状态与接续点
 
-更新于2026-11-19。真实SSH传输修复及10项操作通过；用户新增服务器表单与队列刷新/选区/名称问题已实现，54项生产控件和211项相关回归通过，正进行业务确认和收尾。整体WinUI迁移仍未完成；源码、实际回执及用户确认优先。
+更新于2026-11-19。服务器表单与队列定向刷新/选区/名称修复已提交推送9a09972，54项生产控件、211项相关回归及新完整包检查通过；实际业务窗口确认待用户反馈。此前真实SSH传输10项通过。整体WinUI迁移仍未完成；源码、实际回执及用户确认优先。
 
 ## 当前版本
 
 | 项目 | 当前事实 |
 |---|---|
-| 已提交完整包源码 | e78fa5e53288dea95e21e5e36eb200554257eae9，干净构建且已推送。 |
-| 最新完整目录 | GPTWork/release-win-x64-2c18c11259b2/AbaqusTools：1688清单文件、19worker、15应用资源，全摘要与包内依赖通过；含SSH修复，尚不含本轮表单/队列修改。 |
-| 安装候选 | GPTWork/installer-win-x64-967f065cfdd7/AbaqusTools-0.1.0-win-x64-setup.exe，126137963字节，未签名、未安装；此次负载未重做生命周期。 |
+| 已提交完整包源码 | 9a099728b97da27a5669bf550fa6edfc4a6662f2，干净构建且已推送。 |
+| 最新完整目录 | GPTWork/release-win-x64-555b572ccbfe/AbaqusTools：1689清单文件（连清单1690）、19worker、15应用资源，全摘要与包内依赖通过；包含SSH、表单、队列和命名修复。 |
+| 安装候选 | GPTWork/installer-win-x64-9f4880b493e0/AbaqusTools-0.1.0-win-x64-setup.exe，126146312字节，未签名、未安装；此次负载未重做生命周期。 |
 | 当前开发输出 | GPTWork/queue-dialog-final-native-20261119，服务器表单、队列定向更新及原生列表保持；生产构建0警告/0错误。当前名称及命令规则使用项目Python源码。 |
 | 文档 | README、RepoWiki、功能索引、说明和交接持续同步；未另发GitHub Wiki网站。 |
 
-旧c6999a8e1c8e下载故障已证实，不能作为最新候选。完整发布及真实传输回执见GPTWork/ssh-fixed-delivery-20261119/verification-summary.json和[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+本轮汇总为GPTWork/queue-dialog-delivery-20261119/verification-summary.json；包含目录/安装器摘要、测试范围和保留窗口。SSH真实传输对应旧2c18包，回执见GPTWork/ssh-fixed-delivery-20261119/verification-summary.json和[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)，不当作新555b业务复测。旧c699下载故障已证实，不能作为最新候选。
 
 ## 已有实际证据
 
@@ -24,10 +24,10 @@
 
 ## 准确续接点
 
-1. 当前在处理用户追加的服务器表单、队列增量刷新与Abaqus命名规则，见[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)顶部；开发及测试代码、文档尚待最终收尾提交。待确认的新窗口9249544（前台9528，创建时间1795060504.5837119）使用GPTWork/native-queue-dialog-desktop-20261119/compute-resources独立配置；两个合成加号名称候选已通过正式API加入，无异常、无求解。processes.json和queue-fixture.json有精确身份/结果；已请用户核对表单和等待15秒后的候选选择。
+1. 本轮修复及相关文档已随9a09972推送，发布后证据补充见[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)顶部。待确认的新窗口9249544（前台9528，创建时间1795060504.5837119）使用GPTWork/native-queue-dialog-desktop-20261119/compute-resources独立配置；两个合成加号名称候选已通过正式API加入，无异常、无求解。processes.json和queue-fixture.json有精确身份/结果；已请用户核对表单和等待15秒后的候选选择。该窗口为开发输出，新完整包尚未另开业务窗口。
 2. 已登录旧SSH窗口5379070及前台227820/后台135288/197572保留，不擅自关闭或转移密码。其profile为native-ssh-fixed-20261119/compute-resources，显示与传输检查使用该版本，不冒称其含新界面修复。旧203708已结束、后台194292/190748经idle协议结束，不能称原生正常关闭；回执在native-ssh-20261119。
 3. 首次受限桌面测试218736及其后台已按身份/独立profile确认结束，无残留；其不在CUA清单的失败现场保留于native-server-dialog-20261119/compute-resources/unlisted-launch-cleanup.json。当前CUA仍报coordinate input geometry is unavailable、window capture timed out和failed to activate captured window，已重新定位重试，未绕过工具操作。
-4. 当前测试句柄以TASK-004后续记录为准。当前54项控件PID220820退出0（原51项205080也已退出0）；此前41项224740退出0；开发构建均终态。只对新变更和失败做定向回归，不重复求解三级链或已通过SSH传输；先核对原句柄再启动长任务。
+4. 本轮检查及打包均终态：54项控件220820退出0、211项回归会话36892退出0、完整构建67369退出0、安装器9f4880b493e0状态compiled。冻结API测试后台219864经idle协议退出0、描述符已移除，回执queue-dialog-frozen-6a644c79bf95/verification.json；未启动求解。只对新变更和失败做定向回归，不重复求解三级链或已通过SSH传输；先核对原句柄再启动长任务。
 
 ## 完整迁移范围与约束
 

@@ -2,7 +2,9 @@
 
 ## 2026-11-19 · 服务器表单、队列选区与名称修复
 
-最终定向回归211项通过（40.83秒，queue-dialog-delivery-20261119.xml，会话36892退出0）；最终WinUI构建queue-dialog-final-native-20261119为0警告/0错误，会话74138退出0。54项控件和命名专项均终态。仅源码/控件检查已完成，业务窗口确认尚待用户反馈；接下来按既有授权提交、生成新完整目录并核对远端。
+修复已提交并推送9a099728b97da27a5669bf550fa6edfc4a6662f2，已实际核对origin/main一致。干净完整目录release-win-x64-555b572ccbfe/AbaqusTools、安装候选installer-win-x64-9f4880b493e0已生成并核对全摘要。1689清单文件、19worker、15应用资源；清单SHA256为44f004167a0d60970858277fde3a40eb7583f61105ce35c0c3e36671bd6fb035，安装器126146312字节、SHA256为94e4e639940278210c3e9df739da77b6751ebfbb31d43f6013a5e3daaf4b6982。安装器NotSigned，未安装、未重做生命周期。包内依赖检查及冻结API的两个加号名称、手动扫描状态和候选勾选检查通过；219864后台经idle协议退出0、描述符移除，未启动求解。汇总GPTWork/queue-dialog-delivery-20261119/verification-summary.json，分项queue-dialog-frozen-6a644c79bf95/verification.json和queue-dialog-bundle-probe-20261119/bundle-probe-5t2qcr39/verification.json。
+
+最终定向回归211项通过（40.83秒，queue-dialog-delivery-20261119.xml，会话36892退出0）；最终WinUI构建queue-dialog-final-native-20261119为0警告/0错误，会话74138退出0。54项控件和命名专项均终态。自动检查和打包已完成，业务窗口确认尚待用户反馈；不重复启动新窗口或转移旧SSH登录。
 
 
 收尾新增：侧栏也只响应可见字段变化，54项控件最终通过，220820退出0，queue-dialog-final-controls-20261119/verification.json；51项命名/真实Windows传参检查通过，job-names-fixed-20261119.xml；111项界面/文档/运行控制回归通过，queue-dialog-followup-fixed-20261119.xml。Qt参数记录器曾发现带空格命令路径被QProcess二次转义，按官方setNativeArguments方式修复后通过；保留job-names-final-20261119.xml的73通过/1失败记录。source-contract旧RestoreFormalSelection和SelectedItems.Add断言已随实际入口迁移，两次旧断言失败均保留，最终111通过。
@@ -15,7 +17,7 @@
 
 已通过51项生产原生控件，进程205080退出0，回执queue-dialog-controls-20261119/verification.json；服务器单独41项也通过。正式WinUI开发构建queue-dialog-native-20261119成功。首轮控件构建漏引JobDraftContracts导致编译失败，补齐生产契约后通过。首轮名称/扫描63项中62通过，失败为测试使用了不存在的editCandidate命令，已改为实际updateCandidate；后续117项116通过，唯一失败为旧源码契约仍要求清空后RestoreFormalSelection，已更新为实际两表增量同步入口。最终回归及原生业务确认续记于本节。
 
-准确续接：开发输出queue-dialog-native-20261119，完整包尚未包含本轮界面修改。首次受限桌面启动218736虽有窗口句柄但不在CUA清单，已验证其独立profile、无活动任务后结束前台并经正式idle协议关闭219644等后台；unlisted-launch-cleanup.json确认无残留，不作为原生正常关闭验收。用户可见旧SSH窗口不受影响。下一项为用户桌面新版本核验和最终回归、文档检查、提交推送。相关生成物均在GPTWork，失败回执保留。
+准确续接：新完整555b包已包含本轮全部修改，当前用户可见的待确认窗口仍为queue-dialog-native-20261119开发输出（不含最后的侧栏可见字段过滤；候选列表和表单修复已包含）。首次受限桌面启动218736虽有窗口句柄但不在CUA清单，已验证其独立profile、无活动任务后结束前台并经正式idle协议关闭219644等后台；unlisted-launch-cleanup.json确认无残留，不作为原生正常关闭验收。用户可见旧SSH窗口不受影响。下一项为接收用户表单/候选等待反馈，再继续尚未通过的原生业务；相关生成物均在GPTWork，失败回执保留。
 
 ## 2026-11-19 · 完整候选原生有限复核
 

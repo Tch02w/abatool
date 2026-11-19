@@ -1,5 +1,9 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 表单与队列修复完整候选
+
+9a099728b97da27a5669bf550fa6edfc4a6662f2已提交推送并核对远端。干净完整555b572ccbfe及安装候选9f4880b493e0包含本轮服务器表单、队列定向刷新/选区、官方名称与Windows字面传参修复；54项控件、211项回归、全文件摘要/15应用资源/19worker、包内依赖和冻结候选API通过。安装器未签名、未安装；原生窗口确认尚待反馈，不扩大为八页完成。准确摘要、产物和保留窗口见GPTWork/queue-dialog-delivery-20261119/verification-summary.json及[TASK-004](TASK-004-ui-interaction.md)顶部。冻结API后台219864已经idle关闭，无新求解；开发验收9528与旧已登录227820窗口保留。以下版本及窗口描述均为历史阶段，当前以本节和CURRENT_STATUS为准。
+
 ## 2026-11-19 · SSH真实传输完成，续修服务器表单及队列
 
 SSH修复已提交并推送e78fa5e53288dea95e21e5e36eb200554257eae9。干净完整包GPTWork/release-win-x64-2c18c11259b2/AbaqusTools含1688清单文件、19worker和15应用资源，全摘要与包内依赖通过。包内诊断见ssh-fixed-bundle-probe-20261119/bundle-probe-n2kvvrb3/verification.json。正式安装候选installer-win-x64-967f065cfdd7为126137963字节、未签名、尚未安装；该负载没有重做安装生命周期。汇总ssh-fixed-delivery-20261119/verification-summary.json。

@@ -1,6 +1,6 @@
 # 功能定位索引
 
-F026 最新发布证据：干净dd5fe122 → 完整目录c6999a8e1c8e → 正式安装候选d7c766a02a78；同负载测试身份e8cf272edafb、安装生命周期9dce03ed6016通过。实际完整包已验证结果/后处理加载与往返、侧栏切换和正常退出；包内/安装/原生证据分别记录于[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)，不扩大为完整业务通过。
+F026 最新发布证据：干净9a09972 → 完整目录555b572ccbfe → 安装候选9f4880b493e0；1689清单文件/19worker/15应用资源、全摘要、依赖及冻结候选API通过，安装器未签名/未安装。表单与队列修复54项生产控件、211项相关回归通过，业务窗口待用户确认。旧dd5fe122/c699的原生有限操作及隔离安装生命周期仅代表历史负载；分别记录于[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)，不扩大为完整业务通过。
 
 F001/F002/F021 侧栏视觉修复：`winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml` / ExplorerHeaderButtonStyle、ExplorerHeaderIconStyle、ExplorerCollapseButton；同名.xaml.cs / CollapseRequested、SetCollapseEnabled、FocusCollapseButton；新增`Controls/CompactTreeItem.cs` / Apply、IndentationConverter保留WinUI模板并减少树缩进。`MainWindow.xaml`、`MainWindow.ExplorerVisibility.cs`、`MainWindow.Commands.cs`管理展开入口和锁定。`Services/ResultContracts.cs` / ResultScopeNode.KindDisplay与`Pages/ResultBrowserPage.xaml.cs` / ScopeExplorerItem显示中文目录类型；`Explorer/WorkbenchExplorerAdapters.cs` / FileItem、`Pages/OdbPostprocessingPage.xaml.cs`、`Pages/OdbMergePage.xaml.cs`明确实际ODB文件图标。`tests/winui_explorer/App.xaml.cs` / CheckHeaderAlignmentAsync、CheckCompactTreeAsync，生产控件23项通过。用户已确认对齐/缩进，模型结果目录保留文件夹；已进入干净dd5fe122完整目录c6999a8e1c8e和正式标识安装候选d7c766a02a78；原生有限复核与安装生命周期见当前状态。
 

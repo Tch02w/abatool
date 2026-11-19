@@ -8,6 +8,8 @@
 
 队列快照新增 `externalScanActive` 布尔字段，旧后台缺省 false。包括 `GET /api/v1/job-queues`、`GET /api/v1/local-queue-runtime` 的 queue 及队列命令响应的 snapshot；扫描期间读取最近保存状态。`scanExternalJobs` 命令保持同步返回最终结果，同一后台重复手动扫描返回 409 `EXTERNAL_SCAN_BUSY`；关闭后拒绝开始/合并，返回 503 `CONTROL_PLANE_SHUTTING_DOWN`。
 
+2026-11-19：同一快照增加 `externalManualScanActive`（旧后台缺省false），仅手动扫描期间为true；`externalScanActive`仍涵盖自动/手动扫描的互斥状态，原语义不变。界面“扫描中”与按钮禁用使用前者，自动监测不造成按钮闪烁。失败、取消关闭或完成均释放手动标记，手动请求与背景扫描相撞仍按既有409处理。
+
 成功响应的 `added`、`updated`、`statusOnlyUpdates` 按实际合并条数统计；有过期或本机执行器管理记录时新增可选 `stats.staleResultsSkipped`，不会覆盖扫描期间的新状态。扫描失败不发布部分结果。目录输入和原状态证据规则不变，详见 [本机扫描说明](03-features/LOCAL_SCHEDULING.md)。
 
 ### 连接状态响应补充（2026-11-18，F008）

@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using System.ComponentModel;
+using System.Reflection;
 
 namespace AbaqusTools.WinUI.Services;
 
@@ -7,6 +9,9 @@ public sealed class JobQueueSnapshot
 {
     [JsonPropertyName("externalScanActive")]
     public bool ExternalScanActive { get; init; }
+
+    [JsonPropertyName("externalManualScanActive")]
+    public bool ExternalManualScanActive { get; init; }
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; }
@@ -35,111 +40,153 @@ public sealed class JobQueueSnapshot
     [JsonPropertyName("statusCounts")]
     public IReadOnlyDictionary<string, int> StatusCounts { get; init; } =
         new Dictionary<string, int>(StringComparer.Ordinal);
+
+    public bool HasSameExplorerContent(JobQueueSnapshot other) =>
+        CandidateCount == other.CandidateCount && QueueCount == other.QueueCount
+        && Candidates.Select(item => (item.ItemId, item.JobName, item.InpPath, item.Message, item.Valid, item.Selected))
+            .SequenceEqual(other.Candidates.Select(item => (item.ItemId, item.JobName, item.InpPath, item.Message, item.Valid, item.Selected)))
+        && QueueItems.Select(item => (item.ItemId, item.JobName, item.InpPath, item.Status))
+            .SequenceEqual(other.QueueItems.Select(item => (item.ItemId, item.JobName, item.InpPath, item.Status)));
 }
 
-public sealed class JobQueueItem
+public sealed class JobQueueItem : INotifyPropertyChanged
 {
+    private static readonly PropertyInfo[] SnapshotProperties = typeof(JobQueueItem).GetProperties()
+        .Where(property => property.GetCustomAttribute<JsonPropertyNameAttribute>() is not null).ToArray();
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void UpdateFrom(JobQueueItem snapshot)
+    {
+        if (ItemId != snapshot.ItemId) throw new ArgumentException("Queue row identity must not change.");
+        var changed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in SnapshotProperties)
+        {
+            var before = property.GetValue(this);
+            var after = property.GetValue(snapshot);
+            if (Equals(before, after) || (before is IReadOnlyList<string> left
+                && after is IReadOnlyList<string> right && left.SequenceEqual(right))) continue;
+            property.SetValue(this, after);
+            changed.Add(property.Name);
+        }
+        // Notify only changed fields and the displays that depend on them.
+        void Derived(string name, params string[] inputs)
+        {
+            if (inputs.Any(changed.Contains)) changed.Add(name);
+        }
+        Derived(nameof(SelectedDisplay), nameof(Selected));
+        Derived(nameof(FortranName), nameof(FortranPath));
+        Derived(nameof(CoresDisplay), nameof(Cores));
+        Derived(nameof(PriorityDisplay), nameof(Priority));
+        Derived(nameof(SchedulingDisplay), nameof(Held));
+        Derived(nameof(HasPublishedArchive), nameof(ArchiveDestination), nameof(ArchiveStatus));
+        Derived(nameof(ArchiveDetailsDisplay), nameof(ArchiveStatus), nameof(HasPublishedArchive), nameof(ArchiveError), nameof(ArchiveDestination));
+        Derived(nameof(ResultMessageDisplay), nameof(Message), nameof(ArchiveStatus));
+        Derived(nameof(RuntimeMemoryDisplay), nameof(MemoryObservationStatus), nameof(RuntimeMemoryBytes));
+        Derived(nameof(MemoryDetailsDisplay), nameof(RuntimeMemoryDisplay), nameof(MemoryPeakBytes), nameof(MemoryEstimatedBytes), nameof(MemoryEstimateSource));
+        foreach (var property in changed) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+    }
+
     [JsonPropertyName("attemptId")]
-    public string AttemptId { get; init; } = string.Empty;
+    public string AttemptId { get; set; } = string.Empty;
     [JsonPropertyName("index")]
-    public int Index { get; init; }
+    public int Index { get; set; }
 
     [JsonPropertyName("itemId")]
-    public string ItemId { get; init; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
 
     [JsonPropertyName("jobId")]
-    public string JobId { get; init; } = string.Empty;
+    public string JobId { get; set; } = string.Empty;
 
     [JsonPropertyName("jobName")]
-    public string JobName { get; init; } = string.Empty;
+    public string JobName { get; set; } = string.Empty;
 
     [JsonPropertyName("inpPath")]
-    public string InpPath { get; init; } = string.Empty;
+    public string InpPath { get; set; } = string.Empty;
 
     [JsonPropertyName("source")]
-    public string Source { get; init; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
 
     [JsonPropertyName("selected")]
-    public bool Selected { get; init; }
+    public bool Selected { get; set; }
 
     [JsonPropertyName("valid")]
-    public bool Valid { get; init; }
+    public bool Valid { get; set; }
 
     [JsonPropertyName("message")]
-    public string Message { get; init; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 
     [JsonPropertyName("runMode")]
-    public string RunMode { get; init; } = string.Empty;
+    public string RunMode { get; set; } = string.Empty;
 
     [JsonPropertyName("jobType")]
-    public string JobType { get; init; } = string.Empty;
+    public string JobType { get; set; } = string.Empty;
 
     [JsonPropertyName("oldjobName")]
-    public string OldjobName { get; init; } = string.Empty;
+    public string OldjobName { get; set; } = string.Empty;
 
     [JsonPropertyName("oldjobPath")]
-    public string OldjobPath { get; init; } = string.Empty;
+    public string OldjobPath { get; set; } = string.Empty;
 
     [JsonPropertyName("fortranPath")]
-    public string FortranPath { get; init; } = string.Empty;
+    public string FortranPath { get; set; } = string.Empty;
 
-    [JsonPropertyName("gpuCount")] public int? GpuCount { get; init; }
-    [JsonPropertyName("explicitPrecision")] public string ExplicitPrecision { get; init; } = "default";
-    [JsonPropertyName("outputPrecision")] public string OutputPrecision { get; init; } = "default";
+    [JsonPropertyName("gpuCount")] public int? GpuCount { get; set; }
+    [JsonPropertyName("explicitPrecision")] public string ExplicitPrecision { get; set; } = "default";
+    [JsonPropertyName("outputPrecision")] public string OutputPrecision { get; set; } = "default";
 
     [JsonPropertyName("cores")]
-    public int Cores { get; init; }
+    public int Cores { get; set; }
 
     [JsonPropertyName("memory")]
-    public string Memory { get; init; } = string.Empty;
+    public string Memory { get; set; } = string.Empty;
 
     [JsonPropertyName("runtimeMemoryBytes")]
-    public long RuntimeMemoryBytes { get; init; }
+    public long RuntimeMemoryBytes { get; set; }
 
     [JsonPropertyName("memoryObservationStatus")]
-    public string MemoryObservationStatus { get; init; } = string.Empty;
+    public string MemoryObservationStatus { get; set; } = string.Empty;
 
     [JsonPropertyName("memoryPeakBytes")]
-    public long MemoryPeakBytes { get; init; }
+    public long MemoryPeakBytes { get; set; }
 
     [JsonPropertyName("memoryEstimatedBytes")]
-    public long MemoryEstimatedBytes { get; init; }
+    public long MemoryEstimatedBytes { get; set; }
 
     [JsonPropertyName("memorySampleCount")]
-    public int MemorySampleCount { get; init; }
+    public int MemorySampleCount { get; set; }
 
     [JsonPropertyName("memoryEstimateSource")]
-    public string MemoryEstimateSource { get; init; } = string.Empty;
+    public string MemoryEstimateSource { get; set; } = string.Empty;
 
     [JsonPropertyName("priority")]
-    public int Priority { get; init; }
+    public int Priority { get; set; }
 
     [JsonPropertyName("held")]
-    public bool Held { get; init; }
+    public bool Held { get; set; }
 
     [JsonPropertyName("schedulerState")]
-    public string SchedulerState { get; init; } = string.Empty;
+    public string SchedulerState { get; set; } = string.Empty;
 
     [JsonPropertyName("pendingReason")]
-    public string PendingReason { get; init; } = string.Empty;
+    public string PendingReason { get; set; } = string.Empty;
 
     [JsonPropertyName("status")]
-    public string Status { get; init; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 
     [JsonPropertyName("effectiveWorkDir")]
-    public string EffectiveWorkDir { get; init; } = string.Empty;
+    public string EffectiveWorkDir { get; set; } = string.Empty;
 
     [JsonPropertyName("archiveDestination")]
-    public string ArchiveDestination { get; init; } = string.Empty;
+    public string ArchiveDestination { get; set; } = string.Empty;
 
     [JsonPropertyName("archiveStatus")]
-    public string ArchiveStatus { get; init; } = string.Empty;
+    public string ArchiveStatus { get; set; } = string.Empty;
 
     [JsonPropertyName("archiveError")]
-    public string ArchiveError { get; init; } = string.Empty;
+    public string ArchiveError { get; set; } = string.Empty;
 
     [JsonPropertyName("archiveRecoveryAvailable")]
-    public bool ArchiveRecoveryAvailable { get; init; }
+    public bool ArchiveRecoveryAvailable { get; set; }
 
     [JsonIgnore]
     public bool HasPublishedArchive => !string.IsNullOrWhiteSpace(ArchiveDestination)
@@ -156,13 +203,13 @@ public sealed class JobQueueItem
         || Message.Contains(ArchiveStatus, StringComparison.Ordinal) ? Message : $"{Message} · {ArchiveStatus}";
 
     [JsonPropertyName("elapsed")]
-    public string Elapsed { get; init; } = string.Empty;
+    public string Elapsed { get; set; } = string.Empty;
 
     [JsonPropertyName("isExternal")]
-    public bool IsExternal { get; init; }
+    public bool IsExternal { get; set; }
 
     [JsonPropertyName("dependencyJobIds")]
-    public IReadOnlyList<string> DependencyJobIds { get; init; } = [];
+    public IReadOnlyList<string> DependencyJobIds { get; set; } = [];
 
     [JsonIgnore]
     public string SelectedDisplay => Selected ? "✓" : string.Empty;

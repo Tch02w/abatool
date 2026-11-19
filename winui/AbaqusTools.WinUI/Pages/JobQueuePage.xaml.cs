@@ -16,6 +16,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private readonly QueueExplorerAdapter _queueExplorerAdapter;
     private bool _busy;
     private bool _runtimeRefreshBusy;
+    private bool _applyingSnapshot;
     private int? _lastRuntimeParallel;
     private string? _lastRuntimePolicy;
     private string? _pendingFormalSelectionId;
@@ -26,8 +27,11 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         InitializeComponent();
         CandidateList.ItemsSource = _candidates;
         FormalQueueList.ItemsSource = _queueItems;
-        FormalQueueList.SelectionChanged += (_, _) => App.Current.Commands.SelectQueueItems(
-            FormalQueueList.SelectedItems.OfType<JobQueueItem>().Select(item => item.ItemId));
+        FormalQueueList.SelectionChanged += (_, _) =>
+        {
+            if (!_applyingSnapshot) App.Current.Commands.SelectQueueItems(
+                FormalQueueList.SelectedItems.OfType<JobQueueItem>().Select(item => item.ItemId));
+        };
         App.Current.Commands.Changed += UpdateCommandButtons;
         UpdateCommandButtons();
         _queueExplorerAdapter = new QueueExplorerAdapter(
@@ -679,14 +683,18 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private void ApplySnapshot(JobQueueSnapshot snapshot)
     {
-        _externalScanActive = snapshot.ExternalScanActive;
+        _externalScanActive = snapshot.ExternalManualScanActive;
         ScanExternalJobsButton.Content = _externalScanActive ? "扫描中…" : "扫描";
         ScanExternalJobsButton.IsEnabled = !_busy && !_externalScanActive;
-        var selectedFormalItemIds = CaptureSelectedFormalItemIds();
         _queueExplorerAdapter.Update(snapshot);
-        ReplaceItems(_candidates, snapshot.Candidates);
-        ReplaceItems(_queueItems, snapshot.QueueItems);
-        RestoreFormalSelection(selectedFormalItemIds);
+        _applyingSnapshot = true;
+        try
+        {
+            Controls.QueueListUpdates.Apply(CandidateList, _candidates, snapshot.Candidates);
+            Controls.QueueListUpdates.Apply(FormalQueueList, _queueItems, snapshot.QueueItems);
+        }
+        finally { _applyingSnapshot = false; }
+        App.Current.Commands.SelectQueueItems(SelectedFormalItems().Select(item => item.ItemId));
         SelectPendingFormalItem();
         CandidateSummaryText.Text =
             $"候选：{snapshot.CandidateCount} · 已选 {snapshot.SelectedCandidateCount} · 异常 {snapshot.InvalidCandidateCount}";
@@ -804,20 +812,6 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         ExistingResultPolicyComboBox.IsEnabled = commands.CanEditQueueOptions;
     }
 
-    private HashSet<string> CaptureSelectedFormalItemIds() =>
-        SelectedFormalItems()
-            .Select(item => item.ItemId)
-            .Where(itemId => !string.IsNullOrWhiteSpace(itemId))
-            .ToHashSet(StringComparer.Ordinal);
-
-    private void RestoreFormalSelection(IReadOnlySet<string> selectedItemIds)
-    {
-        foreach (var item in _queueItems.Where(item => selectedItemIds.Contains(item.ItemId)))
-        {
-            FormalQueueList.SelectedItems.Add(item);
-        }
-    }
-
     private JobQueueItem[]? RequireFormalSelection()
     {
         var selected = SelectedFormalItems();
@@ -868,17 +862,6 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
             DefaultButton = ContentDialogButton.Close,
         };
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
-    }
-
-    private static void ReplaceItems(
-        ObservableCollection<JobQueueItem> target,
-        IReadOnlyList<JobQueueItem> source)
-    {
-        target.Clear();
-        foreach (var item in source)
-        {
-            target.Add(item);
-        }
     }
 
     private static string FormatQueueSummary(JobQueueSnapshot snapshot)

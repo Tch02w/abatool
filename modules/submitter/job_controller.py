@@ -30,7 +30,9 @@ from .command import (
     build_abaqus_command,
     queue_item_to_options,
     validate_options,
+    quote_job_argument,
 )
+from .job_runtime import start_detached_command
 from .constants import (
     MAX_CPUS,
     STATUS_CANCELED,
@@ -695,13 +697,9 @@ class JobController:
 
                 continue
 
-            command = f"abaqus terminate job={item.job_name}"
+            command = f"abaqus terminate job={quote_job_argument(item.job_name)}"
 
-            started = QtCore.QProcess.startDetached(
-                ("cmd.exe" if os.name == "nt" else "/bin/sh"),
-                (["/c", command] if os.name == "nt" else ["-lc", command]),
-                work_dir,
-            )
+            started = start_detached_command(command, work_dir)
 
             if not started:
                 item.message = "终止失败：无法启动终止命令"
@@ -760,15 +758,11 @@ class JobController:
 
             queue_item.message = "正在终止"
 
-            command = f"abaqus terminate job={run['job_name']}"
+            command = f"abaqus terminate job={quote_job_argument(run['job_name'])}"
 
             self.append_history(f"终止队列作业：{command}")
 
-            QtCore.QProcess.startDetached(
-                ("cmd.exe" if os.name == "nt" else "/bin/sh"),
-                (["/c", command] if os.name == "nt" else ["-lc", command]),
-                run["work_dir"],
-            )
+            start_detached_command(command, run["work_dir"])
 
         self.refresh_visible_queue_manager()
         self.update_queue_status_label()

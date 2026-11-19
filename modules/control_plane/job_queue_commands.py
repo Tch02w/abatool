@@ -192,6 +192,7 @@ class JobQueueService:
         self.path = Path(path) if path is not None else Path(JOBLIST_PATH)
         self._lock = threading.RLock()
         self._external_scan_lock = threading.Lock()
+        self._external_manual_scan_active = False
         self._external_job_scanner = external_job_scanner
         self._external_monitor_interval = max(0.05, float(external_monitor_interval))
         self._external_scan_roots: set[str] = set()
@@ -212,6 +213,7 @@ class JobQueueService:
     def _project(self, candidates, items, *, scan_active=None):
         snapshot = project_job_queues(candidates, items)
         snapshot["externalScanActive"] = self._external_scan_lock.locked() if scan_active is None else scan_active
+        snapshot["externalManualScanActive"] = self._external_manual_scan_active if scan_active is None else False
         return snapshot
 
     def runtime_transaction(self, mutation) -> Any:
@@ -371,6 +373,7 @@ class JobQueueService:
             return None
         try:
             with self._lock:
+                self._external_manual_scan_active = manual
                 if self._external_monitor_closing.is_set():
                     if manual:
                         raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "后台正在关闭，未开始扫描")
@@ -439,7 +442,9 @@ class JobQueueService:
                 return {"schemaVersion": SCHEMA_VERSION, "action": "scanExternalJobs", "changed": changed,
                         "message": message, "stats": stats, "snapshot": self._project(candidates, current, scan_active=False)}
         finally:
-            self._external_scan_lock.release()
+            with self._lock:
+                self._external_manual_scan_active = False
+                self._external_scan_lock.release()
 
     def _scan_external_roots(
         self,

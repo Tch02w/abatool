@@ -21,6 +21,7 @@
 | 每个功能在哪些文件、该测什么 | [功能索引](03-features/FUNCTION_INDEX.md) |
 | 当前后处理怎么用、限制是什么 | [后处理功能说明](03-features/POSTPROCESSING.md) |
 | 本机优先级、资源准入、后台重启与未知状态 | [本机调度说明](03-features/LOCAL_SCHEDULING.md) |
+| 作业名称、允许的加号与具体校验原因 | [Abaqus命名规则](03-features/JOB_NAMING.md) |
 | 启动前目录检查、复制保护、准备取消 | [工作目录准备](03-features/LOCAL_WORKSPACE.md) |
 | 归档发布、清理、取消和部分结果 | [本机归档](03-features/LOCAL_ARCHIVE.md) |
 | 用户可见的候选版本变化 | [候选版本日志](05-development/CHANGELOG.md) |

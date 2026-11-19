@@ -13,6 +13,7 @@ from .abaqus_diagnostics import (
     update_abaqus_stage_from_text,
 )
 from .constants import SOLVER_START_GRACE_SECONDS, STA_POLL_INTERVAL_MS, STATUS_CONFIRMING
+from .command import literal_windows_command, quote_job_argument
 from .diagnostics import hang_probe, hang_probe_function, hang_probe_log
 from .process_observation import ProcessObservationService
 from .scheduling import ExecutionEvent, ExecutionEventKind
@@ -42,6 +43,24 @@ VS_INIT_NOISE_SUBSTRINGS = (
 
 MAX_CONSOLE_OUTPUT_CHARS = 12000
 LAUNCHER_START_TIMEOUT_MS = 3000
+
+def start_detached_command(command: str, work_dir: str) -> bool:
+    process = QtCore.QProcess()
+    process.setWorkingDirectory(work_dir)
+    if os.name == "nt":
+        launch_command, environment = literal_windows_command(command)
+        process_environment = QtCore.QProcessEnvironment.systemEnvironment()
+        if "ABAQUS_TOOLS_LITERAL_PERCENT" in environment:
+            process_environment.insert("ABAQUS_TOOLS_LITERAL_PERCENT", "%")
+        process.setProcessEnvironment(process_environment)
+        process.setProgram("cmd.exe")
+        process.setNativeArguments('/d /v:off /s /c "' + launch_command + '"')
+    else:
+        process.setProgram("/bin/sh")
+        process.setArguments(["-lc", command])
+    result = process.startDetached()
+    return bool(result[0] if isinstance(result, tuple) else result)
+
 def run_is_datacheck(run: dict) -> bool:
     queue_item = run.get("queue_item")
     return bool(run.get("datacheck_only") or getattr(queue_item, "datacheck_only", False))
@@ -294,7 +313,14 @@ class JobRuntimeController(QtCore.QObject):
 
         start_step = time.monotonic()
         if os.name == "nt":
-            process.start("cmd.exe", ["/c", command])
+            launch_command, environment = literal_windows_command(command)
+            process_environment = QtCore.QProcessEnvironment.systemEnvironment()
+            if "ABAQUS_TOOLS_LITERAL_PERCENT" in environment:
+                process_environment.insert("ABAQUS_TOOLS_LITERAL_PERCENT", "%")
+            process.setProcessEnvironment(process_environment)
+            process.setProgram("cmd.exe")
+            process.setNativeArguments('/d /v:off /s /c "' + launch_command + '"')
+            process.start()
         else:
             process.start("/bin/sh", ["-lc", command])
         hang_probe_log(
@@ -735,10 +761,6 @@ class JobRuntimeController(QtCore.QObject):
         work_dir = run["work_dir"]
         if not job_name or not work_dir:
             return
-        command = f"abaqus {action} job={job_name}"
+        command = f"abaqus {action} job={quote_job_argument(job_name)}"
         self.historyEvent.emit(f"执行控制命令：{command}")
-        QtCore.QProcess.startDetached(
-            "cmd.exe" if os.name == "nt" else "/bin/sh",
-            ["/c", command] if os.name == "nt" else ["-lc", command],
-            work_dir,
-        )
+        start_detached_command(command, work_dir)

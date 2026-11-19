@@ -161,6 +161,7 @@ public sealed class QueueExplorerAdapter : WorkbenchExplorerAdapterBase
     private readonly Action<ExplorerItem>? _select;
     private string _root = string.Empty;
     private JobQueueSnapshot _queue = new();
+    private bool _hasQueueSnapshot;
     private IReadOnlyList<ExplorerItem> _workspaceInputs = [];
 
     public override string ContextKey => "queue";
@@ -182,14 +183,17 @@ public sealed class QueueExplorerAdapter : WorkbenchExplorerAdapterBase
 
     public void Update(JobQueueSnapshot snapshot)
     {
+        var changed = !_hasQueueSnapshot || !_queue.HasSameExplorerContent(snapshot);
+        _hasQueueSnapshot = true;
         _queue = snapshot;
         var inferredRoot = InferRoot(snapshot, _root);
         if (!string.Equals(inferredRoot, _root, StringComparison.OrdinalIgnoreCase))
         {
             _root = inferredRoot;
             _workspaceInputs = WorkspaceExplorerDiscovery.ScanInputFiles(_root);
+            changed = true;
         }
-        Publish(BuildSnapshot());
+        if (changed) Publish(BuildSnapshot());
     }
 
     public override async Task ExecutePrimaryActionAsync(CancellationToken cancellationToken)

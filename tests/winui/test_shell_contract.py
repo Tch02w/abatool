@@ -655,7 +655,7 @@ def test_parallel_limit_inputs_have_space_for_permanent_buttons() -> None:
         assert float(control.get("Width", "0")) >= 160
 
 
-def test_all_numeric_fields_use_the_same_permanent_button_control() -> None:
+def test_adjustable_numeric_fields_use_the_same_permanent_button_control() -> None:
     import re
     xaml_fields = []
     dynamic_count = 0
@@ -669,7 +669,8 @@ def test_all_numeric_fields_use_the_same_permanent_button_control() -> None:
         assert "new NumberBox" not in source
         assert "NumberBoxSpinButtonPlacementMode.Compact" not in source
         assert "NumberBoxSpinButtonPlacementMode.Hidden" not in source
-    assert len(xaml_fields) == 10 and dynamic_count == 6
+    # SSH ports are typed directly; they deliberately have no stepper.
+    assert len(xaml_fields) == 10 and dynamic_count == 5
     assert all(node.get("SpinButtonPlacementMode") == "Inline" for node in xaml_fields)
 
 
@@ -727,9 +728,10 @@ def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     assert "GetJobQueuesAsync" in page
     assert "AddJobQueueCandidatesAsync" in page
     assert "StartLocalQueueAsync" in page
-    assert "CaptureSelectedFormalItemIds()" in page
-    assert "RestoreFormalSelection(selectedFormalItemIds)" in page
-    assert "FormalQueueList.SelectedItems.Add(item)" in page
+    assert "QueueListUpdates.Apply(CandidateList, _candidates, snapshot.Candidates)" in page
+    assert "QueueListUpdates.Apply(FormalQueueList, _queueItems, snapshot.QueueItems)" in page
+    updates = (WINUI_ROOT / "Controls" / "QueueListUpdates.cs").read_text(encoding="utf-8")
+    assert "list.SelectedItems.Add(row)" in updates
     assert 'x:Name="CandidateList"' in xaml
     assert 'x:Name="FormalQueueList"' in xaml
 

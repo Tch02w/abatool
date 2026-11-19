@@ -23,4 +23,4 @@
 - `tests/submitter/test_remote_transfers.py`：实际Windows同步/替换、中文特殊路径、锁定旧文件保护、同名竞争及提交前后取消；`tests/control_plane/test_remote_transfers_api.py`、`test_remote_server_responsiveness.py`：API和资源快照。
 - 本轮真实连接已获用户确认并由原生页面核对：192.168.1.202，64线程、约159.9GB内存、Abaqus命令可用。D:\Abaqus_Cal目录读取及63,488字节中文空格路径上传通过。旧完整包c6999a8e1c8e下载失败现场在`GPTWork/ssh-transfer-b1a0b0448869/operations.json`，不能视为完整传输通过。
 
-修复通过11项专项及78项文档/连接/发布检查；新完整包与真实上传/下载重验仍待。准确源码、包及进程状态见[当前状态](../08-handoff/CURRENT_STATUS.md)和[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。原生登录确认不代替传输对话框的完整鼠标验收。
+修复通过11项专项及78项文档/连接/发布检查，已进入干净e78fa5e完整包2c18c11259b2。192.168.1.202上10项真实传输操作已通过：两向传输/覆盖/禁止覆盖、重复请求、上传与下载取消、范围外拒绝；下载取消保留旧目标，临时文件清理通过。回执GPTWork/ssh-transfer-fixed-8bd4b86f8d98/verification.json及download-cancel-verification.json，合成测试文件保留。准确源码、包及进程状态见[当前状态](../08-handoff/CURRENT_STATUS.md)和[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。正式API传输不代替传输对话框的完整鼠标验收。

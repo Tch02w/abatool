@@ -631,15 +631,12 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             Text = existing?.Host ?? string.Empty,
             PlaceholderText = "192.168.1.20",
         };
-        var portBox = new Controls.WorkbenchNumberBox
+        var portBox = new TextBox
         {
             Header = "SSH 端口",
-            Minimum = 1,
-            Maximum = 65535,
-            Value = existing?.Port ?? 22,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Text = (existing?.Port ?? 22).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            MaxLength = 5,
         };
-        Controls.ParameterHelpButton.AddToHeader(portBox, "ssh-port");
         var usernameBox = new TextBox
         {
             Header = "用户名",
@@ -706,15 +703,9 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         authenticationBox.SelectionChanged += (_, _) => UpdateAuthenticationFields();
         UpdateAuthenticationFields();
 
-        var panel = new StackPanel { Spacing = 10, Width = 560 };
+        var panel = new StackPanel { Spacing = 10 };
         panel.Children.Add(profileNameBox);
-        var endpointGrid = new Grid { ColumnSpacing = 10 };
-        endpointGrid.ColumnDefinitions.Add(new ColumnDefinition());
-        endpointGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
-        endpointGrid.Children.Add(hostBox);
-        Grid.SetColumn(portBox, 1);
-        endpointGrid.Children.Add(portBox);
-        panel.Children.Add(endpointGrid);
+        panel.Children.Add(Controls.ServerDialogLayout.EndpointRow(hostBox, portBox));
         panel.Children.Add(usernameBox);
         panel.Children.Add(authenticationBox);
         panel.Children.Add(privateKeyBox);
@@ -731,17 +722,13 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             Title = connectOnly
                 ? $"连接 {existing?.ProfileName}"
                 : existing is null ? "添加服务器" : "编辑服务器",
-            Content = new ScrollViewer
-            {
-                Content = panel,
-                MaxHeight = 620,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            },
+            Content = Controls.ServerDialogLayout.Content(panel),
             PrimaryButtonText = connectOnly ? "连接" : "保存并连接",
             SecondaryButtonText = connectOnly ? string.Empty : "仅保存",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
         };
+        Controls.ServerDialogLayout.KeepExistingWidth(dialog);
 
         dialog.Closing += (_, args) =>
         {
@@ -753,9 +740,10 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             if (string.IsNullOrWhiteSpace(profileNameBox.Text)) errors.Add("请填写配置名称");
             if (string.IsNullOrWhiteSpace(hostBox.Text)) errors.Add("请填写主机名或 IP");
             if (string.IsNullOrWhiteSpace(usernameBox.Text)) errors.Add("请填写用户名");
-            if (double.IsNaN(portBox.Value) || portBox.Value is < 1 or > 65535)
+            if (!int.TryParse(portBox.Text.Trim(), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
             {
-                errors.Add("SSH 端口必须在 1–65535 之间");
+                errors.Add("SSH 端口必须是 1–65535 之间的整数");
             }
             var mode = authenticationBox.SelectedItem?.ToString() ?? "用户名/密码";
             if (args.Result == ContentDialogResult.Primary
@@ -787,7 +775,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         {
             ProfileName = profileNameBox.Text.Trim(),
             Host = hostBox.Text.Trim(),
-            Port = (int)portBox.Value,
+            Port = int.Parse(portBox.Text.Trim(), System.Globalization.CultureInfo.InvariantCulture),
             Username = usernameBox.Text.Trim(),
             Authentication = mode,
             PrivateKeyPath = privateKeyBox.Text.Trim(),

@@ -1,6 +1,9 @@
 using System.Text.Json;
 using AbaqusTools.WinUI.Controls;
 using AbaqusTools.WinUI.Explorer;
+using AbaqusTools.WinUI.Services;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -37,6 +40,8 @@ public sealed partial class TestApp : Application
             await CheckHeaderAlignmentAsync();
             await CheckCompactTreeAsync();
             await CheckSelectionsAsync();
+            await CheckServerDialogLayoutAsync();
+            await CheckQueueUpdatesAsync();
             Write(new { status = "passed", checks = _checks });
         }
         catch (Exception error)
@@ -51,6 +56,146 @@ public sealed partial class TestApp : Application
             if (_window is not null) _window.Content = null;
             await DispatchAsync();
             Exit();
+        }
+    }
+
+    private async Task CheckQueueUpdatesAsync()
+    {
+        var rows = new ObservableCollection<JobQueueItem>();
+        var list = new ListView { ItemsSource = rows, SelectionMode = ListViewSelectionMode.Multiple, Height = 240 };
+        list.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
+            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <StackPanel Orientation="Horizontal"><CheckBox IsChecked="{Binding Selected, Mode=OneWay}"/><TextBlock Text="{Binding Status}"/><TextBlock Text="{Binding RuntimeMemoryDisplay}"/></StackPanel>
+            </DataTemplate>
+            """);
+        _root.Children.Add(list);
+        JobQueueItem Row(int index, string status = "等待", bool selected = true) => new()
+        {
+            ItemId = $"queue-{index}", Index = index, JobName = $"GJA-8+2_{index}",
+            Status = status, Selected = selected, DependencyJobIds = ["parent"],
+            RuntimeMemoryBytes = status == "运行中" ? 2147483648 : 0
+        };
+        var initial = Enumerable.Range(0, 50).Select(index => Row(index)).ToArray();
+        QueueListUpdates.Apply(list, rows, initial);
+        await DispatchAsync(); _root.UpdateLayout();
+        list.SelectedItems.Add(rows[1]); list.SelectedItems.Add(rows[3]);
+        var row1 = rows[1];
+        var container = list.ContainerFromItem(row1);
+        Check(container is not null, "Queue native list realizes its selected row");
+        var changes = new List<NotifyCollectionChangedAction>();
+        rows.CollectionChanged += (_, args) => changes.Add(args.Action);
+        var fields = new List<string?>();
+        row1.PropertyChanged += (_, args) => fields.Add(args.PropertyName);
+        for (var cycle = 0; cycle < 100; cycle++)
+            QueueListUpdates.Apply(list, rows, Enumerable.Range(0, 50).Select(index => Row(index)).ToArray());
+        await DispatchAsync(); _root.UpdateLayout();
+        Check(changes.Count == 0 && fields.Count == 0, "100 identical polls cause no collection or field notifications");
+        Check(ReferenceEquals(list.ContainerFromItem(row1), container) && list.SelectedItems.Count == 2,
+            "Identical polls retain native row container and candidate multi-selection");
+        var updated = Enumerable.Range(0, 50).Select(index => Row(index, index == 1 ? "运行中" : "等待", index != 1)).ToArray();
+        QueueListUpdates.Apply(list, rows, updated);
+        await DispatchAsync(); _root.UpdateLayout();
+        Check(ReferenceEquals(rows[1], row1) && ReferenceEquals(list.ContainerFromItem(row1), container)
+            && list.SelectedItems.Contains(row1) && row1.Status == "运行中", "Changed status updates the existing selected row in place");
+        Check(fields.Contains("Status") && fields.Contains("RuntimeMemoryDisplay") && !fields.Contains("JobName")
+            && changes.Count == 0, "Only changed values and dependent displays notify bindings");
+        Check(Descendants(container!).OfType<CheckBox>().Single().IsChecked is false
+            && Descendants(container!).OfType<TextBlock>().Any(text => text.Text == "运行中")
+            && Descendants(container!).OfType<TextBlock>().Any(text => text.Text == "2.0 GB"),
+            "Native checkbox, status and memory bindings receive new values without rebuilding the row");
+        var scroller = Descendants(list).OfType<ScrollViewer>().First();
+        scroller.ChangeView(null, 400, null, true);
+        await DispatchAsync(); _root.UpdateLayout();
+        var offset = scroller.VerticalOffset;
+        QueueListUpdates.Apply(list, rows, updated);
+        await DispatchAsync(); _root.UpdateLayout();
+        Check(offset > 0 && Math.Abs(offset - scroller.VerticalOffset) < .1, "Unchanged refresh preserves native scroll position");
+        QueueListUpdates.Apply(list, rows, updated.Reverse().ToArray());
+        await DispatchAsync(); _root.UpdateLayout();
+        Check(list.SelectedItems.Count == 2 && list.SelectedItems.Contains(row1)
+            && rows[48] == row1, "Reordering preserves selected job identities");
+        QueueListUpdates.Apply(list, rows, updated.Where(row => row.ItemId != "queue-3").ToArray());
+        Check(list.SelectedItems.Count == 1 && list.SelectedItems.Contains(row1), "Removing one selected job preserves the surviving selection");
+        Check(!changes.Contains(NotifyCollectionChangedAction.Reset), "Structural changes never reset the whole list");
+        var original = new JobQueueSnapshot { QueueCount = 1, QueueItems = [Row(1)] };
+        var memoryOnly = Row(1); memoryOnly.RuntimeMemoryBytes = 1234;
+        Check(original.HasSameExplorerContent(new() { QueueCount = 1, QueueItems = [memoryOnly] }),
+            "Memory-only changes do not rebuild a sidebar that does not display memory");
+        Check(!original.HasSameExplorerContent(new() { QueueCount = 1, QueueItems = [Row(1, "运行中")] }),
+            "A changed queue status still refreshes the sidebar badge");
+        Check(!new JobQueueSnapshot { CandidateCount = 1, Candidates = [Row(1)] }.HasSameExplorerContent(
+            new() { CandidateCount = 1, Candidates = [Row(1, selected: false)] }),
+            "A changed candidate check still refreshes the sidebar selection badge");
+        _root.Children.Clear(); await DispatchAsync();
+    }
+
+    private async Task CheckServerDialogLayoutAsync()
+    {
+        _window!.AppWindow.Resize(new Windows.Graphics.SizeInt32(1000, 900));
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        foreach (var title in new[] { "添加服务器", "编辑服务器", "连接 计算节点01" })
+        {
+            var host = new TextBox { Header = "主机名或 IP", Text = "192.168.1.202" };
+            var port = new TextBox { Header = "SSH 端口", Text = "65535", MaxLength = 5 };
+            var username = new TextBox { Header = "用户名", Text = "Administrator" };
+            var password = new PasswordBox { Header = "密码" };
+            var panel = new StackPanel { Spacing = 10 };
+            panel.Children.Add(new TextBox { Header = "配置名称", Text = "计算节点01" });
+            panel.Children.Add(ServerDialogLayout.EndpointRow(host, port));
+            panel.Children.Add(username);
+            panel.Children.Add(new ComboBox { Header = "认证方式", ItemsSource = new[] { "用户名/密码" },
+                SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch });
+            panel.Children.Add(password);
+            panel.Children.Add(new TextBox { Header = "服务器计算目录", Text = @"D:\Abaqus_Cal\中文 路径" });
+            panel.Children.Add(new TextBox { Header = "允许访问的服务器根目录（每行一个）", AcceptsReturn = true, MinHeight = 70 });
+            panel.Children.Add(new TextBox { Header = "Abaqus 命令", Text = "abaqus.bat" });
+            panel.Children.Add(new TextBox { Header = "已验证主机指纹", Text = new string('x', 60) });
+            var scroller = ServerDialogLayout.Content(panel);
+            var dialog = new ContentDialog { XamlRoot = _root.XamlRoot, Title = title, Content = scroller,
+                RequestedTheme = theme, PrimaryButtonText = title.StartsWith("连接") ? "连接" : "保存并连接",
+                SecondaryButtonText = title.StartsWith("连接") ? "" : "仅保存", CloseButtonText = "取消" };
+            ServerDialogLayout.KeepExistingWidth(dialog);
+            var opened = new TaskCompletionSource();
+            dialog.Opened += (_, _) => opened.SetResult();
+            var showing = dialog.ShowAsync();
+            try
+            {
+                await opened.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await DispatchAsync();
+                dialog.UpdateLayout();
+                var hostTop = host.TransformToVisual(panel).TransformPoint(default).Y;
+                var portTop = port.TransformToVisual(panel).TransformPoint(default).Y;
+                var userBody = Descendants(username).OfType<FrameworkElement>().First(e => e.Name == "BorderElement");
+                var passwordBody = Descendants(password).OfType<FrameworkElement>().First(e => e.Name == "BorderElement");
+                Check(host.ActualHeight == 32 && port.ActualHeight == 32
+                    && userBody.ActualHeight == 32 && passwordBody.ActualHeight == 32
+                    && Math.Abs(hostTop - portTop) < .01,
+                    $"{theme}/{title}: body heights={host.ActualHeight}/{port.ActualHeight}/{userBody.ActualHeight}/{passwordBody.ActualHeight}; endpoint tops={hostTop}/{portTop}");
+                Check(scroller.ScrollableWidth == 0 && panel.ActualWidth <= scroller.ViewportWidth + .1
+                    && panel.Children.OfType<FrameworkElement>().All(field => field.ActualWidth <= panel.ActualWidth + .1)
+                    && port.TransformToVisual(panel).TransformPoint(default).X + port.ActualWidth <= panel.ActualWidth + .1,
+                    $"{theme}/{title}: all field right edges remain inside the fixed-width dialog viewport");
+                Check(!Descendants(panel).Any(e => e is NumberBox or Microsoft.UI.Xaml.Controls.Primitives.RepeatButton)
+                    && host.VerticalContentAlignment == VerticalAlignment.Center && port.VerticalContentAlignment == VerticalAlignment.Center,
+                    $"{theme}/{title}: direct port input has no steppers and endpoint content is centered vertically");
+            }
+            finally
+            {
+                dialog.Hide();
+                await showing;
+                dialog.Content = null;
+                await DispatchAsync();
+            }
+        }
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
         }
     }
 

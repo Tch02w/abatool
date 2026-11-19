@@ -864,9 +864,11 @@ foreach ($argument in $config.execution_arguments) {
 if ([string]$config.oldjob_name) { $arguments += "oldjob=$($config.oldjob_name)" }
 if ([string]$config.fortran_name) { $arguments += "user=$($config.fortran_name)" }
 if ([bool]$config.datacheck) { $arguments += 'datacheck' }
-$quoted=$arguments | ForEach-Object { if ($_ -match '\s') { '"'+($_ -replace '"','\"')+'"' } else { $_ } }
-$command='call "'+([string]$config.abaqus_command -replace '"','""')+'" '+($quoted -join ' ')
-$process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru
+$quoted=$arguments | ForEach-Object { if ($_ -match '[\s^]') { '"'+($_ -replace '"','\"')+'"' } else { $_ } }
+$command='"'+([string]$config.abaqus_command -replace '"','""')+'" '+($quoted -join ' ')
+$env:ABAQUS_TOOLS_LITERAL_PERCENT='%'
+$command=$command.Replace('%','%ABAQUS_TOOLS_LITERAL_PERCENT%')
+$process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/v:off','/s','/c',('"'+$command+'"')) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru
 try { $started=$process.StartTime.ToUniversalTime().Ticks.ToString() }
 catch { if (-not $process.HasExited) { throw }; $started='exited' }
 $result=[ordered]@{ operation_id=[string]$config.operation_id; state='started'; process_id=[int]$process.Id; process_start_ticks=$started }
@@ -947,9 +949,11 @@ def _control_job_script() -> str:
     return r"""
 $receipt=Get-Content -LiteralPath (Join-Path ([string]$config.work_directory) '.abaqus-tools-launch.json') -Raw -ErrorAction Stop | ConvertFrom-Json
 if ([string]$receipt.operation_id -ne [string]$config.operation_id) { throw '拒绝控制不属于原任务的目录。' }
-$argument=([string]$config.action)+' job='+([string]$config.job_name)
-$command='call "'+([string]$config.abaqus_command -replace '"','""')+'" '+$argument
-$process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru -Wait
+$argument=([string]$config.action)+' job="'+([string]$config.job_name)+'"'
+$command='"'+([string]$config.abaqus_command -replace '"','""')+'" '+$argument
+$env:ABAQUS_TOOLS_LITERAL_PERCENT='%'
+$command=$command.Replace('%','%ABAQUS_TOOLS_LITERAL_PERCENT%')
+$process=Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/v:off','/s','/c',('"'+$command+'"')) -WorkingDirectory ([string]$config.work_directory) -WindowStyle Hidden -PassThru -Wait
 [ordered]@{ exit_code=[int]$process.ExitCode } | ConvertTo-Json -Compress
 """
 

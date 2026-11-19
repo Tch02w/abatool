@@ -18,7 +18,7 @@ from .abaqus_diagnostics import (
     classify_job_text,
     inspect_job_files,
 )
-from .command import build_abaqus_command, queue_item_to_options, validate_options
+from .command import build_abaqus_command, queue_item_to_options, validate_options, quote_job_argument, literal_windows_command
 from .constants import (
     MAX_CPUS,
     STATUS_COMPLETED,
@@ -232,11 +232,13 @@ def run_archive_only(item, controller, progress=None):
 
 
 def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) -> None:
-    command = f'{item.abaqus_command or "abaqus"} terminate job={item.job_name}'
+    command = f'{item.abaqus_command or "abaqus"} terminate job={quote_job_argument(item.job_name)}'
     if log:
         log(f"发送终止命令：{command}")
+    launch_command, environment = literal_windows_command(command)
     subprocess.run(
-        command,
+        launch_command,
+        env=environment,
         cwd=str(work_dir),
         shell=True,
         stdout=subprocess.DEVNULL,
@@ -287,8 +289,10 @@ def execute_local_job(
         log(f"执行命令：{command}")
     _emit(progress, "starting", "正在启动 Abaqus launcher", 10, command)
     check_plan_available(plan, existing_result_policy)
+    launch_command, environment = literal_windows_command(command)
     process = controller.start(
-        command,
+        launch_command,
+        env=environment,
         cwd=str(work_dir),
         shell=True,
         stdout=subprocess.PIPE,

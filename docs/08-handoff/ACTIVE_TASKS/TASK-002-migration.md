@@ -1,5 +1,15 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · SSH真实传输完成，续修服务器表单及队列
+
+SSH修复已提交并推送e78fa5e53288dea95e21e5e36eb200554257eae9。干净完整包GPTWork/release-win-x64-2c18c11259b2/AbaqusTools含1688清单文件、19worker和15应用资源，全摘要与包内依赖通过。包内诊断见ssh-fixed-bundle-probe-20261119/bundle-probe-n2kvvrb3/verification.json。正式安装候选installer-win-x64-967f065cfdd7为126137963字节、未签名、尚未安装；该负载没有重做安装生命周期。汇总ssh-fixed-delivery-20261119/verification-summary.json。
+
+用户再次登录新包并确认已连接，CUA核对5379070在线。生产冻结后台的10个真实传输操作通过：中文空格路径上传/下载摘要一致、禁止覆盖两向拒绝、允许覆盖两向成功、同请求不重复、32MiB上传取消无最终/临时残留、范围外路径拒绝、32MiB下载在3%取消且保留旧目标并清理临时文件。回执ssh-transfer-fixed-8bd4b86f8d98/verification.json及download-cancel-verification.json。服务器两个合成测试文件保留，未下载ODB、未启动远端求解，不触碰服务器已有计算。
+
+旧前台203708已结束但退出原因未证实，旧后台194292/190748经空闲协议关闭；native-ssh-20261119内回执确认描述符移除、日常两份JSON未变。不能将此称为正常UI退出验收。新已认证前台227820、后台135288及197572保留，profile为native-ssh-fixed-20261119/compute-resources；不要重复要求登录或强关此会话。资源页启动时曾出现传输状态读取取消提示，登录后消失，该瞬时超时尚未单独修复。
+
+本轮新增表单右侧截断/等高、队列自动刷新丢选/按钮闪烁及加号名称误拒问题，改动和验证见TASK-004顶部。当前旧完整2c18仅含SSH修复，不能称为含新UI修复；原生业务核验与新交付正在继续。以下各节为历史现场，进程与版本以本节及CURRENT_STATUS为准。
+
 ## 2026-11-19 · 真实合并异常通过；SSH下载缺陷修复中
 
 用户已在旧完整包隔离窗口完成登录，并明确回复“已连接”。CUA确认7096140显示计算节点01在线、64线程/159.9GB、Abaqus可用，主机指纹匹配。前台203708、后台194292/190748仍保留，profile在native-ssh-20261119/compute-resources；不是等待登录状态。真实API读取D:\Abaqus_Cal成功（20条目录项），上传63,488字节中文空格文件成功，但下载在100%后失败：`下载文件失败：[Errno 9] Bad file descriptor`。现场GPTWork/ssh-transfer-b1a0b0448869/operations.json，服务器仅新增`D:\Abaqus_Cal\codex-transfer-a5b395484d95 传输验收.txt`测试文件，保留不删除。未下载任何ODB或启动远端求解。

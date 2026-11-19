@@ -43,9 +43,11 @@ def test_slow_external_scan_does_not_block_queue_reads(tmp_path, manual):
             read = pool.submit(service.snapshot)
             snapshot = read.result(timeout=1)
             assert snapshot["queueItems"][0]["itemId"] == item.item_id and snapshot["externalScanActive"]
+            assert snapshot["externalManualScanActive"] is manual
         finally:
             release.set()
             scan.result(timeout=10)
+            assert not service.snapshot()["externalManualScanActive"]
             service.close()
 
 

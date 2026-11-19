@@ -144,7 +144,10 @@ def calculate_default_joblist_parallel(cpus=None):
     return max(1, (MAX_THREADS * 3) // (2 * requested_cpus))
 
 
-JOB_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*$")
+# Abaqus 2025 CAE User's Guide, "Using basic dialog box components":
+# https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-intdialogbasic.htm
+JOB_NAME_MAX_LENGTH = 80
+JOB_NAME_FORBIDDEN_CHARACTERS = frozenset(" $&*~!()[]{}|:;'`\"”,.?/\\><")
 DIAGNOSTIC_EXTENSIONS = (".sta", ".msg", ".dat", ".log")
 OVERWRITE_PROMPT_MARKERS = (
     "OLD JOB FILES EXIST",

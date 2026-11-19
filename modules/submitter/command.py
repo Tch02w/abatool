@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import DEFAULT_CPUS, JOB_NAME_PATTERN, MAX_CPUS, STATUS_STARTING
+from .constants import DEFAULT_CPUS, JOB_NAME_MAX_LENGTH, JOB_NAME_FORBIDDEN_CHARACTERS, MAX_CPUS, STATUS_STARTING
 from .execution_options import execution_arguments, validate_execution_options
 from .models import QueueItem
 
@@ -69,8 +69,17 @@ def validate_job_name(job_name: str) -> tuple[bool, str]:
     """Validate an Abaqus job name."""
     if not job_name:
         return False, "作业名称不能为空。"
-    if not JOB_NAME_PATTERN.fullmatch(job_name):
-        return False, "作业名称只能以英文字母、数字或下划线开头，并且只能包含英文字母、数字、下划线或短横线。"
+    if len(job_name) > JOB_NAME_MAX_LENGTH:
+        return False, "Abaqus 作业名称最多允许 80 个字符。"
+    if job_name.casefold() == "assembly":
+        return False, "Assembly 是 Abaqus/CAE 保留名称，不能用作作业名。"
+    if job_name.startswith(("-", "_")) or job_name.endswith("_"):
+        return False, "Abaqus 作业名称不能以短横线或下划线开头，也不能以下划线结尾。"
+    invalid = next((char for char in job_name if char in JOB_NAME_FORBIDDEN_CHARACTERS
+                    or char.isspace() or ord(char) < 32 or ord(char) == 127), None)
+    if invalid is not None:
+        label = repr(invalid) if invalid.isspace() or ord(invalid) < 32 or ord(invalid) == 127 else invalid
+        return False, f"Abaqus 作业名称包含不允许的字符：{label}。"
     return True, ""
 
 
@@ -114,7 +123,7 @@ def build_abaqus_command(options: SubmitOptions) -> str:
         abaqus_command.startswith('"') and abaqus_command.endswith('"')
     ):
         abaqus_command = f'"{abaqus_command}"'
-    parts = [f"{abaqus_command} job={options.job_name}"]
+    parts = [f"{abaqus_command} job={quote_job_argument(options.job_name)}"]
 
     if options.datacheck and options.inp_file:
         input_name = os.path.basename(options.inp_file)
@@ -124,8 +133,7 @@ def build_abaqus_command(options: SubmitOptions) -> str:
 
     oldjob_argument = (options.oldjob_arg or "").strip() or derive_oldjob_name(options.oldjob_path)
     if oldjob_argument:
-        if re.search(r"\s", oldjob_argument):
-            oldjob_argument = f'"{oldjob_argument}"'
+        oldjob_argument = quote_job_argument(oldjob_argument)
         parts.append(f"oldjob={oldjob_argument}")
 
     if options.for_file:
@@ -150,6 +158,20 @@ def build_abaqus_command(options: SubmitOptions) -> str:
         parts.append("interactive")
 
     return " ".join(parts)
+
+
+def quote_job_argument(value: str) -> str:
+    """Preserve shell-sensitive characters allowed by Abaqus, e.g. caret."""
+    return f'"{value}"' if re.search(r"[\s^]", value) else value
+
+
+def literal_windows_command(command: str) -> tuple[str, dict[str, str]]:
+    """Expand literal percent signs once, without expanding names like %PATH%."""
+    environment = dict(os.environ)
+    if os.name == "nt" and "%" in command:
+        environment["ABAQUS_TOOLS_LITERAL_PERCENT"] = "%"
+        command = command.replace("%", "%ABAQUS_TOOLS_LITERAL_PERCENT%")
+    return command, environment
 
 
 def validate_options(options: SubmitOptions) -> tuple[bool, str]:

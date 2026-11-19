@@ -1,5 +1,15 @@
 # 工作台布局、运行日志与数字输入
 
+## 服务器表单与队列定向刷新（2026-11-19，F004/F008/F025）
+
+添加、编辑、连接服务器共用 `ComputeResourcesPage.ShowServerDialogAsync` 和 `Controls/ServerDialogLayout.cs`。保持548 DIP固定弹窗，移除超出内容区的560 DIP面板宽度，禁用横向滚动并给纵向滚动条留出右侧空间。主机/端口的标题与输入区分别处于同一Grid行，输入区均32 DIP，文字垂直居中；端口为直接输入的TextBox，无增减按钮，校验1–65535整数。标题、保存/连接按钮、配置名只读及认证方式对应字段保留入口差异，取消仍不保存并清空本次密码。
+
+队列页仍定期读取运行状态，但候选和正式队列由 `Controls/QueueListUpdates.cs` 按ItemId增删/移动，`Services/JobQueueContracts.cs` / JobQueueItem.UpdateFrom只通知变化的属性与相关显示字段。不再Clear整张列表；相同快照无通知，保留原行、控件、勾选、列表多选和滚动位置，删除只移除对应行的选择。侧栏只在其可见名称、状态、检查和勾选等改变时发布新快照，单纯内存变化不重建侧栏。列表多选用于行操作，持久勾选仍由原API决定，二者不混用。过期运行响应仍受QueueRevision约束。
+
+后台自动观测不再让“扫描”按钮周期变灰/变为“扫描中”。原externalScanActive继续表示所有扫描的互斥状态，新externalManualScanActive只表示用户触发的扫描；手动扫描仍禁止重入，撞上后台扫描时由服务返回已有的EXTERNAL_SCAN_BUSY，不启动第二轮扫描。自动状态监测没有关闭。
+
+实际生产控件51项通过（含18项深浅主题/三种表单布局、13项真实ListView更新与侧栏可见字段判定）。100次相同快照不产生集合或属性通知；状态/内存/勾选绑定更新后原选中行容器不变，滚动、重排与删除后的剩余选择通过。回执 `GPTWork/queue-dialog-final-controls-20261119/verification.json`；这些是控件自身检查，业务页视觉与鼠标确认单独记录。名称规则见[Abaqus命名说明](JOB_NAMING.md)。
+
 ## 侧栏标题按钮与树目录（2026-11-19，F001/F002/F021）
 
 刷新与收起按钮位于同一标题Grid，共用30×30 DIP外框与居中方式；为平衡视觉面积，刷新图标14号，折线16号，内容区域均16×16。收起后保留40 DIP窄栏与展开按钮。CollapseRequested交给主窗口处理，关闭/新建锁定同时禁用切换入口，Ctrl+B与偏好持久化保留。
@@ -100,14 +110,14 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 
 ## 数字步进与参数说明（F025）
 
-用户最终选择右侧并排的下/上折线箭头、数字居中。原有 16 处输入及 GPU 编辑区两个入口统一使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
+用户最终选择右侧并排的下/上折线箭头、数字居中。原有16处中的SSH端口已按用户要求改为直接输入；其余15处及GPU编辑区两个入口使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
 
 | 文件 | 控件 | 修复前模式 |
 |---|---|---|
 | `winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml` | CPU；最大并行 | Hidden；Compact |
 | `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml` | 队列并行上限 | Compact |
 | `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` | 编辑作业 Core、优先级 | Inline × 2 |
-| `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` | SSH 端口 | Compact |
+| `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` | SSH 端口（现为直接输入，无增减按钮） | 原Compact |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml` | 后处理并行、预期纵筋数、帧率、GIF 单轮时长、宽、高、容差 | Hidden × 6，单轮时长为新增 |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` | 钢筋直径、断裂前帧 | Compact × 2 |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.StructureBrowser.cs` | 统一参考截面积 | Hidden |

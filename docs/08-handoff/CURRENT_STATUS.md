@@ -1,26 +1,26 @@
 # 当前状态与接续点
 
-当前开发（2026-11-19，F021）：XLSX预览按需读取共享文本，结果目录草稿不再混入已显示记录的索引/导出/清理；26项预览/HTTP、40项界面与正式客户端HTTP、11项目录身份/实际导出及既有生命周期检查通过，开发输出result-browser-fixed-native-20261119。准确性能边界与续接见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)顶部；下方完整e658/安装1fff尚不含此修改。原生鼠标/视觉和整体迁移仍待。
+最新续接（2026-11-19，F021）：XLSX按需共享文本和已加载目录身份修复已纳入干净1d3c981完整0aba6269fe34与安装候选9a463a0e6dc8；26项预览/HTTP、40项界面/正式客户端HTTP、53项文档/索引、11项目录/实际导出及11项冻结HTTP通过。原生新窗口无法定位，仍未验收；详细范围见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)顶部。
 
 实际窗口补充：本轮CUA清单仅返回旧queue-dialog窗口9249544；Get-Process只返回其9528进程。此前已登录227820/旧SSH窗口不再返回，未主动关闭，不将历史连接状态当作当前事实。
 
-最新续接（2026-11-19）：F004页头/按钮局部刷新已随干净6b4ade1纳入完整e658a77e8d53和正式标识候选1fff69dedb9b，全摘要/包内探针通过。同负载独立测试身份安装生命周期aa87c2237002的8步全部通过，活动后台保护、旧版本/用户文件及卸载前14个数据文件摘要保留，无测试进程/登记残留。正式标识未安装且NotSigned，原生业务和无SDK目标机仍待。实际进程9528与227820仍分别运行queue-dialog开发版和2c18完整包，未替换或关闭已有SSH连接。
+此前F004/F026：6b4ade1队列修复完整e658a77e8d53与安装1fff69dedb9b的摘要/包内探针及同负载测试身份安装生命周期aa87c2237002通过。此为历史负载范围，不等于最新1d3c981已重验安装生命周期。
 
 6b4ade1队列修复的34项客户端断言、两项真实HTTP和103项回归已有证据；此前5e4ebbb传输观察6项客户端、真实HTTP保持原任务、99项相关检查，以及单步/批量真实后台崩溃恢复、表单/列表54项控件与211项回归保留原范围。实际业务窗口确认待用户反馈，整体WinUI迁移仍未完成。
 
-F009/F023分离连接等待和状态读取限时，区分超时/用户取消，切页保留传输身份并只读恢复。旧问题由生产C#客户端复现后修正；原生页面切换未验，既有两个窗口仍运行各自旧候选，见TASK-002顶部。
+F009/F023分离连接等待和状态读取限时，区分超时/用户取消，切页保留传输身份并只读恢复。旧问题由生产C#客户端复现后修正；原生页面切换未验，当时的窗口与候选关系见TASK-002历史记录，不作为当前运行状态。
 
 ## 当前版本
 
 | 项目 | 当前事实 |
 |---|---|
-| 已提交完整包源码 | 6b4ade1a3ae0fffb2b45c7bc051e56a4e2971456，干净构建且已推送；本轮验收工具/文档追加不改变应用负载。 |
-| 最新完整目录 | GPTWork/release-win-x64-e658a77e8d53/AbaqusTools：1689清单文件（连清单1690）、19worker、15应用资源，全摘要与包内依赖通过；包含最新队列局部刷新、传输观察及此前修复。 |
-| 安装候选 | GPTWork/installer-win-x64-1fff69dedb9b/AbaqusTools-0.1.0-win-x64-setup.exe，126161101字节，NotSigned、正式标识未安装；同负载测试身份生命周期aa87c2237002通过。 |
-| 当前WinUI输出 | e658完整包为最新生产输出；queue-targeted-native-20261119为同源码开发发布。当前两个业务窗口仍用旧输出，不冒称已加载新版本。 |
+| 已提交完整包源码 | 1d3c981e4392c8d0730a7b2b5c9b6a03d4089756，干净构建，已核对推送；后续文档记录不改应用负载。 |
+| 最新完整目录 | GPTWork/release-win-x64-0aba6269fe34/AbaqusTools：1689清单文件、19worker、15应用资源，全摘要、包内依赖及11项冻结HTTP通过，含F021最新修复。 |
+| 安装候选 | GPTWork/installer-win-x64-9a463a0e6dc8/AbaqusTools-0.1.0-win-x64-setup.exe，126168153字节，NotSigned、未安装；本轮未重复生命周期，旧aa87对应6b4。 |
+| 当前WinUI输出 | 0aba完整包为最新输出，result-browser-fixed-native-20261119为开发输出；新包测试窗口不可定位并已按归属收尾，旧9528仍运行queue-dialog版。 |
 | 文档 | README、RepoWiki、功能索引、说明和交接持续同步；未另发GitHub Wiki网站。 |
 
-本轮汇总为GPTWork/queue-release-lifecycle-20261119/verification-summary.json；包括目录/安装器摘要、数据保留、失败预检修复及保留窗口。源码改动回执为queue-targeted-delivery-20261119/verification.json。SSH真实传输对应旧2c18，真实合并崩溃对应555b，不当作新e658原生业务复测。旧c699下载故障已证实，不能作为最新候选。
+本轮汇总为GPTWork/result-browser-delivery-20261119/verification-summary.json；冻结HTTP/收尾见native-result-context-20261119，包内探针为result-browser-bundle-probe-20261119/bundle-probe-biygdnek。旧安装生命周期汇总queue-release-lifecycle-20261119保留原范围。
 
 ## 已有实际证据
 
@@ -32,8 +32,10 @@ F009/F023分离连接等待和状态读取限时，区分超时/用户取消，�
 
 ## 准确续接点
 
+本轮1d3源码已推送，新完整0aba/安装9a已生成并核对；所有本轮构建/检查/索引/隔离测试进程均终态。继续原生目录提示、预览/导出/取消与八页完整业务；不要重开已收尾的178864或误用其描述符。尚未验收的原生/目标机不因11项冻结HTTP而通过。
+
 1. 表单/列表修复先前随9a09972推送，后续队列局部刷新见[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)顶部。待确认窗口9249544（前台9528，创建时间1795060504.5837119）使用GPTWork/native-queue-dialog-desktop-20261119/compute-resources独立配置；两个合成加号名称候选已通过正式API加入，无异常、无求解。processes.json和queue-fixture.json有精确身份/结果；已请用户核对表单和等待15秒后的候选选择。该窗口为旧开发输出，新完整包尚未另开业务窗口，不重复提问或覆盖其配置。
-2. 已登录旧SSH窗口5379070及前台227820/后台135288/197572保留，不擅自关闭或转移密码。其profile为native-ssh-fixed-20261119/compute-resources，显示与传输检查使用该版本，不冒称其含新界面修复。旧203708已结束、后台194292/190748经idle协议结束，不能称原生正常关闭；回执在native-ssh-20261119。
+2. 历史已登录旧SSH窗口5379070及前台227820本轮不再返回，不宣称仍连接，也不转移密码。其profile为native-ssh-fixed-20261119/compute-resources，显示与传输检查使用该版本，不冒称其含新界面修复。旧203708已结束、后台194292/190748经idle协议结束，不能称原生正常关闭；回执在native-ssh-20261119。
 3. 首次受限桌面测试218736及其后台已按身份/独立profile确认结束，无残留；其不在CUA清单的失败现场保留于native-server-dialog-20261119/compute-resources/unlisted-launch-cleanup.json。当前CUA仍报coordinate input geometry is unavailable、window capture timed out和failed to activate captured window，已重新定位重试，未绕过工具操作。
 4. 本轮检查及打包均终态：54项控件220820退出0、211项回归会话36892退出0、完整构建67369退出0、安装器9f4880b493e0状态compiled。冻结API测试后台219864经idle协议退出0、描述符已移除，回执queue-dialog-frozen-6a644c79bf95/verification.json；未启动求解。只对新变更和失败做定向回归，不重复求解三级链或已通过SSH传输；先核对原句柄再启动长任务。
 5. 最新真实单步/批量后台崩溃检查会话40726、28532均退出0，所有记录进程终态、恢复后台经idle退出0；单步校验161188和批量128728恢复后退出120。批量首次7217cd20dc0d未命中故障时序，原任务实际成功后已idle收尾，失败回执保留。两项成功中断现场均留在G盘；不要因保留工作区误认仍运行或重复测试。下一项为其余未验业务，原生确认仍待用户反馈。

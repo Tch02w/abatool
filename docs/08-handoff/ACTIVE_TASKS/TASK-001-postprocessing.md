@@ -16,7 +16,11 @@ C#会话已退出0，GPTWork/result-context-check-20261119.log包含11项目录�
 
 最终文档导航与结果索引API53项通过（4.39秒，GPTWork/result-docs-verified-20261119.xml），ruff与git diff --check通过。首次命令误列不存在的tests/control_plane/test_results_paging.py，未运行任何测试（result-docs-final-20261119.xml）；已按实际索引改用test_result_index_api.py，分页由上述正式客户端HTTP覆盖，不将不存在文件计为通过。
 
-准确续接：全部上述检查已终态，未运行新求解、未创建/移动C盘ODB。上一轮CUA清单实查只剩旧queue-dialog窗口9249544/9528；旧SSH窗口不再列出，不声称仍连接。桌面此前点击geometry unavailable、截图timeout未解除，不重复请求旧验收。下一步为提交推送及新版完整包；现有e658/1fff不含本节两项修改，原生确认仍待。
+新完整目录GPTWork/release-win-x64-0aba6269fe34/AbaqusTools来自干净1d3c981e4392c8d0730a7b2b5c9b6a03d4089756，已实际推送并核对origin/main。1689清单文件（含清单1690）、19worker、15应用资源，全摘要及包内依赖通过；清单SHA256为7983ed02a19fa59cd9fe4416a5204e910f7ecf6048eb7e695ab981b8579bb9df。正式标识安装候选GPTWork/installer-win-x64-9a463a0e6dc8/AbaqusTools-0.1.0-win-x64-setup.exe为126168153字节，SHA256为76050c577f365f5bdfacf395a640b70b49732b0c9188e89b388d833a5bdd29dd，实查NotSigned、未安装。构建61945和安装编译29406均退出0；未改安装模板，本轮没有重做生命周期，旧aa87仅证明此前6b4负载。
+
+新包隔离前台178864（创建1795068266.2893393）、后台226488（1795068267.781207）已启动；CUA两次清单都找不到新窗口，不能验收原生布局/鼠标。冻结后台真实HTTP完成11项：CSV/实际XLSX、10万共享文本早/晚引用、三种非法引用422、错误目录拒绝、正确目录索引成功及双源摘要保留。回执GPTWork/native-result-context-20261119/verification.json，具体索引操作c32c126cee074554806e4fcbe51d3b95已成功终态。随后核对精确身份/路径，仅结束不可定位的自有隔离前台（退出15），后台经正式idle协议退出0，剩余自有进程为空、描述符移除；cleanup.json明确不计原生正常关闭通过。旧9528及其创建时间/路径保持，未操作原有窗口。
+
+准确续接：本轮检查、构建、索引和隔离进程均终态，源码已推送。下一项为新包原生目录提示/预览/分页/导出/取消及完整业务，未缩小总迁移目标；无原始模型修改、求解或C盘ODB。
 
 2026-11-18最新：用户确认并经CUA核对，修复后模型选择/CSV前50行3列预览正常；实际导出80行/1408字节且与源摘要一致，随后窗口/后台正常结束。原198808不再活跃，详细证据见[TASK-002](TASK-002-migration.md)顶部。这只覆盖单份小CSV，取消/部分失败/回收站和八页完整交互仍待。
 

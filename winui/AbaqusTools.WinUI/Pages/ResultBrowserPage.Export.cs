@@ -17,7 +17,8 @@ public sealed partial class ResultBrowserPage
         var records = SelectedRecords().Where(record => !record.Internal && !record.IsDirectory)
             .Select(record => new ResultExportFile(record.Path, record.RelativePath)).ToArray();
         if (records.Length == 0) return;
-        var root = RootTextBox.Text;
+        var root = _location.LoadedRoot;
+        if (root is null) return;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         App.Current.PendingResultFileOperation = completion.Task; // Includes the destination picker.
         _exportBusy = true;

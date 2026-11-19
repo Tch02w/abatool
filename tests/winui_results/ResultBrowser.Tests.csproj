@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ResultBrowserLoadCoordinator.cs" Link="ResultBrowserLoadCoordinator.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/ResultBrowserLocation.cs" Link="ResultBrowserLocation.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ResultTablePreview.cs" Link="ResultTablePreview.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ResultFileRecycle.cs" Link="ResultFileRecycle.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/ResultFileExport.cs" Link="ResultFileExport.cs" />

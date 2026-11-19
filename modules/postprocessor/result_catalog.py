@@ -363,6 +363,35 @@ def _excel_column_name(index: int) -> str:
     return name
 
 
+def _read_preview_shared_strings(
+    archive: zipfile.ZipFile, required: set[int], main_ns: str
+) -> dict[int, str]:
+    """Retain only strings used by the preview, releasing each parsed XML item."""
+    if not required:
+        return {}
+    found: dict[int, str] = {}
+    with archive.open("xl/sharedStrings.xml") as stream:
+        events = ElementTree.iterparse(stream, events=("start", "end"))
+        first = next(events, None)
+        if first is None:
+            raise ValueError("工作簿共享文本表为空。")
+        _, root = first
+        index = 0
+        for event, item in events:
+            if event != "end" or item.tag != f"{{{main_ns}}}si":
+                continue
+            if index in required:
+                found[index] = "".join(node.text or "" for node in item.iter(f"{{{main_ns}}}t"))
+            # Clearing alone leaves an empty element per workbook string in the root.
+            root.remove(item)
+            item.clear()
+            index += 1
+            if len(found) == len(required):
+                return found
+    missing = min(required.difference(found))
+    raise ValueError(f"预览单元格引用的共享文本不存在：{missing}")
+
+
 def read_xlsx_preview(
     path: Path, max_rows: int = 50
 ) -> tuple[list[str], list[list[str]]]:
@@ -372,18 +401,6 @@ def read_xlsx_preview(
     rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
     package_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
     with zipfile.ZipFile(path) as archive:
-        shared_strings: list[str] = []
-        if "xl/sharedStrings.xml" in archive.namelist():
-            shared_root = ElementTree.fromstring(archive.read("xl/sharedStrings.xml"))
-            for item in shared_root.findall(f"{{{main_ns}}}si"):
-                shared_strings.append(
-                    "".join(
-                        node.text or ""
-                        for node in item.iter()
-                        if node.tag == f"{{{main_ns}}}t"
-                    )
-                )
-
         sheet_path = "xl/worksheets/sheet1.xml"
         if (
             "xl/workbook.xml" in archive.namelist()
@@ -409,7 +426,8 @@ def read_xlsx_preview(
                     )
                     break
 
-        preview_cells: list[dict[int, str]] = []
+        preview_cells: list[dict[int, str | int]] = []
+        required_strings: set[int] = set()
         maximum_column = 0
         with archive.open(sheet_path) as stream:
             for _, node in ElementTree.iterparse(stream, events=("end",)):
@@ -422,22 +440,30 @@ def read_xlsx_preview(
                 preview_cells.extend({} for _ in range(len(preview_cells), min(row_number - 1, max_rows)))
                 if len(preview_cells) >= max_rows:
                     break
-                values: dict[int, str] = {}
+                values: dict[int, str | int] = {}
                 column = -1
                 for cell in node.findall(f"{{{main_ns}}}c"):
                     reference = cell.get("r")
                     column = _excel_column_index(reference) if reference else column + 1
                     maximum_column = max(maximum_column, column)
-                    value = cell.findtext(f"{{{main_ns}}}v") or ""
+                    value: str | int = cell.findtext(f"{{{main_ns}}}v") or ""
                     if cell.get("t") == "inlineStr":
                         value = "".join(t.text or "" for t in cell.iter(f"{{{main_ns}}}t"))
                     elif cell.get("t") == "s" and value:
-                        value = shared_strings[int(value)]
+                        value = int(value)
+                        if value < 0:
+                            raise ValueError("预览单元格的共享文本编号不能为负数。")
+                        required_strings.add(value)
                     values[column] = value
                 preview_cells.append(values)
                 node.clear()
                 if len(preview_cells) >= max_rows:
                     break
+        shared_strings = _read_preview_shared_strings(archive, required_strings, main_ns)
+        for values in preview_cells:
+            for column, value in values.items():
+                if isinstance(value, int):
+                    values[column] = shared_strings[value]
     column_count = maximum_column + 1
     headers = [_excel_column_name(index) for index in range(column_count)]
     preview_rows = [

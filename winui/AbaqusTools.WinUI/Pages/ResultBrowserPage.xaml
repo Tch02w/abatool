@@ -18,6 +18,10 @@
             BorderThickness="1"
             CornerRadius="8">
             <Grid ColumnSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -27,6 +31,7 @@
                     x:Name="RootTextBox"
                     Header="结果根目录"
                     KeyDown="OnRootTextBoxKeyDown"
+                    TextChanged="OnRootTextChanged"
                     PlaceholderText="例如 G:\Projects\Abaqus\AbaqusODBPostProcessor_Results" />
                 <Button
                     x:Name="BrowseButton"
@@ -54,6 +59,9 @@
                         <TextBlock Text="读取目录" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <TextBlock x:Name="RootContextHint" Grid.Row="1" Grid.ColumnSpan="3"
+                    Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True" />
             </Grid>
         </Border>
 

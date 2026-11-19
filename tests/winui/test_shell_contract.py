@@ -69,6 +69,20 @@ def test_result_export_and_recycle_register_the_entire_operation_before_dialogs(
     assert "FileOperationBusy" in recycle and "App.Current.Session.IsClosing" in recycle
 
 
+def test_result_file_actions_use_loaded_directory_and_keep_pending_root_visible():
+    page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml.cs").read_text(encoding="utf-8")
+    export = (WINUI_ROOT / "Pages" / "ResultBrowserPage.Export.cs").read_text(encoding="utf-8")
+    assert "var root = RootTextBox.Text" not in page + export
+    assert "var root = _location.LoadedRoot;" in export
+    assert "_appliedQuery?.Root ?? _location.RequireLoadedRoot()" in page
+    assert "Root = _location.RequireLoadedRoot()" in page
+    assert "RefreshScopesAsync(snapshot.Request.TimeDirectory, snapshot.Request.Root)" in page
+    assert "RefreshScopesAsync(_selectedScope?.Path, _location.LoadedRoot)" in page
+    shell = ET.parse(WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml").getroot()
+    assert _named_element(shell, "RootTextBox").get("TextChanged") == "OnRootTextChanged"
+    assert _named_element(shell, "RootContextHint").get("Visibility") == "Collapsed"
+
+
 def test_current_job_route_is_distinct_and_does_not_replace_pending_workspace():
     shell = ET.parse(WINUI_ROOT / "MainWindow.xaml").getroot()
     assert _named_element(shell, "CurrentJobPostprocessingMenuItem").attrib["Click"] == "OnCurrentJobPostprocessingMenuClicked"

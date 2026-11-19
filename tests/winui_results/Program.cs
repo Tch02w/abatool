@@ -22,6 +22,7 @@ try
     await RecoveryDoesNotLoadBeforeIndexSuccessAsync();
     await NonTerminalIndexCannotRefreshAsync();
     RecordRequestsAreInvalidated();
+    await ResultBrowserLocationChecks.RunAsync();
     CheckTablePreview();
     CheckRecyclePaths();
     Console.WriteLine("10 result-browser asynchronous lifecycle checks and table preview checks passed");

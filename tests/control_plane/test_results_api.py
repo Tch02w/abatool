@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openpyxl import Workbook
+
 from modules.postprocessor.result_catalog import classify_result, result_section
 from modules.postprocessor.result_index import build_result_index
 from tests.control_plane.test_api import (
@@ -145,3 +147,47 @@ def test_result_api_rejects_missing_indexes_and_paths_outside_root(
         assert json_response(outside_preview)["error"]["code"] == (
             "PATH_OUTSIDE_RESULT_ROOT"
         )
+
+
+def test_xlsx_preview_returns_real_workbook_values_and_rejects_bad_shared_references(tmp_path):
+    from tests.postprocessor.test_result_xlsx_preview import workbook
+
+    root = tmp_path / "results"
+    root.mkdir()
+    path = root / "工程预览.xlsx"
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["时间", "荷载", "备注"])
+    sheet.append([0, 12.5, "中文说明"])
+    sheet.append([1, -2.75, None])
+    book.save(path)
+    book.close()
+    original = path.read_bytes()
+    shared = workbook(root / "shared.xlsx", '<row r="1"><c r="A1" t="s"><v>0</v></c>'
+                      '<c r="B1" t="s"><v>5</v></c></row>', string_count=100)
+
+    with running_control_plane(tmp_path) as runtime:
+        def preview(target, limit):
+            return _post(runtime, "/api/v1/result-previews", {
+                "root": str(root), "path": str(target), "maxRows": limit,
+            })
+
+        response = preview(path, 2)
+        assert response[0] == 200
+        data = json_response(response)
+        assert data["headers"] == ["A", "B", "C"]
+        assert data["rows"] == [["时间", "荷载", "备注"], ["0", "12.5", "中文说明"]]
+        assert data["truncated"] is True
+        exact = json_response(preview(path, 3))
+        assert exact["rows"][-1] == ["1", "-2.75", ""]
+        assert exact["truncated"] is False
+        response = preview(shared, 1)
+        assert response[0] == 200
+        assert json_response(response)["rows"] == [["载荷 N", "value-5-" + "x" * 128]]
+        for reference in ("-1", "999", "not-an-index"):
+            invalid = workbook(root / "invalid.xlsx",
+                f'<row r="1"><c r="A1" t="s"><v>{reference}</v></c></row>', string_count=2)
+            failed = preview(invalid, 1)
+            assert failed[0] == 422
+            assert json_response(failed)["error"]["code"] == "RESULT_PREVIEW_FAILED"
+    assert path.read_bytes() == original

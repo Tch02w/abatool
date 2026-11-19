@@ -33,6 +33,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private ResultScopeNode? _selectedScope;
     private string? _activeIndexOperationId;
     private readonly ResultBrowserLoadCoordinator _loads = new();
+    private readonly ResultBrowserLocation _location = new();
     private bool _scopeBusy => _loads.IsRefreshingScopes;
     private bool _recordsBusy;
     private bool _recycleBusy;
@@ -51,8 +52,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         InitializeComponent();
         Controls.InfoBarLayout.Track(StatusMessagesPanel, ErrorInfoBar, WarningInfoBar, IndexInfoBar);
         _explorerAdapter = new ResultExplorerAdapter(
-            () => FileOperationBusy || string.IsNullOrWhiteSpace(RootTextBox.Text)
-                ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path),
+            () => FileOperationBusy || _scopeBusy || _indexBusy
+                || (_location.LoadedRoot is null && string.IsNullOrWhiteSpace(RootTextBox.Text))
+                ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path, _location.LoadedRoot),
             SelectExplorerItem,
             ActivateExplorerItemAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
@@ -63,6 +65,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         UseCaseComboBox.SelectedIndex = 0;
         App.Current.Session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
             async () => { ++_previewRequest; await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); });
+        _location.DraftRoot = RootTextBox.Text;
         Loaded += OnPageLoaded;
         RefreshInteractionState();
     }
@@ -95,7 +98,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     public async Task SetResultRootAsync(string root)
     {
-        if (FileOperationBusy) throw new InvalidOperationException("请等待当前结果导出或清理结束。");
+        if (FileOperationBusy || _indexBusy) throw new InvalidOperationException("请等待当前结果索引、导出或清理结束。");
         if (string.IsNullOrWhiteSpace(root))
         {
             throw new ArgumentException("结果根目录不能为空。", nameof(root));
@@ -221,15 +224,31 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnShowInternalChanged(object sender, RoutedEventArgs e)
     {
-        if (IsLoaded && !_scopeBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text))
+        if (IsLoaded && !_scopeBusy && !_indexBusy && !FileOperationBusy && _location.LoadedRoot is not null)
         {
-            await RefreshScopesAsync(_selectedScope?.Path);
+            await RefreshScopesAsync(_selectedScope?.Path, _location.LoadedRoot);
         }
     }
 
-    private async Task RefreshScopesAsync(string? selectPath = null)
+    private void OnRootTextChanged(object sender, TextChangedEventArgs e)
     {
-        var root = RootTextBox.Text.Trim();
+        _location.DraftRoot = ((TextBox)sender).Text;
+        UpdateRootContextHint();
+    }
+
+    private void UpdateRootContextHint()
+    {
+        if (RootContextHint is null) return; // TextChanged can fire while XAML is loading.
+        RootContextHint.Text = _location.HasPendingRoot
+            ? $"输入的目录尚未读取；当前显示及操作目录：{_location.LoadedRoot}" : string.Empty;
+        RootContextHint.Visibility = _location.HasPendingRoot ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null)
+    {
+        _location.DraftRoot = RootTextBox.Text;
+        var locationRead = _location.BeginRead(explicitRoot);
+        var root = locationRead.Root;
         ErrorInfoBar.IsOpen = false;
         WarningInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
@@ -245,7 +264,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             ClearScopesAndResults,
             response =>
             {
-                RootTextBox.Text = response.Root;
+                _location.Apply(locationRead, response.Root);
+                if (RootTextBox.Text != _location.DraftRoot) RootTextBox.Text = _location.DraftRoot;
+                UpdateRootContextHint();
                 _scopeNodes = response.Nodes;
                 BuildScopeTree(response.Nodes);
                 UpdateExplorer();
@@ -285,6 +306,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void ClearScopesAndResults()
     {
+        _location.ClearLoadedRoot();
+        UpdateRootContextHint();
         _selectedScope = null;
         _scopeNodes = [];
         ScopeTree.SelectedNode = null;
@@ -364,7 +387,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             IconGlyph = record.IsDirectory ? "\uE8B7" : "\uE8A5",
         }).ToArray();
         _explorerAdapter.Update(
-            RootTextBox.Text.Trim(),
+            _location.LoadedRoot ?? string.Empty,
             $"范围 {_scopeNodes.Count} · 当前结果 {records.Length}",
             [
                 WorkbenchExplorerAdapterBase.Group("results:scopes", "结果范围", roots, roots.Length.ToString()),
@@ -516,7 +539,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async Task LoadRecordsAsync(int? pageOffset = null)
     {
         var scope = _selectedScope;
-        if (scope is null || !_loads.CanLoadRecords)
+        if (scope is null || !_loads.CanLoadRecords || _location.LoadedRoot is null)
         {
             return;
         }
@@ -524,7 +547,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         // Page within the last applied filters, even if an unsubmitted search is in the editor.
         var query = pageOffset.HasValue ? _appliedQuery : new ResultRecordsRequest
         {
-            Root = _scopeNodes.FirstOrDefault(node => node.Kind == "root")?.Path ?? RootTextBox.Text,
+            Root = _location.RequireLoadedRoot(),
             Scope = scope.Path, TimeDirectory = scope.TimeDirectory,
             Section = (SectionComboBox.SelectedItem as SectionOption)?.Key ?? "all",
             Query = SearchTextBox.Text,
@@ -658,7 +681,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async Task BuildIndexAsync()
     {
         var scope = _selectedScope;
+        var root = _location.LoadedRoot;
         if (scope is null
+            || root is null
             || string.IsNullOrWhiteSpace(scope.TimeDirectory)
             || _scopeBusy || _recordsBusy || _indexBusy)
         {
@@ -679,7 +704,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         try
         {
             var initial = await App.Current.ControlPlane.StartResultIndexBuildAsync(
-                RootTextBox.Text,
+                root,
                 scope.TimeDirectory,
                 Guid.NewGuid());
             _activeIndexOperationId = initial.OperationId;
@@ -736,7 +761,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         await _loads.CompleteIndexAsync(
             snapshot.Status,
-            () => RefreshScopesAsync(snapshot.Request.TimeDirectory));
+            () => RefreshScopesAsync(snapshot.Request.TimeDirectory, snapshot.Request.Root));
         switch (snapshot.Status)
         {
             case "succeeded":
@@ -828,7 +853,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         try
         {
             var preview = await App.Current.ControlPlane.GetResultPreviewAsync(
-                _appliedQuery?.Root ?? RootTextBox.Text,
+                _appliedQuery?.Root ?? _location.RequireLoadedRoot(),
                 record.Path);
             if (request != _previewRequest)
             {
@@ -962,7 +987,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var records = SelectedRecords().ToArray();
         if (records.Length == 0 || records.Any(record => record.Internal || record.IsDirectory
             || !ResultFileRecycle.IsExport(record.Path))) return;
-        var root = RootTextBox.Text;
+        var root = _location.LoadedRoot;
+        if (root is null) return;
         var message = $"将所选 {records.Length} 个导出文件移到系统回收站。公共数据文件可能被多个对比组引用。\n\n"
             + string.Join("\n", records.Take(8).Select(record => record.Path));
         if (records.Length > 8) message += $"\n另有 {records.Length - 8} 个文件";

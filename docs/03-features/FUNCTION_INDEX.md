@@ -89,6 +89,8 @@ F001/F021结果导出：`winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.Export.
 
 ## 横切基础与旧版对照
 
+F021预览性能与目录身份补充：`modules/postprocessor/result_catalog.py` / `_read_preview_shared_strings`仅保留预览引用；`winui/AbaqusTools.WinUI/Services/ResultBrowserLocation.cs` / BeginRead、Apply、RequireLoadedRoot区分输入草稿与已加载来源，接入ResultBrowserPage及其Export分文件。测试`tests/postprocessor/test_result_xlsx_preview.py`、`tests/control_plane/test_results_api.py`、`tests/winui_results/ResultBrowserLocationChecks.cs`、`tests/winui/test_shell_contract.py`；交互约定见[后处理说明](POSTPROCESSING.md)。
+
 | ID / 功能 | 入口和实现 / 符号 | 首选测试 |
 |---|---|---|
 | F023 控制面启动、鉴权、HTTP 路由、操作跟踪 | `modules/control_plane/__main__.py`、`modules/control_plane/server.py`；`ControlPlaneRuntime`；`modules/control_plane/descriptor.py`、`modules/control_plane/contracts.py`；`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` | `tests/control_plane/test_api.py`（含 `test_success_response_drains_delayed_optional_command_body`）、`tests/control_plane/test_descriptor.py`、`tests/winui_host/ControlPlaneHost.Tests.csproj` |

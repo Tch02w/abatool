@@ -1,5 +1,19 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 完整验收阻塞核对及回滚入口补验
+
+上一目标轮属于实际进展：当前源码全量1085项及9项子检查完成，交接记录已随58d59bb推送并核对远端。本轮按完整目标重新核对八页/菜单/状态栏、性能与界面、旧数据、发布目标机及README/RepoWiki，不以已通过的自动检查缩小完成范围。
+
+桌面再次实查仅返回旧隔离窗口9249544（前台9528，queue-dialog-native-20261119）；计算资源页可读，正式队列0、远端未连接、控制面已连接。使用已读文档的桌面API点击当前观察中的“作业队列”仍报`coordinate input geometry is unavailable`；刷新后仍停在计算资源页。重新列举并绑定同一窗口，激活再报`failed to activate captured window`。没有使用其他系统输入方式绕过，也没有重开窗口。此为此前表单/队列、结果浏览两轮已记录的同一桌面输入障碍，连续至少三轮仍无法完成鼠标/选区/视觉验收；不是正在运行而尚未完成的测试任务。
+
+对最新前台212240消失补做只读检查：application.log仍为0字节，Windows Application日志在本日14:15之后的1000/1026查询返回NoMatchingEventsFound。没有证据识别退出原因，也不能将无错误事件当作正常关闭证明。后台219004（创建1795069000.5883832）和227524仍在，旧9528创建1795060504.5837119；本轮均未终止。原始模型未改、未求解、未创建或移动ODB。
+
+独立补验保留的Qt回滚入口：项目`.venv/Scripts/python.exe -X utf8 -m pytest tests/submitter/test_native_window_startup.py -q --basetemp=GPTWork/native-rollback-current-20261119/pytest-temp --junitxml=GPTWork/native-rollback-current-20261119/results.xml`，1项通过，9.25秒，原会话85097退出0。TEMP/TMP及两个应用数据目录显式设在该G盘工作区，实际temp路径已核对；测试构造真实Qt主窗口后正常退出，不代表WinUI八页业务通过。本轮没有应用源码改动或再次打包。
+
+当前真正的续接条件是桌面输入恢复或人工协助完成已列明的原生验收；现有远端未连接，剩余真实远端检查需要用户在应用登录及对应测试资源；用户此前明确暂无无Python/.NET SDK的Windows目标环境。README、仓库RepoWiki和开发交接已上传GitHub，但发布负责人功能对等确认和目标机门槛仍未满足。现有证据下可独立完成的自动回归及回滚启动均已完成，不能用重复构建、模拟检查或再次运行同一算例替代剩余要求。
+
+准确续接：整体状态为验收受阻，完整目标保持不变。恢复后先核对实际窗口/版本及后台身份，再按[原生验收步骤](../../06-testing/NATIVE_ACCEPTANCE.md)继续CSV目录提示、队列15秒多选/扫描按钮、服务器表单和其余页面；不要直接复用已消失的2164996，也不要重复发送尚未答复的人工问题。当前仍未切换默认入口或删除PySide6。文档导航52项通过（0.41秒），git diff --check通过；回执集中在GPTWork/native-rollback-current-20261119，实际Git核对写入verification.json。
+
 ## 2026-11-19 · 当前源码全量自动回归完成
 
 针对上次4cb0503全量检查后42个应用文件的改动，在干净2343765（应用负载1d3c981）执行一次全量自动回归：`python -X utf8 -m pytest tests -q --ignore=tests/submitter/test_native_window_startup.py --tb=short --basetemp=GPTWork/result-full-regression-20261119/pytest-temp --junitxml=GPTWork/result-full-regression-20261119/results.xml`。解释器为项目`.venv/Scripts/python.exe`，TEMP/TMP、两个应用数据目录及绘图库缓存均显式设为G盘隔离目录，Qt使用offscreen。

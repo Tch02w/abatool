@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+2026-11-19阻塞复核与独立回滚启动：当前源码真实Qt主窗口构造/退出1项通过（9.25秒，会话85097退出0，GPTWork/native-rollback-current-20261119/results.xml），使用独立G盘TEMP/TMP和应用数据。现有WinUI窗口9249544仍可读但点击报coordinate input geometry is unavailable，重新定位激活报failed to activate captured window，远端未连接；同一输入障碍已连续至少三轮。212240消失没有可用应用日志/对应Windows错误事件，关闭原因仍未知，未补记正常退出。完整验收受阻，不等于后台功能失败或迁移完成；恢复条件见TASK-002顶部。
+
 2026-11-19最新全量自动回归：干净2343765（应用负载1d3c981）1085项及9项子检查通过，840.76秒，JUnit共1094项且0失败/错误/跳过。Qt offscreen，TEMP/TMP、应用数据及缓存均G盘隔离；本轮排除单独原生Qt启动。原会话98987退出0、166852/155748已结束；GPTWork/result-full-regression-20261119/tests.log和results.xml为实际回执。生产队列增量逻辑已复核，不能以自动通过代替业务页多选等待、鼠标或像素验收。准确命令见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。
 
 结束后进程核对：新前台212240已不存在，后台219004及子进程227524仍在，旧9528仍在。未观察关闭过程，不计正常关闭通过，未终止或重开；下段“保留窗口”仅为先前时间点。

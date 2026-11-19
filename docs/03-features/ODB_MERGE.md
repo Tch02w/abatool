@@ -51,4 +51,4 @@
 - 回归：`tests/postprocessor/test_merge_validation.py`、`tests/submitter/test_odb_merge_execution.py`、`tests/submitter/test_odb_merge.py`、`tests/control_plane/test_odb_merge_operations_api.py`。
 - 重启恢复与异常退出：`tests/control_plane/test_odb_merge_recovery.py`；原生 DTO/生命周期：`tests/winui_host/Program.cs`。
 
-真实模型的路径、运行结果、失败记录及尚未完成的原生/多节点验收见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)；自动化与实际 ODB 验证不替代原生页面点击验收。
+真实模型的路径、运行结果、失败记录及尚未完成的原生验收见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。2026-11-19已按用户授权完成实际求解的简单实体三级链，两级串联合并的场/历史和独立解析值核对均通过，详见[批量任务验收](ODB_RESULT_BATCH.md)。自动化与实际 ODB 验证不替代原生页面点击验收，合并功能自身仍不启动求解。

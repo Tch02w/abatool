@@ -50,6 +50,8 @@ WinUI 的「新建作业」通过已连接且已确认指纹的 Windows SSH 服�
 
 仅从本功能版本开始提交的任务有持久记录；升级前只存在旧后台内存中的远端任务无法自动重建。独立文件传输仍采用原来的生命周期，不承诺跨后台恢复。实际 SSH、凭据重输、WinUI 点击和远端 MPI 尚待验收，不能因为本机进程恢复通过就宣布 F010 或全迁移整体完成。
 
+2026-11-19已对用户提供的192.168.1.202完成SSH握手：端口22可达，主机指纹与已有“计算节点01”配置一致。回执`GPTWork/ssh-readonly-probe-20261119.json`明确`authenticated=false`；只说明网络和服务器身份核对通过，不代表登录、目录读取、传输或远端作业通过。完整包已打开隔离计算资源窗口，等待用户直接在应用中输入密码，不将密码写入文档或测试夹具。
+
 ## 定位与验证
 
 - 业务入口：`modules/control_plane/remote_jobs.py` / `RemoteJobOperationManager`，启动/状态 PowerShell 由 `_start_job_script`、`_job_status_script` 生成。

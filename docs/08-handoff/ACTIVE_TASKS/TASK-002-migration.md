@@ -1,5 +1,21 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 用户授权的三级重启动通过，真实SSH等待应用登录
+
+用户回复：“ssh是192.168.1.202，暂时没有连续三级重启动，你可以创建一个简单的进行计算并测试此功能，三也暂无”。此授权仅用于G盘新建隔离模型，不修改或求解G:\Job原模型；无开发环境Windows目标机暂不具备。既有服务器配置“计算节点01”已保存用户名、端口和主机指纹，采用用户名/密码登录；不在报告或聊天中收集密码。
+
+新算例GPTWork/three-restart-9ae3bd6cf4e9：1个C3D8实体单元，线弹性立方体E=1000、泊松比0.3、边长1、NLGEOM=NO，三个连续作业cube_base→cube_r1→cube_r2；轴向位移依次0.01/0.02/0.03，1 CPU，每步4增量。侧面约束只消除刚体运动并允许泊松收缩。生成/求解脚本GPTWork/verify_three_restart_20261119.py。89086已退出0，三个STA均明确成功。solve-receipts.json记录命令、父作业及进程身份；不只依据退出码判断。
+
+正式客户端测试CheckBatchApi新增可选topology=sequential，原兄弟分支方式保留。构建零警告零错误，输出GPTWork/three-restart-client-20261119。GPTWork/verify_sequential_batch_20261119.py调用当前冻结完整包c6999a8e1c8e，先base+r1再使用实际中间结果+r2；2步/10帧和3步/15帧全场/历史回执通过。两次启动203016和221036均空闲协议正常退出0、描述符移除；同批次和两个子任务身份、输出与回执摘要在恢复前后完全一致，三个来源SHA256不变。证据GPTWork/sequential-result-batch-0983d4f23773/verification.json及processes.json。
+
+独立只读检查四个ODB（3来源+最终结果）通过：Load1/2/3各5帧，步时间0/.25/.5/.75/1，累计起点0/1/2，末位移0.01/.02/.03，总反力和S33依次10/20/30，历史各5点。回执source-content-verified.json。检查脚本前两次失败分别是TOP在实例层（不是装配层）、numpy.float32不能直接序列化，已修正；一次命令行检查猜错结果文件名且中文经bat编码损坏，改为从实际合并回执生成UTF-8清单content-inputs.json，未移动ODB或重复求解。source-content.json是不完整失败文件，不能作为通过证据。
+
+SSH握手通过，指纹匹配，未认证：GPTWork/ssh-readonly-probe-20261119.json。当前窗口7096140来自完整包计算资源页，profile为GPTWork/native-ssh-20261119/compute-resources/profile；前台203708（created=1795057059.272467），后台194292（1795057059.5873792）、子190748（1795057059.5910633）。进程身份在processes.json，窗口保留等待用户登录。CUA读取配置/资源页通过；点击行先遇到动态元素缓存失效，再按新树定位报coordinate input geometry is unavailable。已请用户选计算节点01→连接，在应用内输入密码并报告状态；不能从握手通过推定登录成功。
+
+本节覆盖下方历史“尚未收到资源”“禁止新算例”的当时状态。准确续接：三级求解/串联合并/正常后台重开已通过，所有求解与合并句柄终态，不重跑相同模型。等待上述隔离窗口登录后，从同一后台读取连接、目录并验传输；不从日常配置取密码。无开发环境目标机暂无，原生完整业务、真实worker中断和GPU/MPI仍待；不将简单模型通过描述为全迁移通过。
+
+定向回归96项通过（34.08秒、31469退出0），包括文档导航、独立结果图、重启动结果计划和持久批量任务，回执GPTWork/three-restart-regression-20261119.xml。最终只读后源/输出/回执摘要仍不变，求解154288/24816/229148及合并后台203016/221036均按创建时间核对结束，见sequential-result-batch-0983d4f23773/final-readonly-check.json。本轮仅扩展验收入口和证据文档，未改变合并生产算法或重新打包；Git核验记录存于同目录git-delivery.json，生成前不推定已推送。最新服务器快照仍disconnected，无错误，登录请求继续等待用户。
+
 ## 2026-11-19 · 侧栏修复进入完整目录与安装候选
 
 收尾文档导航49项通过（docs-final.log，0.09秒），git diff --check通过。最终文档提交/远端核验回执位于GPTWork/sidebar-release-verification-20261119/git-delivery.json。已请求后续真实验收可用的SSH配置名称、非C盘连续三级ODB目录和无开发环境Windows机器；尚未收到资源信息，不假定外部环境已具备。

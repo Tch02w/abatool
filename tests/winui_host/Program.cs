@@ -313,21 +313,30 @@ static async Task CheckBatchApi(string descriptorPath, string fixturePath, strin
     if (sources.Length != 3 || sources.Any(p => !File.Exists(p))) throw new Exception("Expected three existing fixture ODBs");
     var directory = fixture["outputDirectory"]!.GetValue<string>();
     var requestId = Guid.Parse(fixture["clientRequestId"]!.GetValue<string>());
+    var sequential = fixture["topology"]?.GetValue<string>() == "sequential";
     await using var host = new ControlPlaneHost();
     SetField(host, "_descriptor", descriptor);
     SetField(host, "_descriptorPath", descriptorPath);
     var graph = await host.GetOdbResultGraphAsync();
-    string[] targets = ["branch0", "branch1"];
+    string[] targets = sequential ? ["restart2"] : ["branch0", "branch1"];
     if (!recover)
     {
         if (graph.Revision != 0 || graph.Nodes.Count != 0) throw new Exception("Use an isolated empty result graph");
         graph = await host.SaveOdbResultGraphAsync(0, directory,
             [new() { NodeId = "base", Name = Path.GetFileNameWithoutExtension(sources[0]), OdbPath = sources[0] },
-             new() { NodeId = targets[0], Name = Path.GetFileNameWithoutExtension(sources[1]), ParentNodeId = "base", OdbPath = sources[1] },
-             new() { NodeId = targets[1], Name = Path.GetFileNameWithoutExtension(sources[2]), ParentNodeId = "base", OdbPath = sources[2] }]);
+             new() { NodeId = sequential ? "restart1" : targets[0], Name = Path.GetFileNameWithoutExtension(sources[1]), ParentNodeId = "base", OdbPath = sources[1] },
+             new() { NodeId = sequential ? "restart2" : targets[1], Name = Path.GetFileNameWithoutExtension(sources[2]), ParentNodeId = sequential ? "restart1" : "base", OdbPath = sources[2] }]);
         var plans = await host.PreviewOdbResultGraphPlansAsync(targets);
-        if (!plans.Valid || plans.Plans.Count != 2 || plans.Plans.Any(p => p.Steps.Count != 1 || p.Steps[0].OriginalOdb != sources[0]))
-            throw new Exception("Branch preview does not match the real ancestry");
+        if (!plans.Valid || plans.Plans.Count != targets.Length
+            || plans.Plans.Any(p => p.Steps.Count != (sequential ? 2 : 1) || p.Steps[0].OriginalOdb != sources[0]))
+            throw new Exception("Preview does not match the real ancestry");
+        if (sequential)
+        {
+            var stages = plans.Plans[0].Steps;
+            if (stages[0].RestartOdb != sources[1] || stages[1].RestartOdb != sources[2]
+                || stages[1].OriginalOdb != stages[0].OutputOdb)
+                throw new Exception("Second stage must consume the first merged output");
+        }
     }
     if (graph.Revision != 1 || graph.Nodes.Count != 3) throw new Exception("Persisted graph was not restored");
     var source = new { kind = "graph", revision = graph.Revision, targetNodeIds = targets };
@@ -352,17 +361,22 @@ static async Task CheckBatchApi(string descriptorPath, string fixturePath, strin
         snapshot = await host.GetOdbResultBatchAsync(snapshot.OperationId);
     }
     await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(snapshot, json));
-    if (snapshot.Status != "succeeded" || snapshot.Results.Count != 2 || snapshot.CompletedSteps != 2 || snapshot.TotalSteps != 2)
-        throw new Exception("Real batch did not complete both independent targets; inspect the saved report");
+    if (snapshot.Status != "succeeded" || snapshot.Results.Count != targets.Length || snapshot.CompletedSteps != 2 || snapshot.TotalSteps != 2)
+        throw new Exception("Real batch did not complete its two stages; inspect the saved report");
     var history = await host.ListOdbResultBatchesAsync();
     if (history.Operations.Count != 1 || history.Operations[0].OperationId != snapshot.OperationId)
         throw new Exception("Batch history is inconsistent");
     var merges = await host.ListOdbMergeOperationsAsync();
     if (merges.Operations.Count != 2 || merges.Operations.Any(m => !m.IsSuccessful || m.Result?.ValidationReport is null
-            || m.Request?.OriginalOdb != sources[0] || m.Request.IncludeHistory != true))
-        throw new Exception("Completed branches lost source identity or content-validation receipts");
+            || m.Request?.IncludeHistory != true))
+        throw new Exception("Completed stages lost content-validation receipts");
+    var first = merges.Operations.Single(m => m.Request?.RestartOdb == sources[1]);
+    var second = merges.Operations.Single(m => m.Request?.RestartOdb == sources[2]);
+    if (first.Request!.OriginalOdb != sources[0]
+        || second.Request!.OriginalOdb != (sequential ? first.Result!.OutputOdb : sources[0]))
+        throw new Exception("Executed merge sources do not match the requested topology");
     await File.WriteAllTextAsync(Path.ChangeExtension(reportPath, ".merges.json"), JsonSerializer.Serialize(merges, json));
-    Console.WriteLine(recover ? "Production C# client restored the completed batch without new merges." : "Production C# client completed the two-target batch.");
+    Console.WriteLine(recover ? "Production C# client restored the completed batch without new merges." : "Production C# client completed both stages with verified ancestry.");
 }
 
 static void CheckBatchContracts()

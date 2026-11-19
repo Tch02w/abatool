@@ -37,7 +37,8 @@ descriptor 同目录的 `odb-result-batches.sqlite3` 保存请求身份、不可
 - 记录无法保存时停止推进并禁止新任务。退出预留同时检查批量、单步合并、升级及本机/后处理/索引/远端等受管工作，即使两步之间没有外部进程也不会错误关闭后台。
 - 来源中无结果帧的分析步提示保留在批量完成消息中。生成完整结果不表示原求解已完成。
 - 失败/取消批次不能直接点击继续；保存现有结果，核对问题后重新生成计划。后台重启暂停的批次才提供继续入口。
-- 恢复功能有隔离测试进程真实退出、HTTP 和客户端契约检查。11 月 18 日正式 C# HTTP 客户端通过冻结后台完成 GJB-15 两个真实兄弟目标，重启后相同批次和子任务恢复，输出完整摘要不变：V20D 8 步/70 帧，U100D 12 步/63 帧（保留 4 个无结果帧步骤提示），均包含历史输出。来源副本完整摘要未变，中文含空格输出路径通过。证据 `GPTWork/real-result-batch-750883913dd9/verification.json`；三层连续链、原生点击/布局仍待验收。
+- 恢复功能有隔离测试进程真实退出、HTTP 和客户端契约检查。11 月 18 日正式 C# HTTP 客户端通过冻结后台完成 GJB-15 两个真实兄弟目标，重启后相同批次和子任务恢复，输出完整摘要不变：V20D 8 步/70 帧，U100D 12 步/63 帧（保留 4 个无结果帧步骤提示），均包含历史输出。来源副本完整摘要未变，中文含空格输出路径通过。证据 `GPTWork/real-result-batch-750883913dd9/verification.json`。
+- 11月19日按用户授权，另在G盘新建并实际计算1个C3D8实体单元的连续三级链。正式C#客户端调用当前完整包c6999a8e1c8e：先合并base+r1，再将实际中间结果与r2合并；得到2步/10帧的中间结果、3步/15帧的最终结果，逐场值/历史校验通过。两次后台启动后保持同一批次及两个子任务，输出/回执摘要不变，三个源ODB摘要不变。证据`GPTWork/sequential-result-batch-0983d4f23773/verification.json`。独立Abaqus只读检查确认各步末位移0.01/0.02/0.03、总反力10/20/30和应力10/20/30，见`GPTWork/three-restart-9ae3bd6cf4e9/source-content-verified.json`。这是实际求解的简单实体模型验收，原生点击/布局、真实Abaqus进程中断仍待。
 - 冻结后台突然退出、外部测试子进程仍存活的情况也已单独验证：重启后批次为等待继续，原单步为 `ODB_MERGE_INTERRUPTED`；尝试继续明确失败，不重放原阶段、不启动后续阶段、不发布结果。第三次启动仍恢复同一失败批次。验收工具 `packaging/verify_batch_interruption.py` 只使用微小非 ODB 夹具，不能代替真实 Abaqus 崩溃或工程连续三层链验收。回执 `GPTWork/frozen-batch-interruption-691d9fb533f3/verification.json`，所有自有测试进程已结束。
 
 ## 维护入口
@@ -48,5 +49,6 @@ descriptor 同目录的 `odb-result-batches.sqlite3` 保存请求身份、不可
 - `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.ResultBatch.cs`、`winui/AbaqusTools.WinUI/Services/OdbResultBatchContracts.cs`：批量请求和状态校验。
 - `winui/AbaqusTools.WinUI/Pages/OdbMergePage.ResultGraph.cs`：创建、读取、继续与结果显示。
 - `tests/control_plane/test_odb_result_batches.py`、`tests/control_plane/test_restart_result_plans_api.py`、`tests/winui_host/Program.cs`：恢复、拒绝重跑、数据变化、分支、取消、损坏和界面契约。
+- `tests/winui_host/Program.cs` / `CheckBatchApi`：`--batch-api descriptor fixture report`及`--batch-recover-api`共用正式客户端。fixture含`sources`（三个已存在ODB绝对路径）、`outputDirectory`、`clientRequestId`；新增可选`topology: "sequential"`验证base→r1→r2、两阶段实际输入衔接及恢复去重。不填时保留原兄弟分支测试。该入口只合并已有文件，不启动求解；算例生成必须另有授权。
 
 旧 `winui/AbaqusTools.WinUI/Services/OdbResultBatchRunner.cs` 及其检查保留作迁移对照；生产批量入口不再调用它。协议入口为 `/api/v1/odb-result-batches`，支持创建/列表/按 ID 查询及 `/cancel`、`/resume`；需本机 bearer 鉴权，不发送任意可执行步骤给后台。架构决策见 [ADR 0007](../submitter/adr/0007-durable-result-batches.md)。

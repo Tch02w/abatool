@@ -1,5 +1,17 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 真实合并异常通过；SSH下载缺陷修复中
+
+用户已在旧完整包隔离窗口完成登录，并明确回复“已连接”。CUA确认7096140显示计算节点01在线、64线程/159.9GB、Abaqus可用，主机指纹匹配。前台203708、后台194292/190748仍保留，profile在native-ssh-20261119/compute-resources；不是等待登录状态。真实API读取D:\Abaqus_Cal成功（20条目录项），上传63,488字节中文空格文件成功，但下载在100%后失败：`下载文件失败：[Errno 9] Bad file descriptor`。现场GPTWork/ssh-transfer-b1a0b0448869/operations.json，服务器仅新增`D:\Abaqus_Cal\codex-transfer-a5b395484d95 传输验收.txt`测试文件，保留不删除。未下载任何ODB或启动远端求解。
+
+根因是download_file对只读临时文件句柄fsync，Windows报EBADF。改为r+b并在同步后再次检查取消；同时修复上传先remove旧目标导致覆盖失败丢失旧文件、禁止覆盖时POSIX rename/本地replace绕过同名保护，以及管理器在实际发布后误标取消。Windows SFTP不支持POSIX扩展时调用同一认证会话的File.Replace/Move，不收集密码。新增11项定向测试通过（4.94秒，ssh-publish-fixed-20261119.xml），包括真实PowerShell覆盖、特殊路径与锁定失败；初次File.Replace传$null被Windows PowerShell转为空字符串，改为[NullString]::Value后通过，保留初次失败回执。初轮46377已退出1（20通过/1项上述空参数失败），修复后的78项文档/连接/文件发布检查通过（80.69秒，59750退出0；ssh-final-regression-20261119.xml）。需要构建新完整包，重新在应用登录后验下载/覆盖/取消，不能将源码通过写成包内已修复。
+
+真实合并异常验收工具packaging/verify_real_merge_interruption.py使用G盘既有GJB副本，没启动求解。最终GPTWork/real-merge-interruption-74bb9bec2c53/verification.json通过：校验阶段观察到真实SMAPython进程后，分别走正式取消API及终止精确拥有的校验进程；状态分别cancelled/failed、result为空，旧目标及源摘要不变，无残留临时发布物。两次后台启动后恢复原两个终态任务，不重放；自有后台均正常退出。测试会话58635已退出0。
+
+首轮GPTWork/real-merge-interruption-543c5f0bb5c9不算通过：工具错误匹配源脚本名validate_odb_merge.py，实际暂存名为validate_joined_odb.py且参数是相对路径，未及时介入，合并正常成功。98498退出1后核验原任务终态，按空闲协议关闭59192，源摘要未变；failure-followup.json记录。修正定位后才开独立第二轮，旧结果保留。
+
+准确续接：相关检查均终态；提交源码后构建新完整包；不修改已打开旧包或偷取凭据。新窗口准备好后请用户在应用重新登录，继续实际传输和远端功能。整体迁移保持未完成。
+
 ## 2026-11-19 · 用户授权的三级重启动通过，真实SSH等待应用登录
 
 用户回复：“ssh是192.168.1.202，暂时没有连续三级重启动，你可以创建一个简单的进行计算并测试此功能，三也暂无”。此授权仅用于G盘新建隔离模型，不修改或求解G:\Job原模型；无开发环境Windows目标机暂不具备。既有服务器配置“计算节点01”已保存用户名、端口和主机指纹，采用用户名/密码登录；不在报告或聊天中收集密码。

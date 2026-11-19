@@ -41,6 +41,8 @@
 
 新增全量内容核对会增加读取时间。界面 82% 阶段显示逐分析步校验，日志按步骤更新；大文件需要等待，不因暂时没有新日志重复启动。
 
+2026-11-19使用既有GJB工程ODB副本，通过当前完整包实际验收校验阶段取消和SMAPython进程意外退出：分别显示cancelled/failed，无成功结果，既有目标及来源摘要不变；重开后台恢复原记录，不重复执行。回执`GPTWork/real-merge-interruption-74bb9bec2c53/verification.json`。工具`packaging/verify_real_merge_interruption.py`只作用于GPTWork来源及其自有后台后代；此证据覆盖实际校验worker异常，不等于后台崩溃时遗留worker、所有求解进程或原生点击验收。
+
 ## 实现与验证入口
 
 - 计划：`modules/submitter/odb_merge_core.py` / `build_merge_plan`。

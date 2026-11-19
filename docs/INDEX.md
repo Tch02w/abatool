@@ -28,6 +28,7 @@
 | GPU、Explicit 计算精度和 ODB 场输出精度 | [提交选项说明](03-features/EXECUTION_OPTIONS.md) |
 | 作业结束提醒、未读恢复与批量已读 | [作业提醒说明](03-features/JOB_NOTIFICATIONS.md) |
 | 远端完成确认、数据检查和日志去重 | [远端作业说明](03-features/REMOTE_JOBS.md) |
+| SSH目录浏览、上传下载、覆盖与取消 | [远端传输说明](03-features/REMOTE_TRANSFERS.md) |
 | 完整结果批量执行、共享祖先与重启继续 | [批量结果说明](03-features/ODB_RESULT_BATCH.md) |
 | ODB 合并校验、历史输出、停止与部分结果 | [安全合并说明](03-features/ODB_MERGE.md) |
 | 侧栏、选择刷新、日志、数字输入及参数说明（F001/F002/F005/F021/F025/F028） | [界面交互说明](03-features/UI_INTERACTION.md) |

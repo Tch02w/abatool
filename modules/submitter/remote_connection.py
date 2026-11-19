@@ -166,6 +166,27 @@ class _PinnedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
             )
 
 
+def _remote_replace_file_script(source: str, destination: str) -> str:
+    """Windows fallback for servers without the POSIX rename extension."""
+    paths = base64.b64encode(json.dumps({"source": source, "destination": destination},
+                                       ensure_ascii=False).encode("utf-8")).decode("ascii")
+    return rf"""
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$paths = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{paths}')) | ConvertFrom-Json
+$sourcePath = [IO.Path]::GetFullPath($paths.source)
+$destinationPath = [IO.Path]::GetFullPath($paths.destination)
+if (-not [string]::Equals([IO.Path]::GetDirectoryName($sourcePath), [IO.Path]::GetDirectoryName($destinationPath), [StringComparison]::OrdinalIgnoreCase)) {{
+    throw 'The upload temporary file must be in the destination directory.'
+}}
+if ([IO.File]::Exists($destinationPath)) {{
+    [IO.File]::Replace($sourcePath, $destinationPath, [NullString]::Value)
+}} else {{
+    [IO.File]::Move($sourcePath, $destinationPath)
+}}
+""".strip()
+
+
 def _powershell_resource_script(profile: ServerProfileDraft) -> str:
     config = {
         "compute_root": profile.compute_root,
@@ -571,9 +592,7 @@ class RemoteConnectionManager:
                         sftp.put(str(source), temporary, callback=callback, confirm=True)
                         if cancel_requested is not None and cancel_requested():
                             raise RemoteTransferCancelled("文件上传已取消。")
-                        if overwrite and self._sftp_exists(sftp, final_path):
-                            sftp.remove(final_path)
-                        self._sftp_rename(sftp, temporary, final_path)
+                        self._sftp_rename(sftp, temporary, final_path, overwrite=overwrite)
                     except BaseException:
                         try:
                             sftp.remove(temporary)
@@ -621,9 +640,20 @@ class RemoteConnectionManager:
                         )
                         if cancel_requested is not None and cancel_requested():
                             raise RemoteTransferCancelled("文件下载已取消。")
-                        with temporary.open("rb") as stream:
+                        # Windows _commit/fsync requires a writable descriptor.
+                        with temporary.open("r+b") as stream:
                             os.fsync(stream.fileno())
-                        os.replace(temporary, destination)
+                        if cancel_requested is not None and cancel_requested():
+                            raise RemoteTransferCancelled("文件下载已取消。")
+                        if overwrite:
+                            os.replace(temporary, destination)
+                        elif os.name == "nt":
+                            # Unlike replace(), Windows rename refuses a target
+                            # created by another writer after the initial check.
+                            os.rename(temporary, destination)
+                        else:
+                            os.link(temporary, destination)
+                            temporary.unlink()
                     finally:
                         temporary.unlink(missing_ok=True)
             except RemoteConnectionError:
@@ -742,16 +772,26 @@ class RemoteConnectionManager:
             return False
         return True
 
-    @staticmethod
     def _sftp_rename(
+        self,
         sftp: paramiko.SFTPClient,
         source: str,
         destination: str,
+        *,
+        overwrite: bool,
     ) -> None:
+        if not overwrite:
+            # Standard SFTP rename refuses an existing destination. POSIX rename
+            # would silently overwrite a file created after the initial stat.
+            sftp.rename(source, destination)
+            return
         try:
             sftp.posix_rename(source, destination)
         except (AttributeError, OSError):
-            sftp.rename(source, destination)
+            # Windows OpenSSH may not implement the POSIX extension. Replace
+            # using the verified Windows session, never remove the old target
+            # first. A failed commit leaves its error visible to the caller.
+            self.execute_powershell(_remote_replace_file_script(source, destination))
 
     @staticmethod
     def _transfer_callback(

@@ -258,9 +258,8 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
             return
 
         with self._lock:
-            if operation.cancel_event.is_set():
-                self._finish_cancelled_locked(operation)
-                return
+            # The service checks cancellation before publishing. Its successful
+            # return means the file is committed; a later cancel must not hide it.
             operation.status = SUCCEEDED
             operation.result = result
             operation.completed_bytes = max(

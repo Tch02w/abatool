@@ -1,5 +1,7 @@
 # 验收记录与已知缺口
 
+2026-11-19新增人工原生证据：用户在最新0aba结果浏览截图中将输入改为“待读取结果”，没有读取，提示明确保留实际操作目录“当前结果”；所选load_point_raw.csv预览time=0、force=123。N08步骤1通过，源CSV/XLSX四份摘要不变；截图及回执位于GPTWork/native-result-context-desktop-20261119/manual-root-draft-20261119.png/.json。随后用户报告实例意外关闭，N08步骤2未通过，触发原因未确定；重开234192并以37319记录退出码，unexpected-close-20261119-2341.json保存现场。仅证明首项实际操作，不扩大为刷新索引、稳定性、导出或全页通过；唯一问题见TASK-001顶部。
+
 2026-11-19阻塞复核与独立回滚启动：当前源码真实Qt主窗口构造/退出1项通过（9.25秒，会话85097退出0，GPTWork/native-rollback-current-20261119/results.xml），使用独立G盘TEMP/TMP和应用数据。现有WinUI窗口9249544仍可读但点击报coordinate input geometry is unavailable，重新定位激活报failed to activate captured window，远端未连接；同一输入障碍已连续至少三轮。212240消失没有可用应用日志/对应Windows错误事件，关闭原因仍未知，未补记正常退出。完整验收受阻，不等于后台功能失败或迁移完成；恢复条件见TASK-002顶部。
 
 2026-11-19最新全量自动回归：干净2343765（应用负载1d3c981）1085项及9项子检查通过，840.76秒，JUnit共1094项且0失败/错误/跳过。Qt offscreen，TEMP/TMP、应用数据及缓存均G盘隔离；本轮排除单独原生Qt启动。原会话98987退出0、166852/155748已结束；GPTWork/result-full-regression-20261119/tests.log和results.xml为实际回执。生产队列增量逻辑已复核，不能以自动通过代替业务页多选等待、鼠标或像素验收。准确命令见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)顶部。

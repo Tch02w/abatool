@@ -23,7 +23,7 @@
 
 1. 最新测试窗口来自winui-sidebar-final-20261119，窗口1442068，原生205860、后台201772、子221920；AX已确认中文目录说明和后台连接，窗口保留供查看。独立配置`GPTWork/native-sidebar-final-20261119/result-browser`。由`GPTWork/native_sidebar_final_20261119.py capture result-browser`记录后台身份；关闭后才能执行finish核对。不要重复启动同一profile。
 2. 旧205808、187916、197448均连同自有后台核验结束；227408前端已退出，其空闲后台226912/193812经正式idle关闭协议收尾。各自verification.json确认描述符移除及两份日常JSON未改。API关闭只证明后台收尾，不算该窗口的原生关闭流程通过。
-3. 下一步将本轮代码/说明提交并推送，再从干净源码更新完整目录与安装候选；保留旧产物。相关失败、用户反馈和回执见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)及[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+3. 本轮代码/说明提交`8ac63ac7305bcad878980d2afc98456739ff9b93`已推送GitHub main，ls-remote与本地HEAD一致、提交后工作树干净。下一步从干净源码更新完整目录与安装候选；保留旧产物。相关失败、用户反馈和回执见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)及[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 4. 顶部留白、按钮对齐、六级缩进的局部通过不代表完整业务验收。八页业务交互、日志拖选/复制、悬停说明、跨屏、工程任务和目标机仍需逐项完成；不要重复同一已通过检查代替这些缺口。
 
 ## 未完成的完整迁移范围

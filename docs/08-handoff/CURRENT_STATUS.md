@@ -1,35 +1,36 @@
 # 当前状态与接续点
 
-更新于2026-11-19。完整WinUI迁移仍待八页业务、真实工程/SSH及目标机验收；本轮只完成侧栏视觉与说明修复。实际源码、回执及用户确认优先。
+更新于2026-11-19。侧栏修复已经进入完整目录与安装候选，完成包内、隔离安装及有限原生运行核验；整体WinUI迁移仍待完整业务和真实环境验收。实际源码、回执及用户确认优先。
 
-## 当前改动与证据
-
-- 用户确认此前完整5497f45cfec3顶部空白消失、密度合适、侧栏收起展开正常；本轮又确认按钮已对齐、树缩进正常，并澄清模型甲是结果文件夹。
-- 刷新/收起位于同一标题Grid，外框30×30，刷新图标14、折线16；收起保留40 DIP入口和既有偏好/草稿/任务。
-- 树每级缩进16改10，减少箭头及图标旁空隙。保留目录/文件图标差异，实际ODB文件使用文件图标；模型结果目录副标题改成中文，类型和路径不变。
-- 23项生产原生控件检查通过：`GPTWork/sidebar-final-checks-20261119/verification.json`，PID229496退出0；六级文字X为53/63/73/83/93/103 DIP，深浅主题下展开后选择通过。源码发布日志`GPTWork/winui-sidebar-final-publish-20261119.log`成功。最终shell与文档回归86项通过：`GPTWork/sidebar-final-regression-fixed-20261119.log`。
-- 旧完整包依赖/安装证据和此前单CSV预览/80行完整导出证据保留，不扩大成新版本全部业务通过。截图仍超时，最终图标比例的视觉确认与自动几何检查区分记录。
-
-## 当前输出
+## 当前版本
 
 | 项目 | 当前事实 |
 |---|---|
-| 最新开发输出 | `GPTWork/winui-sidebar-final-20261119`，包含上述修复，配套后台来自既有完整包；不是重新生成完整安装候选。 |
-| 完整目录候选 | `GPTWork/release-win-x64-5497f45cfec3/AbaqusTools`，源码758f1cc，1687文件/19worker/15应用资源和依赖验证通过；尚不含本轮侧栏修复。 |
-| 安装候选 | `GPTWork/installer-win-x64-b4ca03cbe0c8/AbaqusTools-0.1.0-win-x64-setup.exe`，未签名、正式身份未安装；同负载测试身份生命周期7818c66a5988通过。 |
-| 文档 | README、RepoWiki、功能索引与交接已维护；包内是构建时快照，仓库记录后续验收，未另发GitHub Wiki网站。 |
+| 已打包源码 | `dd5fe12290d6b579ae1145dd03e6db3e8de2123d`，干净且已推送；包含8ac63ac侧栏修复及文档。 |
+| 完整目录 | `GPTWork/release-win-x64-c6999a8e1c8e/AbaqusTools`，1687清单文件/19worker/15应用资源，全摘要和包内依赖通过。 |
+| 正式标识安装候选 | `GPTWork/installer-win-x64-d7c766a02a78/AbaqusTools-0.1.0-win-x64-setup.exe`，126128448字节，未签名且未安装正式身份。 |
+| 隔离安装验证 | 同负载测试e8cf272edafb从上一完整d597341f22be升级，`GPTWork/installer-lifecycle-9dce03ed6016/verification.json` verified；无自有进程/登记残留。 |
+| 原生核验 | 完整包结果浏览/后处理加载与Ctrl+7/8往返、侧栏收起恢复和输入保留、正常退出已核对；截图/鼠标仍受工具限制，完整业务未验完。 |
+| 文档 | README、RepoWiki、功能索引、说明和交接持续同步。包内为dd5fe122构建时快照，最终验收追加到仓库；未另发GitHub Wiki网站。 |
+
+摘要、产物与失败详情见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)，机器回执`GPTWork/sidebar-release-verification-20261119/verification-summary.json`。旧5497f45cfec3/b4ca03cbe0c8保留历史追溯，不再作为最新候选。
+
+## 当前界面证据
+
+- 用户已确认顶部空白消失、密度合适、侧栏收起展开正常；本轮又确认按钮对齐和树缩进正常，并澄清模型甲为结果目录。
+- 两按钮同一标题行，外框30×30；刷新14号、折线16号，收起保留40 DIP入口。树每级缩进16改10，目录/文件图标明确，内部目录类型换成中文说明。
+- 23项生产控件、86项shell/文档检查通过，分别见sidebar-final-checks-20261119和sidebar-final-regression-fixed-20261119.log。发布验证不重复旧全量回归，不把局部检查说成八页业务通过。
+- 新完整包原生4个结果范围、中文说明、包内后台连接、键盘切换/侧栏与退出均有实际证据。鼠标报coordinate input geometry is unavailable，截图报window capture timed out；最终14号图标的像素确认没有冒称通过。
 
 ## 准确续接点
 
-1. 最新测试窗口来自winui-sidebar-final-20261119，窗口1442068，原生205860、后台201772、子221920；AX已确认中文目录说明和后台连接，窗口保留供查看。独立配置`GPTWork/native-sidebar-final-20261119/result-browser`。由`GPTWork/native_sidebar_final_20261119.py capture result-browser`记录后台身份；关闭后才能执行finish核对。不要重复启动同一profile。
-2. 旧205808、187916、197448均连同自有后台核验结束；227408前端已退出，其空闲后台226912/193812经正式idle关闭协议收尾。各自verification.json确认描述符移除及两份日常JSON未改。API关闭只证明后台收尾，不算该窗口的原生关闭流程通过。
-3. 本轮代码/说明提交`8ac63ac7305bcad878980d2afc98456739ff9b93`已推送GitHub main，ls-remote与本地HEAD一致、提交后工作树干净。下一步从干净源码更新完整目录与安装候选；保留旧产物。相关失败、用户反馈和回执见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)及[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
-4. 顶部留白、按钮对齐、六级缩进的局部通过不代表完整业务验收。八页业务交互、日志拖选/复制、悬停说明、跨屏、工程任务和目标机仍需逐项完成；不要重复同一已通过检查代替这些缺口。
+1. 本轮全部构建、安装和原生句柄均终态。开发205860/201772/221920与完整包227292/212816/226444已按创建时间核对结束，描述符移除，两份日常JSON摘要未变；回执分别在native-sidebar-final-20261119及native-sidebar-release-20261119/result-browser/verification.json。没有保留的新窗口，不等待旧窗口关闭。
+2. 新包的清单、依赖、隔离安装和有限原生核验已完成。不要仅因验收文档追加而重打相同包或重跑全量测试；需要复用时先确认原进程终态，再建立新的独立G盘profile，不能重复launch旧profile。
+3. 继续完整八页业务与四组菜单、日志拖选/复制、参数悬停、跨屏、导出取消/关闭等原生验收；键盘/AX及生产控件测试不能替代真实鼠标和像素检查。实际SSH/GPU/MPI、连续三级工程ODB与无开发环境目标机等还需外部资料/环境。
+4. 新安装候选可供后续目标机检查，仍未签名。所有旧候选和失败现场保留；不修改原模型、不启动新求解，不提前退役PySide6或切换默认入口。文档导航49项通过；最终文档提交/推送见`GPTWork/sidebar-release-verification-20261119/git-delivery.json`。后续SSH配置名称、三级ODB路径和目标机信息已向用户询问，尚未收到回复。
 
-## 未完成的完整迁移范围
+## 完整迁移范围与约束
 
-真实SSH/指纹/传输、GPU/MPI及工程负载，连续三级真实工程ODB链、真实worker中断，原生分组/图例/取消/大文件/回收站及复杂草稿，正式安装向导、签名与无开发环境目标机、负责人对等确认仍待。已有ODB关系最长两节点，不用兄弟分支或新求解补造三级链。见[交付核对](../06-testing/COMPLETION_AUDIT.md)、[功能索引](../03-features/FUNCTION_INDEX.md)。
+完整范围见[交付核对](../06-testing/COMPLETION_AUDIT.md)、[功能索引](../03-features/FUNCTION_INDEX.md)。真实worker中断、原生分组/图例/取消/大文件/回收站及复杂草稿、目标机/正式向导与负责人对等确认仍待；已有ODB关系最长两节点，不用兄弟分支或新求解补造三级链。
 
-## 约束
-
-禁止向C盘放任何ODB；TEMP/TMP、basetemp及产物均用G盘GPTWork。G:\Job原模型只读，不启动求解、不修改集成仓库、不删除PySide6/日常配置/历史验收。控制面使用项目.venv，worker用Abaqus解释器。每完成一个功能，立即同步维护功能索引、说明、测试与交接；文档、代码、测试一起交付，局部通过不称整体迁移完成。
+禁止向C盘放任何ODB；TEMP/TMP、basetemp及产物用G盘GPTWork。G:\Job原模型只读，不修改集成仓库，不删除PySide6/日常配置/历史验收。控制面用项目.venv，worker用Abaqus解释器。每完成一个功能，立即同步维护功能索引、文档、测试与交接，局部通过不称整体完成。

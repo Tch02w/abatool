@@ -1,5 +1,21 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 侧栏修复进入完整目录与安装候选
+
+收尾文档导航49项通过（docs-final.log，0.09秒），git diff --check通过。最终文档提交/远端核验回执位于GPTWork/sidebar-release-verification-20261119/git-delivery.json。已请求后续真实验收可用的SSH配置名称、非C盘连续三级ODB目录和无开发环境Windows机器；尚未收到资源信息，不假定外部环境已具备。
+
+从干净且已推送的dd5fe12290d6b579ae1145dd03e6db3e8de2123d构建完整目录GPTWork/release-win-x64-c6999a8e1c8e/AbaqusTools，构建句柄29868退出0。包含8ac63ac的标题按钮/树缩进/中文目录说明；1687清单文件、19个worker、15项应用XBF/PRI，含清单357546657字节，全摘要与文件集合检查通过，无ODB/INP/PySide6/虚拟环境混入。清单SHA256为3b35fc80186e9ddce3df8386264b0b3825906c53e2c4c8b1cf28c7b798e815fc，WinUI DLL为ade04cc4679588c533c4aa4402bb4a5b4858473941ccab6f19765f62a273c9e6。inventory.json及汇总位于GPTWork/sidebar-release-verification-20261119。
+
+包内--check-bundle退出0，bundle-probe-_de384qw验证defaults、worker-assets、GIF、Agg图表、xlsx-preview、SSH加密依赖、Qt-free。仅依赖诊断，未连接SSH或调用求解。
+
+正式标识安装候选GPTWork/installer-win-x64-d7c766a02a78/AbaqusTools-0.1.0-win-x64-setup.exe，126128448字节，SHA256 bd76f0afec0953ce58e6a55dc65f3ac93a8b3f6d976e3febcbc5ce66f4263a91，NotSigned，正式身份未安装。同负载测试身份e8cf272edafb（SHA256 c86c930303e7a00ccc3f0536b196c6ae40c1c973a5cb7299b8f49f12a8bb7c78）与上一完整d597341f22be执行升级/卸载，句柄65724退出0，GPTWork/installer-lifecycle-9dce03ed6016/verification.json verified：陌生目录/链接祖先拒绝、中文空格目录初装与全摘要、运行中自有后台阻止覆盖/卸载、旧版本和用户文件保留、开始菜单更新、安装后正式C#主机API/退出、卸载保留用户文件均通过；forcedCleanupPids/remainingOwnedPids为空，无测试登记残留。普通受限账户预检无法读取用户Shell Folders；在用户上下文运行正式隔离验证通过，未修改系统目录来绕过检查。
+
+实际从c6999a8e1c8e完整目录启动WinUI，使用GPTWork/native-sidebar-release-20261119/result-browser独立G盘profile；原生227292、后台212816、子226444，窗口1639072。CUA核对4个结果范围、中文目录说明和包内后台连接；Ctrl+7到后处理、Ctrl+8回结果浏览、Ctrl+B收起/恢复并保留根目录输入均经后续新鲜AX确认。不能把键盘发送后立即返回的旧状态当作失败；Ctrl+1不是现有快捷键，未切页不记缺陷。Shift+Tab未取得可靠焦点变化证据；鼠标点击仍coordinate input geometry is unavailable，截图仍window capture timed out。没有将此有限观察写成完整八页业务或像素验收。
+
+通过Alt+F4正常退出，finish核对上述三个身份已结束、描述符移除、两份日常JSON摘要不变。此前开发窗口205860/201772/221920也已通过同样正常收尾。两个verification.json及新包native-observations.json、总verification-summary.json保留。无求解、无创建或移动ODB，TEMP/TMP与所有测试输出均G盘。
+
+准确续接：新候选清单、依赖、安装及有限原生验收已完成，本轮全部句柄/自有进程终态。仓库文档记录最终验收，包内文档是dd5fe122构建时快照；不要仅因验收文档更新重复打相同包。下一步继续完整八页业务、真实SSH/GPU/MPI、连续三级工程ODB及目标机验收；截图/鼠标工具仍是原生交互限制，整体目标未完成。文档收尾检查与Git核验另记，不删除旧候选或历史证据。
+
 ## 2026-11-19 · 侧栏按钮比例、树缩进与目录含义
 
 提交核验：修复与说明已提交`8ac63ac7305bcad878980d2afc98456739ff9b93`并推送origin/main，远端ls-remote与本地HEAD一致；其后的本条为验收记录补充。完整目录及安装候选尚未重建，不把旧安装包称作本轮版本。

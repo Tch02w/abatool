@@ -2,13 +2,15 @@
 
 ## 2026-11-19 · 远端传输状态观察修复
 
+本轮源码已提交推送5e4ebbb4c5bb7c22d71f8c88cabb14363473d2f4。干净完整e42230b93c6d含1689清单文件/19worker/15应用资源，完整摘要与包内探针通过；安装候选6126fe1ff978为126156314字节、NotSigned，未安装。清单SHA256为13f03ce0386f72123c654305a88d9a75d4b05282998edd9657f44f8755fca692，安装器SHA256为f6e42ea6c32ba43610f0a0ca0d6e873dbddce1c58cf0f107dc79dfffbc32caeb。汇总GPTWork/remote-observation-delivery-20261119/verification-summary.json；构建71574和安装编译86084均退出0，不重做原始求解/SSH传输。两项Python测试文件ruff最终通过（首轮仅新增导入需换行排序）。
+
 上一轮e81fcb5f99cedb7ead531a906ee6a529c3aef0bd已推送并核对远端，属于实际进展。本轮处理资源页曾出现的“后台传输状态读取失败：The operation was canceled.”：源码中三个状态GET将10秒响应限时也用于等待连接，而后台冷启动另允许25秒。新增生产C#客户端检查，持有连接门10.4秒即复现旧行为，remote-observation-before-20261119会话61751退出1，错误State-read deadline expired while only waiting for backend readiness；没有启动后台或求解。
 
 ControlPlaneHost.ReadRemoteStateAsync为服务器快照、活动传输列表及按ID查询分离30秒连接准备/10秒响应预算，内部超时返回REMOTE_STATE_TIMEOUT，外部取消仍为取消。ComputeResourcesPage保留原传输ID，切页只取消观察，重进先按ID查询终态；临时读取失败显示待确认并由原10秒定时器/主动刷新重查，不自动重新提交。明确拒绝创建、实际传输失败和后台旧记录不存在分别显示；无法确认时不虚构成功/失败。没有变更远端登录、密码、后台传输算法或HTTP协议。
 
 生产客户端6项检查已通过，remote-observation-fixed-20261119会话79699退出0；三个读取等待准备、HTTP超时分类、调用者取消及后续读取恢复。真实HTTP/替身传输集成首轮3通过/1失败（remote-observation-api-20261119.xml，会话44130退出1）：新增Python用例漏导入json_response，修正导入后单例通过，transfer-observer-cancel-fixed-20261119.xml为1通过/4.51秒。该例验证生产C#取消进度观察后原后台仍仅有一个running传输，释放替身后succeeded；不等于真实SSH断网或原生切页验收。此前37项shell检查通过；本轮新增页面接线约束随最终回归复核。
 
-开发发布remote-observation-native-20261119首次构建通过（会话88677退出0），随后补充明确创建拒绝的错误分支；最终生产构建会话7661退出0、0警告/0错误（23.13秒）。最终文档/shell/传输API/慢资源快照99项通过（9.99秒，会话85029，remote-observation-final-20261119.xml）。原表单/队列确认问题尚未收到答复，窗口9528和已登录227820保留；不重复登录或关闭其后台。准确续接点：提交修复并构建新完整候选，再继续未验业务；旧555b/9f安装候选不含此次前端观察修复，不把原生行为提前标为通过。
+开发发布remote-observation-native-20261119首次构建通过（会话88677退出0），随后补充明确创建拒绝的错误分支；最终生产构建会话7661退出0、0警告/0错误（23.13秒）。最终文档/shell/传输API/慢资源快照99项通过（9.99秒，会话85029，remote-observation-final-20261119.xml）。原表单/队列确认问题尚未收到答复，窗口9528和已登录227820保留；不重复登录或关闭其后台。准确续接点：本轮构建和检查均终态，继续最新安装负载生命周期及原生业务；新e422已含修复，旧555b/9f不含，不能提前认定原生切页通过。文档收尾提交与远端核对另记本地Git回执。
 
 ## 2026-11-19 · 真实合并进程存活时的后台崩溃恢复
 

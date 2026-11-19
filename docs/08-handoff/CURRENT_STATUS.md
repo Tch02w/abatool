@@ -1,20 +1,20 @@
 # 当前状态与接续点
 
-更新于2026-11-19。真实Abaqus合并校验进程存活时的后台崩溃恢复已补验通过，未更改生产恢复规则。服务器表单与队列修复已随9a09972推送、验收文档44e05c0已推送，54项生产控件、211项相关回归及新完整包检查通过；实际业务窗口确认待用户反馈。整体WinUI迁移仍未完成；源码、实际回执及用户确认优先。
+更新于2026-11-19。最新5e4ebbb已修复远端状态读取计时与传输观察：6项客户端、真实HTTP保持原任务、99项相关检查及生产构建通过，新完整包/安装候选已生成。此前单步/批量真实后台崩溃恢复、表单/队列54项控件与211项回归已有证据。实际业务窗口确认待用户反馈，整体WinUI迁移仍未完成。
 
-当前新增F009/F023前端观察修复：分离连接等待和状态读取限时，区分超时/用户取消，切页保留传输身份并只读恢复。旧问题已由生产C#客户端复现，修复6项检查及真实HTTP取消观察保持任务通过；最终发布核验中。e81fcb5已推送，最新555b完整包暂不含这次前端改动，见TASK-002顶部。
+F009/F023分离连接等待和状态读取限时，区分超时/用户取消，切页保留传输身份并只读恢复。旧问题由生产C#客户端复现后修正；原生页面切换未验，既有两个窗口仍运行各自旧候选，见TASK-002顶部。
 
 ## 当前版本
 
 | 项目 | 当前事实 |
 |---|---|
-| 已提交完整包源码 | 9a099728b97da27a5669bf550fa6edfc4a6662f2，干净构建且已推送。 |
-| 最新完整目录 | GPTWork/release-win-x64-555b572ccbfe/AbaqusTools：1689清单文件（连清单1690）、19worker、15应用资源，全摘要与包内依赖通过；包含SSH、表单、队列和命名修复。 |
-| 安装候选 | GPTWork/installer-win-x64-9f4880b493e0/AbaqusTools-0.1.0-win-x64-setup.exe，126146312字节，未签名、未安装；此次负载未重做生命周期。 |
-| 当前开发输出 | GPTWork/queue-dialog-final-native-20261119，服务器表单、队列定向更新及原生列表保持；生产构建0警告/0错误。当前名称及命令规则使用项目Python源码。 |
+| 已提交完整包源码 | 5e4ebbb4c5bb7c22d71f8c88cabb14363473d2f4，干净构建且已推送。 |
+| 最新完整目录 | GPTWork/release-win-x64-e42230b93c6d/AbaqusTools：1689清单文件（连清单1690）、19worker、15应用资源，全摘要与包内依赖通过；包含SSH、表单、队列、命名及传输观察修复。 |
+| 安装候选 | GPTWork/installer-win-x64-6126fe1ff978/AbaqusTools-0.1.0-win-x64-setup.exe，126156314字节，未签名、未安装；此次负载未重做生命周期。 |
+| 当前WinUI输出 | e422完整包为最新生产输出；remote-observation-native-20261119是此前开发输出，最终源码另经0警告/0错误构建后纳入完整包。 |
 | 文档 | README、RepoWiki、功能索引、说明和交接持续同步；未另发GitHub Wiki网站。 |
 
-本轮汇总为GPTWork/queue-dialog-delivery-20261119/verification-summary.json；包含目录/安装器摘要、测试范围和保留窗口。SSH真实传输对应旧2c18包，回执见GPTWork/ssh-fixed-delivery-20261119/verification-summary.json和[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)，不当作新555b业务复测。旧c699下载故障已证实，不能作为最新候选。
+本轮汇总为GPTWork/remote-observation-delivery-20261119/verification-summary.json；包含目录/安装器摘要、测试范围和保留窗口。此前队列包回执为queue-dialog-delivery-20261119；SSH真实传输对应旧2c18，真实合并崩溃对应555b，不当作新e422原生业务复测。旧c699下载故障已证实，不能作为最新候选。
 
 ## 已有实际证据
 
@@ -31,6 +31,7 @@
 3. 首次受限桌面测试218736及其后台已按身份/独立profile确认结束，无残留；其不在CUA清单的失败现场保留于native-server-dialog-20261119/compute-resources/unlisted-launch-cleanup.json。当前CUA仍报coordinate input geometry is unavailable、window capture timed out和failed to activate captured window，已重新定位重试，未绕过工具操作。
 4. 本轮检查及打包均终态：54项控件220820退出0、211项回归会话36892退出0、完整构建67369退出0、安装器9f4880b493e0状态compiled。冻结API测试后台219864经idle协议退出0、描述符已移除，回执queue-dialog-frozen-6a644c79bf95/verification.json；未启动求解。只对新变更和失败做定向回归，不重复求解三级链或已通过SSH传输；先核对原句柄再启动长任务。
 5. 最新真实单步/批量后台崩溃检查会话40726、28532均退出0，所有记录进程终态、恢复后台经idle退出0；单步校验161188和批量128728恢复后退出120。批量首次7217cd20dc0d未命中故障时序，原任务实际成功后已idle收尾，失败回执保留。两项成功中断现场均留在G盘；不要因保留工作区误认仍运行或重复测试。下一项为其余未验业务，原生确认仍待用户反馈。
+6. 传输观察修复已推送5e4ebbb；99项检查85029、最终构建7661、完整打包71574和安装编译86084均退出0。包内探针位于remote-observation-bundle-probe-20261119/bundle-probe-bdkxobgi。没有为本轮另开窗口或重新SSH登录；下一项可验证最新安装负载生命周期及原生业务，不因文档追加重建包。
 
 ## 完整迁移范围与约束
 

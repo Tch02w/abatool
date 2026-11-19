@@ -33,8 +33,12 @@ public sealed class WorkbenchCommandState
     public bool RemoteObservationIsCurrent(long revision) => revision == RemoteRevision && !ResourceBusy && !RemoteRefreshBusy;
     public void ApplyQueue(LocalQueueRuntimeSnapshot value)
     {
-        QueueKnown = true; QueueActive = value.Active; _activeIds = value.ActiveItemIds.ToHashSet(StringComparer.Ordinal);
-        QueueRevision++; Changed?.Invoke();
+        var activeIds = value.ActiveItemIds.ToHashSet(StringComparer.Ordinal);
+        var changed = !QueueKnown || QueueActive != value.Active || !_activeIds.SetEquals(activeIds);
+        QueueKnown = true; QueueActive = value.Active; _activeIds = activeIds;
+        // Every accepted observation fences older responses, even if no command changed.
+        QueueRevision++;
+        if (changed) Changed?.Invoke();
     }
     public void ApplyRemote(RemoteServersSnapshot value)
     {
@@ -42,7 +46,12 @@ public sealed class WorkbenchCommandState
         ConnectedProfile = value.Profiles.FirstOrDefault(profile => profile.ProfileName == Connection.ProfileName);
         RemoteRevision++; Changed?.Invoke();
     }
-    public void InvalidateQueue() { QueueKnown = false; QueueRevision++; Changed?.Invoke(); }
+    public void InvalidateQueue()
+    {
+        var changed = QueueKnown;
+        QueueKnown = false; QueueRevision++;
+        if (changed) Changed?.Invoke();
+    }
     public void InvalidateRemote() { RemoteKnown = false; RemoteRevision++; Changed?.Invoke(); }
     public void SetQueueBusy(bool value)
     {

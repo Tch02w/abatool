@@ -72,6 +72,31 @@ internal static class WorkbenchCommandChecks
         state.Changed += () => notifications++;
         state.SetResourceBusy(false); state.SetQueueBusy(false); state.SetLocked(false);
         Check(notifications == 0, "Unchanged busy flags recursively notified UI listeners");
+        before = state.QueueRevision;
+        for (var index = 0; index < 100; index++)
+            state.ApplyQueue(new() { Active = false, MaxParallel = index + 1,
+                SchedulerMessage = $"observation {index}", Queue = new() { CapturedAt = DateTimeOffset.UtcNow } });
+        Check(notifications == 0, "Unchanged queue actions notified the toolbar on every poll");
+        Check(state.QueueRevision == before + 100 && !state.QueueObservationIsCurrent(before),
+            "Suppressing unchanged UI notifications accepted an older observation");
+        state.ApplyQueue(new() { Active = true, ActiveItemIds = ["running", "running-2"] });
+        Check(notifications == 1 && state.CanStopQueue && state.CanTerminateSelected,
+            "Changed running state did not notify queue controls");
+        state.ApplyQueue(new() { Active = true, ActiveItemIds = ["running-2", "running"] });
+        Check(notifications == 1 && state.SelectedActiveIds.SequenceEqual(["running"]),
+            "Reordered active IDs unnecessarily notified controls or changed the target");
+        state.ApplyQueue(new() { Active = true, ActiveItemIds = ["running-2"] });
+        Check(notifications == 2 && !state.CanTerminateSelected,
+            "A completed selected job left its termination command enabled");
+        before = state.QueueRevision;
+        state.InvalidateQueue(); state.InvalidateQueue();
+        Check(notifications == 3 && !state.CanStopQueue,
+            "Repeated unavailable observations re-notified an already unavailable queue");
+        Check(state.QueueRevision == before + 2 && !state.QueueObservationIsCurrent(before),
+            "Unavailable observations lost their stale-response fence");
+        state.ApplyQueue(new() { Active = true, ActiveItemIds = ["running-2"] });
+        Check(notifications == 4 && state.CanStopQueue,
+            "Recovery to the same runtime state did not restore queue controls");
         Console.WriteLine($"{count} shared command-state checks passed.");
     }
 

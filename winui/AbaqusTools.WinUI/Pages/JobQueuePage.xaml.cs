@@ -648,13 +648,15 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     {
         App.Current.Commands.ApplyQueue(runtime);
         ApplySnapshot(runtime.Queue);
-        SchedulerInfoBar.Message = runtime.SchedulerMessage;
-        SchedulerInfoBar.IsOpen = !string.IsNullOrWhiteSpace(runtime.SchedulerMessage);
+        if (SchedulerInfoBar.Message != runtime.SchedulerMessage)
+            SchedulerInfoBar.Message = runtime.SchedulerMessage;
+        var showSchedulerMessage = !string.IsNullOrWhiteSpace(runtime.SchedulerMessage);
+        if (SchedulerInfoBar.IsOpen != showSchedulerMessage) SchedulerInfoBar.IsOpen = showSchedulerMessage;
         var drafts = App.Current.Session.State.Pages.GetValueOrDefault("job-queue");
         // Runtime polling must not replace a setting the user is still editing.
-        if (runtime.Active || (_lastRuntimeParallel is { } previousParallel
+        if (ParallelLimitNumberBox.Value != runtime.MaxParallel && (runtime.Active || (_lastRuntimeParallel is { } previousParallel
                 ? ParallelLimitNumberBox.Text == previousParallel.ToString()
-                : drafts?.ContainsKey("ParallelLimitNumberBox") != true))
+                : drafts?.ContainsKey("ParallelLimitNumberBox") != true)))
             ParallelLimitNumberBox.Value = runtime.MaxParallel;
         var updatePolicy = runtime.Active || (_lastRuntimePolicy is { } previousPolicy
             ? ExistingResultPolicy() == previousPolicy
@@ -669,11 +671,11 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
                     runtime.ExistingResultPolicy,
                     StringComparison.Ordinal))
             {
-                ExistingResultPolicyComboBox.SelectedIndex = index;
+                if (ExistingResultPolicyComboBox.SelectedIndex != index)
+                    ExistingResultPolicyComboBox.SelectedIndex = index;
                 break;
             }
         }
-        UpdateCommandButtons();
         if (runtime.Active)
         {
             App.Current.MainWindow.ReportPageStatus(
@@ -684,8 +686,9 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private void ApplySnapshot(JobQueueSnapshot snapshot)
     {
         _externalScanActive = snapshot.ExternalManualScanActive;
-        ScanExternalJobsButton.Content = _externalScanActive ? "扫描中…" : "扫描";
-        ScanExternalJobsButton.IsEnabled = !_busy && !_externalScanActive;
+        var scanLabel = _externalScanActive ? "扫描中…" : "扫描";
+        if (!Equals(ScanExternalJobsButton.Content, scanLabel)) ScanExternalJobsButton.Content = scanLabel;
+        SetEnabledIfChanged(ScanExternalJobsButton, !_busy && !_externalScanActive);
         _queueExplorerAdapter.Update(snapshot);
         _applyingSnapshot = true;
         try
@@ -696,9 +699,11 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         finally { _applyingSnapshot = false; }
         App.Current.Commands.SelectQueueItems(SelectedFormalItems().Select(item => item.ItemId));
         SelectPendingFormalItem();
-        CandidateSummaryText.Text =
+        var candidateSummary =
             $"候选：{snapshot.CandidateCount} · 已选 {snapshot.SelectedCandidateCount} · 异常 {snapshot.InvalidCandidateCount}";
-        FormalQueueSummaryText.Text = FormatQueueSummary(snapshot);
+        if (CandidateSummaryText.Text != candidateSummary) CandidateSummaryText.Text = candidateSummary;
+        var queueSummary = FormatQueueSummary(snapshot);
+        if (FormalQueueSummaryText.Text != queueSummary) FormalQueueSummaryText.Text = queueSummary;
         if (string.IsNullOrWhiteSpace(ExternalWorkDirTextBox.Text))
         {
             ExternalWorkDirTextBox.Text = snapshot.QueueItems
@@ -707,12 +712,14 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
                 ?.EffectiveWorkDir
                 ?? string.Empty;
         }
-        CandidateEmptyPanel.Visibility = snapshot.CandidateCount == 0
+        var candidateEmpty = snapshot.CandidateCount == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
-        FormalQueueEmptyText.Visibility = snapshot.QueueCount == 0
+        if (CandidateEmptyPanel.Visibility != candidateEmpty) CandidateEmptyPanel.Visibility = candidateEmpty;
+        var queueEmpty = snapshot.QueueCount == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        if (FormalQueueEmptyText.Visibility != queueEmpty) FormalQueueEmptyText.Visibility = queueEmpty;
     }
 
     public void SelectFormalItem(string itemId)
@@ -805,11 +812,16 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private void UpdateCommandButtons()
     {
         var commands = App.Current.Commands;
-        StartQueueButton.IsEnabled = commands.CanStartQueue;
-        StopQueueButton.IsEnabled = commands.CanStopQueue;
-        TerminateQueueItemsButton.IsEnabled = commands.CanTerminateSelected;
-        ParallelLimitNumberBox.IsEnabled = commands.CanEditQueueOptions;
-        ExistingResultPolicyComboBox.IsEnabled = commands.CanEditQueueOptions;
+        SetEnabledIfChanged(StartQueueButton, commands.CanStartQueue);
+        SetEnabledIfChanged(StopQueueButton, commands.CanStopQueue);
+        SetEnabledIfChanged(TerminateQueueItemsButton, commands.CanTerminateSelected);
+        SetEnabledIfChanged(ParallelLimitNumberBox, commands.CanEditQueueOptions);
+        SetEnabledIfChanged(ExistingResultPolicyComboBox, commands.CanEditQueueOptions);
+    }
+
+    private static void SetEnabledIfChanged(Control control, bool enabled)
+    {
+        if (control.IsEnabled != enabled) control.IsEnabled = enabled;
     }
 
     private JobQueueItem[]? RequireFormalSelection()

@@ -1,5 +1,15 @@
 # TASK-004：日志选区稳定与数字输入样式
 
+## 2026-11-19 · 进一步缩小队列刷新范围
+
+用户要求只刷新必要内容。核对当前源码：此前已按ItemId保留列表对象/容器与选择，仅通知变化字段；剩余ApplyQueue每1.5秒无条件触发Changed，页头/按钮及调度选项也重复赋值。本次修改JobQueuePage.ApplySnapshot/ApplyRuntime/SetEnabledIfChanged，仅写实际变化的显示值；WorkbenchCommandState.ApplyQueue/InvalidateQueue在队列可知性、调度状态或活动编号集合变化时才通知。相同活动编号重排不通知；每次观测和失败仍递增QueueRevision，保留旧响应丢弃约定，不更改后台轮询频率、扫描互斥、勾选持久化、求解或队列命令。
+
+先在生产C#状态类新增100次相同动作状态观测、活动编号重排/终态变化、重复失联与恢复、旧响应隔离共8项断言。修复前pytest会话99303退出1，GPTWork/queue-targeted-before-20261119.xml明确失败于Unchanged queue actions notified the toolbar on every poll。修复后34项客户端断言通过；与已有两项真实HTTP状态/目标身份检查一起，GPTWork/queue-targeted-fixed-20261119.xml为3通过/54未选（6.95秒），不是57项通过。列表逻辑本轮未改，原54项原生控件回执保留既有范围。
+
+最终文档导航、界面/草稿接线及后台扫描并发回归103项通过（21.93秒，会话5309退出0，GPTWork/queue-targeted-regression-20261119.xml）；ruff和git diff --check通过。生产发布会话70362退出0，目标GPTWork/queue-targeted-native-20261119、日志同名.log，未报告警告/错误。汇总及Git核对写入GPTWork/queue-targeted-delivery-20261119/verification.json，提交/推送状态仅以实际核对回执为准。
+
+准确续接：自动检查与开发构建均已终态，无本轮长任务待等待。未启动新工作台、未关闭旧窗口。Get-Process实查9528（queue-dialog-native-20261119）和227820（release-win-x64-2c18c11259b2/AbaqusTools）仍在，创建时间与既有回执一致；CIM只读查询被拒绝后改用Get-Process确认，没有改权限。旧完整e422/安装6126不含本次优化，下一项是新候选的业务页鼠标/视觉确认与后续完整打包，不能以构建或状态类检查替代。没有启动求解或访问原始模型。
+
 ## 2026-11-19 · 服务器表单、队列选区与名称修复
 
 修复已提交并推送9a099728b97da27a5669bf550fa6edfc4a6662f2，已实际核对origin/main一致。干净完整目录release-win-x64-555b572ccbfe/AbaqusTools、安装候选installer-win-x64-9f4880b493e0已生成并核对全摘要。1689清单文件、19worker、15应用资源；清单SHA256为44f004167a0d60970858277fde3a40eb7583f61105ce35c0c3e36671bd6fb035，安装器126146312字节、SHA256为94e4e639940278210c3e9df739da77b6751ebfbb31d43f6013a5e3daaf4b6982。安装器NotSigned，未安装、未重做生命周期。包内依赖检查及冻结API的两个加号名称、手动扫描状态和候选勾选检查通过；219864后台经idle协议退出0、描述符移除，未启动求解。汇总GPTWork/queue-dialog-delivery-20261119/verification-summary.json，分项queue-dialog-frozen-6a644c79bf95/verification.json和queue-dialog-bundle-probe-20261119/bundle-probe-5t2qcr39/verification.json。

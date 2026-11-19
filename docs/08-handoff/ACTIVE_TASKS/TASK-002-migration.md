@@ -1,5 +1,21 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-19 · 最新队列负载完整打包与安装生命周期
+
+上一轮6b4ade1a3ae0fffb2b45c7bc051e56a4e2971456已实际推送，属于进展；本轮将其页头/按钮定向更新与此前传输观察修复纳入干净完整目录GPTWork/release-win-x64-e658a77e8d53/AbaqusTools。1689清单文件（连清单1690）、19worker、15应用资源，清单SHA256为46524e417dbaf4986a51e37ef53f0dd4fec08905d5f74b46fa68fbd9931b4fb2；全摘要与包内探针queue-targeted-bundle-probe-20261119/bundle-probe-9_1333gl通过。完整构建40120退出0。
+
+正式标识安装候选GPTWork/installer-win-x64-1fff69dedb9b/AbaqusTools-0.1.0-win-x64-setup.exe，126161101字节，SHA256为c6c996022ac657380dec3037501faf5e8fa831dfe4deae2bb5146b4bfb3e01ac，实际签名状态NotSigned；源码/构建器均为干净6b4ade1，未将正式标识安装到用户目录。新测试包c5a8e5525348与正式候选负载标识同为6b4ade1a3ae0-46524e417dba；旧测试包520eabb37f44为e422负载，两者使用独立AppId尾缀fa0dbad4b19e。三次编译39935/86597/49575均退出0，不修改既有候选。
+
+扩充packaging/verify_installer.py：user_data_hashes记录隔离控制面实际生成的数据库及其他数据文件，升级/卸载前后核对完整清单和摘要；verify先运行正式C#检查器的纯状态检查，避免权限不符的临时构建目录导致安装中途才失败。本轮只修改验收工具和文档，未改变生产安装模板或应用负载，不为文档重复打包。
+
+第一次验收97321在GPTWork/installer-lifecycle-196971a98c8c完成陌生目录/目录链接拒绝、初装全摘要和活动后台拒绝升级/卸载，随后从pytest私有目录启动C#检查器遭WinError 5。失败回执保留，不能计完整通过；finally按捕获身份终止自有后台156864/11252，remainingOwnedPids为空。将检查器重新构建到普通目录GPTWork/installer-lifecycle-host-20261119（0警告/错误），34项预检查实际通过。核实测试标识/绝对目录/安装清单/无活动进程后，仅完成该失败测试原定卸载，67536退出0，failed-uninstall-verification.json证实用户文件、3个数据库/旁文件保留、测试登记移除、无强制收尾/残留；失败现场、日志及目录链接保留。
+
+第二次94959退出0，GPTWork/installer-lifecycle-aa87c2237002/verification.json为verified，8步通过：陌生目录与目录链接拒绝、初装全摘要、活动后台阻止升级/卸载且不终止后台、正常idle退出后升级保留旧负载/用户文件并更新快捷方式、安装后正式主机资源/队列API与正常退出、卸载去除已登记程序/入口、实际数据摘要保留。升级前1个数据库不变，卸载前14个数据文件（含队列/通知/合并/批量/远端库和旁文件）均保留；forcedCleanupPids、remainingOwnedPids为空，registrationRemaining=null。仅正常卸载登记的测试程序文件，未递归清理历史资料；卸载日志目录非空145对应有意保留用户文件，最终退出0。
+
+缺检查器的负向预检也通过，GPTWork/queue-release-lifecycle-20261119/preflight-verification.json确认未新建生命周期目录/登记/快捷方式。最终文档导航与安装清单71项通过（1.98秒，GPTWork/queue-release-final-20261119.xml），ruff及git diff --check通过；汇总工具再次核对完整清单/正式安装器摘要和卸载后的14个数据文件。没有启动求解、移动ODB或打开新业务窗口；原9528及已登录227820仍在原路径，不能称其已运行新e658。整体汇总及实际提交/远端核对保存在同目录verification-summary.json。
+
+准确续接：上述构建/安装/验收会话均已终态，测试后台无残留，原表单/候选确认仍待用户反馈。新完整e658和正式候选1fff可供后续原生验收；安装生命周期已补齐本机新负载范围，不再重复这一轮。继续8页真实交互、SSH异常/远端任务、更多工程/GPU/MPI及无SDK目标机；保留PySide回滚和当前SSH窗口，总体迁移未完成。
+
 ## 2026-11-19 · 远端传输状态观察修复
 
 本轮源码已提交推送5e4ebbb4c5bb7c22d71f8c88cabb14363473d2f4。干净完整e42230b93c6d含1689清单文件/19worker/15应用资源，完整摘要与包内探针通过；安装候选6126fe1ff978为126156314字节、NotSigned，未安装。清单SHA256为13f03ce0386f72123c654305a88d9a75d4b05282998edd9657f44f8755fca692，安装器SHA256为f6e42ea6c32ba43610f0a0ca0d6e873dbddce1c58cf0f107dc79dfffbc32caeb。汇总GPTWork/remote-observation-delivery-20261119/verification-summary.json；构建71574和安装编译86084均退出0，不重做原始求解/SSH传输。两项Python测试文件ruff最终通过（首轮仅新增导入需换行排序）。

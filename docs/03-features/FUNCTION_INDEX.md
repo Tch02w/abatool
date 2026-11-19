@@ -2,7 +2,7 @@
 
 F009/F023远端状态观察：`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / ReadRemoteStateAsync、GetRemoteServersAsync、GetActiveRemoteTransfersAsync、GetRemoteTransferAsync分离连接与响应限时；`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` / RecoverTransfersAsync、ObserveTransferAsync、OnPageUnloaded、ShowTransferObservationWarning保留任务身份、区分读取失败与传输终态、只读恢复。测试`tests/winui_host/RemoteObservationChecks.cs`、`tests/winui_host/test_shutdown_api.py`及`tests/winui/test_shell_contract.py`；范围见[传输说明](REMOTE_TRANSFERS.md)。
 
-F026 最新发布证据：干净5e4ebbb → 完整目录e42230b93c6d → 安装候选6126fe1ff978；1689清单文件/19worker/15应用资源、全摘要及依赖通过，安装器未签名/未安装。传输观察修复6项客户端、真实HTTP及99项相关检查通过，原生切页待验。表单/队列54项控件、211项回归和旧负载原生/安装证据保留原范围；分别记录于[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)，不扩大为完整业务通过。
+F026 最新发布证据：干净6b4ade1 → 完整目录e658a77e8d53 → 安装候选1fff69dedb9b；1689清单文件/19worker/15应用资源、全摘要及依赖通过。相同新负载的独立测试身份安装/升级/卸载aa87c2237002通过，14个数据文件摘要保留、无测试登记/进程残留；正式标识仍未安装、NotSigned。含队列局部刷新与传输观察修复，旧控件/业务证据保留各自范围；详见[TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)，不扩大为完整业务或目标机通过。
 
 F012/F013真实后台崩溃补验：`packaging/verify_real_merge_backend_crash.py` / `verify`，复用`packaging/verify_real_merge_interruption.py`的HTTP/进程身份/摘要工具。只中断自有冻结后台，保持经身份核实的真实Abaqus校验进程存活至恢复核对，再恢复其执行；验证中断记录、同请求不重放、旧结果及来源摘要、工作区保留和三次启动持久化。--later第三源路径启用真实两阶段批量检查，包括恢复后继续拒绝重放、第二阶段未提交。回执real-merge-backend-crash-9597d1bc621d及real-batch-backend-crash-453005f06383的verification.json；范围及退出码见[安全合并](ODB_MERGE.md)和[批量任务](ODB_RESULT_BATCH.md)。
 
@@ -98,7 +98,7 @@ F001/F021结果导出：`winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.Export.
 | F027 作业结束提醒与未读恢复 | `modules/control_plane/job_notifications.py` / `JobNotificationManager`；F005 `_store_result`、F010 `_touch_locked`；`winui/AbaqusTools.WinUI/MainWindow.Notifications.cs`、`winui/AbaqusTools.WinUI/Services/JobNotificationContracts.cs`、`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Notifications.cs`；[提醒说明](JOB_NOTIFICATIONS.md) | `tests/control_plane/test_job_notifications.py`、`tests/winui_host/JobNotificationChecks.cs`；`packaging/verify_local_memory.py` 的 `--notifications` 模式 |
 | F028 GPU 与精度选项 | `modules/submitter/execution_options.py` / `parse_execution_options`、`execution_arguments`；F003 草稿、F004 队列编辑、F005 执行、F010 远端恢复；`winui/AbaqusTools.WinUI/Controls/ExecutionOptionsEditor.cs`、`winui/AbaqusTools.WinUI/Services/ExecutionOptionsContracts.cs`；[使用及默认兼容](EXECUTION_OPTIONS.md) | `tests/control_plane/test_execution_options.py`、`tests/winui_host/ExecutionOptionChecks.cs`、`tests/winui_host/test_execution_options_api.py` |
 
-F026 安装/升级/卸载：`packaging/build_installer.py` / `verified_bundle`、`render`、`build`；`packaging/installer.iss.in` / `PrepareToInstall`、`VerifyInstalledFile`、`InitializeUninstall`；`packaging/verify_installer.py` / `verify`。清单回归 `tests/common/test_installer_manifest.py`，真实隔离生命周期回执见TASK-002。目录与失败规则见[安装说明](../05-development/INSTALLATION.md)。
+F026 安装/升级/卸载：`packaging/build_installer.py` / `verified_bundle`、`render`、`build`；`packaging/installer.iss.in` / `PrepareToInstall`、`VerifyInstalledFile`、`InitializeUninstall`；`packaging/verify_installer.py` / `verify`、`user_data_hashes`先检查验收主机可执行性，升级/卸载保留实际测试数据完整摘要。清单回归 `tests/common/test_installer_manifest.py`，真实隔离生命周期回执见TASK-002。目录与失败规则见[安装说明](../05-development/INSTALLATION.md)。
 
 ## 跨功能修改提示
 

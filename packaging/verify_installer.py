@@ -87,6 +87,17 @@ def installed_hashes(target, report, *, require_ui_resources=True):
     assert entries["release-manifest.json"]["sha256"] == report["bundleManifestSha256"]
 
 
+def user_data_hashes(work):
+    """Inventory isolated application data after its owning backend has stopped."""
+    result = {}
+    for name in ("data", "post-data", "installed-host"):
+        for path in sorted((work / name).rglob("*")):
+            if path.is_file():
+                assert path.resolve().is_relative_to(work.resolve()), "Data escaped the isolated test directory"
+                result[path.relative_to(work).as_posix()] = digest(path)
+    return result
+
+
 def verify(old_report, new_report, host, *, legacy_old=False):
     reports = [json.loads(path.read_text(encoding="utf-8")) for path in (old_report, new_report)]
     old, new = reports
@@ -102,6 +113,10 @@ def verify(old_report, new_report, host, *, legacy_old=False):
     assert registered(new["appId"]) is None, "Test identity is already installed; do not overwrite it"
     shortcut = shortcut_path(new["appId"])
     assert not shortcut.exists(), "Test shortcut already exists; do not overwrite it"
+    # A pytest-created directory can be private to another Windows build account.
+    # Fail before installing anything if the selected production client cannot run.
+    host_check = subprocess.run([str(host), "--command-state-checks"], cwd=ROOT, capture_output=True,
+                                timeout=60, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
     work = ROOT / "GPTWork" / f"installer-lifecycle-{uuid4().hex[:12]}"
     work.mkdir()
     target = work / "中文 安装目录"
@@ -111,6 +126,8 @@ def verify(old_report, new_report, host, *, legacy_old=False):
     owners = OwnedProcesses()
     report = {"status": "running", "work": str(work), "target": str(target), "appId": new["appId"],
               "oldInstaller": str(old_report), "newInstaller": str(new_report), "steps": [],
+              "hostExecutable": str(host), "hostSha256": digest(host),
+              "hostPreflight": host_check.stdout.decode("utf-8", errors="replace").strip(),
               "solverStarted": False, "nativeWindowOpened": False, "legacyOldInventoryOnly": legacy_old}
     print(f"VERIFICATION_DIRECTORY={work}", flush=True)
 
@@ -191,21 +208,31 @@ def verify(old_report, new_report, host, *, legacy_old=False):
             step("live owned backend blocks upgrade and uninstall without termination")
             assert run([host, "--close-api", descriptor, "idle"], work / "backend-close.log", owners) == 0
             assert backend.wait(timeout=20) == 0
+        before_upgrade = user_data_hashes(work)
+        assert "data/scheduler_state.db" in before_upgrade, "No real application database to preserve"
         assert install(new, target, "upgrade-new") == 0
         installed_hashes(target, old, require_ui_resources=not legacy_old)
         installed_hashes(target, new)
         check_shortcut(new, "new")
         assert keep.read_bytes() == b"user content is not an installer payload"
+        assert user_data_hashes(work) == before_upgrade, "Upgrade changed isolated application data"
+        report["userDataBeforeUpgrade"] = before_upgrade
         step("upgrade verifies new payload and preserves previous version and user file")
         payload = target / "versions" / new["payloadId"]
         assert run([host, "--launch-bundle", payload, work / "installed-host"], work / "installed-host.log", owners) == 0
         step("installed production host startup APIs and shutdown passed")
+        before_uninstall = user_data_hashes(work)
+        assert "installed-host/submitter/scheduler_state.db" in before_uninstall
+        assert "installed-host/job-notifications.sqlite3" in before_uninstall
         assert uninstall("uninstall-final") == 0
         assert registered(new["appId"]) is None
         assert not shortcut.exists()
         assert keep.read_bytes() == b"user content is not an installer payload"
         assert not (target / "versions").exists()
+        assert user_data_hashes(work) == before_uninstall, "Uninstall changed isolated application data"
+        report["userDataBeforeUninstall"] = before_uninstall
         step("uninstall removes registered versions and registration while retaining user file")
+        step("upgrade and uninstall retain every isolated application data file and SHA256")
         verified_bundle(Path(old["bundle"]), require_ui_resources=not legacy_old)
         verified_bundle(Path(new["bundle"]))
         report["status"] = "verified"

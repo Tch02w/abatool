@@ -1,5 +1,7 @@
 # TASK-004：日志选区稳定与数字输入样式
 
+后续发布已同步：6b4ade1局部刷新现已包含于完整e658a77e8d53和正式候选1fff69dedb9b；同负载隔离安装生命周期aa87c2237002通过，见TASK-002顶部。现有两个业务窗口仍为旧输出，以下开发/控件证据不扩大为新包原生交互确认。
+
 ## 2026-11-19 · 进一步缩小队列刷新范围
 
 用户要求只刷新必要内容。核对当前源码：此前已按ItemId保留列表对象/容器与选择，仅通知变化字段；剩余ApplyQueue每1.5秒无条件触发Changed，页头/按钮及调度选项也重复赋值。本次修改JobQueuePage.ApplySnapshot/ApplyRuntime/SetEnabledIfChanged，仅写实际变化的显示值；WorkbenchCommandState.ApplyQueue/InvalidateQueue在队列可知性、调度状态或活动编号集合变化时才通知。相同活动编号重排不通知；每次观测和失败仍递增QueueRevision，保留旧响应丢弃约定，不更改后台轮询频率、扫描互斥、勾选持久化、求解或队列命令。

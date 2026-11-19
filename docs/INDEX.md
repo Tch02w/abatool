@@ -38,6 +38,7 @@
 | Windows 安装、升级、卸载与数据保留 | [安装说明](05-development/INSTALLATION.md) |
 | 哪些验收已通过，证据证明什么 | [验收记录与缺口](06-testing/VALIDATION.md) |
 | 完整迁移合同还缺什么 | [交付核对清单](06-testing/COMPLETION_AUDIT.md) |
+| 八页原生交互怎样逐项验收 | [原生验收步骤](06-testing/NATIVE_ACCEPTANCE.md) |
 | 接手时先做什么、目前未完成什么 | [当前状态](08-handoff/CURRENT_STATUS.md) |
 | 任务过程、失败定位、后续动作 | [任务索引](08-handoff/TASK_INDEX.md) |
 | 为什么这样设计 | [现有 ADR](submitter/adr/README.md) |

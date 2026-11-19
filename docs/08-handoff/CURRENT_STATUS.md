@@ -1,8 +1,8 @@
 # 当前状态与接续点
 
-最新续接（2026-11-19，F021）：XLSX按需共享文本和已加载目录身份修复已纳入干净1d3c981完整0aba6269fe34与安装候选9a463a0e6dc8；26项预览/HTTP、40项界面/正式客户端HTTP、53项文档/索引、11项目录/实际导出及11项冻结HTTP通过。原生新窗口无法定位，仍未验收；详细范围见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)顶部。
+最新续接（2026-11-19，F021）：XLSX按需共享文本和已加载目录身份修复已纳入干净1d3c981完整0aba6269fe34与安装候选9a463a0e6dc8；26项预览/HTTP、40项界面/正式客户端HTTP、53项文档/索引、11项目录/实际导出及11项冻结HTTP通过。最新原生窗口已实际加载4范围节点，点击/视觉仍未验收；详细范围见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)顶部。
 
-实际窗口补充：本轮CUA清单仅返回旧queue-dialog窗口9249544；Get-Process只返回其9528进程。此前已登录227820/旧SSH窗口不再返回，未主动关闭，不将历史连接状态当作当前事实。
+最新原生补充：同一0aba新窗口2164996已实际加载结果浏览4个范围，前台212240/后台219004使用GPTWork/native-result-context-desktop-20261119/profile，临时与数据均G盘。点击/激活仍失败，已发出唯一待反馈问题核对CSV荷载123及未提交新目录的提示；窗口与旧9528均保留。此前已登录227820不再返回，不称仍连接。准确回执native-observation.json及下一步见TASK-001顶部和[原生验收步骤](../06-testing/NATIVE_ACCEPTANCE.md)。
 
 此前F004/F026：6b4ade1队列修复完整e658a77e8d53与安装1fff69dedb9b的摘要/包内探针及同负载测试身份安装生命周期aa87c2237002通过。此为历史负载范围，不等于最新1d3c981已重验安装生命周期。
 
@@ -17,7 +17,7 @@ F009/F023分离连接等待和状态读取限时，区分超时/用户取消，�
 | 已提交完整包源码 | 1d3c981e4392c8d0730a7b2b5c9b6a03d4089756，干净构建，已核对推送；后续文档记录不改应用负载。 |
 | 最新完整目录 | GPTWork/release-win-x64-0aba6269fe34/AbaqusTools：1689清单文件、19worker、15应用资源，全摘要、包内依赖及11项冻结HTTP通过，含F021最新修复。 |
 | 安装候选 | GPTWork/installer-win-x64-9a463a0e6dc8/AbaqusTools-0.1.0-win-x64-setup.exe，126168153字节，NotSigned、未安装；本轮未重复生命周期，旧aa87对应6b4。 |
-| 当前WinUI输出 | 0aba完整包为最新输出，result-browser-fixed-native-20261119为开发输出；新包测试窗口不可定位并已按归属收尾，旧9528仍运行queue-dialog版。 |
+| 当前WinUI输出 | 0aba完整包为最新输出；当前新包窗口2164996/前台212240已加载，鼠标验收待用户反馈。此前不可定位的178864已收尾，旧9528仍运行queue-dialog版。 |
 | 文档 | README、RepoWiki、功能索引、说明和交接持续同步；未另发GitHub Wiki网站。 |
 
 本轮汇总为GPTWork/result-browser-delivery-20261119/verification-summary.json；冻结HTTP/收尾见native-result-context-20261119，包内探针为result-browser-bundle-probe-20261119/bundle-probe-biygdnek。旧安装生命周期汇总queue-release-lifecycle-20261119保留原范围。

@@ -1,5 +1,7 @@
 # 当前状态与接续点
 
+最新用户接续（2026-11-19 23:31）：按用户要求重开最新0aba前台32412/窗口1706436，复用native-result-context-desktop-20261119/profile，结果浏览已实际加载“当前结果”4范围节点。用户截图此前读取旧fixture，已解释“待读取结果”是新测试目录名称。旧9528/212240已不存在；本轮未操作点击，原生交互仍待。回执与下一步见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)顶部。
+
 当前结论（2026-11-19）：完整迁移验收受阻，目标未缩小、未完成。当前源码全量1085项及9子检查通过，独立原生Qt回滚启动也已通过（1项/9.25秒，GPTWork/native-rollback-current-20261119/results.xml）。再次点击旧隔离工作台仍报coordinate input geometry is unavailable，重新绑定后激活仍失败；该障碍已连续至少三轮。剩余实际交互须桌面通道恢复或人工协助；真实远端未连接、无开发环境Windows目标机暂无。准确失败、现存进程与恢复顺序见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)顶部。
 
 最新复核（2026-11-19）：干净2343765源码（应用负载1d3c981）全量自动回归1085项及9项子检查通过，840.76秒，原会话98987退出0，日志/XML位于GPTWork/result-full-regression-20261119。原生Qt启动用例本轮排除，WinUI业务实操仍待；详见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md)顶部。结束后新前台212240已不存在，后台219004及子进程227524仍在，旧9528仍在；未观察关闭过程、未终止或重开。下方原生窗口“保留”是先前时间点，继续验收须重新定位。
@@ -21,7 +23,7 @@ F009/F023分离连接等待和状态读取限时，区分超时/用户取消，�
 | 已提交完整包源码 | 1d3c981e4392c8d0730a7b2b5c9b6a03d4089756，干净构建，已核对推送；后续文档记录不改应用负载。 |
 | 最新完整目录 | GPTWork/release-win-x64-0aba6269fe34/AbaqusTools：1689清单文件、19worker、15应用资源，全摘要、包内依赖及11项冻结HTTP通过，含F021最新修复。 |
 | 安装候选 | GPTWork/installer-win-x64-9a463a0e6dc8/AbaqusTools-0.1.0-win-x64-setup.exe，126168153字节，NotSigned、未安装；本轮未重复生命周期，旧aa87对应6b4。 |
-| 当前WinUI输出 | 0aba完整包为最新输出；其前台212240已不存在，关闭原因未证实，后台219004/227524仍在。旧9528/窗口9249544运行queue-dialog版，可读但点击/激活失败，远端未连接。 |
+| 当前WinUI输出 | 0aba完整包为最新输出；按用户要求重开前台32412/窗口1706436，结果浏览“当前结果”4节点已加载。旧9528/212240均不存在，复用既有G盘profile；此前后台219004/227524保留，实际交互仍待。 |
 | 文档 | README、RepoWiki、功能索引、说明和交接持续同步；未另发GitHub Wiki网站。 |
 
 本轮汇总为GPTWork/result-browser-delivery-20261119/verification-summary.json；冻结HTTP/收尾见native-result-context-20261119，包内探针为result-browser-bundle-probe-20261119/bundle-probe-biygdnek。旧安装生命周期汇总queue-release-lifecycle-20261119保留原范围。

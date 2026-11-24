@@ -343,22 +343,18 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         try
         {
             var snapshot = await App.Current.ControlPlane.CancelOdbMergeOperationAsync(operationId);
-            ApplyOperationSnapshot(snapshot);
+            ApplyMonitoredSnapshot(snapshot);
         }
         catch (OperationCanceledException)
         {
             // Normal during application shutdown.
         }
-        catch (ControlPlaneException exception)
-        {
-            _cancelRequested = false;
-            ShowPlanState("无法停止 ODB 合并", exception.ToDisplayMessage(), InfoBarSeverity.Error);
-            RefreshInteractionState();
-        }
         catch (Exception exception)
         {
+            if (_activeOperationId != operationId) return;
             _cancelRequested = false;
-            ShowPlanState("无法停止 ODB 合并", exception.Message, InfoBarSeverity.Error);
+            ShowPlanState("无法停止 ODB 合并", exception is ControlPlaneException error ? error.ToDisplayMessage() : exception.Message,
+                InfoBarSeverity.Error);
             RefreshInteractionState();
         }
     }
@@ -367,13 +363,14 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         OdbMergeOperationSnapshot initial,
         bool applyCompletion = true)
     {
-        _activeOperationId = initial.OperationId;
+        _activeOperationId = initial.IsTerminal ? null : initial.OperationId;
         _lastOperationVersion = -1;
         _cancelRequested = string.Equals(initial.Status, "cancelling", StringComparison.Ordinal);
         ApplyOperationSnapshot(initial);
+        RefreshInteractionState();
         try
         {
-            var progress = new Progress<OdbMergeOperationSnapshot>(ApplyOperationSnapshot);
+            var progress = new Progress<OdbMergeOperationSnapshot>(ApplyMonitoredSnapshot);
             var final = await App.Current.ControlPlane.PollOdbMergeUntilTerminalAsync(
                 initial,
                 progress);
@@ -483,20 +480,25 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
     }
 
+    private void ApplyMonitoredSnapshot(OdbMergeOperationSnapshot snapshot)
+    {
+        if (_activeOperationId != snapshot.OperationId) return;
+        if (!_cancelRequested && snapshot.Status == "cancelling")
+        {
+            _cancelRequested = true;
+            RefreshInteractionState();
+        }
+        ApplyOperationSnapshot(snapshot);
+    }
+
     private void ApplyOperationSnapshot(OdbMergeOperationSnapshot snapshot)
     {
-        if (_activeOperationId is not null
-            && !string.Equals(_activeOperationId, snapshot.OperationId, StringComparison.Ordinal))
-        {
-            return;
-        }
         if (snapshot.Version < _lastOperationVersion)
         {
             return;
         }
 
         _lastOperationVersion = snapshot.Version;
-        _activeOperationId ??= snapshot.OperationId;
         MergeProgressBar.IsIndeterminate = !_batchBusy && snapshot.Status is "queued" or "starting"
             && snapshot.Progress.Percent == 0;
         MergeProgressBar.Value = _batchBusy && _batchTotalSteps > 0
@@ -766,7 +768,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         ConflictPolicyComboBox.IsEnabled = editingEnabled;
         PreviewButton.IsEnabled = editingEnabled && MergeModeComboBox.SelectedIndex == 1;
         ExecuteButton.IsEnabled = ExecutionCommand != OdbMergeCommand.None;
-        StopButton.IsEnabled = (_operationBusy || _batchBusy) && !_cancelRequested;
+        StopButton.IsEnabled = OdbMergeExecution.CanStop(_batchBusy, _operationBusy, _activeOperationId, _cancelRequested);
     }
 
     private void ShowPlanError(string message)

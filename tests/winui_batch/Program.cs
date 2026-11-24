@@ -3,6 +3,7 @@ using AbaqusTools.WinUI.Services;
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("execution follows the current mode and checked plan", CheckExecutionCommandAsync),
+    ("manual Stop requires an acknowledged operation, while batch Stop can be queued", CheckStopAsync),
     ("populating a saved graph and undoing edits preserve its clean state", GraphEditsAsync),
     ("shared ancestor uses verified auto-numbered output", SharedAncestorAsync),
     ("prefix cache is isolated to one batch", NoCrossBatchReuseAsync),
@@ -43,6 +44,18 @@ static Task CheckExecutionCommandAsync()
 }
 
 static string Odb(string name) => Path.Combine(Path.GetTempPath(), "abatool-batch-runner-tests", $"{name}.odb");
+
+static Task CheckStopAsync()
+{
+    foreach (var id in new string?[] { null, "", "   " })
+        Equal(false, OdbMergeExecution.CanStop(false, true, id, false), "Manual submission without a usable ID");
+    Equal(true, OdbMergeExecution.CanStop(false, true, "accepted", false), "Acknowledged manual operation");
+    Equal(false, OdbMergeExecution.CanStop(false, true, "accepted", true), "Pending manual cancellation");
+    Equal(false, OdbMergeExecution.CanStop(false, false, "previous", false), "Completed manual operation");
+    Equal(true, OdbMergeExecution.CanStop(true, false, null, false), "Batch can queue cancellation before acknowledgement");
+    Equal(false, OdbMergeExecution.CanStop(true, false, null, true), "Pending batch cancellation");
+    return Task.CompletedTask;
+}
 
 static Task GraphEditsAsync()
 {

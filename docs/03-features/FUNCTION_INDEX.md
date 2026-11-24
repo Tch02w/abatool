@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F013 的手工合并停止状态由 `winui/AbaqusTools.WinUI/Services/OdbMergeExecution.cs` 的 `CanStop` 判定，页面取操作回执时刷新。定向检查在 `tests/winui_batch/Program.cs` 的 `CheckStopAsync`，真实执行中停止见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
+
 F022 的运行范围在 `winui/AbaqusTools.WinUI/Services/OdbScopedRunPlan.cs` 中解析。后处理页的 `BuildScopedQueueRequest` 将当前勾选、范围、图例和输出设置交给同一个启动与追加入队入口。回归见 `tests/winui_postprocess/ScopedRunChecks.cs` 及 `tests/winui/test_shell_contract.py`。[操作说明](../repowiki/postprocessor.md)
 
 F022 多模型参数由 `winui/AbaqusTools.WinUI/Services/OdbPostprocessParameterComparison.cs` 校验改动，`winui/AbaqusTools.WinUI/Controls/OdbParameterComparisonEditor.cs` 分页对照，`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.ParameterComparison.cs` 保存和恢复编辑。预建空组入口在 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupCatalog.cs`，名称、重复处理和成员迁移在 `winui/AbaqusTools.WinUI/Services/OdbComparisonGroups.cs`。定向测试见 `tests/winui_postprocess/ParameterComparisonChecks.cs`、`tests/winui_postprocess/PostprocessEmptyGroupChecks.cs`、`tests/winui_explorer/ParameterComparisonChecks.cs`。[使用说明](../repowiki/postprocessor.md)

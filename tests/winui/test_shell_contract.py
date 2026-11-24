@@ -985,5 +985,9 @@ def test_odb_merge_page_executes_tracks_cancels_and_recovers_operations() -> Non
     assert "Launcher.LaunchFolderAsync" in page
     assert 'Click="OnExecuteClicked"' in xaml
     assert 'Click="OnStopClicked"' in xaml
+    assert "StopButton.IsEnabled = OdbMergeExecution.CanStop(_batchBusy, _operationBusy, _activeOperationId, _cancelRequested)" in page
+    observer = page.split("private async Task<OdbMergeOperationSnapshot> ObserveOperationAsync", 1)[1].split("private void OnClearMaterializationClicked", 1)[0]
+    assert observer.index("_activeOperationId = initial.IsTerminal ? null : initial.OperationId") < observer.index("RefreshInteractionState()") < observer.index("PollOdbMergeUntilTerminalAsync")
+    assert "_activeOperationId ??= snapshot.OperationId" not in page
     assert 'x:Name="MergeOperationLogTextBox"' in xaml
     assert "AbaqusCommandTextBox" not in xaml

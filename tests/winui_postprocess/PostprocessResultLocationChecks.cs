@@ -55,6 +55,12 @@ internal static class PostprocessResultLocationChecks
             locations.Begin("region", "odb.postprocess.region", root);
             locations.Complete(Snapshot("region", "succeeded", [top], region));
             Equal(Resolve(sourceA), top);
+            locations.SetGroupQueueResult("queue", root, new OdbPostprocessResult
+                { ResultRoots = [a, b], Outputs = [outputA, outputB], OutputCount = 2 });
+            Equal(Resolve(), a, b);
+            Equal(Resolve(sourceB), b);
+            locations.SetGroupQueueResult("empty-queue", root, new OdbPostprocessResult());
+            Missing(() => Resolve());
             foreach (var state in new[] { "failed", "cancelled" })
             {
                 locations.Begin(state, "odb.postprocess.run", root);

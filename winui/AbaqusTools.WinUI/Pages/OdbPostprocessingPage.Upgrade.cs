@@ -18,7 +18,7 @@ public sealed partial class OdbPostprocessingPage
 
     private async void OnUpgradeClicked(object sender, RoutedEventArgs e)
     {
-        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing) return;
+        if (GroupQueueBlocksOtherOperations || _discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing) return;
         var rows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
         if (rows.Length == 0 || rows.Any(row => row.CompatibilityStatus != "upgrade_required"))
         {
@@ -80,7 +80,7 @@ public sealed partial class OdbPostprocessingPage
 
     private async Task<bool> RecoverUpgradeAsync(bool showHistory)
     {
-        if (_upgradeBusy || _discoveryBusy || _compatibilityBusy || _postprocessBusy) return false;
+        if (GroupQueueBlocksOtherOperations || _upgradeBusy || _discoveryBusy || _compatibilityBusy || _postprocessBusy) return false;
         _upgradeBusy = true;
         RefreshInteractionState();
         try

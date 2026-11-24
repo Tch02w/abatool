@@ -1,4 +1,7 @@
 # 功能定位索引
+
+F022 后处理分组队列由 `modules/control_plane/postprocess_group_queue.py` 的 `PostprocessGroupQueueManager` 调度，HTTP 入口与关闭协调在 `modules/control_plane/server.py` 和 `modules/control_plane/shutdown_protocol.py`。WinUI 使用 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupQueue.cs` 接回队列、显示日志及操作状态，`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupEditor.cs` 编辑等待组。测试见 `tests/control_plane/test_postprocess_group_queue.py`、`tests/control_plane/test_postprocess_group_queue_http.py` 和 `tests/winui_host/test_postprocess_group_queue_api.py`。运行规则见 [ADR 0023](../submitter/adr/0023-postprocess-group-queue.md)。
+
 | 11 月 24 日修复 | 生产入口及定位 | 验证 |
 |---|---|---|
 | `F011` 重启动前置关系 | `modules/submitter/restart_topology.py` / RestartTopology，`modules/control_plane/job_queue_commands.py`，`winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml.cs` | `tests/control_plane/test_restart_dependency_edits.py`，原生旧记录修复见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) |

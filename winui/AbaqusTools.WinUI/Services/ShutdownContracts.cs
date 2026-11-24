@@ -14,6 +14,7 @@ public sealed class ShutdownWorkItem
         "remote.job" => "远端作业" + (string.IsNullOrWhiteSpace(Name) || Name == Kind ? "" : " · " + Name),
         "remote.transfer" => "远端文件传输",
         "result.index" => "结果索引",
+        "odb.postprocess.group-queue" => "分组提取队列" + (string.IsNullOrWhiteSpace(Name) || Name == Kind ? "" : " · " + Name),
         _ when Kind.StartsWith("odb.postprocess", StringComparison.Ordinal) => "ODB 后处理",
         _ when Kind.StartsWith("odb.compatibility", StringComparison.Ordinal) => "ODB 兼容性检查",
         _ when Kind.StartsWith("odb.upgrade", StringComparison.Ordinal) => "ODB 升级",

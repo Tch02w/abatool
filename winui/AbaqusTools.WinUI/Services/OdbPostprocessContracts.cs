@@ -24,7 +24,7 @@ internal sealed class OdbPostprocessScanCreateRequest
     public bool ForceRescan { get; init; }
 }
 
-public sealed class OdbPostprocessRunCreateRequest
+public sealed record OdbPostprocessRunCreateRequest
 {
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = 1;
@@ -138,7 +138,7 @@ public sealed class OdbPostprocessJobDraft
     public OdbPostprocessJobDraft Clone() => (OdbPostprocessJobDraft)MemberwiseClone();
 }
 
-public sealed class OdbPostprocessGroupDraft
+public sealed record OdbPostprocessGroupDraft
 {
     [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;

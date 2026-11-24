@@ -2443,7 +2443,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                     error.Message,
                     error.Code,
                     error.TraceId,
-                    error.Retryable);
+                    error.Retryable,
+                    statusCode: (int)statusCode);
             }
         }
         catch (JsonException)
@@ -2452,7 +2453,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         }
 
         var safeStatus = $"{(int)statusCode} {statusCode}";
-        return new ControlPlaneException($"控制面请求失败：{safeStatus}。");
+        return new ControlPlaneException($"控制面请求失败：{safeStatus}。", statusCode: (int)statusCode);
     }
 
     private static string ValidateOperationId(string operationId)
@@ -2794,6 +2795,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     private bool UpdateActivePostprocessTracking(OdbPostprocessOperationSnapshot snapshot)
     {
+        // The queue owns this child. Stopping it independently could dispatch the next group.
+        if (snapshot.Request.ClientRequestId.StartsWith("pgq:", StringComparison.Ordinal)) return true;
         lock (_operationGate)
         {
             if (snapshot.IsTerminal)
@@ -2825,6 +2828,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string[] odbMergeOperationIds;
         string[] resultBatchIds;
         string[] postprocessOperationIds;
+        string[] postprocessGroupQueues;
         try
         {
             lock (_operationGate)
@@ -2834,6 +2838,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 odbMergeOperationIds = [.. _activeOdbMergeOperationIds];
                 resultBatchIds = [.. _activeResultBatchIds];
                 postprocessOperationIds = [.. _activePostprocessOperationIds];
+                postprocessGroupQueues = [.. _activePostprocessGroupQueues];
             }
         }
         finally
@@ -2846,6 +2851,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 && resultIndexOperationIds.Length == 0
                 && odbMergeOperationIds.Length == 0
                 && resultBatchIds.Length == 0
+                && postprocessGroupQueues.Length == 0
                 && postprocessOperationIds.Length == 0)
             || descriptor is null
             || !IsValidDescriptor(descriptor))
@@ -2877,6 +2883,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         await Task.WhenAll(
             compatibilityCancellations
                 .Concat(resultBatchIds.Select(id => BestEffortCancelBatchAsync(descriptor, id, timeoutSource.Token)))
+                .Concat(postprocessGroupQueues.Select(id => BestEffortStopGroupQueueAsync(descriptor, id, timeoutSource.Token)))
                 .Concat(resultIndexCancellations)
                 .Concat(odbMergeCancellations)
                 .Concat(postprocessCancellations));

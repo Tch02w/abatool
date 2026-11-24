@@ -87,8 +87,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             if (!SaveWorkspace(forClose: true)) throw new IOException("后处理配置未能保存，关闭已取消。");
         });
         App.Current.Session.RegisterCheckpoint("postprocess-workspace", SavePostprocessDraftAsync);
+        _groupQueueTimer.Tick += OnGroupQueueTick;
         Loaded += OnPageLoaded;
-        Unloaded += (_, _) => SaveWorkspace();
+        Unloaded += (_, _) => { _groupQueueTimer.Stop(); SaveWorkspace(); };
         RefreshInteractionState();
     }
 
@@ -116,6 +117,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return false;
         }
         if (!IsLoaded || canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
+        if (GroupQueueBlocksOtherOperations) { ShowWarning("请先结束当前工作区的提取队列。", "不能切换 ODB"); return false; }
         if (_discoveryBusy || _postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing
             || _postprocessRecoveryBusy || DraftPending || _draftActionBusy)
         {
@@ -147,6 +149,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        if (_initialLoadTask?.IsCompleted == true && _groupQueue is { IsActive: true }) StartGroupQueuePolling();
         _initialLoadTask ??= InitializePageAsync();
         try { await _initialLoadTask; }
         catch (Exception error) { ShowWarning(error.Message, "后处理页面恢复未完成"); }
@@ -171,6 +174,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
         _recoveryAttempted = true;
         if (await RecoverUpgradeAsync(showHistory: false)) return;
+        if (await RestoreGroupQueueAsync()) return;
         if (!await RecoverActivePostprocessOperationAsync())
         {
             await RecoverActiveCompatibilityOperationAsync();
@@ -183,7 +187,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         try
         {
             var operations = await App.Current.ControlPlane.ListOdbPostprocessOperationsAsync(activeOnly: true);
-            var snapshot = operations.Operations.FirstOrDefault(operation => !operation.IsTerminal);
+            var snapshot = operations.Operations.FirstOrDefault(operation => !operation.IsTerminal
+                && !operation.Request.ClientRequestId.StartsWith("pgq:", StringComparison.OrdinalIgnoreCase));
             if (snapshot is null)
             {
                 return false;
@@ -375,6 +380,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async void OnBrowseClicked(object sender, RoutedEventArgs e)
     {
+        if (GroupQueueBlocksOtherOperations) return;
         ErrorInfoBar.IsOpen = false;
         try
         {
@@ -414,7 +420,10 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task DiscoverAsync() => await DiscoverCoreAsync();
+    private async Task DiscoverAsync()
+    {
+        if (!GroupQueueBlocksOtherOperations) await DiscoverCoreAsync();
+    }
 
     private async Task<bool> DiscoverCoreAsync(string? requestedRoot = null, Func<bool>? canApply = null)
     {
@@ -709,7 +718,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async Task AnalyzeSelectedAsync()
     {
-        if (_postprocessBusy || _compatibilityBusy || _discoveryBusy || UpgradeBlocksEditing)
+        if (GroupQueueBlocksOtherOperations || _postprocessBusy || _compatibilityBusy || _discoveryBusy || UpgradeBlocksEditing)
         {
             return;
         }
@@ -779,10 +788,18 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
 
         var selected = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
-        foreach (var row in selected)
+        var memberships = selected.Select(row => (Row: row, NewValue: OdbComparisonGroups.UpdateMembership(
+            row.ComparisonGroup, GroupNameTextBox.Text, operation))).ToArray();
+        foreach (var (row, value) in memberships)
         {
-            row.ComparisonGroup = OdbComparisonGroups.UpdateMembership(row.ComparisonGroup, GroupNameTextBox.Text, operation);
+            var priorNames = ParseGroupNames(row.ComparisonGroup);
+            var nextNames = ParseGroupNames(value);
+            var removedNames = priorNames.Except(nextNames, StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var affected = UnfinishedGroups.FirstOrDefault(entry => entry.Members.Contains(row.Path, StringComparer.OrdinalIgnoreCase)
+                && (entry.Standalone ? priorNames.Length == 0 && nextNames.Length > 0 : removedNames.Contains(entry.Name)));
+            if (!CanRemoveGroupMembership(affected)) return;
         }
+        foreach (var (row, value) in memberships) row.ComparisonGroup = value;
         SelectedPlanText.Text = $"已更新 {selected.Length} 个 ODB 的分组；原始文件未修改。";
         UpdateExplorer();
         RefreshInteractionState();
@@ -957,6 +974,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             new() { ["原组名"] = selector, ["新名称"] = nameBox });
         if (result == ContentDialogResult.None) return;
         var oldName = SelectedText(selector);
+        var affected = UnfinishedGroups.FirstOrDefault(entry => !entry.Standalone && entry.Name.Equals(oldName, StringComparison.OrdinalIgnoreCase));
+        if (!CanRemoveGroupMembership(affected)) return;
         if (result == ContentDialogResult.Secondary)
         {
             var confirmation = new ContentDialog { XamlRoot = XamlRoot, Title = "删除对比组？",
@@ -1072,10 +1091,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync(OdbFileRow row)
+    private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync(OdbFileRow row, OdbPostprocessJobDraft? queued = null)
     {
-        var scan = row.ScanDetails!;
-        var current = row.PostprocessJob!.Clone();
+        var current = (queued ?? row.PostprocessJob!).Clone();
+        var scan = row.ScanDetails ?? new OdbPostprocessScanItem
+        {
+            Steps = [current.StartStep, current.EndStep], AssemblyNodeSets = [current.LoadSet],
+            AssemblyElementSets = [current.PileDisplaySet, current.PileConcreteSet, current.PileSteelSet, current.SoilSet, current.RebarSet]
+        };
         var startStep = Choice(scan.Steps, current.StartStep, "起始分析步");
         var endStep = Choice(scan.Steps, current.EndStep, "结束分析步");
         var frameMode = Choice(
@@ -1124,10 +1147,13 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
         reinforcement.SelectionChanged += (_, _) => UpdateRebarFields();
         UpdateRebarFields();
+        if (queued is not null && row.ScanDetails is null)
+            foreach (var choice in new[] { startStep, endStep, loadSet, pileDisplay, concrete, steel, soil, rebar })
+                choice.IsEditable = true;
         var fields = new StackPanel { Spacing = 10 };
         fields.Children.Add(new TextBlock
         {
-            Text = scan.NameMetadata.Condition.Length > 0
+            Text = row.ScanDetails is null ? "显示排队时保存的集合与分析步。可直接输入其他已核对的名称。" : scan.NameMetadata.Condition.Length > 0
                 ? $"文件名识别：{scan.NameMetadata.SampleId} · {scan.NameMetadata.Condition}"
                 : "文件名没有提供加载方向，请在下方手动选择。",
             TextWrapping = TextWrapping.Wrap,
@@ -1185,8 +1211,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ["钢构件集合"] = steel, ["土体集合"] = soil, ["配筋"] = reinforcement,
             ["纵筋集合"] = rebar, ["纵筋材料"] = material, ["纵筋直径"] = diameter, ["断裂前帧"] = prefracture,
         };
-        if (await ShowRecoverableDialogAsync(dialog, fields, "提取参数", PathKey(row.Path),
-            new { current, scan.Steps, scan.AssemblyNodeSets, scan.AssemblyElementSets }, inputControls) != ContentDialogResult.Primary)
+        var response = queued is null
+            ? await ShowRecoverableDialogAsync(dialog, fields, "提取参数", PathKey(row.Path),
+                new { current, scan.Steps, scan.AssemblyNodeSets, scan.AssemblyElementSets }, inputControls)
+            : await dialog.ShowAsync();
+        if (response != ContentDialogResult.Primary)
         {
             return null;
         }
@@ -1231,7 +1260,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         return combo;
     }
 
-    private static string SelectedText(ComboBox combo) => combo.SelectedItem?.ToString()?.Trim() ?? string.Empty;
+    private static string SelectedText(ComboBox combo) => (combo.IsEditable ? combo.Text : combo.SelectedItem?.ToString())?.Trim() ?? string.Empty;
 
     private async void OnRunPostprocessClicked(object sender, RoutedEventArgs e)
     {
@@ -1245,34 +1274,41 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return;
         }
         var rows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
+        var groups = OdbComparisonGroups.ForExecution(rows);
+        var submission = BuildQueueRequest(rows, groups);
+        if (submission is not null && SaveWorkspace()) await SubmitGroupQueueAsync(submission);
+    }
+
+    private OdbPostprocessRunCreateRequest? BuildQueueRequest(OdbFileRow[] rows, IReadOnlyList<OdbExecutionGroup> selectedGroups)
+    {
         if (rows.Length == 0 || rows.Any(row => row.PostprocessJob is null || !row.HasPostprocessConfiguration))
         {
             ShowWarning("请选择已完成结构读取的 ODB。", "处理计划不完整");
-            return;
+            return null;
         }
         if (WhiteBackgroundCheckBox.IsChecked is not true
             && TransparentBackgroundCheckBox.IsChecked is not true)
         {
             ShowWarning("白底 PNG 与透明底 PNG 至少启用一项。", "输出设置无效");
-            return;
+            return null;
         }
 
         if (DurationMode && (!double.IsFinite(AnimationDurationNumberBox.Value) || AnimationDurationNumberBox.Value < 0.01))
         {
             ShowWarning("请填写至少 0.01 秒的 GIF 单轮时长。", "输出设置无效");
-            return;
+            return null;
         }
         if (!DurationMode && (!double.IsFinite(AnimationFpsNumberBox.Value)
             || AnimationFpsNumberBox.Value != Math.Round(AnimationFpsNumberBox.Value)))
         {
             ShowWarning("请填写 1 至 60 之间的整数帧率。", "输出设置无效");
-            return;
+            return null;
         }
         var timing = CaptureOutputOptions();
-        var groups = OdbComparisonGroups.ForExecution(rows)
-            .Select((group, index) => new OdbPostprocessGroupDraft
+        var groups = selectedGroups
+            .Select(group => new OdbPostprocessGroupDraft
             {
-                Id = $"group-{index + 1}",
+                Id = StableGroupDraftId(RootTextBox.Text, group),
                 Name = group.Name,
                 Members = OdbComparisonGroups.OrderMembers(group.Members,
                     !group.Standalone && _groupMemberOrder.TryGetValue(group.Name, out var order) ? order : [])
@@ -1283,7 +1319,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                     : new Dictionary<string, OdbLegendOverride>(),
             })
             .ToArray();
-        var request = new OdbPostprocessRunCreateRequest
+        return new OdbPostprocessRunCreateRequest
         {
             ClientRequestId = Guid.NewGuid().ToString("D"),
             Root = RootTextBox.Text.Trim(),
@@ -1304,44 +1340,15 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             Groups = groups,
         };
 
-        if (!SaveWorkspace()) return;
-        _activePathKeys.Clear();
-        foreach (var row in rows)
-        {
-            _activePathKeys.Add(PathKey(row.Path));
-            row.MarkProcessing("排队中", "处理计划已提交，等待 Abaqus 后处理");
-        }
-        BeginPostprocessMonitoring(request.ClientRequestId, "odb.postprocess.run");
-        _activePostprocessOperationId = null;
-        _activePostprocessKind = "odb.postprocess.run";
-        _lastPostprocessVersion = -1;
-        _displayedLogCount = 0;
-        PostprocessLogTextBox.Text = string.Empty;
-        SetPostprocessBusy(true);
-        try
-        {
-            var initial = await App.Current.ControlPlane.StartOdbPostprocessAsync(request);
-            ForceRescanCheckBox.IsChecked = false;
-            _activePostprocessOperationId = initial.OperationId;
-            ApplyPostprocessSnapshot(initial);
-            var progress = new Progress<OdbPostprocessOperationSnapshot>(ApplyPostprocessProgressSnapshot);
-            var final = await App.Current.ControlPlane.PollOdbPostprocessUntilTerminalAsync(initial, progress,
-                _postprocessMonitoringSource!.Token);
-            ApplyPostprocessSnapshot(final);
-            CompletePostprocessOperation(final);
-        }
-        catch (Exception exception)
-        {
-            HandlePostprocessInterruption(exception, "ODB 后处理失败");
-        }
-        finally
-        {
-            EndPostprocessMonitoring();
-        }
     }
 
     private async void OnCancelPostprocessClicked(object sender, RoutedEventArgs e)
     {
+        if (_groupQueue is { IsActive: true } queue && !_postprocessBusy)
+        {
+            await ChangeGroupQueueAsync(queue, PostprocessGroupQueueAction.CancelCurrent, groupId: queue.CurrentGroupId);
+            return;
+        }
         if (_postprocessCancelInFlight || !_postprocessTracking.RequestCancel())
         {
             return;
@@ -1571,7 +1578,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async Task StartCompatibilityCheckAsync()
     {
-        if (_discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing)
+        if (GroupQueueBlocksOtherOperations || _discoveryBusy || _compatibilityBusy || _postprocessBusy || UpgradeBlocksEditing)
         {
             return;
         }
@@ -1849,32 +1856,33 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void RefreshInteractionState()
     {
-        var idle = !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !UpgradeBlocksEditing && !DraftPending && !_draftActionBusy;
+        var idle = !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !UpgradeBlocksEditing && !DraftPending && !_draftActionBusy && !_groupQueueCommandBusy;
+        var canStartOtherOperation = idle && !GroupQueueBlocksOtherOperations;
         RefreshDraftActions();
         var hasItems = _odbItems.Count > 0;
         var selectedCount = OdbList.SelectedItems.Count;
         var selectedRows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
 
-        BrowseButton.IsEnabled = idle;
+        BrowseButton.IsEnabled = canStartOtherOperation;
         GroupOrderButton.IsEnabled = idle && _odbItems.Any(row => ParseGroupNames(row.ComparisonGroup).Length > 0);
         ManageGroupsButton.IsEnabled = GroupOrderButton.IsEnabled;
-        DiscoverButton.IsEnabled = idle;
-        RootTextBox.IsEnabled = idle;
-        RecursiveCheckBox.IsEnabled = idle;
+        DiscoverButton.IsEnabled = canStartOtherOperation;
+        RootTextBox.IsEnabled = canStartOtherOperation;
+        RecursiveCheckBox.IsEnabled = canStartOtherOperation;
         OdbList.IsEnabled = idle;
         SelectAllButton.IsEnabled = idle && hasItems && selectedCount < _odbItems.Count;
         SelectNoneButton.IsEnabled = idle && selectedCount > 0;
         InvertSelectionButton.IsEnabled = idle && hasItems;
         ForceRescanCheckBox.IsEnabled = idle && hasItems;
-        CompatibilityCheckButton.IsEnabled = idle && selectedCount > 0;
-        UpgradeButton.IsEnabled = idle && selectedCount > 0
+        CompatibilityCheckButton.IsEnabled = canStartOtherOperation && selectedCount > 0;
+        UpgradeButton.IsEnabled = canStartOtherOperation && selectedCount > 0
             && selectedRows.All(row => row.CompatibilityStatus == "upgrade_required");
-        RecoverUpgradeButton.IsEnabled = !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !_upgradeBusy;
+        RecoverUpgradeButton.IsEnabled = !GroupQueueBlocksOtherOperations && !_discoveryBusy && !_compatibilityBusy && !_postprocessBusy && !_upgradeBusy;
         CancelUpgradeButton.Visibility = UpgradeBlocksEditing ? Visibility.Visible : Visibility.Collapsed;
         CancelUpgradeButton.IsEnabled = !string.IsNullOrWhiteSpace(_upgradeOperationId)
             && !_upgradeCancelRequested;
-        AnalyzeButton.IsEnabled = idle && selectedCount > 0;
-        StructureBrowserButton.IsEnabled = idle && selectedRows.Length == 1
+        AnalyzeButton.IsEnabled = canStartOtherOperation && selectedCount > 0;
+        StructureBrowserButton.IsEnabled = canStartOtherOperation && selectedRows.Length == 1
             && selectedRows[0].ScanDetails is { Error.Length: 0 };
         ApplyGroupButton.IsEnabled = idle && selectedCount > 0;
         LegendButton.IsEnabled = idle && selectedCount > 0;
@@ -1913,6 +1921,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         RecoverPostprocessButton.Visibility = _postprocessTracking.NeedsRecovery ? Visibility.Visible : Visibility.Collapsed;
         RecoverPostprocessButton.IsEnabled = _postprocessTracking.NeedsRecovery && !_postprocessRecoveryBusy
             && _postprocessMonitoringSource is null && !_postprocessCancelInFlight;
+        UpdateGroupQueueControls();
         SelectionCountText.Text = $"已选择 {selectedCount} / {_odbItems.Count}";
         SelectedPlanText.Text = selectedRows.Length switch
         {

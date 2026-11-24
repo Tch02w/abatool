@@ -13,6 +13,17 @@ if (args.Contains("--wait-child"))
 
 try
 {
+    if (args.Length == 3 && args[0] == "--postprocess-group-queue-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        try { await PostprocessGroupQueueChecks.RunAsync(host, args[2]); }
+        finally { await host.DetachForCloseAsync(); }
+        return 0;
+    }
     if (args.Length == 1 && args[0] == "--remote-observation-checks")
     {
         await RemoteObservationChecks.RunAsync();
@@ -179,7 +190,7 @@ try
         return 0;
     }
     if ((args.Length == 3 || (args.Length == 5 && args[3] == "--odb")
-        || (args.Length == 4 && args[3] == "--execution-options")) && args[0] == "--launch-bundle")
+        || (args.Length == 4 && args[3] is "--execution-options" or "--group-queue-history")) && args[0] == "--launch-bundle")
     {
         Environment.SetEnvironmentVariable("ABAQUS_TOOLS_ROOT", Path.GetFullPath(args[1]));
         Environment.SetEnvironmentVariable("ABAQUS_TOOLS_PYTHON", null);
@@ -198,7 +209,9 @@ try
             throw new Exception("Host launched an unexpected control-plane executable");
         await host.GetLocalResourceAsync();
         await host.GetLocalQueueRuntimeAsync();
-        if (args.Length == 4)
+        if (args.Length == 4 && args[3] == "--group-queue-history")
+            await PostprocessGroupQueueChecks.VerifyHistoryAsync(host);
+        if (args.Length == 4 && args[3] == "--execution-options")
         {
             var fixture = Path.Combine(Path.GetFullPath(args[2]), "client_case.inp");
             await File.WriteAllTextAsync(fixture, "*Heading\nSubmission parameter fixture; no solver.\n");

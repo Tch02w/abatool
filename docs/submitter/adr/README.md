@@ -31,3 +31,4 @@ Current records:
 - [0020-shared-workbench-command-state.md](0020-shared-workbench-command-state.md)
 - [0021-cancellable-result-export.md](0021-cancellable-result-export.md)
 - [0022-isolated-workbench-profiles.md](0022-isolated-workbench-profiles.md)
+- [0023-postprocess-group-queue.md](0023-postprocess-group-queue.md)

@@ -28,6 +28,28 @@ XAML_NAME = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
 XAML_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
 
 
+def test_postprocess_group_queue_poll_preserves_controls_and_updates_both_progress_indicators() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.GroupQueue.cs").read_text(encoding="utf-8")
+    poll = page.split("private async Task ReadGroupQueueAsync(", 1)[1].split("private void ApplyGroupQueue(", 1)[0]
+    assert "GetPostprocessGroupQueueIfChangedAsync(known.OperationId, known.Version) ?? known" in poll
+    assert "GetOdbPostprocessOperationAsync(childId)" in poll
+    assert "PostprocessProgress.Value = percent" in poll
+    assert 'PostprocessPercentText.Text = $"{percent}%"' in poll
+    assert "QueryGroupQueueButton.IsEnabled = !_groupQueueCommandBusy;" in page
+    assert "finally { _groupQueueReadBusy = false; }" in poll
+
+
+def test_postprocess_group_queue_rejects_pending_mutations_while_suspended() -> None:
+    queue = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.GroupQueue.cs").read_text(encoding="utf-8")
+    editor = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.GroupEditor.cs").read_text(encoding="utf-8")
+    assert 'queue?.Status is "queued" or "running"' in queue
+    assert "EditQueuedGroupButton.IsEnabled = canChangePending" in queue
+    assert "ClearQueuedGroupsButton.IsEnabled = canChangePending" in queue
+    assert "!AcceptsPendingChanges(existing)" in queue
+    assert "!AcceptsPendingChanges(queue)" in editor
+    assert "error.StatusCode == 404 && _queueBookmark is null" in queue
+
+
 def test_postprocess_legend_errors_keep_the_dialog_and_draft() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
     editor = page.split("private async void OnLegendClicked", 1)[1].split("private async void OnManageGroupsClicked", 1)[0]

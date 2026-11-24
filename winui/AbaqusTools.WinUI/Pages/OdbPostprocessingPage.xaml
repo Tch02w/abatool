@@ -290,6 +290,21 @@
                                 <Button x:Name="CancelPostprocessButton" Grid.Column="1" HorizontalAlignment="Stretch" Click="OnCancelPostprocessClicked" Content="停止当前操作" IsEnabled="False" />
                             </Grid>
                             <Button x:Name="RecoverPostprocessButton" HorizontalAlignment="Stretch" Click="OnRecoverPostprocessClicked" Content="查询原操作状态" IsEnabled="False" Visibility="Collapsed" />
+                            <StackPanel x:Name="GroupQueuePanel" Spacing="6" Visibility="Collapsed">
+                                <TextBlock x:Name="GroupQueueSummary" TextWrapping="Wrap" />
+                                <TextBlock x:Name="GroupQueueEditHint" Text="工作区改动用于新任务。已排队组的成员、参数和图例可在“编辑等待组”中修改或同步。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ComboBox x:Name="GroupQueueEntries" Header="提取队列" HorizontalAlignment="Stretch" SelectionChanged="OnGroupQueueSelectionChanged" />
+                                <TextBlock x:Name="GroupQueueDetail" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                <Grid ColumnSpacing="6" RowSpacing="6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <Button x:Name="EditQueuedGroupButton" Content="编辑等待组…" HorizontalAlignment="Stretch" Click="OnEditQueuedGroupClicked" />
+                                    <Button x:Name="ClearQueuedGroupsButton" Grid.Column="1" Content="清空待办" HorizontalAlignment="Stretch" Click="OnClearQueuedGroupsClicked" />
+                                    <Button x:Name="QueryGroupQueueButton" Grid.Row="1" Content="刷新队列状态" HorizontalAlignment="Stretch" Click="OnQueryGroupQueueClicked" />
+                                    <Button x:Name="ResumeGroupQueueButton" Grid.Row="1" Grid.Column="1" Content="继续等待组" HorizontalAlignment="Stretch" Click="OnResumeGroupQueueClicked" />
+                                </Grid>
+                                <Button x:Name="StopGroupQueueButton" Content="停止整个队列…" HorizontalAlignment="Stretch" Click="OnStopGroupQueueClicked" />
+                            </StackPanel>
                             <Button x:Name="CancelCompatibilityButton" HorizontalAlignment="Stretch" Click="OnCancelCompatibilityClicked" Content="取消兼容性检查" IsEnabled="False" Visibility="Collapsed" />
                         </StackPanel>
                     </Border>

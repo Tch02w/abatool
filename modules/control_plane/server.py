@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import threading
 from collections.abc import Callable
@@ -54,6 +55,7 @@ from .odb_merge_operations import (
     OdbMergeRunner,
 )
 from .odb_result_batches import OdbResultBatchManager
+from .postprocess_group_queue import PostprocessGroupQueueManager
 from .odb_result_graphs import OdbResultGraphService
 from .odb_upgrade_drafts import preview_odb_upgrade
 from .odb_upgrade_operations import OdbUpgradeOperationManager
@@ -80,6 +82,7 @@ from .shutdown_protocol import ShutdownProtocol
 LOGGER = logging.getLogger(__name__)
 LOOPBACK_HOST = "127.0.0.1"
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
+POSTPROCESS_GROUP_QUEUES = "/api/v1/odb-postprocess-group-queues"
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,7 @@ class ControlPlaneContext:
     odb_merge_manager: OdbMergeOperationManager
     odb_upgrade_manager: OdbUpgradeOperationManager
     postprocess_manager: PostprocessOperationManager
+    postprocess_group_queue: PostprocessGroupQueueManager
     job_queue_service: JobQueueService
     local_queue_runtime: LocalQueueRuntimeManager
     remote_server_service: RemoteServerService
@@ -107,7 +111,7 @@ class ControlPlaneContext:
         # Retain the v1 route for older clients, but fence every managed worker.
         # Batch -> merge lock order matches batch child submission. No manager
         # may be reserved if any other manager still needs this process.
-        managers = (self.odb_result_batch_manager, self.odb_merge_manager,
+        managers = (self.postprocess_group_queue, self.odb_result_batch_manager, self.odb_merge_manager,
                     self.odb_upgrade_manager, self.local_queue_runtime,
                     self.postprocess_manager, self.operation_manager,
                     self.result_index_manager, self.remote_transfer_manager,
@@ -201,6 +205,16 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/odb-postprocess-operations":
                 self._handle_list_postprocess_operations(target.query, trace_id)
                 return
+            if target.path == POSTPROCESS_GROUP_QUEUES:
+                active = self._parse_active_only(target.query, "后处理分组队列")
+                queues = self.context.postprocess_group_queue.list_snapshots(active_only=active)
+                self._send_json(HTTPStatus.OK, {"schemaVersion": SCHEMA_VERSION, "operations": queues}, trace_id)
+                return
+            if target.path.startswith(POSTPROCESS_GROUP_QUEUES + "/"):
+                queue_id = target.path[len(POSTPROCESS_GROUP_QUEUES) + 1:]
+                if queue_id and "/" not in queue_id:
+                    self._handle_postprocess_group_queue(queue_id, target.query, trace_id)
+                    return
             if target.path == "/api/v1/odb-upgrade-operations":
                 active_only = self._parse_active_only(target.query, "ODB 升级任务")
                 self._send_json(HTTPStatus.OK, {
@@ -483,6 +497,18 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                     trace_id,
                 )
                 return
+            if target.path == POSTPROCESS_GROUP_QUEUES and not target.query:
+                snapshot = self.context.postprocess_group_queue.create(self._read_json_object())
+                self._send_json(HTTPStatus.ACCEPTED, snapshot, trace_id)
+                return
+            if target.path.startswith(POSTPROCESS_GROUP_QUEUES + "/") and not target.query:
+                parts = target.path[len(POSTPROCESS_GROUP_QUEUES) + 1:].split("/")
+                if len(parts) == 2 and all(parts):
+                    snapshot = self.context.postprocess_group_queue.command(
+                        parts[0], parts[1], self._read_json_object()
+                    )
+                    self._send_json(HTTPStatus.OK, snapshot, trace_id)
+                    return
             if target.path == "/api/v1/odb-region-extractions" and not target.query:
                 self._send_json(
                     HTTPStatus.ACCEPTED,
@@ -620,7 +646,10 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "schemaVersion": SCHEMA_VERSION,
             "apiVersion": API_VERSION,
             "status": "ok",
-            "capabilities": ["jobQueue.scanExternalJobs", "job.execution-options-v1", "job.notifications-v1", "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1", "odb.upgrade.history-v1", "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
+            "capabilities": ["jobQueue.scanExternalJobs", "job.execution-options-v1", "job.notifications-v1",
+                             "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1",
+                             "odb.upgrade.history-v1", "odb.postprocess.group-queue-v1",
+                             "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),
             "startedAt": self.context.started_at,
@@ -860,6 +889,20 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
     ) -> None:
         snapshot = self.context.result_index_manager.cancel(operation_id)
         self._send_json(HTTPStatus.ACCEPTED, snapshot, trace_id)
+
+    def _handle_postprocess_group_queue(self, queue_id: str, raw_query: str, trace_id: str) -> None:
+        manager = self.context.postprocess_group_queue
+        if raw_query:
+            query = parse_qs(raw_query, keep_blank_values=True)
+            versions = query.get("afterVersion", [])
+            if (set(query) != {"afterVersion"} or len(versions) != 1
+                    or not re.fullmatch(r"[0-9]{1,19}", versions[0])):
+                raise ApiProblem(400, "INVALID_QUERY", "afterVersion 必须是一个非负整数")
+            changed = manager.get_if_changed(queue_id, int(versions[0]))
+            response = {"schemaVersion": SCHEMA_VERSION, "operation": changed}
+        else:
+            response = manager.get(queue_id)
+        self._send_json(HTTPStatus.OK, response, trace_id)
 
     def _handle_list_result_index_builds(self, raw_query: str, trace_id: str) -> None:
         active_only = self._parse_active_only(raw_query, "结果索引操作列表")
@@ -1346,6 +1389,9 @@ class ControlPlaneRuntime:
             self.descriptor_path.with_name("odb-result-batches.sqlite3"),
             joblist_path=job_queue_service.path,
         )
+        postprocess_group_queue = PostprocessGroupQueueManager(
+            postprocess_manager, self.descriptor_path.with_name("odb-postprocess-group-queues.sqlite3")
+        )
         context = ControlPlaneContext(
             token=self.token,
             instance_id=self.instance_id,
@@ -1356,6 +1402,7 @@ class ControlPlaneRuntime:
             odb_merge_manager=odb_merge_manager,
             odb_upgrade_manager=odb_upgrade_manager,
             postprocess_manager=postprocess_manager,
+            postprocess_group_queue=postprocess_group_queue,
             job_queue_service=job_queue_service,
             local_queue_runtime=local_queue_runtime,
             remote_server_service=remote_server_service,
@@ -1368,6 +1415,7 @@ class ControlPlaneRuntime:
         try:
             self.httpd = ControlPlaneHttpServer((LOOPBACK_HOST, int(port)), context)
         except BaseException:
+            postprocess_group_queue.close()
             odb_result_batch_manager.close()
             remote_job_manager.close()
             remote_transfer_manager.close()
@@ -1399,6 +1447,7 @@ class ControlPlaneRuntime:
             write_descriptor_atomic(self.descriptor_path, descriptor)
         except BaseException:
             self.httpd.server_close()
+            postprocess_group_queue.close()
             odb_result_batch_manager.close()
             remote_job_manager.close()
             remote_transfer_manager.close()
@@ -1471,6 +1520,7 @@ class ControlPlaneRuntime:
                 return
             self._closed = True
             self.httpd.server_close()
+            self.httpd.context.postprocess_group_queue.close()
             self.httpd.context.odb_result_batch_manager.close()
             self.remote_job_manager.close()
             self.remote_transfer_manager.close()

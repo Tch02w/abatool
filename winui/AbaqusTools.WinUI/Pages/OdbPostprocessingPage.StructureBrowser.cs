@@ -10,6 +10,7 @@ public sealed partial class OdbPostprocessingPage
 {
     private async void OnStructureBrowserClicked(object sender, RoutedEventArgs e)
     {
+        if (GroupQueueBlocksOtherOperations) return;
         var rows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
         if (rows.Length != 1 || rows[0].ScanDetails is not { } scan) return;
         var catalog = scan.StructureCatalog;

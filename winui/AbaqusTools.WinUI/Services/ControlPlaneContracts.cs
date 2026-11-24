@@ -337,12 +337,14 @@ public sealed class ControlPlaneException : Exception
         string? code = null,
         string? traceId = null,
         bool retryable = false,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        int? statusCode = null)
         : base(message, innerException)
     {
         Code = code;
         TraceId = traceId;
         Retryable = retryable;
+        StatusCode = statusCode;
     }
 
     public string? Code { get; }
@@ -350,6 +352,7 @@ public sealed class ControlPlaneException : Exception
     public string? TraceId { get; }
 
     public bool Retryable { get; }
+    public int? StatusCode { get; }
 
     public string ToDisplayMessage()
     {

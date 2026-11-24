@@ -57,6 +57,11 @@ class ShutdownProtocol:
     def _snapshot(self, context):
         status = context.prepare_odb_shutdown(reserve=False)
         assert self._lease is not None
+        # The close dialog lists work the user can identify. The safety decision
+        # above includes every child worker, including final cleanup.
+        group_children = {group["childOperationId"] for item in status["operations"]
+                          if item.get("kind") == "odb.postprocess.group-queue"
+                          for group in item.get("groups", ()) if group.get("childOperationId")}
         return {"schemaVersion": 1, "kind": "controlPlane.shutdown",
                 "requestId": self._lease["requestId"], "state": self._lease["state"],
                 "safeToStop": bool(status["safeToStop"] and self._requests == 0),
@@ -65,7 +70,8 @@ class ShutdownProtocol:
                                 "kind": item.get("kind", "operation"),
                                 "name": item.get("jobName") or item.get("phase") or item.get("kind", "后台任务"),
                                 "status": item.get("status", "unknown")}
-                               for item in status["operations"]]}
+                               for item in status["operations"]
+                               if item.get("operationId") not in group_children]}
 
     def prepare(self, context, payload):
         self.validate(payload, fields=("clientRequestId",))
@@ -112,7 +118,7 @@ class ShutdownProtocol:
             # Stop dispatch first; never infer solver ownership from a process name.
             local = context.local_queue_runtime
             local.control({"schemaVersion": 1, "action": "stop"})
-            managers = (context.odb_result_batch_manager, context.odb_merge_manager,
+            managers = (context.postprocess_group_queue, context.odb_result_batch_manager, context.odb_merge_manager,
                         context.odb_upgrade_manager, context.postprocess_manager,
                         context.operation_manager, context.result_index_manager,
                         context.remote_transfer_manager)

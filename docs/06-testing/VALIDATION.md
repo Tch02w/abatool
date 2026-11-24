@@ -2,6 +2,8 @@
 
 ## 2026-11-24 · 最新实际验收
 
+F022 分组取消和续行已用 G 盘已有的 GJB-15 工程 ODB 验证。第一组取消，第二组发布九份 480 × 320 动画，每份为 41 帧、1.64 秒。客户端三组调度、过期命令、缓存结果和条件轮询的接口测试与原生窗口范围分别记录在 [TASK-001](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 新建作业原生进入实际队列后仍为待运行，Core=4，内存 63%。三级链的错误依赖已在窗口内修复，再试自引用被拒绝；已保存的结果图执行了 1 个目标、2 个真实合并阶段，最终 ODB 有 3 步、15 帧。单元集 PICK 的截面结果为 36 行 × 24 列，与既有 CSV 摘要相同。从此结果目录切入 GJB 后再进 GJA，重用结果页时实际读取的范围数从 4 变为 16、20。跨模块自动回归 125 项通过，记录为 `GPTWork/cross-module-regression-20261124-r1/regression-receipt.json`。各页面证据与待验内容见[原生验收表](NATIVE_ACCEPTANCE.md)。
 
 桌面截图和输入已恢复。F021实际通过：未读取的目录草稿在索引/侧栏刷新及内部开关后保持，操作仍指向已加载目录；原生文件夹选择器导出CSV与来源摘要一致；显式读取切换；非法目录清空并禁用旧文件动作；真实Excel中文预览与完整剪贴板；空闲正常关闭。证据GPTWork/native-result-context-desktop-20261119/native-result-acceptance-20261124.json，准确过程见[TASK-001](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)。

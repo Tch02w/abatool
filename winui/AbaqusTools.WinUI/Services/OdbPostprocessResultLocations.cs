@@ -31,6 +31,13 @@ internal sealed class OdbPostprocessResultLocations
         _result = snapshot.Status == "succeeded" ? snapshot.Result : null;
     }
 
+    public void SetGroupQueueResult(string operationId, string root, OdbPostprocessResult? result)
+    {
+        _root = FullPath(root);
+        _requestId = operationId;
+        _result = result;
+    }
+
     public static bool HasPublishedOutputs(OdbPostprocessResult? result) =>
         result is { OutputCount: > 0, ResultRoots.Count: > 0 } && result.Outputs.Count == result.OutputCount;
 

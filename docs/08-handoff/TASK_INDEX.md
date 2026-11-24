@@ -1,5 +1,7 @@
 # 任务索引
 
+F022 分组运行、待办编辑、取消后续行、后台接回及 GJB 工程回执见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。[用户使用说明](../repowiki/postprocessor.md)列出各按钮的作用以及重开时的核对步骤。
+
 11 月 24 日晚的续接入口：[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md) 记录新建作业的保留、清空、保存受阻和实际入队；[TASK-002](ACTIVE_TASKS/TASK-002-migration.md) 记录重启动依赖及发行验证；[批量合并](../03-features/ODB_RESULT_BATCH.md) 记录两阶段原生执行；[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md) 记录实体截面、索引及切换已发布目录。用户最新反馈的浅色行列线以及长名对齐的实测也在 TASK-004。
 
 目录包 `15bec5c3e691`（应用源码 `ee1f79f`）包括对齐后的行列线及本轮后处理和重启动修复。此前的目录包 `7857f4955208` 已实测两表滚动和日志复制，服务器表单、508 条分页和 24 列宽表复制亦有原生记录。

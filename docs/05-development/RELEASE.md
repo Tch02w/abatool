@@ -1,5 +1,7 @@
 # Windows 发布构建（F026）
 
+最新目录包为 `GPTWork/release-win-x64-b4a1453081df/AbaqusTools`，来自干净提交 `b85c24b164d4aea9451a0df6405efdc0a9664cc2`。已核对 1692 个文件的大小与 SHA256，清单摘要为 `abb8226dca228dcd2d5cde9abf8a054cebae8e6b092faa7f5dfb89b589b9a80d`。16 项前端资源齐备，全部 15 项 XBF 与原生验收版一致。冻结后台通过 7 项依赖探针和正式客户端的队列历史回读，恢复出部分完成、已取消及 B 组的已发布路径，活动列表为空，随后空闲退出。详细回执为 `GPTWork/release-group-queue-b85c24b-20261124/verification.json`。[安装候选](INSTALLATION.md)
+
 2026-11-24 从干净提交 `ee1f79f5fa1fb6d3cd66cf783d042a734845c4ba` 生成 `GPTWork/release-win-x64-15bec5c3e691/AbaqusTools`。它包含两张队列表的对齐与浅色行列线、重启动依赖校验、ODB 合并执行修复和已发布结果的目录选择。清单 1691 个文件的大小及 SHA256 全部匹配，清单 SHA256 为 `7b78c1919b9b9f1d454659a74eed6ccb1efb4cadf0843303c57e733478388bf5`。
 
 检查覆盖 19 个 Abaqus worker 和 16 项 WinUI 资源，队列表格和作业队列等 6 项 XBF 与联合开发版相同。C# 客户端实际启动冻结后台、读取资源及队列，验证 GPU/精度预览、入队与复位，空闲退出成功。7 项依赖检查及摘要见 `GPTWork/release-chain-navigation-ee1f79f-20261124/verification.json`。[安装候选](INSTALLATION.md)

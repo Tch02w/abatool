@@ -1,10 +1,8 @@
 # Abaqus Tools
 
-Windows 安装与升级候选已接入：默认按用户安装、保留既有数据，提供开始菜单和标准卸载。使用与限制见[安装说明](docs/05-development/INSTALLATION.md)，实际候选状态见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。原生业务页及无开发环境目标机仍待验收。
-
-用户已确认当前完整候选的顶部空白消失、密度合适及侧栏收起展开正常。侧栏按钮比例、逐级缩进和中文目录说明已纳入新的完整目录与安装候选，包内检查、隔离升级/卸载及有限原生启动/退出通过；完整八页业务仍待验收。准确入口与范围以当前状态为准。
-
 Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台。当前原生前端使用 C#、.NET 10 和 WinUI 3；Python 3.14 控制面复用经过验证的提交、调度、SSH、ODB 与结果处理核心。PySide6 实现暂时保留为兼容与回滚入口，不参与原生页面渲染。
+
+首次使用可从[安装说明](docs/05-development/INSTALLATION.md)和[八个页面的操作手册](docs/repowiki/user-guide.md)开始。队列支持对齐的行列线与保留选区的刷新。后处理支持运行中追加对比组、编辑等待组、取消单组后继续，并能在重开前台时接回队列。各项的工程测试、桌面实测及待验范围见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
 
 ## 功能
 

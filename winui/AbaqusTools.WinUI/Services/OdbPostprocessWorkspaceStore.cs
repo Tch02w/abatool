@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AbaqusTools.WinUI.Services;
 
@@ -9,6 +10,16 @@ public sealed class OdbPostprocessWorkspace
     public int Version { get; set; } = 1;
     public OdbPostprocessOutputOptions Output { get; set; } = new();
     public List<OdbPostprocessSavedRow> Rows { get; set; } = [];
+    [JsonIgnore]
+    public List<string> GroupExecutionOrder { get; set; } = [];
+
+    // An omitted preference keeps existing workspaces' recovery fingerprints valid.
+    [JsonInclude, JsonPropertyName(nameof(GroupExecutionOrder)), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal List<string>? SavedGroupExecutionOrder
+    {
+        get => GroupExecutionOrder.Count == 0 ? null : GroupExecutionOrder;
+        set => GroupExecutionOrder = value ?? throw new JsonException("对比组执行顺序无效。");
+    }
     public Dictionary<string, List<string>> GroupMemberOrder { get; set; } = [];
     public Dictionary<string, Dictionary<string, OdbLegendOverride>> Legends { get; set; } = [];
 }
@@ -78,7 +89,8 @@ public sealed class OdbPostprocessWorkspaceStore(string directory)
     internal static void Validate(OdbPostprocessWorkspace state)
     {
         if (state.Version != 1 || state.Rows is null || state.Legends is null || state.Output is null
-            || state.GroupMemberOrder is null
+            || state.GroupMemberOrder is null || state.GroupExecutionOrder is null
+            || state.GroupExecutionOrder.Any(string.IsNullOrWhiteSpace)
             || state.GroupMemberOrder.Any(pair => pair.Value is null || pair.Value.Any(string.IsNullOrWhiteSpace))
             || state.Rows.Any(row => row is null || string.IsNullOrWhiteSpace(row.Path) || row.Group is null)
             || state.Legends.Any(group => group.Value is null || group.Value.Any(field => field.Value is null)))

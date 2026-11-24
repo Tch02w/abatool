@@ -281,7 +281,7 @@ class RemoteServerService:
                 )
             return deepcopy(self._snapshot_locked())
 
-    def browse(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def browse(self, payload: Mapping[str, Any], *, expected_profile: dict | None = None) -> dict[str, Any]:
         if payload.get("schemaVersion") != SCHEMA_VERSION:
             raise ApiProblem(
                 400,
@@ -297,6 +297,10 @@ class RemoteServerService:
                 details={"fields": unknown},
             )
         with self._communication("正在读取远端目录"):
+            try:
+                self._verify_profile_locked(expected_profile)
+            except RemoteConnectionError as exc:
+                raise ApiProblem(409, "REMOTE_CONNECTION_CHANGED", str(exc)) from exc
             try:
                 result = self._manager.list_directory(_text(payload, "path"))
             except RemoteConnectionError as exc:
@@ -363,7 +367,12 @@ class RemoteServerService:
     def _verify_profile_locked(self, expected):
         if expected is not None and (self._connection_status != "connected" or self._manager.connected_profile is None
                 or server_identity(self._manager.connected_profile) != expected):
-            raise RemoteConnectionError("请重新连接本任务原服务器、指纹及计算目录；未向其他服务器发送命令。")
+            if not expected.get("host") or not expected.get("port"):
+                raise RemoteConnectionError("记录缺少原服务器的地址或端口，无法核对连接。")
+            raise RemoteConnectionError(
+                f"请在计算资源中连接原服务器 {expected['host']}:{expected['port']}，"
+                "核对登录用户、主机指纹和计算目录后重试。"
+            )
 
     def requested_identity(self, payload):
         with self._lock:

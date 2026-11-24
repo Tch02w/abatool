@@ -23,7 +23,8 @@ public sealed record OdbScopedRunPlan(OdbFileRow[] Rows, IReadOnlyList<OdbExecut
 
     public static OdbScopedRunPlan Resolve(OdbRunScope? scope, IEnumerable<OdbFileRow> selected,
         IReadOnlyCollection<OdbFileRow> workspace, string inputRoot, string? discoveredRoot, string? activeQueueRoot,
-        IReadOnlyList<OdbPostprocessGroupQueueItem>? queuedGroups = null, bool workspaceReadable = true)
+        IReadOnlyList<OdbPostprocessGroupQueueItem>? queuedGroups = null, bool workspaceReadable = true,
+        IReadOnlyList<string>? groupExecutionOrder = null)
     {
         static OdbScopedRunPlan Block(string message) => new([], [], message);
         var comparer = StringComparer.OrdinalIgnoreCase;
@@ -64,6 +65,7 @@ public sealed record OdbScopedRunPlan(OdbFileRow[] Rows, IReadOnlyList<OdbExecut
             default:
                 return Block("请重新选择本次运行范围。");
         }
+        string? skipMessage = null;
         if (activeQueueRoot is not null && queuedGroups is { Count: > 0 })
         {
             var liveKeys = queuedGroups.Where(entry => entry.Status is "queued" or "running" or "cancelling")
@@ -82,23 +84,27 @@ public sealed record OdbScopedRunPlan(OdbFileRow[] Rows, IReadOnlyList<OdbExecut
             }
             if (skipped.Count > 0)
             {
-                static string Labels(List<OdbExecutionGroup> items)
-                {
-                    var first = string.Join("、", items.Take(3).Select(group => group.Standalone
-                        ? $"独立模型“{group.Members[0].RelativePath}”" : $"对比组“{group.Name}”"));
-                    return items.Count > 3 ? $"{first}等 {items.Count} 项" : first;
-                }
-                var skipMessage = $"已在队列中，跳过{Labels(skipped)}。";
+                skipMessage = $"已在队列中，跳过{Labels(skipped)}。";
                 if (pending.Count == 0) return Block(skipMessage + "待运行组可通过“编辑等待组”修改成员。");
-                summary = $"将追加{Labels(pending)}。{skipMessage}";
                 groups = pending;
                 var paths = pending.SelectMany(group => group.Members).Select(row => row.Path).ToHashSet(comparer);
                 rows = rows.Where(row => paths.Contains(row.Path)).ToArray();
             }
         }
+        if (scope.Kind == OdbRunScopeKind.Selection && groupExecutionOrder is { Count: > 0 })
+            groups = OdbComparisonGroups.OrderExecutionGroups(groups, groupExecutionOrder);
+        if (skipMessage is not null) summary = $"将追加{Labels(groups)}。{skipMessage}";
+        else if (groups.Count > 1) summary += $" 执行顺序为{Labels(groups)}。";
         var unready = rows.FirstOrDefault(row => !row.HasPostprocessConfiguration || row.PostprocessJob is null);
         return unready is null ? new(rows, groups, summary)
             : Block($"“{unready.RelativePath}”尚未就绪，请读取结构并检查提取参数。");
+    }
+
+    private static string Labels(IReadOnlyList<OdbExecutionGroup> items)
+    {
+        var first = string.Join("、", items.Take(3).Select(group => group.Standalone
+            ? $"独立模型“{group.Members[0].RelativePath}”" : $"对比组“{group.Name}”"));
+        return items.Count > 3 ? $"{first}等 {items.Count} 项" : first;
     }
 
     private static string? QueueKey(OdbExecutionGroup group)

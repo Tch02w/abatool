@@ -578,7 +578,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     public async Task<RemoteDirectoryListing> BrowseRemoteDirectoryAsync(
         string path = "",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? sourceOperationId = null)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -589,7 +590,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             descriptor,
             HttpMethod.Post,
             "/api/v1/remote-file-listings",
-            new RemoteDirectoryListingRequest { Path = path.Trim() },
+            new RemoteDirectoryListingRequest { Path = path.Trim(), SourceOperationId = sourceOperationId },
             "远端目录浏览",
             effectiveSource.Token);
         if (response.SchemaVersion != 1
@@ -610,7 +611,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string source,
         string destination,
         bool overwrite,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? sourceOperationId = null)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -623,6 +625,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             "/api/v1/remote-transfers",
             new RemoteTransferRequest
             {
+                SourceOperationId = sourceOperationId,
                 ClientRequestId = Guid.NewGuid().ToString("N"),
                 Direction = direction,
                 Source = source.Trim(),

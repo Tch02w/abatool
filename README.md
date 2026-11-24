@@ -6,6 +6,8 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 ## 功能
 
+要让某个工况先出结果，在「ODB 后处理 → 选择与对比组 → 对比组执行顺序」里将对应组上移。运行前可以展开完整顺序，正在等待和执行的任务仍按入队时的顺序继续。[分组操作](docs/repowiki/postprocessor.md)
+
 在「ODB 后处理」选中多个已读取结构的模型，点「对照提取参数…」可并排查看各自的分析步、集合、配筋和帧设置。可以逐个修改，或勾选少数字段复制到其余模型，保存前会标出哪些模型需要修正。「新建对比组…」支持先建空组，稍后再添加模型。[后处理使用说明](docs/repowiki/postprocessor.md)
 
 以下是功能范围，不代表全部迁移验收已经完成。当前后处理可运行核心与剩余缺口见 [交接状态](docs/08-handoff/CURRENT_STATUS.md)；后续开发先从 [功能定位索引](docs/03-features/FUNCTION_INDEX.md) 找到代码与测试。
@@ -31,6 +33,8 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 - 关闭前保存页面草稿，支持后台继续、停止后关闭或取消；联合检查受管任务及线程收尾，未知状态保留后台；[退出与恢复边界](docs/03-features/UI_INTERACTION.md)。
 
 ## 原生工作台
+
+GitHub 仓库提供源码和使用手册。交接文档中以 `GPTWork/` 开头的是开发机上的构建或验证目录。首次使用时，拿到完整 Windows 目录包可直接运行其中的 `AbaqusTools.WinUI.exe`，拿到安装程序则按安装说明操作。只有源码时，可使用下方构建命令。[安装说明](docs/05-development/INSTALLATION.md)
 
 八个页面共用适度紧凑的留白，侧栏右上角折线按钮或Ctrl+B收起/展开；收起后保留小型展开入口，内容随当前页面显示相关目录、作业或结果。实际候选与待验范围见当前状态。
 

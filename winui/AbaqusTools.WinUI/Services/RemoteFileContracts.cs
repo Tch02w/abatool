@@ -60,6 +60,9 @@ public sealed class RemoteDirectoryEntry
 
 public sealed class RemoteDirectoryListingRequest
 {
+    [JsonPropertyName("sourceOperationId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceOperationId { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = 1;
 
@@ -69,6 +72,9 @@ public sealed class RemoteDirectoryListingRequest
 
 public sealed class RemoteTransferRequest
 {
+    [JsonPropertyName("sourceOperationId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceOperationId { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = 1;
 
@@ -138,6 +144,9 @@ public sealed class RemoteTransferListSnapshot
 
 public sealed class RemoteTransferOperationRequest
 {
+    [JsonPropertyName("sourceOperationId")]
+    public string? SourceOperationId { get; init; }
+
     [JsonPropertyName("clientRequestId")]
     public string ClientRequestId { get; init; } = string.Empty;
 

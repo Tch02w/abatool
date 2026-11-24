@@ -43,6 +43,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private List<OdbRunScope>? _runScopeChoices;
     private readonly OdbPostprocessResultLocations _resultLocations = new();
     private readonly Dictionary<string, List<string>> _groupMemberOrder = new(StringComparer.OrdinalIgnoreCase);
+    private List<string> _groupExecutionOrder = [];
     private readonly OdbPostprocessWorkspaceStore _workspaceStore = new(Path.Combine(
         WorkbenchProfile.Current.StateDirectory, "postprocess-workspaces"));
     private readonly HashSet<string> _unreadableWorkspaces = new(StringComparer.OrdinalIgnoreCase);
@@ -486,6 +487,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             if (!sameRoot)
             {
                 _groupMemberOrder.Clear();
+                _groupExecutionOrder = saved?.GroupExecutionOrder.ToList() ?? [];
                 if (saved is not null)
                     foreach (var pair in saved.GroupMemberOrder) _groupMemberOrder[pair.Key] = pair.Value;
             }
@@ -1057,7 +1059,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         {
             var replacement = result == ContentDialogResult.Secondary ? null : nameBox.Text;
             if (!TrySaveWorkspaceChange(next => OdbComparisonGroups.ChangeGroup(next, oldName, replacement))) return;
-            OdbComparisonGroups.ChangeGroup(_odbItems, oldName, replacement, _legendOverridesByGroup, _groupMemberOrder);
+            OdbComparisonGroups.ChangeGroup(_odbItems, oldName, replacement, _legendOverridesByGroup, _groupMemberOrder, _groupExecutionOrder);
             GroupNameTextBox.Text = result == ContentDialogResult.Secondary ? "" : nameBox.Text.Trim();
             UpdateExplorer();
             RefreshInteractionState();
@@ -1380,7 +1382,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private OdbScopedRunPlan ResolveRunScope(IEnumerable<OdbFileRow> selectedRows) => OdbScopedRunPlan.Resolve(
         RunScopeComboBox.SelectedItem as OdbRunScope, selectedRows, _odbItems, RootTextBox.Text, _lastDiscoveryRoot,
         _groupQueue is { IsTerminal: false } queue ? queue.Root : null, _groupQueue?.Groups,
-        _lastDiscoveryRoot is null || !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot)));
+        _lastDiscoveryRoot is null || !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot)), _groupExecutionOrder);
 
     private OdbPostprocessRunCreateRequest? BuildScopedQueueRequest()
     {
@@ -1944,6 +1946,10 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         GroupOrderButton.IsEnabled = idle && _odbItems.Any(row => ParseGroupNames(row.ComparisonGroup).Length > 0);
         CreateGroupsButton.IsEnabled = idle && _lastDiscoveryRoot is not null
             && !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot));
+        GroupExecutionOrderButton.IsEnabled = CreateGroupsButton.IsEnabled
+            && string.Equals(OdbPostprocessResultLocations.FullPath(RootTextBox.Text),
+                OdbPostprocessResultLocations.FullPath(_lastDiscoveryRoot), StringComparison.OrdinalIgnoreCase)
+            && _runScopeChoices?.Where(scope => scope.Kind == OdbRunScopeKind.NamedGroup).Skip(1).Any() == true;
         ManageGroupsButton.IsEnabled = CreateGroupsButton.IsEnabled
             && (GroupOrderButton.IsEnabled || _groupMemberOrder.Count != 0 || _legendOverridesByGroup.Count != 0);
         DiscoverButton.IsEnabled = canStartOtherOperation;
@@ -1972,6 +1978,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             && selectedRows.All(row => row.ScanDetails is { Error.Length: 0 } && row.PostprocessJob is not null);
         var runScope = ResolveRunScope(selectedRows);
         RunScopePreviewText.Text = runScope.Summary;
+        RunOrderPreviewButton.Visibility = runScope.Groups.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         RunScopeComboBox.IsEnabled = idle;
         RunPostprocessButton.IsEnabled = idle && runScope.CanRun;
         OpenResultsButton.IsEnabled = !_discoveryBusy && !_postprocessBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);

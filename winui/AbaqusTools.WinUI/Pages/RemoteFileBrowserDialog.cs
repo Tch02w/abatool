@@ -10,6 +10,7 @@ public enum RemoteSelectionMode
 {
     File,
     Folder,
+    Browse,
 }
 
 public sealed record RemoteFileSelection(string Path, bool IsDirectory);
@@ -17,6 +18,7 @@ public sealed record RemoteFileSelection(string Path, bool IsDirectory);
 public sealed class RemoteFileBrowserDialog
 {
     private readonly RemoteSelectionMode _mode;
+    private readonly string? _sourceOperationId;
     private readonly ContentDialog _dialog;
     private readonly TextBox _pathBox;
     private readonly ListView _list;
@@ -25,17 +27,20 @@ public sealed class RemoteFileBrowserDialog
     private readonly InfoBar _infoBar;
     private readonly ObservableCollection<RemoteDirectoryEntry> _entries = [];
     private string _parentPath = string.Empty;
+    private string? _retryPath;
     private bool _busy;
 
     public RemoteFileBrowserDialog(
         XamlRoot xamlRoot,
         RemoteSelectionMode mode,
-        string title)
+        string title,
+        string? sourceOperationId = null)
     {
         _mode = mode;
+        _sourceOperationId = sourceOperationId;
         _pathBox = new TextBox { IsReadOnly = true, PlaceholderText = "服务器目录" };
         _upButton = new Button { Content = "上一级", IsEnabled = false };
-        _openButton = new Button { Content = "打开", IsEnabled = false };
+        _openButton = new Button { Content = "进入", IsEnabled = false };
         _list = new ListView
         {
             ItemsSource = _entries,
@@ -44,10 +49,6 @@ public sealed class RemoteFileBrowserDialog
             MaxHeight = 500,
         };
         _infoBar = new InfoBar { IsOpen = false, IsClosable = true };
-        _list.SelectionChanged += (_, _) =>
-        {
-            _openButton.IsEnabled = !_busy && _list.SelectedItem is not null;
-        };
         _list.DoubleTapped += OnListDoubleTapped;
         _upButton.Click += OnUpClicked;
         _openButton.Click += OnOpenClicked;
@@ -62,15 +63,18 @@ public sealed class RemoteFileBrowserDialog
         Grid.SetColumn(_openButton, 2);
         header.Children.Add(_openButton);
 
-        var panel = new StackPanel { Spacing = 10, Width = 720 };
+        var panel = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Stretch };
         panel.Children.Add(_infoBar);
         panel.Children.Add(header);
         panel.Children.Add(_list);
         panel.Children.Add(new TextBlock
         {
-            Text = mode == RemoteSelectionMode.File
-                ? "双击文件夹可进入；选择文件后确认。"
-                : "双击文件夹可进入；确认时选择当前目录。",
+            Text = mode switch
+            {
+                RemoteSelectionMode.File => "双击进入文件夹，选择文件后确认。",
+                RemoteSelectionMode.Folder => "双击进入文件夹，确认时选择当前目录。",
+                _ => "双击文件夹查看内容。",
+            },
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                 "TextFillColorSecondaryBrush"],
         });
@@ -80,21 +84,24 @@ public sealed class RemoteFileBrowserDialog
             XamlRoot = xamlRoot,
             Title = title,
             Content = panel,
-            PrimaryButtonText = mode == RemoteSelectionMode.File ? "选择文件" : "选择当前目录",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary,
+            PrimaryButtonText = mode switch
+            {
+                RemoteSelectionMode.File => "选择文件",
+                RemoteSelectionMode.Folder => "选择当前目录",
+                _ => "",
+            },
+            CloseButtonText = mode == RemoteSelectionMode.Browse ? "关闭" : "取消",
+            DefaultButton = mode == RemoteSelectionMode.Browse ? ContentDialogButton.Close : ContentDialogButton.Primary,
         };
         _dialog.Closing += OnDialogClosing;
+        _list.SelectionChanged += (_, _) => SetControlsEnabled(!_busy);
     }
 
     public RemoteFileSelection? Selection { get; private set; }
 
     public async Task<RemoteFileSelection?> ShowAsync(string initialPath = "")
     {
-        if (!await NavigateAsync(initialPath))
-        {
-            return null;
-        }
+        await NavigateAsync(initialPath);
         var result = await _dialog.ShowAsync();
         return result == ContentDialogResult.Primary ? Selection : null;
     }
@@ -129,13 +136,13 @@ public sealed class RemoteFileBrowserDialog
 
     private async void OnOpenClicked(object sender, RoutedEventArgs e)
     {
-        if (_list.SelectedItem is RemoteDirectoryEntry { IsDirectory: true } directory)
+        if (_retryPath is { } path)
+        {
+            await NavigateAsync(path);
+        }
+        else if (_list.SelectedItem is RemoteDirectoryEntry { IsDirectory: true } directory)
         {
             await NavigateAsync(directory.Path);
-        }
-        else if (_list.SelectedItem is RemoteDirectoryEntry { IsDirectory: false })
-        {
-            _dialog.IsPrimaryButtonEnabled = true;
         }
     }
 
@@ -147,18 +154,19 @@ public sealed class RemoteFileBrowserDialog
         }
     }
 
-    private async Task<bool> NavigateAsync(string path)
+    private async Task NavigateAsync(string path)
     {
         if (_busy)
         {
-            return false;
+            return;
         }
         _busy = true;
         SetControlsEnabled(false);
         _infoBar.IsOpen = false;
         try
         {
-            var listing = await App.Current.ControlPlane.BrowseRemoteDirectoryAsync(path);
+            var listing = await App.Current.ControlPlane.BrowseRemoteDirectoryAsync(path, sourceOperationId: _sourceOperationId);
+            _retryPath = null;
             _pathBox.Text = listing.Path;
             _parentPath = listing.ParentPath;
             _entries.Clear();
@@ -167,12 +175,14 @@ public sealed class RemoteFileBrowserDialog
                 _entries.Add(entry);
             }
             _list.SelectedItem = null;
-            return true;
         }
         catch (Exception exception)
         {
+            _retryPath = path;
+            _entries.Clear();
+            _pathBox.Text = "";
+            _parentPath = "";
             ShowError(exception.Message);
-            return false;
         }
         finally
         {
@@ -184,9 +194,15 @@ public sealed class RemoteFileBrowserDialog
     private void SetControlsEnabled(bool enabled)
     {
         _upButton.IsEnabled = enabled && !string.IsNullOrWhiteSpace(_parentPath);
-        _openButton.IsEnabled = enabled && _list.SelectedItem is not null;
+        _openButton.Content = _retryPath is null ? "进入" : "重试";
+        _openButton.IsEnabled = enabled && (_retryPath is not null || _list.SelectedItem is RemoteDirectoryEntry { IsDirectory: true });
         _list.IsEnabled = enabled;
-        _dialog.IsPrimaryButtonEnabled = enabled;
+        _dialog.IsPrimaryButtonEnabled = enabled && (_mode switch
+        {
+            RemoteSelectionMode.Folder => !string.IsNullOrEmpty(_pathBox.Text),
+            RemoteSelectionMode.File => _list.SelectedItem is RemoteDirectoryEntry { IsDirectory: false },
+            _ => false,
+        });
     }
 
     private void ShowError(string message)

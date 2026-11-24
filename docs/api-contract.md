@@ -4,6 +4,10 @@
 
 ## 启动与就绪
 
+### 历史远端作业输出（F005/F009/F010）
+
+`POST /api/v1/remote-file-listings` 和下载方向的 `POST /api/v1/remote-transfers` 接受可选 `sourceOperationId`，为远端作业的 32 位小写十六进制编号。普通资源页省略此字段。提供编号时从持久作业记录解析对应的服务器身份，作业下载还要匹配已登记的输出路径。目录请求遇到不同连接返回 409 `REMOTE_CONNECTION_CHANGED`。已受理的下载在执行文件操作前核对连接，错服时状态为 failed，保留目标文件。编号加入传输幂等签名并随该任务的 request 返回。未知作业返回 404，错误编号、未登记的输出和以作业身份上传均返回 400。
+
 ### 外部扫描响应补充（2026-11-18，F004/F005）
 
 队列快照新增 `externalScanActive` 布尔字段，旧后台缺省 false。包括 `GET /api/v1/job-queues`、`GET /api/v1/local-queue-runtime` 的 queue 及队列命令响应的 snapshot；扫描期间读取最近保存状态。`scanExternalJobs` 命令保持同步返回最终结果，同一后台重复手动扫描返回 409 `EXTERNAL_SCAN_BUSY`；关闭后拒绝开始/合并，返回 503 `CONTROL_PLANE_SHUTTING_DOWN`。

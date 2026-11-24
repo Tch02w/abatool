@@ -67,7 +67,11 @@ from .postprocessing import (
 )
 from .remote_jobs import RemoteJobOperationManager, RemoteJobRequest, preview_remote_job
 from .remote_servers import RemoteManager, RemoteServerService
-from .remote_transfers import RemoteTransferOperationManager, RemoteTransferRequest
+from .remote_transfers import (
+    RemoteTransferOperationManager,
+    RemoteTransferRequest,
+    source_operation_id,
+)
 from .resources import capture_local_resource
 from .restart_chains import read_restart_chains
 from .restart_result_plans import build_restart_result_plan
@@ -405,9 +409,15 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 self._handle_remote_server_command(trace_id)
                 return
             if target.path == "/api/v1/remote-file-listings" and not target.query:
+                payload = self._read_json_object()
+                job_id = source_operation_id(payload)
+                identity = None
+                if job_id is not None:
+                    identity = self.context.remote_job_manager.file_access_identity(job_id)
+                    del payload["sourceOperationId"]
                 self._send_json(
                     HTTPStatus.OK,
-                    self.context.remote_server_service.browse(self._read_json_object()),
+                    self.context.remote_server_service.browse(payload, expected_profile=identity),
                     trace_id,
                 )
                 return
@@ -423,9 +433,12 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/remote-transfers" and not target.query:
                 request = RemoteTransferRequest.from_payload(self._read_json_object())
+                identity = None
+                if request.source_operation_id is not None:
+                    identity = self.context.remote_job_manager.file_access_identity(request.source_operation_id, request.source)
                 self._send_json(
                     HTTPStatus.ACCEPTED,
-                    self.context.remote_transfer_manager.create(request),
+                    self.context.remote_transfer_manager.create(request, expected_profile=identity),
                     trace_id,
                 )
                 return

@@ -77,6 +77,7 @@ public sealed partial class OdbPostprocessingPage
         {
             Output = output,
             GroupMemberOrder = _groupMemberOrder.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparer.OrdinalIgnoreCase),
+            GroupExecutionOrder = [.. _groupExecutionOrder],
             Rows = _odbItems.Select(row => new OdbPostprocessSavedRow { Path = row.Path, Group = row.ComparisonGroup,
                 Selected = selection.Contains(row), Draft = row.PostprocessJob?.Clone() }).ToList(),
             Legends = _legendOverridesByGroup.ToDictionary(pair => pair.Key, pair => pair.Value.ToDictionary(), StringComparer.OrdinalIgnoreCase),
@@ -166,6 +167,7 @@ public sealed partial class OdbPostprocessingPage
         RestoreOutputOptions(workspace.Output);
         RestoreInputs(OutputDraftFields(), inputs);
         _groupMemberOrder.Clear();
+        _groupExecutionOrder = [.. workspace.GroupExecutionOrder];
         foreach (var pair in workspace.GroupMemberOrder) _groupMemberOrder[pair.Key] = pair.Value.ToList();
         _legendOverridesByGroup.Clear();
         foreach (var pair in workspace.Legends) _legendOverridesByGroup[pair.Key] = pair.Value.ToDictionary();

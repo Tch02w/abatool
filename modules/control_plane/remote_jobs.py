@@ -349,6 +349,18 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
             self._check_history()
             return self._snapshot_locked(self._require_locked(operation_id))
 
+    def file_access_identity(self, operation_id: str, output_path: str | None = None) -> dict:
+        with self._lock:
+            self._check_history()
+            operation = self._require_locked(operation_id)
+            if not operation.server_identity or not operation.work_directory:
+                raise ApiProblem(409, "REMOTE_JOB_WORKSPACE_UNAVAILABLE", "作业记录缺少原服务器或工作目录。")
+            if output_path is not None:
+                recorded = {ntpath.normcase(path) for path in operation.files.values()}
+                if ntpath.normcase(output_path) not in recorded:
+                    raise ApiProblem(400, "REMOTE_JOB_OUTPUT_UNKNOWN", "所选文件未登记在该作业的输出记录中。")
+            return dict(operation.server_identity)
+
     def list_snapshots(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             self._check_history()

@@ -1,5 +1,7 @@
 # 任务索引
 
+F022 组间执行顺序的设置、草稿和入队顺序归入 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F005/F009/F010 历史作业的原服务器归属、目录浏览与输出下载归入 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+
 11 月 25 日的 Windows x64 候选取自 `1fc22fd`。F004 的亮暗主题表格截图与 40 行滚动验收见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 的目录包、同负载安装升级及卸载 8 项实测见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 F013 手工合并在真实 restartJoin 运行期间取消，确认无半成品、源文件完整。停止按钮的受理前状态及全量测试记录见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。

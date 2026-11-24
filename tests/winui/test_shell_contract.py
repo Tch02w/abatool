@@ -933,6 +933,27 @@ def test_postprocess_execution_uses_isolated_group_identity() -> None:
     assert "ManageGroupsButton.IsEnabled = CreateGroupsButton.IsEnabled" in page
 
 
+def test_group_execution_order_uses_the_saved_workspace_and_the_actual_run_plan() -> None:
+    pages = WINUI_ROOT / "Pages"
+    xaml = (pages / "OdbPostprocessingPage.xaml").read_text(encoding="utf-8")
+    page = (pages / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    editor = (pages / "OdbPostprocessingPage.GroupExecutionOrder.cs").read_text(encoding="utf-8")
+    drafts = (pages / "OdbPostprocessingPage.Drafts.cs").read_text(encoding="utf-8")
+    for event in ("OnGroupOrderClicked", "OnGroupExecutionOrderClicked", "OnRunOrderPreviewClicked"):
+        assert f'Click="{event}"' in xaml
+    assert "RunScopePreviewText.Text = runScope.Summary;" in page
+    assert "BuildQueueRequest(plan.Rows, plan.Groups)" in page
+    preview = editor.split("private async void OnRunOrderPreviewClicked", 1)[1]
+    assert "ResolveRunScope(" in preview and "plan.Groups.Select(" in preview
+    assert "saved?.GroupExecutionOrder.ToList()" in page
+    assert "GroupExecutionOrder = [.. _groupExecutionOrder]" in drafts
+    assert "_groupExecutionOrder = [.. workspace.GroupExecutionOrder]" in drafts
+    assert "ShowRecoverableDialogAsync" in editor and "CompleteDialogDraftAsync" in editor
+    assert editor.index("click.Cancel = true;") < editor.index("TrySaveWorkspaceChange(")
+    assert editor.index("TrySaveWorkspaceChange(") < editor.index("_groupExecutionOrder = nextOrder;")
+    assert editor.index("_groupExecutionOrder = nextOrder;") < editor.index("click.Cancel = false;")
+
+
 def test_odb_merge_page_uses_native_pickers_and_safe_plan_preview() -> None:
     host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
         encoding="utf-8"
@@ -991,3 +1012,13 @@ def test_odb_merge_page_executes_tracks_cancels_and_recovers_operations() -> Non
     assert "_activeOperationId ??= snapshot.OperationId" not in page
     assert 'x:Name="MergeOperationLogTextBox"' in xaml
     assert "AbaqusCommandTextBox" not in xaml
+
+
+def test_overview_directory_and_output_download_identify_the_selected_remote_job():
+    page = (WINUI_ROOT / "Pages" / "JobOverviewPage.xaml.cs").read_text(encoding="utf-8")
+    browser = (WINUI_ROOT / "Pages" / "RemoteFileBrowserDialog.cs").read_text(encoding="utf-8")
+    directory = page.split("private async void OnOpenDirectoryClicked", 1)[1].split("var currentJob", 1)[0]
+    assert "RemoteSelectionMode.Browse" in directory and "remote.OperationId" in directory
+    assert "DownloadRemoteOutputAsync(remote.OperationId, remotePath)" in page
+    assert "sourceOperationId: sourceOperationId" in page
+    assert "BrowseRemoteDirectoryAsync(path, sourceOperationId: _sourceOperationId)" in browser

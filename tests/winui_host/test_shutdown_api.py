@@ -13,7 +13,38 @@ from tests.control_plane.test_api import (
 )
 from tests.control_plane.test_local_queue_runtime_api import wait_until
 from tests.control_plane.test_postprocessing_api import _scan_payload, _settings
+from tests.control_plane.test_remote_job_output_access import OutputServers, post
+from tests.control_plane.test_remote_job_recovery import (
+    create,
+    request_for,
+    view,
+    wait_for,
+)
+from tests.control_plane.test_remote_servers_api import command, profile_payload
 from tests.control_plane.test_remote_transfers_api import FakeRemoteManager, _connect
+
+
+def test_native_client_downloads_history_output_from_its_own_server(tmp_path, close_client):
+    remote = OutputServers()
+    with running_control_plane(tmp_path, remote_manager=remote, server_profiles_path=tmp_path / "profiles.json") as runtime:
+        _connect(runtime)
+        original_host = remote.connected_profile.host
+        job = create(runtime, request_for(tmp_path / "case.inp"))
+        wait_for(lambda: view(runtime, job)["status"] == "succeeded")
+        alternate = {**profile_payload(), "host": "10.0.0.99", "hostFingerprint": "SHA256:test-server"}
+        assert post(runtime, "remote-server-commands", command("connect", profile=alternate))[0] == 200
+        destination = tmp_path / "from-client.sta"
+        destination.write_bytes(b"previous")
+        def exercise(mode):
+            run = subprocess.run(["dotnet", str(close_client), "--remote-output-api", str(runtime.descriptor_path),
+                                  job, str(destination), mode], capture_output=True, timeout=35, check=False)
+            assert run.returncode == 0, (run.stdout, run.stderr)
+        exercise("alternate")
+        assert remote.reads == [("list", alternate["host"])] and destination.read_bytes() == b"previous"
+        _connect(runtime)
+        exercise("original")
+        assert remote.reads[1:] == [("list", original_host), ("list", original_host), ("download", original_host)]
+        assert destination.read_text("ascii") == original_host
 
 
 def test_remote_observation_separates_readiness_timeout_and_cancellation(close_client):

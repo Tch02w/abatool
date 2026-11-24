@@ -621,8 +621,9 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         {
             var browser = new RemoteFileBrowserDialog(
                 XamlRoot,
-                RemoteSelectionMode.File,
-                $"{remote.Request.JobName} · 服务器工作目录");
+                RemoteSelectionMode.Browse,
+                $"{remote.Request.JobName} · 服务器工作目录",
+                remote.OperationId);
             await browser.ShowAsync(remote.WorkDirectory);
             return;
         }
@@ -659,7 +660,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             var key = extension.TrimStart('.');
             if (remote.Files.TryGetValue(key, out var remotePath))
             {
-                await DownloadRemoteOutputAsync(remotePath);
+                await DownloadRemoteOutputAsync(remote.OperationId, remotePath);
             }
             return;
         }
@@ -689,7 +690,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task DownloadRemoteOutputAsync(string remotePath)
+    private async Task DownloadRemoteOutputAsync(string sourceOperationId, string remotePath)
     {
         var view = _jobViewRevision;
         var extension = Path.GetExtension(remotePath);
@@ -715,7 +716,8 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 "download",
                 remotePath,
                 destination.Path,
-                overwrite: true);
+                overwrite: true,
+                sourceOperationId: sourceOperationId);
             var terminal = await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
                 operation.OperationId,
                 snapshot =>

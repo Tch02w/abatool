@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -36,6 +37,16 @@ from .shutdown_guard import OperationShutdownGuard
 TRANSFER_DIRECTIONS = frozenset({"upload", "download"})
 
 
+def source_operation_id(payload: Mapping[str, Any]) -> str | None:
+    """Only omission selects the unscoped resource browser."""
+    if "sourceOperationId" not in payload:
+        return None
+    value = payload["sourceOperationId"]
+    if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value):
+        raise ApiProblem(400, "INVALID_SOURCE_OPERATION_ID", "远端作业标识无效。")
+    return value
+
+
 @dataclass(frozen=True)
 class RemoteTransferRequest:
     client_request_id: str
@@ -43,6 +54,7 @@ class RemoteTransferRequest:
     source: str
     destination: str
     overwrite: bool
+    source_operation_id: str | None = None
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> RemoteTransferRequest:
@@ -54,7 +66,7 @@ class RemoteTransferRequest:
             "destination",
             "overwrite",
         }
-        unknown = sorted(set(payload) - allowed)
+        unknown = sorted(set(payload) - allowed - {"sourceOperationId"})
         missing = sorted(allowed - set(payload))
         if unknown:
             raise ApiProblem(
@@ -93,6 +105,9 @@ class RemoteTransferRequest:
         direction = text("direction")
         if direction not in TRANSFER_DIRECTIONS:
             raise ApiProblem(400, "INVALID_TRANSFER_DIRECTION", "文件传输方向无效")
+        job_id = source_operation_id(payload)
+        if job_id is not None and direction != "download":
+            raise ApiProblem(400, "INVALID_TRANSFER_DIRECTION", "作业输出仅支持下载。")
         overwrite = payload.get("overwrite")
         if not isinstance(overwrite, bool):
             raise ApiProblem(400, "INVALID_TRANSFER_FIELD", "overwrite 必须是布尔值")
@@ -102,16 +117,18 @@ class RemoteTransferRequest:
             text("source"),
             text("destination"),
             overwrite,
+            job_id,
         )
 
     @property
-    def signature(self) -> tuple[str, str, str, bool]:
-        return self.direction, self.source, self.destination, self.overwrite
+    def signature(self) -> tuple[str, str, str, bool, str | None]:
+        return self.direction, self.source, self.destination, self.overwrite, self.source_operation_id
 
 
 @dataclass
 class RemoteTransferOperation:
     request: RemoteTransferRequest
+    expected_profile: dict | None = None
     operation_id: str = field(default_factory=lambda: uuid4().hex)
     status: str = QUEUED
     created_at: str = field(default_factory=utc_now_text)
@@ -140,7 +157,7 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="remote-transfer")
         self._closed = False
 
-    def create(self, request: RemoteTransferRequest) -> dict[str, Any]:
+    def create(self, request: RemoteTransferRequest, *, expected_profile: dict | None = None) -> dict[str, Any]:
         with self._lock:
             if self._closed or self._shutdown_reserved:
                 raise ApiProblem(
@@ -159,7 +176,9 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
                         "clientRequestId 已用于不同的文件传输请求",
                     )
                 return self._snapshot_locked(existing)
-            operation = RemoteTransferOperation(request)
+            if request.source_operation_id is not None and not expected_profile:
+                raise ApiProblem(409, "REMOTE_JOB_WORKSPACE_UNAVAILABLE", "无法核对原作业的服务器身份。")
+            operation = RemoteTransferOperation(request, expected_profile=expected_profile)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id
             self._emit_locked(operation, "remote.transfer.queued")
@@ -240,6 +259,7 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
                 overwrite=operation.request.overwrite,
                 progress=progress,
                 cancel_requested=operation.cancel_event.is_set,
+                expected_profile=operation.expected_profile,
             )
         except RemoteTransferCancelled:
             with self._lock:
@@ -317,6 +337,7 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
                 "source": operation.request.source,
                 "destination": operation.request.destination,
                 "overwrite": operation.request.overwrite,
+                **({"sourceOperationId": operation.request.source_operation_id} if operation.request.source_operation_id else {}),
             },
             "progress": {
                 "completedBytes": operation.completed_bytes,

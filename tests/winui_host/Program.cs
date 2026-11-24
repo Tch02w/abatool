@@ -34,6 +34,17 @@ try
         await RemoteObservationChecks.RunApiAsync(args[1], args[2]);
         return 0;
     }
+    if (args.Length == 5 && args[0] == "--remote-output-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        try { await RemoteObservationChecks.RunJobOutputAsync(host, args[2], args[3], args[4] == "original"); }
+        finally { await host.DetachForCloseAsync(); }
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--profile-checks")
     {
         WorkbenchProfileChecks.Run(args[1]);

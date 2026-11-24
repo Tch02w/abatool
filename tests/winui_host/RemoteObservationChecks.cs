@@ -5,6 +5,25 @@ using AbaqusTools.WinUI.Services;
 
 static class RemoteObservationChecks
 {
+    public static async Task RunJobOutputAsync(ControlPlaneHost host, string id, string localFile, bool original)
+    {
+        var job = await host.GetRemoteJobAsync(id);
+        // The unscoped resource browser remains on the current connection.
+        await host.BrowseRemoteDirectoryAsync(job.WorkDirectory);
+        try
+        {
+            await host.BrowseRemoteDirectoryAsync(job.WorkDirectory, sourceOperationId: job.OperationId);
+            if (!original) throw new Exception("The job browser listed the alternate server");
+        }
+        catch (ControlPlaneException error) when (!original && error.Code == "REMOTE_CONNECTION_CHANGED") { }
+        var transfer = await host.StartRemoteTransferAsync("download", job.Files["sta"], localFile,
+            overwrite: true, sourceOperationId: job.OperationId);
+        var result = await host.PollRemoteTransferUntilTerminalAsync(transfer.OperationId);
+        if (result.Request.SourceOperationId != id || result.Status != (original ? "succeeded" : "failed"))
+            throw new Exception("Unexpected output transfer identity or outcome");
+        Console.WriteLine("Remote job output binding verified");
+    }
+
     public static async Task RunApiAsync(string descriptorPath, string operationId)
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(descriptorPath),

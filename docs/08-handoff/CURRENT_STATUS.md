@@ -1,5 +1,7 @@
 # 当前状态与接续点
 
+11 月 25 日，源码已补上对比组之间的执行顺序。原生后处理页两次进程中的 33 项检查，以及生产 HTTP 队列取组顺序已核对。远端历史作业的工作目录和 STA/MSG/DAT 下载已绑定原服务器，两台同路径替身与正式客户端验证通过。[对比组验收](ACTIVE_TASKS/TASK-001-postprocessing.md) · [远端作业验收](ACTIVE_TASKS/TASK-002-migration.md)
+
 F004 候选区和正式队列的表头及内容采用同一套列宽，明暗主题均有细行列线。[原生渲染和滚动验收](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 同负载安装、升级和卸载已通过 8 项检查，16 个应用数据文件在卸载前后内容一致。[安装实测](../05-development/INSTALLATION.md)
 
 F022 的运行范围已经接入工作台。GJA 属于 A、B，GJB 只属于 A 的实页数据验证了只选 B 时只提交 GJA，独立模型使用自身色标，批量则按各组的顺序和图例出图。空工作区的组名、图例、持久化与确认删除已在离屏页面通过。[开发及验收记录](ACTIVE_TASKS/TASK-001-postprocessing.md)

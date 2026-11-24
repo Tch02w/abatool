@@ -12,17 +12,17 @@ public static class OdbComparisonGroups
 
     public static void ChangeGroup(IEnumerable<OdbFileRow> rows, string oldName, string? newName,
         IDictionary<string, IReadOnlyDictionary<string, OdbLegendOverride>> legends,
-        IDictionary<string, List<string>> orders) =>
+        IDictionary<string, List<string>> orders, List<string>? groupExecutionOrder = null) =>
         ChangeGroup(rows, row => row.ComparisonGroup, (row, value) => row.ComparisonGroup = value,
-            oldName, newName, legends, orders);
+            oldName, newName, legends, orders, groupExecutionOrder);
 
     public static void ChangeGroup(OdbPostprocessWorkspace workspace, string oldName, string? newName) =>
         ChangeGroup(workspace.Rows, row => row.Group, (row, value) => row.Group = value,
-            oldName, newName, workspace.Legends, workspace.GroupMemberOrder);
+            oldName, newName, workspace.Legends, workspace.GroupMemberOrder, workspace.GroupExecutionOrder);
 
     private static void ChangeGroup<TRow, TLegend>(IEnumerable<TRow> rows, Func<TRow, string> read,
         Action<TRow, string> write, string oldName, string? newName, IDictionary<string, TLegend> legends,
-        IDictionary<string, List<string>> orders)
+        IDictionary<string, List<string>> orders, List<string>? groupExecutionOrder)
     {
         var items = rows.ToArray();
         var names = items.SelectMany(row => ParseNames(read(row))).Concat(orders.Keys).Concat(legends.Keys)
@@ -44,6 +44,14 @@ public static class OdbComparisonGroups
                 .Where(name => name is not null)));
         RenameKey(legends, oldName, newName);
         RenameKey(orders, oldName, newName);
+        if (groupExecutionOrder is { Count: > 0 })
+        {
+            var updated = groupExecutionOrder.Select(name => name.Trim()).Where(names.Contains)
+                .Select(name => comparer.Equals(name, oldName) ? newName : name)
+                .OfType<string>().Distinct(comparer).ToArray();
+            groupExecutionOrder.Clear();
+            groupExecutionOrder.AddRange(updated);
+        }
     }
 
     private static void RenameKey<T>(IDictionary<string, T> values, string oldName, string? newName)
@@ -64,6 +72,34 @@ public static class OdbComparisonGroups
         foreach (var path in paths)
             if (remaining.Remove(Path.GetFullPath(path), out var row)) ordered.Add(row);
         ordered.AddRange(remaining.Values);
+        return ordered;
+    }
+
+    public static string[] OrderGroupNames(IEnumerable<string> availableNames, IEnumerable<string> savedOrder)
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        var names = availableNames.Distinct(comparer).ToArray();
+        var remaining = names.ToDictionary(name => name, comparer);
+        var ordered = new List<string>(names.Length);
+        foreach (var configured in savedOrder)
+            if (remaining.Remove(configured.Trim(), out var actual)) ordered.Add(actual);
+        ordered.AddRange(names.Where(remaining.ContainsKey));
+        return ordered.ToArray();
+    }
+
+    public static IReadOnlyList<OdbExecutionGroup> OrderExecutionGroups(
+        IReadOnlyList<OdbExecutionGroup> groups, IReadOnlyList<string> savedOrder)
+    {
+        if (savedOrder.Count == 0 || groups.Count < 2) return groups;
+        var named = groups.Where(group => !group.Standalone).ToArray();
+        if (named.Length < 2) return groups;
+        var byName = named.ToDictionary(group => group.Name, StringComparer.OrdinalIgnoreCase);
+        var names = OrderGroupNames(named.Select(group => group.Name), savedOrder);
+        // A standalone model keeps its slot even if a named group shares its display name.
+        var ordered = groups.ToArray();
+        var nextName = 0;
+        for (var slot = 0; slot < ordered.Length; slot++)
+            if (!ordered[slot].Standalone) ordered[slot] = byName[names[nextName++]];
         return ordered;
     }
 

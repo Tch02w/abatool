@@ -1,5 +1,9 @@
 # 功能定位索引
 
+F022 对比组间的执行顺序保存于 `winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs` 的 `GroupExecutionOrder`。组名和独立模型位置由 `OdbComparisonGroups.OrderExecutionGroups` 处理，运行范围与追加共用 `OdbScopedRunPlan.Resolve`。原生排序与完整预览在 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupExecutionOrder.cs`，域测试在 `tests/winui_postprocess/GroupExecutionOrderChecks.cs`。[分组使用说明](../repowiki/postprocessor.md)
+
+F005/F009/F010 历史远端作业目录和输出由 `modules/control_plane/remote_jobs.py` 的 `file_access_identity` 从作业记录解析。目录与文件读取在 `modules/control_plane/remote_servers.py` 核对实际连接，异步传输在 `modules/control_plane/remote_transfers.py` 保留作业编号。界面入口在 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs` 和 `winui/AbaqusTools.WinUI/Pages/RemoteFileBrowserDialog.cs`。跨服务器、重开后台与传输排队的回归见 `tests/control_plane/test_remote_job_output_access.py`，C# 客户端见 `tests/winui_host/RemoteObservationChecks.cs`。[远端输出规则](REMOTE_TRANSFERS.md)
+
 F013 的手工合并停止状态由 `winui/AbaqusTools.WinUI/Services/OdbMergeExecution.cs` 的 `CanStop` 判定，页面取操作回执时刷新。定向检查在 `tests/winui_batch/Program.cs` 的 `CheckStopAsync`，真实执行中停止见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 F022 的运行范围在 `winui/AbaqusTools.WinUI/Services/OdbScopedRunPlan.cs` 中解析。后处理页的 `BuildScopedQueueRequest` 将当前勾选、范围、图例和输出设置交给同一个启动与追加入队入口。回归见 `tests/winui_postprocess/ScopedRunChecks.cs` 及 `tests/winui/test_shell_contract.py`。[操作说明](../repowiki/postprocessor.md)

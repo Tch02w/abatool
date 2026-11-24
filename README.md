@@ -79,7 +79,7 @@ docs/                      架构、协议、ADR 与 RepoWiki
 
 ## 开发验证
 
-从本项目G:盘目录执行，下例将临时文件放到新建GPTWork目录；禁止向C:写ODB。当前原生操作暂停，单独的可见窗口启动测试明确排除，仍属待验项。完整约定见[维护工作流](docs/05-development/WORKFLOW.md)。
+从本项目 G 盘目录执行。下例将临时文件放入新的 GPTWork 目录，ODB 验证文件必须留在 G 盘。此命令运行离屏自动回归；可见窗口启动、鼠标交互和工程出图各有独立验收步骤。[维护工作流](docs/05-development/WORKFLOW.md) · [原生页面验收](docs/06-testing/NATIVE_ACCEPTANCE.md)
 
 ```powershell
 $verificationTemp = Join-Path (Get-Location) ('GPTWork/temp-' + [guid]::NewGuid().ToString('N'))

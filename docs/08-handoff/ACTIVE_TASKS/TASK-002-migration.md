@@ -1,5 +1,11 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-25 · 运行范围、分组图例和代码检查
+
+提交 `39564cd1ef444964714d7bb7425970b849f3753a` 已推送项目 GitHub。对应干净包为 `GPTWork/release-win-x64-b92a31121560/AbaqusTools`，未签名安装候选为 `GPTWork/installer-win-x64-c7434d4a8c32`。1692 个文件的大小和全摘要经过复核，15 项 XBF 与最终原生测试版本一致，包内后台通过 7 项依赖检查和正式客户端的查询与安全关闭。回执为 `GPTWork/release-scoped-39564cd-20261124/verification.json`。指定组的工程出图、实际视口取值、原生页面和结果导出见 [TASK-001](TASK-001-postprocessing.md)。
+
+随后处理 README 开发检查命令报告的 9 项风格问题及图例模块的一个空行。修改限于导入块和 5 个由纯关键字构成的字典字面量，归一这些表达法后，5 份文件的语法树均与原版一致。两组 Ruff 检查及 39 项实际 HTTP、正式客户端、分组执行与图例测试通过。证据为 `GPTWork/scope-style-20261125`。旧 PySide 回滚入口在本机 Windows Qt 后端启动并正常关闭，单项用时 4.37 秒，回执为 `GPTWork/scoped-postprocess-20261124/native-qt-start/result.xml`。
+
 ## 2026-11-24 · 多模型参数对照与持久空组的发布候选
 
 干净提交 `4d55265eedd17cf155f049ea565b49ac29594aa7` 由项目 `.venv` 调用 `packaging/build_release.py --no-restore` 构建。完整目录为 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools`。独立复核 1692 个文件的大小和 SHA256，15 项 XBF 与通过 148 项原生控件检查的开发版本逐字节一致，PRI 在内共 16 项界面资源齐全。包内冻结后台验证了 7 项依赖及 19 个 worker 脚本。正式 C# 客户端验证进程来源、资源和队列读取，回读 B 组发布记录、部分完成及取消状态后，确认活动列表为空并安全关闭。

@@ -1,5 +1,7 @@
 # 任务索引
 
+F021 的次页筛选及所选导出已在 508 文件的原生页面测试通过。F022 指定 B 组实际出图已从 CAE 的静态与动画视口读回手动范围 1–31。[工程和页面验收](ACTIVE_TASKS/TASK-001-postprocessing.md)
+
 F022 的指定组、独立模型与批量运行已用同一对 GJA/GJB 生产请求核对。成员顺序、云图色标及追加去重的实际证据见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
 F022 的多模型参数对照、稀疏草稿恢复、空组创建与保留归入 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。该记录给出 GJA/GJB 的实际参数和帧序号、64 模型分页与 300 模型草稿的验收，以及解锁桌面后的检查顺序。

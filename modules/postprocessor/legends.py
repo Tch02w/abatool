@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from math import isfinite
 from typing import Any
 
-
 DAMAGE_SPECS = {"PILE_CON_DAMAGET", "PILE_CON_DAMAGEC"}
 DAMAGE_DISPLAY_MIN = 0.0
 

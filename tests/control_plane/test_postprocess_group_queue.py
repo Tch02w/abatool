@@ -13,7 +13,10 @@ import pytest
 
 from modules.control_plane.contracts import ApiProblem
 from modules.control_plane.events import EventStore
-from modules.control_plane.postprocess_group_queue import TERMINAL, PostprocessGroupQueueManager
+from modules.control_plane.postprocess_group_queue import (
+    TERMINAL,
+    PostprocessGroupQueueManager,
+)
 from modules.control_plane.postprocessing import PostprocessOperationManager
 from modules.control_plane.results import discover_result_scopes
 from modules.postprocessor.cache import abaqus_cache_version, quick_odb_fingerprint
@@ -21,7 +24,10 @@ from modules.postprocessor.file_attributes import clear_windows_hidden
 from modules.postprocessor.postprocess_execution import safe_folder_name
 from modules.postprocessor.process_runner import ProcessCancelled
 from modules.postprocessor.result_assets import (
-    GROUP_MEMBER_MANIFEST_NAME, numeric_asset_dir, write_group_member_manifest, write_numeric_asset_manifest,
+    GROUP_MEMBER_MANIFEST_NAME,
+    numeric_asset_dir,
+    write_group_member_manifest,
+    write_numeric_asset_manifest,
 )
 from tests.control_plane.test_postprocessing_api import _run_payload, _settings
 from tests.postprocessor.test_result_assets import write_valid_numeric_payload
@@ -60,12 +66,12 @@ def publish(plan):
         output = root / folder / (plan.batch_id + "_01") / safe_folder_name(source.stem)
         (output / "frames").mkdir(parents=True)
         (output / "frames" / "frame.png").write_bytes(b"test frame")
-        receipt = dict(white_png_count=1, transparent_png_count=0, animations={})
+        receipt = {"white_png_count": 1, "transparent_png_count": 0, "animations": {}}
         (output / "render_postprocess_manifest.json").write_text(json.dumps(receipt), encoding="utf-8")
         write_group_member_manifest(output, asset_dir=asset, odb_path=source, comparison_group=group.name,
                                     content_fingerprint=fingerprint, numeric_config_hash=config_hash)
         outputs.append(str(output))
-    return dict(outputCount=len(outputs), outputs=outputs)
+    return {"outputCount": len(outputs), "outputs": outputs}
 
 
 @contextmanager

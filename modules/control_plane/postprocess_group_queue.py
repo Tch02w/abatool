@@ -20,9 +20,14 @@ from modules.postprocessor.paths import APP_NAME
 from modules.postprocessor.postprocess_core import count_render_pngs
 from modules.postprocessor.postprocess_execution import safe_folder_name
 from modules.postprocessor.result_assets import (
-    GROUP_MEMBER_MANIFEST_NAME, INCOMPLETE_OUTPUT_MARKER, RESULT_LAYOUT_VERSION,
-    numeric_asset_dir, numeric_asset_is_valid, resolve_group_member_asset,
+    GROUP_MEMBER_MANIFEST_NAME,
+    INCOMPLETE_OUTPUT_MARKER,
+    RESULT_LAYOUT_VERSION,
+    numeric_asset_dir,
+    numeric_asset_is_valid,
+    resolve_group_member_asset,
 )
+
 from .contracts import ApiProblem, utc_now_text
 from .operation_journal import OperationJournal
 from .postprocessing import _client_request_id, _validate_fields
@@ -299,9 +304,12 @@ class PostprocessGroupQueueManager:
                    for r in self._records.values()):
                 raise _conflict("此工作区已有执行中或待核对的队列，请在原队列追加")
             oid = uuid4().hex
-            item = dict(schemaVersion=1, operationId=oid, kind=KIND, clientRequestId=rid, root=root, status="queued",
-                        version=0, phase="已入队", currentGroupId="", groups=[], result=_results(), createdAt=utc_now_text())
-            record = dict(snapshot=item, signature=signature, commands={}, drafts={}, sources={})
+            item = {
+                "schemaVersion": 1, "operationId": oid, "kind": KIND, "clientRequestId": rid,
+                "root": root, "status": "queued", "version": 0, "phase": "已入队",
+                "currentGroupId": "", "groups": [], "result": _results(), "createdAt": utc_now_text(),
+            }
+            record = {"snapshot": item, "signature": signature, "commands": {}, "drafts": {}, "sources": {}}
             self._edit_groups(record, inputs, update=False)
             self._save(record)
             self._start(oid)
@@ -343,9 +351,11 @@ class PostprocessGroupQueueManager:
                 continue
             else:
                 gid = uuid4().hex
-                row = dict(groupId=gid, groupKey=key, name=raw["name"], members=raw["members"],
-                           standalone=raw["standalone"], status="queued", childOperationId="", message="等待执行",
-                           batchId=datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f_") + gid[:8], result=_results())
+                row = {
+                    "groupId": gid, "groupKey": key, "name": raw["name"], "members": raw["members"],
+                    "standalone": raw["standalone"], "status": "queued", "childOperationId": "", "message": "等待执行",
+                    "batchId": datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f_") + gid[:8], "result": _results(),
+                }
                 groups.append(row)
             record["drafts"][gid] = dict(draft, clientRequestId="pgq:" + gid)
             record["sources"][gid] = pins

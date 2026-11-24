@@ -55,10 +55,10 @@ from .odb_merge_operations import (
     OdbMergeRunner,
 )
 from .odb_result_batches import OdbResultBatchManager
-from .postprocess_group_queue import PostprocessGroupQueueManager
 from .odb_result_graphs import OdbResultGraphService
 from .odb_upgrade_drafts import preview_odb_upgrade
 from .odb_upgrade_operations import OdbUpgradeOperationManager
+from .postprocess_group_queue import PostprocessGroupQueueManager
 from .postprocessing import (
     PostprocessOperationManager,
     PostprocessRunRunner,

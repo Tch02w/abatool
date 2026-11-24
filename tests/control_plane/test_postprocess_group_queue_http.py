@@ -9,9 +9,12 @@ from copy import deepcopy
 import pytest
 
 from modules.postprocessor.process_runner import ProcessCancelled
-from tests.control_plane.test_api import api_request, json_response, running_control_plane
+from tests.control_plane.test_api import (
+    api_request,
+    json_response,
+    running_control_plane,
+)
 from tests.control_plane.test_postprocessing_api import _run_payload, _settings
-
 
 BASE = "/api/v1/odb-postprocess-group-queues"
 CLOSE = "/api/v1/shutdown-requests"

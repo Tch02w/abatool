@@ -30,6 +30,9 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/JobQueueContracts.cs" Link="JobQueueContracts.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/JobDraftContracts.cs" Link="JobDraftContracts.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueListUpdates.cs" Link="QueueListUpdates.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableRow.cs" Link="Controls/QueueTableRow.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml.cs" Link="Controls/QueueTableView.xaml.cs" />
+    <Page Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml" Link="Controls/QueueTableView.xaml" />
     <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml" Link="Controls/WorkbenchExplorerHost.xaml" />
   </ItemGroup>
 </Project>

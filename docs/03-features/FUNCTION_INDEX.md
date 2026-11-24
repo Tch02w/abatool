@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F004表格布局（2026-11-24）：`winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml`、同名.xaml.cs / List、ApplyKind、UpdateWidth统一表头和虚拟列表的滚动与容器；`winui/AbaqusTools.WinUI/Controls/QueueTableRow.cs` / CandidateColumns、FormalColumns、BuildCells定义列、对齐、浅色行列线、截断及勾选。`winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs`通过CandidateTable.List / FormalTable.List继续使用既有更新、命令和双击逻辑。`tests/winui_explorer/App.xaml.cs` / CheckQueueTableAsync直接加载生产控件；`tests/winui/test_shell_contract.py`核对迁移后的接线。约定见[界面交互](UI_INTERACTION.md)，实际业务观察见TASK-004。
+
 F009/F023远端状态观察：`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / ReadRemoteStateAsync、GetRemoteServersAsync、GetActiveRemoteTransfersAsync、GetRemoteTransferAsync分离连接与响应限时；`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` / RecoverTransfersAsync、ObserveTransferAsync、OnPageUnloaded、ShowTransferObservationWarning保留任务身份、区分读取失败与传输终态、只读恢复。测试`tests/winui_host/RemoteObservationChecks.cs`、`tests/winui_host/test_shutdown_api.py`及`tests/winui/test_shell_contract.py`；范围见[传输说明](REMOTE_TRANSFERS.md)。
 
 F026 最新发布证据：干净1d3c981 → 完整目录0aba6269fe34 → 安装候选9a463a0e6dc8；1689清单文件/19worker/15应用资源、全摘要/依赖和11项冻结HTTP通过。最新版原生目录初次加载已观察，实际点击/视觉仍受阻。此前6b4负载的测试身份安装/升级/卸载aa87c2237002通过，14个数据文件保留；此历史证据不扩大到新负载生命周期。最新正式标识未安装、NotSigned。见[当前状态](../08-handoff/CURRENT_STATUS.md)和[原生验收步骤](../06-testing/NATIVE_ACCEPTANCE.md)。

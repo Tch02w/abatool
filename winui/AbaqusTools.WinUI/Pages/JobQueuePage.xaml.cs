@@ -10,6 +10,8 @@ namespace AbaqusTools.WinUI.Pages;
 
 public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 {
+    private ListView CandidateList => CandidateTable.List;
+    private ListView FormalQueueList => FormalTable.List;
     private readonly ObservableCollection<JobQueueItem> _candidates = [];
     private readonly ObservableCollection<JobQueueItem> _queueItems = [];
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _runtimeTimer;
@@ -27,6 +29,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         InitializeComponent();
         CandidateList.ItemsSource = _candidates;
         FormalQueueList.ItemsSource = _queueItems;
+        FormalQueueList.DoubleTapped += OnFormalQueueDoubleTapped;
         FormalQueueList.SelectionChanged += (_, _) =>
         {
             if (!_applyingSnapshot) App.Current.Commands.SelectQueueItems(

@@ -1,0 +1,35 @@
+<UserControl
+    x:Class="AbaqusTools.WinUI.Controls.QueueTableView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:AbaqusTools.WinUI.Controls">
+    <UserControl.Resources>
+        <DataTemplate x:Key="CandidateRowTemplate">
+            <local:QueueTableRow Kind="Candidate" CandidateCheckClicked="OnCandidateCheckClicked" />
+        </DataTemplate>
+        <DataTemplate x:Key="FormalRowTemplate">
+            <local:QueueTableRow Kind="Formal" />
+        </DataTemplate>
+        <Style x:Key="TableItemStyle" TargetType="ListViewItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer x:Name="HorizontalViewport" HorizontalScrollBarVisibility="Auto"
+                  HorizontalScrollMode="Enabled" VerticalScrollBarVisibility="Disabled"
+                  VerticalScrollMode="Disabled" Padding="0" SizeChanged="OnViewportSizeChanged">
+        <Grid x:Name="TableContent">
+            <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+            <local:QueueTableRow x:Name="ColumnHeader" IsHeader="True" Margin="0,0,16,0"
+                                 Background="{ThemeResource LayerFillColorAltBrush}" />
+            <ListView x:Name="Rows" Grid.Row="1" SelectionMode="Multiple" IsMultiSelectCheckBoxEnabled="False"
+                      Padding="0,0,16,0" BorderThickness="0" ItemContainerStyle="{StaticResource TableItemStyle}"
+                      ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        </Grid>
+    </ScrollViewer>
+</UserControl>

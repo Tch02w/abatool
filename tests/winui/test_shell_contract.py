@@ -336,6 +336,8 @@ def test_native_submitter_pages_preserve_the_original_information_architecture()
 
     for filename, expected_texts in page_expectations.items():
         text = (WINUI_ROOT / "Pages" / filename).read_text(encoding="utf-8")
+        if filename == "JobQueuePage.xaml":
+            text += (WINUI_ROOT / "Controls" / "QueueTableRow.cs").read_text(encoding="utf-8")
         for expected in expected_texts:
             assert expected in text
 
@@ -732,7 +734,7 @@ def test_job_queue_restores_external_local_job_scan_controls() -> None:
     assert (
         xaml.index('x:Name="FormalQueueActionBar"')
         < xaml.index('x:Name="ExternalJobScanBar"')
-        < xaml.index('x:Name="FormalQueueList"')
+        < xaml.index('x:Name="FormalTable"')
     )
     assert "OnScanExternalJobsClicked" in page
     assert "ScanExternalJobsAsync" in page
@@ -763,8 +765,10 @@ def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     assert "QueueListUpdates.Apply(FormalQueueList, _queueItems, snapshot.QueueItems)" in page
     updates = (WINUI_ROOT / "Controls" / "QueueListUpdates.cs").read_text(encoding="utf-8")
     assert "list.SelectedItems.Add(row)" in updates
-    assert 'x:Name="CandidateList"' in xaml
-    assert 'x:Name="FormalQueueList"' in xaml
+    assert 'x:Name="CandidateTable"' in xaml
+    assert 'CandidateTable.List' in page
+    assert 'x:Name="FormalTable"' in xaml
+    assert 'FormalTable.List' in page
 
 
 def test_job_overview_uses_the_shared_queue_snapshot_and_safe_file_launchers() -> None:

@@ -42,6 +42,7 @@ public sealed partial class TestApp : Application
             await CheckSelectionsAsync();
             await CheckServerDialogLayoutAsync();
             await CheckQueueUpdatesAsync();
+            await CheckQueueTableAsync();
             Write(new { status = "passed", checks = _checks });
         }
         catch (Exception error)
@@ -127,6 +128,82 @@ public sealed partial class TestApp : Application
             new() { CandidateCount = 1, Candidates = [Row(1, selected: false)] }),
             "A changed candidate check still refreshes the sidebar selection badge");
         _root.Children.Clear(); await DispatchAsync();
+    }
+
+    private async Task CheckQueueTableAsync()
+    {
+        _window!.AppWindow.Resize(new Windows.Graphics.SizeInt32(2500, 900));
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        foreach (var kind in new[] { QueueTableKind.Candidate, QueueTableKind.Formal })
+        {
+            var table = new QueueTableView { Kind = kind, RequestedTheme = theme, Height = 350,
+                HorizontalAlignment = HorizontalAlignment.Left };
+            var rows = new ObservableCollection<JobQueueItem>(Enumerable.Range(1, 80).Select(index => new JobQueueItem
+            {
+                ItemId = $"table-{index}", Index = index,
+                JobName = "GJA-8+2_U40D_V20D_" + new string('X', 70),
+                InpPath = @"G:\isolated\" + new string('p', 180) + ".inp",
+                JobType = "Standard", Source = "隔离界面验收", Status = "等待", Selected = index == 2
+            }));
+            table.List.ItemsSource = rows;
+            _root.Children.Add(table);
+            foreach (var width in new[] { 900d, 1600d, 2300d })
+            {
+                table.Width = width;
+                await DispatchAsync(); _root.UpdateLayout(); await DispatchAsync();
+                var header = Descendants(table).OfType<QueueTableRow>().Single(row => row.IsHeader);
+                var container = (ListViewItem)table.List.ContainerFromIndex(0);
+                var row = Descendants(container).OfType<QueueTableRow>().Single();
+                Check(header.Children.Count == row.Children.Count && header.Children.Cast<Border>().Zip(row.Children.Cast<Border>())
+                    .All(pair => Math.Abs(pair.First.TransformToVisual(table).TransformPoint(default).X
+                        - pair.Second.TransformToVisual(table).TransformPoint(default).X) < 1
+                        && Math.Abs(pair.First.ActualWidth - pair.Second.ActualWidth) < 1),
+                    $"{theme} {kind} {width}: every header and body column shares the same boundary");
+                Check(row.Children.Cast<Border>().All(cell => cell.BorderThickness.Bottom == 1)
+                    && row.Children.Cast<Border>().SkipLast(1).All(cell => cell.BorderThickness.Right == 1)
+                    && row.Children.Cast<Border>().Select(cell => cell.Child).OfType<TextBlock>()
+                        .All(text => text.TextTrimming == TextTrimming.CharacterEllipsis
+                            && (string.IsNullOrEmpty(text.Text) || text.ActualWidth > 0)),
+                    $"{theme} {kind} {width}: subtle row and column lines, bounded text in every cell "
+                    + string.Join("; ", row.Children.Cast<Border>().Select(cell =>
+                        $"{cell.ActualWidth}/{cell.BorderThickness.Right}/{cell.BorderThickness.Bottom}/{(cell.Child as FrameworkElement)?.ActualWidth}")));
+                var indexCell = (Border)row.Children[1];
+                Check(((TextBlock)indexCell.Child).TextAlignment == TextAlignment.Center
+                    && ((TextBlock)((Border)header.Children[1]).Child).TextAlignment == TextAlignment.Center,
+                    $"{theme} {kind} {width}: index header and numbers centered in the same column");
+                table.List.SelectedItems.Add(rows[0]);
+                await DispatchAsync(); _root.UpdateLayout();
+                Check(Math.Abs(header.ActualWidth - row.ActualWidth) < 1
+                    && Math.Abs(header.TransformToVisual(table).TransformPoint(default).X
+                        - row.TransformToVisual(table).TransformPoint(default).X) < 1,
+                    $"{theme} {kind} {width}: selecting a row adds no leading checkbox gutter");
+                var horizontal = Descendants(table).OfType<ScrollViewer>().First(view => view.Name == "HorizontalViewport");
+                if (width == 900)
+                {
+                    horizontal.ChangeView(160, null, null, true);
+                    await DispatchAsync(); _root.UpdateLayout();
+                    Check(horizontal.HorizontalOffset > 0
+                        && Math.Abs(header.TransformToVisual(table).TransformPoint(default).X
+                            - row.TransformToVisual(table).TransformPoint(default).X) < 1,
+                        $"{theme} {kind}: narrow table scrolls header and body together");
+                    horizontal.ChangeView(0, null, null, true);
+                }
+                table.List.SelectedItems.Clear();
+            }
+            if (kind == QueueTableKind.Formal)
+            {
+                var container = (ListViewItem)table.List.ContainerFromIndex(0);
+                var check = Descendants(container).OfType<QueueTableRow>().Single().Children.Cast<Border>()
+                    .Select(cell => cell.Child).OfType<CheckBox>().Single();
+                check.IsChecked = true;
+                await DispatchAsync();
+                Check(table.List.SelectedItems.Contains(rows[0]), $"{theme}: formal checkbox selects the native row");
+                table.List.SelectedItems.Clear();
+                await DispatchAsync();
+                Check(check.IsChecked is false, $"{theme}: native deselection clears the formal checkbox");
+            }
+            _root.Children.Clear(); await DispatchAsync();
+        }
     }
 
     private async Task CheckServerDialogLayoutAsync()

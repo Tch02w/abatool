@@ -43,26 +43,8 @@
                 </Grid>
                 <Grid Grid.Row="3">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <Grid Padding="8,0" Background="{ThemeResource LayerFillColorAltBrush}" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="50" /><ColumnDefinition Width="55" /><ColumnDefinition Width="150" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="130" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center" Text="勾选" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="序号" />
-                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="作业名称" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="INP 文件路径" />
-                        <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="加入方式" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="作业类型" />
-                        <TextBlock Grid.Column="6" VerticalAlignment="Center" Text="重启动依赖" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="检查结果" />
-                    </Grid>
-                    <ListView x:Name="CandidateList" Grid.Row="1" SelectionMode="Multiple">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="8,7" ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="50" /><ColumnDefinition Width="55" /><ColumnDefinition Width="150" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="130" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
-                                    <CheckBox HorizontalAlignment="Center" IsChecked="{Binding Selected, Mode=OneWay}" Click="OnCandidateCheckClicked" /><TextBlock Grid.Column="1" Text="{Binding Index}" />
-                                    <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding JobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="3" Text="{Binding InpPath}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="4" Text="{Binding Source}" /><TextBlock Grid.Column="5" Text="{Binding JobType}" />
-                                    <TextBlock Grid.Column="6" Text="{Binding OldjobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="7" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <controls:QueueTableView x:Name="CandidateTable" Grid.RowSpan="2" Kind="Candidate"
+                                             CandidateCheckClicked="OnCandidateCheckClicked" />
                     <StackPanel x:Name="CandidateEmptyPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="5">
                         <FontIcon FontSize="26" Glyph="&#xE8F1;" />
                         <TextBlock Text="尚无候选作业" />
@@ -119,26 +101,7 @@
                 </Grid>
                 <Grid Grid.Row="3">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <Grid Padding="8,0" Background="{ThemeResource LayerFillColorAltBrush}" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="55" /><ColumnDefinition Width="145" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="125" /><ColumnDefinition Width="70" /><ColumnDefinition Width="85" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="100" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center" Text="序号" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="作业名称" /><TextBlock Grid.Column="2" VerticalAlignment="Center" Text="INP 文件路径" />
-                        <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="作业类型" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="重启动依赖" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="Core" />
-                        <TextBlock Grid.Column="6" VerticalAlignment="Center" Text="内存" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="优先级" /><TextBlock Grid.Column="8" VerticalAlignment="Center" Text="调度" />
-                        <TextBlock Grid.Column="9" VerticalAlignment="Center" Text="状态" /><TextBlock Grid.Column="10" VerticalAlignment="Center" Text="备注" />
-                    </Grid>
-                    <ListView x:Name="FormalQueueList" Grid.Row="1" SelectionMode="Multiple" DoubleTapped="OnFormalQueueDoubleTapped">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="8,7" ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="55" /><ColumnDefinition Width="145" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="125" /><ColumnDefinition Width="70" /><ColumnDefinition Width="85" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="100" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Index}" /><TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding JobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="2" Text="{Binding InpPath}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="3" Text="{Binding JobType}" /><TextBlock Grid.Column="4" Text="{Binding OldjobName}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="5" Text="{Binding CoresDisplay}" />
-                                    <TextBlock Grid.Column="6" Text="{Binding RuntimeMemoryDisplay}" ToolTipService.ToolTip="{Binding MemoryDetailsDisplay}" /><TextBlock Grid.Column="7" Text="{Binding PriorityDisplay}" /><TextBlock Grid.Column="8" Text="{Binding SchedulingDisplay}" />
-                                    <TextBlock Grid.Column="9" FontWeight="SemiBold" Text="{Binding Status}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="10" Text="{Binding ResultMessageDisplay}" ToolTipService.ToolTip="{Binding ArchiveDetailsDisplay}" TextTrimming="CharacterEllipsis" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <controls:QueueTableView x:Name="FormalTable" Grid.RowSpan="2" Kind="Formal" />
                     <TextBlock x:Name="FormalQueueEmptyText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Text="尚无正式队列作业" />
                 </Grid>
             </Grid>

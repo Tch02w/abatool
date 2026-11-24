@@ -1,5 +1,7 @@
 # TASK-004：日志选区稳定与数字输入样式
 
+深色主题下使用相同控件和尺寸核对，七个表头分界与浅色版完全相同。深灰数据行上的分隔线为 RGB 71/71/71，表头分隔线为 RGB 81/81/81，均只占一个像素。深色示例图及读图检查为 `GPTWork/native-parameter-comparison-20261124/tabledark1/queue-dividers.png` 和同目录 `verified-pixels.json`。
+
 11 月 25 日使用 WinUI 自身的 RenderTargetBitmap 将生产候选表、三行示例数据和浅色主题渲染为 1350 × 165 PNG。读图核实八列有七条内部竖线，表头和各行的分界在同一像素位置，白底上分隔线为 RGB 233/233/233、厚 1 像素。序号居中，长名称在名称列内显示省略号。图片及读图回执为 `GPTWork/native-parameter-comparison-20261124/table1/queue-dividers.png` 和同目录 `verified-pixels.json`。正式队列与 40 行滚动的实际窗口记录见下文。
 
 11 月 24 日晚在最新完整目录包 `15bec5c3e691` 打开独立的 40 候选和 40 正式作业样例，再次目视核对两表每行下方和相邻列之间的细线。选框与序号居中，名称和路径左对齐，长名称和长路径均在列内省略。应用源码为 `ee1f79f`；保留的验收窗口和配置位置见 [TASK-002](TASK-002-migration.md)。

@@ -1,5 +1,7 @@
 # 任务索引
 
+11 月 25 日的 Windows x64 候选取自 `1fc22fd`。F004 的亮暗主题表格截图与 40 行滚动验收见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 的目录包、同负载安装升级及卸载 8 项实测见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+
 F013 手工合并在真实 restartJoin 运行期间取消，确认无半成品、源文件完整。停止按钮的受理前状态及全量测试记录见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 F021 的次页筛选及所选导出已在 508 文件的原生页面测试通过。F022 指定 B 组实际出图已从 CAE 的静态与动画视口读回手动范围 1–31。[工程和页面验收](ACTIVE_TASKS/TASK-001-postprocessing.md)
@@ -12,7 +14,7 @@ F022 分组运行、待办编辑、取消后续行、后台接回及 GJB 工程�
 
 11 月 24 日晚的续接入口：[TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md) 记录新建作业的保留、清空、保存受阻和实际入队；[TASK-002](ACTIVE_TASKS/TASK-002-migration.md) 记录重启动依赖及发行验证；[批量合并](../03-features/ODB_RESULT_BATCH.md) 记录两阶段原生执行；[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md) 记录实体截面、索引及切换已发布目录。用户最新反馈的浅色行列线以及长名对齐的实测也在 TASK-004。
 
-最新目录包 `b4a1453081df` 和安装候选 `69f4b496676b` 含分组队列，源提交 `b85c24b`。目录包 `15bec5c3e691` 已实测两表各 40 行的对齐和分隔线，详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。[本次包的实际校验](../05-development/RELEASE.md)
+11 月 24 日的目录包 `b4a1453081df` 和安装候选 `69f4b496676b` 含分组队列，源提交 `b85c24b`。目录包 `15bec5c3e691` 已实测两表各 40 行的对齐和分隔线，详见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。[历次包的实际校验](../05-development/RELEASE.md)
 
 当前验收受阻（2026-11-20）：N08未提交目录保持123和显式读取新目录显示999已有用户证据，刷新期间的界面保持仍待确认。恢复后连续三轮点击失败，当前cua_repl也未恢复；近两次续接无新通过项。234192/窗口7078082及后台219004/227524仍在，保持当前目录和已有人工问题。准确续接见TASK-001顶部，完整范围与未具备环境见TASK-002顶部；未完成迁移，后续历史记录不代表当前进程状态。
 
@@ -41,7 +43,7 @@ F022 分组运行、待办编辑、取消后续行、后台接回及 GJB 工程�
 | ID | 任务 | 状态 | 关联功能 | 说明 |
 |---|---|---|---|---|
 | TASK-001 | 优先恢复结果提取与结果查看 | F020 同组色标、双模型 GIF 两种模式已复核（11 月 18 日），F021分页和宽表已验证；结果选择崩溃已修复，单CSV预览/导出/退出已确认，其他业务交互待验 | F014–F022 | [准确记录](ACTIVE_TASKS/TASK-001-postprocessing.md) |
-| TASK-002 | 完整迁移、性能、界面与文档发布 | 已构建 51cc69f 完整包和安装候选，验证目录包启动与活动任务关闭流程；八页其余业务、安装目标机和对等确认待验 | F001–F028 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) |
+| TASK-002 | 完整迁移、性能、界面与文档发布 | `1fc22fd` 完整包、同负载测试标识安装升级及卸载通过。新增弹窗可见窗口交互、正式标识安装、独立目标机与远端特殊工况待验 | F001–F028 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) |
 | TASK-003 | 建立功能定位和持续维护交接体系 | 本次建档完成；后续维护持续执行 | F001–F024 | [文档记录](COMPLETED_TASKS/TASK-003-documentation.md) |
 | TASK-004 | 日志选区、数字输入、参数说明与窗口布局 | 队列表格列线/对齐、日志拖选跨刷新和服务器表单已获得实际窗口证据；跨屏与工程负载继续验证 | F001/F002/F003/F004/F005/F007/F008/F022/F025 | [准确记录](ACTIVE_TASKS/TASK-004-ui-interaction.md) |
 

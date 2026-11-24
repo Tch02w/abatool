@@ -1,5 +1,7 @@
 # 完整迁移交付核对
 
+11 月 25 日发布候选使用干净提交 `1fc22fd`。1692 个负载文件逐项校验，同负载的测试安装器从旧版升级并卸载，8 项检查通过。升级、卸载后数据摘要均与操作前相同。队列表格亮暗两种主题的原生渲染已核对列分界和行线位置。[发布检查](../05-development/RELEASE.md) · [安装实测](../05-development/INSTALLATION.md) · [队列表格实测](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md)
+
 11 月 25 日完成项目全量离屏测试，1122 个用例与 9 个子检查通过，另行运行原生 Windows Qt 回滚启动用例通过。实际工程验证了指定 B 组内静态与动画的 1–31 手动范围，也验证了手工合并运行中的取消。结果浏览以真实导出动作核对次页筛选前后 4 个文件的完整内容。可见桌面的新增弹窗、异常远端配置、无 Python/.NET SDK 的独立 Windows 目标机仍需各自的实测。[工程和导出记录](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [合并及全量回归](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
 
 ## 2026-11-24 · 最新实际验收

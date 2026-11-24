@@ -1,10 +1,12 @@
 # Windows 发布构建（F026）
 
-本轮目录包来自干净提交 `4d55265eedd17cf155f049ea565b49ac29594aa7`，包含多模型提取参数对照、预建空组和队列表格的浅色行列线。在项目目录打开 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools/AbaqusTools.WinUI.exe` 即可运行。需要安装时使用本轮的 [Windows 安装候选](INSTALLATION.md)。
+当前 Windows x64 目录包来自干净提交 `1fc22fdc27ad056fda402d8452521ac301dab4ef`。在项目目录打开 `GPTWork/release-win-x64-9f04c1da2255/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。包括作业队列的浅色行列线、多模型提取参数对照、预建分组、精确出图范围及手工合并受理后的停止按钮。[Windows 安装候选](INSTALLATION.md)
 
-已重新计算清单中全部 1692 个文件的大小及 SHA256。清单 SHA256 为 `f408923a90687c62ab05dfdbbfe68152bf214ce9751a5ffbe048fb177116de55`，`sourceDirty=false`。16 项 WinUI 资源齐备，其中 15 项 XBF 与通过 148 项原生控件检查的版本逐字节一致。包内冻结后台通过 7 项依赖检查，包含 19 个 Abaqus worker 脚本。正式 C# 客户端启动包内进程后，成功读取资源、队列、部分完成和取消的历史以及 B 组已发布路径，确认活动列表为空，随后安全退出。回执为 `GPTWork/release-parameter-comparison-4d55265-20261124/verification.json`。本轮正式标识安装、无开发环境 Windows 和解锁桌面后的实点另待验收。
+清单包含 1692 个文件，清单自身的 SHA256 为 `c08a79f0e55731e60da09a05b50456d2c0f30988fcaf809512f7fd4e7e2276dd`。逐文件校验通过。15 个编译界面文件与原生验收的资源一致，123 份生产源码输入与手工合并最终验收版本相符。包内后台检查覆盖 7 项依赖、19 个 worker 脚本、客户端读取历史记录和正常关闭。完整检查记录位于 `GPTWork/release-scoped-1fc22fd-20261125/verification.json`。同负载测试标识的 8 项安装检查见[安装实测](INSTALLATION.md)。
 
 ### 历史候选
+
+`4d55265` 首次包含多模型对照及空组，目录 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools`。其独立回执位于 `GPTWork/release-parameter-comparison-4d55265-20261124/verification.json`。`39564cd` 增加确切运行范围，目录 `GPTWork/release-win-x64-b92a31121560/AbaqusTools`，回执为 `GPTWork/release-scoped-39564cd-20261124/verification.json`。
 
 `b85c24b` 的分组队列目录包为 `GPTWork/release-win-x64-b4a1453081df/AbaqusTools`，对应回执为 `GPTWork/release-group-queue-b85c24b-20261124/verification.json`。以下包名和回执均对应各自的历史版本。
 

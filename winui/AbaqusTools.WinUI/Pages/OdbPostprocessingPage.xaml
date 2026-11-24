@@ -217,7 +217,14 @@
                             <TextBlock x:Name="SelectedPlanText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="选择 ODB 后可编辑参数" TextWrapping="Wrap" />
                             <Button x:Name="StructureBrowserButton" Content="浏览实例、集合与可用输出…" HorizontalAlignment="Stretch" Click="OnStructureBrowserClicked" IsEnabled="False" />
                             <Button x:Name="GroupOrderButton" Content="组内排序…" HorizontalAlignment="Stretch" Click="OnGroupOrderClicked" />
-                            <Button x:Name="ManageGroupsButton" Content="重命名 / 删除对比组…" HorizontalAlignment="Stretch" Click="OnManageGroupsClicked" />
+                            <Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="CreateGroupsButton" Content="新建对比组…" HorizontalAlignment="Stretch" Click="OnCreateGroupsClicked" />
+                                <Button x:Name="ManageGroupsButton" Grid.Column="1" Content="重命名 / 删除…" HorizontalAlignment="Stretch" Click="OnManageGroupsClicked" />
+                            </Grid>
                             <TextBox x:Name="GroupNameTextBox" Header="对比组名称" PlaceholderText="多个组用分号分隔" Text="对比组 1" />
                             <ComboBox x:Name="GroupOperationComboBox" Header="对选中 ODB 的分组操作" HorizontalAlignment="Stretch" SelectedIndex="0">
                                 <ComboBoxItem Content="替换分组" Tag="replace" />

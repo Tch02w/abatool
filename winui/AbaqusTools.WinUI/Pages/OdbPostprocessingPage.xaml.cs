@@ -36,6 +36,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     ];
 
     private bool _discoveryBusy;
+    private bool _updatingSelection;
     private string? _lastDiscoveryRoot;
     private readonly OdbPostprocessResultLocations _resultLocations = new();
     private readonly Dictionary<string, List<string>> _groupMemberOrder = new(StringComparer.OrdinalIgnoreCase);
@@ -486,11 +487,10 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             if (!sameRoot) RestoreOutputOptions(saved?.Output ?? new OdbPostprocessOutputOptions());
             if (saved is not null)
                 foreach (var pair in saved.Legends) _legendOverridesByGroup[pair.Key] = pair.Value;
+            var savedRows = saved?.Rows.ToDictionary(item => PathKey(item.Path), StringComparer.OrdinalIgnoreCase);
             foreach (var row in refreshed.Rows)
             {
-                var previous = saved?.Rows.FirstOrDefault(item =>
-                    string.Equals(PathKey(item.Path), PathKey(row.Path), StringComparison.OrdinalIgnoreCase));
-                if (previous is not null)
+                if (savedRows is not null && savedRows.TryGetValue(PathKey(row.Path), out var previous))
                 {
                     row.ComparisonGroup = previous.Group;
                     if (previous.Draft is not null) row.UpdatePostprocessJob(previous.Draft);
@@ -500,8 +500,16 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 _odbByPath[PathKey(row.Path)] = row;
             }
 
-            var restoredSelection = saved is null ? refreshed.SelectedRows : refreshed.Rows.Where(row =>
-                saved.Rows.Any(item => item.Selected && string.Equals(PathKey(item.Path), PathKey(row.Path), StringComparison.OrdinalIgnoreCase))).ToArray();
+            // Old workspaces sometimes kept a group only on its members. Keep
+            // its name available if a refresh no longer finds the last member.
+            var previousGroups = sameRoot ? previousRows.Select(row => row.ComparisonGroup)
+                : saved?.Rows.Select(row => row.Group) ?? [];
+            var memberGroups = _odbItems.SelectMany(row => ParseGroupNames(row.ComparisonGroup));
+            foreach (var name in previousGroups.SelectMany(ParseGroupNames).Except(memberGroups, StringComparer.OrdinalIgnoreCase))
+                _groupMemberOrder.TryAdd(name, []);
+
+            var restoredSelection = savedRows is null ? refreshed.SelectedRows : refreshed.Rows.Where(row =>
+                savedRows.TryGetValue(PathKey(row.Path), out var previous) && previous.Selected).ToArray();
             foreach (var row in restoredSelection)
             {
                 OdbList.SelectedItems.Add(row);
@@ -551,13 +559,13 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void UpdateExplorer()
     {
-        var groups = OdbComparisonGroups.ForBrowser(_odbItems)
+        var groups = OdbComparisonGroups.ForBrowser(_odbItems, SavedGroupNames())
             .Select(group => WorkbenchExplorerAdapterBase.Group(
-                $"postprocess:group:{group.Key}",
-                group.Key,
-                group.Select(row => new ExplorerItem
+                group.Unassigned ? "postprocess:ungrouped" : $"postprocess:group:{group.Name}",
+                group.Name,
+                group.Members.Select(row => new ExplorerItem
                 {
-                    StableId = $"postprocess:odb:{Uri.EscapeDataString(group.Key.ToUpperInvariant())}:{row.Path.ToUpperInvariant()}",
+                    StableId = $"postprocess:odb:{(group.Unassigned ? "" : Uri.EscapeDataString(group.Name.ToUpperInvariant()))}:{row.Path.ToUpperInvariant()}",
                     Kind = ExplorerItemKind.OdbFile,
                     Title = row.Name,
                     Subtitle = $"{row.CompatibilityStatusDisplay} · {row.PostprocessStatusDisplay}",
@@ -566,17 +574,23 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                     Badge = row.CompatibilityStatusDisplay,
                     IconGlyph = "\uE8A5",
                 }),
-                group.Count().ToString()))
-            .ToArray();
+                group.Members.Count.ToString()))
+            .ToList();
         _explorerAdapter.Update(
             RootTextBox.Text.Trim(),
-            $"ODB {_odbItems.Count} · 分组 {groups.Length}",
+            $"ODB {_odbItems.Count} · 分组 {groups.Count}",
             groups);
     }
 
     private void SelectExplorerOdb(ExplorerItem item)
     {
         if (DraftPending || _draftActionBusy || _discoveryBusy) return;
+        if (item.Kind == ExplorerItemKind.Group)
+        {
+            if (item.StableId.StartsWith("postprocess:group:", StringComparison.Ordinal))
+                GroupNameTextBox.Text = item.Title;
+            return;
+        }
         if (_odbByPath.TryGetValue(PathKey(item.Path), out var row))
         {
             OdbList.SelectedItems.Clear();
@@ -594,6 +608,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void OnOdbSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updatingSelection || _discoveryBusy || _draftActionBusy) return;
         RefreshInteractionState();
         SaveWorkspace();
     }
@@ -607,10 +622,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             || _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot))) return true;
         try
         {
-            var workspace = CaptureEditableWorkspace(CaptureOutputOptions());
-            _workspaceStore.Save(_lastDiscoveryRoot, workspace);
-            _workspaceBasis = OdbPostprocessDraftRecovery.Fingerprint(workspace);
-            _lastSavedOutput = workspace.Output;
+            CommitWorkspace(_lastDiscoveryRoot, CaptureEditableWorkspace(CaptureOutputOptions()));
             return true;
         }
         catch (Exception exception)
@@ -618,6 +630,35 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ShowWarning(exception.Message, "后处理配置未能保存");
             return false;
         }
+    }
+
+    private bool TrySaveWorkspaceChange(Action<OdbPostprocessWorkspace> change)
+    {
+        try
+        {
+            if (_lastDiscoveryRoot is null || _unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot))
+                || _discoveryBusy || _postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing
+                || DraftPending || _draftActionBusy || App.Current.Session.IsClosing
+                || !string.Equals(PathKey(RootTextBox.Text), PathKey(_lastDiscoveryRoot), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("请先回到已读取的工作区，处理待恢复草稿或等待当前操作结束。");
+            var next = CaptureEditableWorkspace(CaptureOutputOptions());
+            change(next);
+            CommitWorkspace(_lastDiscoveryRoot, next);
+            return true;
+        }
+        catch (Exception error)
+        {
+            ShowWarning(error.Message, "工作区修改未能保存");
+            return false;
+        }
+    }
+
+    private void CommitWorkspace(string root, OdbPostprocessWorkspace workspace)
+    {
+        var basis = OdbPostprocessDraftRecovery.Fingerprint(workspace);
+        _workspaceStore.Save(root, workspace);
+        _workspaceBasis = basis;
+        _lastSavedOutput = workspace.Output;
     }
 
     private OdbPostprocessOutputOptions CaptureOutputOptions() => new()
@@ -672,13 +713,16 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         var selected = OdbList.SelectedItems
             .OfType<OdbFileRow>()
             .ToHashSet();
-        OdbList.SelectedItems.Clear();
-        foreach (var row in _odbItems.Where(row => !selected.Contains(row)))
+        _updatingSelection = true;
+        try
         {
-            OdbList.SelectedItems.Add(row);
+            OdbList.SelectedItems.Clear();
+            foreach (var row in _odbItems.Where(row => !selected.Contains(row)))
+                OdbList.SelectedItems.Add(row);
         }
-
+        finally { _updatingSelection = false; }
         RefreshInteractionState();
+        SaveWorkspace();
     }
 
     private async void OnCompatibilityCheckClicked(object sender, RoutedEventArgs e)
@@ -799,11 +843,20 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 && (entry.Standalone ? priorNames.Length == 0 && nextNames.Length > 0 : removedNames.Contains(entry.Name)));
             if (!CanRemoveGroupMembership(affected)) return;
         }
+        var changes = memberships.ToDictionary(pair => PathKey(pair.Row.Path), pair => pair.NewValue, StringComparer.OrdinalIgnoreCase);
+        var retainedNames = memberships.SelectMany(pair => ParseGroupNames(pair.Row.ComparisonGroup)
+            .Concat(ParseGroupNames(pair.NewValue))).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (!TrySaveWorkspaceChange(next =>
+            {
+                foreach (var name in retainedNames) next.GroupMemberOrder.TryAdd(name, []);
+                foreach (var saved in next.Rows)
+                    if (changes.TryGetValue(PathKey(saved.Path), out var value)) saved.Group = value;
+            })) return;
+        foreach (var name in retainedNames) _groupMemberOrder.TryAdd(name, []);
         foreach (var (row, value) in memberships) row.ComparisonGroup = value;
         SelectedPlanText.Text = $"已更新 {selected.Length} 个 ODB 的分组；原始文件未修改。";
         UpdateExplorer();
         RefreshInteractionState();
-        SaveWorkspace();
     }
 
     private async void OnLegendClicked(object sender, RoutedEventArgs e)
@@ -905,6 +958,18 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             DefaultButton = ContentDialogButton.Primary,
         };
         var values = new Dictionary<string, OdbLegendOverride>(StringComparer.Ordinal);
+        bool PersistLegend(bool reset)
+        {
+            if (TrySaveWorkspaceChange(next =>
+                {
+                    next.GroupMemberOrder.TryAdd(groupName, []);
+                    if (reset) next.Legends.Remove(groupName);
+                    else next.Legends[groupName] = values;
+                })) return true;
+            validation.Text = "未能保存该组的图例设置。请检查工作区后重试。";
+            validation.Visibility = Visibility.Visible;
+            return false;
+        }
         dialog.PrimaryButtonClick += (_, args) =>
         {
             values.Clear();
@@ -926,7 +991,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 }
                 values[row.Field] = new OdbLegendOverride { Minimum = minimum, Maximum = maximum };
             }
+            args.Cancel = !PersistLegend(false);
         };
+        dialog.SecondaryButtonClick += (_, args) => args.Cancel = !PersistLegend(true);
         var legendInputs = new Dictionary<string, Control>();
         foreach (var row in rows)
         {
@@ -936,30 +1003,22 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
         var result = await ShowRecoverableDialogAsync(dialog, content, "图例范围", groupName,
             new { groupName, existing }, legendInputs);
-        if (result == ContentDialogResult.None)
-        {
-            return;
-        }
-        if (result == ContentDialogResult.Secondary)
-        {
-            _legendOverridesByGroup.Remove(groupName);
-            SaveWorkspace();
-            await CompleteDialogDraftAsync("图例范围", groupName);
-            ShowWarning($"“{groupName}”已恢复为自动图例范围。", "图例设置已更新");
-            return;
-        }
-
-        _legendOverridesByGroup[groupName] = values;
-        SaveWorkspace();
+        if (result == ContentDialogResult.None) return;
+        _groupMemberOrder.TryAdd(groupName, []);
+        if (result == ContentDialogResult.Secondary) _legendOverridesByGroup.Remove(groupName);
+        else _legendOverridesByGroup[groupName] = values;
+        UpdateExplorer();
+        RefreshInteractionState();
         await CompleteDialogDraftAsync("图例范围", groupName);
-        ShowWarning($"已保存“{groupName}”的 {values.Count} 个手动图例范围。", "图例设置已更新");
+        ShowWarning(result == ContentDialogResult.Secondary
+            ? $"“{groupName}”已恢复为自动图例范围。"
+            : $"已保存“{groupName}”的 {values.Count} 个手动图例范围。", "图例设置已更新");
     }
 
     private async void OnManageGroupsClicked(object sender, RoutedEventArgs e)
     {
         if (_discoveryBusy || _postprocessBusy || _compatibilityBusy || UpgradeBlocksEditing) return;
-        var names = _odbItems.SelectMany(row => ParseGroupNames(row.ComparisonGroup))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var names = KnownGroupNames();
         if (names.Length == 0) return;
         var selector = Choice(names, names[0], "对比组");
         var nameBox = new TextBox { Header = "新名称（重命名时使用）", Text = names[0] };
@@ -989,13 +1048,12 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
         try
         {
-            OdbComparisonGroups.ChangeGroup(_odbItems, oldName,
-                result == ContentDialogResult.Secondary ? null : nameBox.Text,
-                _legendOverridesByGroup, _groupMemberOrder);
+            var replacement = result == ContentDialogResult.Secondary ? null : nameBox.Text;
+            if (!TrySaveWorkspaceChange(next => OdbComparisonGroups.ChangeGroup(next, oldName, replacement))) return;
+            OdbComparisonGroups.ChangeGroup(_odbItems, oldName, replacement, _legendOverridesByGroup, _groupMemberOrder);
             GroupNameTextBox.Text = result == ContentDialogResult.Secondary ? "" : nameBox.Text.Trim();
             UpdateExplorer();
             RefreshInteractionState();
-            SaveWorkspace();
             await CompleteDialogDraftAsync("管理分组", "当前目录");
         }
         catch (ArgumentException exception) { ShowWarning(exception.Message, "无法更新对比组"); }
@@ -1068,17 +1126,23 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private async void OnConfigureClicked(object sender, RoutedEventArgs e)
     {
         var selected = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
-        if (selected.Length != 1)
+        if (selected.Length == 0)
         {
-            ShowWarning("请只选择一个 ODB，再编辑它的提取参数。", "需要单选");
+            ShowWarning("请选择要编辑的 ODB。", "尚未选择模型");
+            return;
+        }
+        if (selected.Any(row => row.ScanDetails is not { Error.Length: 0 } || row.PostprocessJob is null))
+        {
+            ShowWarning("请为每个所选模型运行“读取结构与默认参数”。", "参数尚未就绪");
+            return;
+        }
+        if (selected.Length > 1)
+        {
+            try { await ShowParameterComparisonAsync(selected); }
+            catch (Exception error) { ShowWarning(error.Message, "模型参数对照未完成"); }
             return;
         }
         var row = selected[0];
-        if (row.ScanDetails is null || row.PostprocessJob is null)
-        {
-            ShowWarning("请先运行“读取结构与默认参数”。", "参数尚未就绪");
-            return;
-        }
 
         var draft = await ShowJobConfigurationDialogAsync(row);
         if (draft is not null)
@@ -1865,7 +1929,10 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
         BrowseButton.IsEnabled = canStartOtherOperation;
         GroupOrderButton.IsEnabled = idle && _odbItems.Any(row => ParseGroupNames(row.ComparisonGroup).Length > 0);
-        ManageGroupsButton.IsEnabled = GroupOrderButton.IsEnabled;
+        CreateGroupsButton.IsEnabled = idle && _lastDiscoveryRoot is not null
+            && !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot));
+        ManageGroupsButton.IsEnabled = CreateGroupsButton.IsEnabled
+            && (GroupOrderButton.IsEnabled || _groupMemberOrder.Count != 0 || _legendOverridesByGroup.Count != 0);
         DiscoverButton.IsEnabled = canStartOtherOperation;
         RootTextBox.IsEnabled = canStartOtherOperation;
         RecursiveCheckBox.IsEnabled = canStartOtherOperation;
@@ -1885,11 +1952,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         StructureBrowserButton.IsEnabled = canStartOtherOperation && selectedRows.Length == 1
             && selectedRows[0].ScanDetails is { Error.Length: 0 };
         ApplyGroupButton.IsEnabled = idle && selectedCount > 0;
-        LegendButton.IsEnabled = idle && selectedCount > 0;
-        ConfigureButton.IsEnabled = idle
-            && selectedRows.Length == 1
-            && selectedRows[0].ScanDetails is { Error.Length: 0 }
-            && selectedRows[0].PostprocessJob is not null;
+        LegendButton.IsEnabled = CreateGroupsButton.IsEnabled
+            && (selectedCount > 0 || _groupMemberOrder.Count != 0 || _legendOverridesByGroup.Count != 0);
+        ConfigureButton.Content = selectedCount > 1 ? "对照提取参数…" : "编辑提取参数";
+        ConfigureButton.IsEnabled = idle && selectedRows.Length > 0
+            && selectedRows.All(row => row.ScanDetails is { Error.Length: 0 } && row.PostprocessJob is not null);
         RunPostprocessButton.IsEnabled = idle
             && selectedRows.Length > 0
             && selectedRows.All(row => row.HasPostprocessConfiguration);

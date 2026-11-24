@@ -22,12 +22,14 @@ def parse_sequence_expression(text: str, available: Iterable[int]) -> list[int]:
             start, end = int(left.strip()), int(right.strip())
             if start > end:
                 start, end = end, start
-            selected.update(range(start, end + 1))
         else:
-            selected.add(int(token))
-    missing = sorted(selected - allowed)
-    if missing:
-        raise ValueError(f"时程序号不存在：{missing}")
+            start = end = int(token)
+        # Stop at the first unavailable frame. An out-of-range endpoint must
+        # not allocate indices that are absent from the actual ODB catalog.
+        for index in range(start, end + 1):
+            if index not in allowed:
+                raise ValueError(f"时程序号不存在：{index}")
+            selected.add(index)
     if not selected:
         raise ValueError("手动选择帧不能为空")
     return sorted(selected)

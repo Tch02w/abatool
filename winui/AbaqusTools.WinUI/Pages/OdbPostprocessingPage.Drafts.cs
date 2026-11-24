@@ -70,14 +70,18 @@ public sealed partial class OdbPostprocessingPage
     private List<OdbDraftSource> CurrentDraftSources() => _odbItems.Select(row =>
         new OdbDraftSource(row.Path, row.SizeBytes, row.ModifiedAt.UtcDateTime.Ticks)).ToList();
 
-    private OdbPostprocessWorkspace CaptureEditableWorkspace(OdbPostprocessOutputOptions output) => new()
+    private OdbPostprocessWorkspace CaptureEditableWorkspace(OdbPostprocessOutputOptions output)
     {
-        Output = output,
-        GroupMemberOrder = _groupMemberOrder.ToDictionary(pair => pair.Key, pair => pair.Value.ToList()),
-        Rows = _odbItems.Select(row => new OdbPostprocessSavedRow { Path = row.Path, Group = row.ComparisonGroup,
-            Selected = OdbList.SelectedItems.Contains(row), Draft = row.PostprocessJob?.Clone() }).ToList(),
-        Legends = _legendOverridesByGroup.ToDictionary(pair => pair.Key, pair => pair.Value.ToDictionary()),
-    };
+        var selection = OdbList.SelectedItems.OfType<OdbFileRow>().ToHashSet();
+        return new()
+        {
+            Output = output,
+            GroupMemberOrder = _groupMemberOrder.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparer.OrdinalIgnoreCase),
+            Rows = _odbItems.Select(row => new OdbPostprocessSavedRow { Path = row.Path, Group = row.ComparisonGroup,
+                Selected = selection.Contains(row), Draft = row.PostprocessJob?.Clone() }).ToList(),
+            Legends = _legendOverridesByGroup.ToDictionary(pair => pair.Key, pair => pair.Value.ToDictionary(), StringComparer.OrdinalIgnoreCase),
+        };
+    }
 
     private async Task LoadWorkspaceRecoveryAsync(string root, OdbPostprocessWorkspace? saved)
     {

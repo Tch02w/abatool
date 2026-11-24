@@ -48,6 +48,12 @@ def test_manual_sequence_expression_rejects_missing_frame():
         parse_sequence_expression("0,9", range(4))
 
 
+def test_manual_range_reports_first_gap_in_sparse_catalog():
+    with pytest.raises(ValueError, match=r"时程序号不存在：3$"):
+        parse_sequence_expression("10000-1", [1, 2, 10000])
+    assert parse_sequence_expression("5-3,4，3", range(6)) == [3, 4, 5]
+
+
 def test_auto_selects_prefracture_and_last():
     assert choose_sequences(catalog([0, 1, 2, 3], prefracture=2), "auto") == [2, 3]
 

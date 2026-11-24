@@ -19,6 +19,32 @@ static class PostprocessDraftChecks
     private static RecoveryDraftFile<OdbPostprocessRecoveryDraft> Store(string path, int max = 8 * 1024 * 1024)
         => new(path, draft => draft.Validate(), max);
 
+    private static async Task VerifyComparisonRecoveryAsync(string directory)
+    {
+        var root = Path.Combine(directory, "对照");
+        var sources = Enumerable.Range(0, 300)
+            .Select(i => new OdbDraftSource(Path.Combine(root, $"model-{i}.odb"), 123, 0)).ToList();
+        var basis = OdbPostprocessDraftRecovery.SourceKey(sources);
+        var target = OdbPostprocessDraftRecovery.ComparisonDialogKind + " · " + basis;
+        var values = Enumerable.Range(0, sources.Count).ToDictionary(i => $"{i}/LoadDirection", _ => "3");
+        OdbPostprocessRecoveryDraft Draft(string key, Dictionary<string, string> inputs) => new()
+        {
+            Basis = basis, Root = root, Sources = sources,
+            Workspace = new() { Rows = sources.Select(s => new OdbPostprocessSavedRow { Path = s.Path }).ToList() },
+            Dialogs = new() { [key] = new() { Basis = basis, Inputs = inputs } }
+        };
+        var store = Store(Path.Combine(directory, "comparison-300.json"));
+        await store.SaveAsync(Draft(target, values));
+        var loaded = store.Load()!;
+        Check(loaded.Dialogs[target].Inputs.Count == 300 && loaded.Dialogs[target].Inputs["299/LoadDirection"] == "3",
+            "A valid 300-model comparison could not save and restore all edits");
+        await Reject(() => store.SaveAsync(Draft("普通弹窗", values)));
+        await Reject(() => store.SaveAsync(Draft(target, new(values) { ["300/LoadDirection"] = "1" })));
+        await Reject(() => store.SaveAsync(Draft(target, new(values) { ["0/Unknown"] = "1" })));
+        await Reject(() => store.SaveAsync(Draft(target, new(values) { ["01/LoadDirection"] = "1" })));
+        Check(store.Load()!.Dialogs[target].Inputs.Count == 300, "Invalid edits replaced the last valid comparison draft");
+    }
+
     public static async Task RunAsync(string directory)
     {
         directory = Path.GetFullPath(directory);
@@ -131,6 +157,7 @@ static class PostprocessDraftChecks
         Check(archive is not null && Store(archive).Load()!.Dialogs.Count == 4 && store.Load() is null, "Preserve and clear lost pending dialogs");
         Check(formalBytes.SequenceEqual(File.ReadAllBytes(formalPath)) && Directory.GetFiles(directory, "*.odb", SearchOption.AllDirectories).Length == 0,
             "Tests altered formal settings or created an ODB");
+        await VerifyComparisonRecoveryAsync(directory);
         Console.WriteLine($"{_checks} postprocess recovery draft checks passed.");
     }
 }

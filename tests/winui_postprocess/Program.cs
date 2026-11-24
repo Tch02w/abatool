@@ -2,6 +2,7 @@ using AbaqusTools.WinUI.Models;
 using AbaqusTools.WinUI.Services;
 
 PostprocessResultLocationChecks.Run();
+PostprocessEmptyGroupChecks.Run();
 
 static void Check(bool condition, string message)
 {
@@ -30,6 +31,7 @@ try
     // Verify this executable's failure contract without a Windows crash dialog.
     if (args.Contains("--verify-failure-exit"))
         throw new InvalidOperationException("Intentional test-runner failure-exit verification");
+    ParameterComparisonChecks.Run();
     if (args.Length == 2 && args[0] == "--draft-checks") await PostprocessDraftChecks.RunAsync(args[1]);
     else RunChecks();
 }
@@ -77,13 +79,16 @@ edited.FrameMode = "manual";
 edited.ManualSequenceExpression = "0,2";
 row.UpdatePostprocessJob(edited);
 row.ComparisonGroup = "A;B";
-var browserGroups = OdbComparisonGroups.ForBrowser([row]).ToArray();
-Check(browserGroups.Length == 2 && browserGroups.All(group => group.Single() == row), "Multi-group ODB must appear under both browser groups");
+var browserGroups = OdbComparisonGroups.ForBrowser([row], []).ToArray();
+Check(browserGroups.Length == 2 && browserGroups.All(group => group.Members.Single() == row), "Multi-group ODB must appear under both browser groups");
 Check(OdbComparisonGroups.ParseNames(" A；a; B;; ").SequenceEqual(new[] { "A", "B" }), "Group parsing must trim and deduplicate names");
 var ungrouped = new OdbFileRow(new OdbDiscoveryItem { Path = "ungrouped.odb" });
 ungrouped.ComparisonGroup = " ;； ";
-Check(OdbComparisonGroups.ForBrowser([ungrouped]).Single().Key == "未分组", "Empty memberships must stay visible");
-Console.WriteLine("3 comparison browser checks passed");
+Check(OdbComparisonGroups.ForBrowser([ungrouped], []).Single().Name == "未分组", "Empty memberships must stay visible");
+var literalGroup = OdbComparisonGroups.ForBrowser([ungrouped], ["未分组"]).ToArray();
+Check(literalGroup.Length == 2 && literalGroup.Single(g => g.Unassigned).Members.Single() == ungrouped
+    && literalGroup.Single(g => !g.Unassigned).Members.Count == 0, "A saved group named 未分组 must not absorb standalone models");
+Console.WriteLine("4 comparison browser checks passed");
 Check(OdbComparisonGroups.UpdateMembership("A；B", "b;C", "add") == "A；B；C", "Append must preserve existing groups and deduplicate");
 Check(OdbComparisonGroups.UpdateMembership("A；B", "a", "remove") == "B", "Removal must preserve other memberships");
 Check(OdbComparisonGroups.UpdateMembership("A；B", "C", "replace") == "C", "Replacement must remain explicit");

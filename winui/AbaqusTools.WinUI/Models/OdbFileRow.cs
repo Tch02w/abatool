@@ -205,34 +205,12 @@ public sealed class OdbFileRow : INotifyPropertyChanged
             return;
         }
         if (PostprocessJob is not { } draft) return;
-        var issues = new List<string>();
-        var steps = scan.Steps.ToList();
-        var start = steps.IndexOf(draft.StartStep);
-        var end = steps.IndexOf(draft.EndStep);
-        if (start < 0 || end < start) issues.Add("请选择有效的起止分析步");
-        if (draft.LoadDirection is not ("1" or "3" or "1+3")) issues.Add("请选择加载方向");
-        if (!scan.AssemblyNodeSets.Contains(draft.LoadSet)) issues.Add("请选择加载节点集");
-        foreach (var (name, label) in new[] {
-            (draft.PileDisplaySet, "桩体显示集合"), (draft.PileConcreteSet, "混凝土集合"),
-            (draft.SoilSet, "土体集合") })
-            if (!scan.AssemblyElementSets.Contains(name)) issues.Add($"请重新选择{label}");
-        if (draft.ReinforcementMode is not ("required" or "none")) issues.Add("请选择纵筋配置");
-        if (draft.ReinforcementMode != "none" && !scan.AssemblyElementSets.Contains(draft.RebarSet))
-            issues.Add("请重新选择纵筋集合");
-        if (draft.PileSteelSet.Length > 0 && !scan.AssemblyElementSets.Contains(draft.PileSteelSet))
-            issues.Add("请重新选择钢构件集合");
-        if (draft.FrameMode is not ("auto" or "all" or "manual")
-            || (draft.FrameMode == "manual" && string.IsNullOrWhiteSpace(draft.ManualSequenceExpression)))
-            issues.Add("请配置提取帧");
-        if (draft.PileType is not ("RC" or "CFST")) issues.Add("请选择桩体类型");
-        if (draft.ReinforcementMode != "none" && string.IsNullOrWhiteSpace(draft.LongitudinalMaterial)) issues.Add("请填写纵筋材料");
-        if (!double.IsFinite(draft.RebarDiameterMm) || draft.RebarDiameterMm < 1 || draft.RebarDiameterMm > 100)
-            issues.Add("纵筋直径应为 1–100 mm");
+        var issues = OdbPostprocessParameterComparison.ValidateDraft(Path, scan, draft);
         HasPostprocessConfiguration = issues.Count == 0;
         PostprocessStatusDisplay = HasPostprocessConfiguration ? (_hasEditedPostprocessJob ? "已配置" : "已就绪") : "待配置";
         PostprocessSummary = HasPostprocessConfiguration
             ? $"{draft.StartStep} → {draft.EndStep} · {FrameModeDisplay(draft.FrameMode)} · 方向 {draft.LoadDirection}"
-            : string.Join("；", issues);
+            : string.Join("；", issues.Select(issue => issue.Message));
     }
 
     public void MarkProcessing(string status, string message)

@@ -31,6 +31,15 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/JobDraftContracts.cs" Link="JobDraftContracts.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueListUpdates.cs" Link="QueueListUpdates.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableRow.cs" Link="Controls/QueueTableRow.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/OdbParameterComparisonEditor.cs" Link="Controls/OdbParameterComparisonEditor.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs" Link="Controls/WorkbenchNumberBox.cs" />
+    <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml" Link="Controls/WorkbenchNumberBoxResources.xaml" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Models/OdbFileRow.cs" Link="Models/OdbFileRow.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/ControlPlaneContracts.cs" Link="Services/ControlPlaneContracts.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessContracts.cs" Link="Services/OdbPostprocessContracts.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbStructureContracts.cs" Link="Services/OdbStructureContracts.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessParameterComparison.cs" Link="Services/OdbPostprocessParameterComparison.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs" Link="Services/OdbPostprocessWorkspaceStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml.cs" Link="Controls/QueueTableView.xaml.cs" />
     <Page Include="../../winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml" Link="Controls/QueueTableView.xaml" />
     <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml" Link="Controls/WorkbenchExplorerHost.xaml" />

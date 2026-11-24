@@ -19,9 +19,14 @@ public sealed partial class TestApp : Application
     private Window? _window;
     private readonly Grid _root = new();
 
-    public TestApp(string receipt)
+    private readonly string? _comparisonScans;
+
+    public TestApp(string receipt, string? comparisonScans)
     {
         _receipt = receipt;
+        _comparisonScans = comparisonScans;
+        UnhandledException += (_, e) =>
+            Write(new { status = "failed", checks = _checks, error = e.Exception.ToString(), message = e.Message });
         InitializeComponent();
     }
 
@@ -43,6 +48,7 @@ public sealed partial class TestApp : Application
             await CheckServerDialogLayoutAsync();
             await CheckQueueUpdatesAsync();
             await CheckQueueTableAsync();
+            await CheckParameterComparisonAsync();
             Write(new { status = "passed", checks = _checks });
         }
         catch (Exception error)

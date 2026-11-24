@@ -917,7 +917,8 @@ def test_postprocess_execution_uses_isolated_group_identity() -> None:
     assert 'Click="OnGroupOrderClicked"' in xaml
     assert 'Click="OnManageGroupsClicked"' in xaml
     assert "OdbComparisonGroups.ChangeGroup(_odbItems, oldName," in page
-    assert "ManageGroupsButton.IsEnabled = GroupOrderButton.IsEnabled" in page
+    assert 'Click="OnCreateGroupsClicked"' in xaml
+    assert "ManageGroupsButton.IsEnabled = CreateGroupsButton.IsEnabled" in page
 
 
 def test_odb_merge_page_uses_native_pickers_and_safe_plan_preview() -> None:

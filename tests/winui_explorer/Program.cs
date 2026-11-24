@@ -14,7 +14,7 @@ static class Program
         {
             SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(
                 DispatcherQueue.GetForCurrentThread()));
-            _ = new TestApp(Path.GetFullPath(args[0]));
+            _ = new TestApp(Path.GetFullPath(args[0]), args.Length > 1 ? Path.GetFullPath(args[1]) : null);
         });
     }
 }

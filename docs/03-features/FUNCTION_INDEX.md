@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F022 多模型参数由 `winui/AbaqusTools.WinUI/Services/OdbPostprocessParameterComparison.cs` 校验改动，`winui/AbaqusTools.WinUI/Controls/OdbParameterComparisonEditor.cs` 分页对照，`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.ParameterComparison.cs` 保存和恢复编辑。预建空组入口在 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupCatalog.cs`，名称、重复处理和成员迁移在 `winui/AbaqusTools.WinUI/Services/OdbComparisonGroups.cs`。定向测试见 `tests/winui_postprocess/ParameterComparisonChecks.cs`、`tests/winui_postprocess/PostprocessEmptyGroupChecks.cs`、`tests/winui_explorer/ParameterComparisonChecks.cs`。[使用说明](../repowiki/postprocessor.md)
+
 F022 后处理分组队列由 `modules/control_plane/postprocess_group_queue.py` 的 `PostprocessGroupQueueManager` 调度，HTTP 入口与关闭协调在 `modules/control_plane/server.py` 和 `modules/control_plane/shutdown_protocol.py`。WinUI 使用 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupQueue.cs` 接回队列、显示日志及操作状态，`winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupEditor.cs` 编辑等待组。测试见 `tests/control_plane/test_postprocess_group_queue.py`、`tests/control_plane/test_postprocess_group_queue_http.py` 和 `tests/winui_host/test_postprocess_group_queue_api.py`。运行规则见 [ADR 0023](../submitter/adr/0023-postprocess-group-queue.md)。
 
 | 11 月 24 日修复 | 生产入口及定位 | 验证 |

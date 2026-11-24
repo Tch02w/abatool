@@ -36,7 +36,9 @@ public sealed class OdbPostprocessRecoveryDraft
         {
             if (pair.Key.Length > 32768 || pair.Value is null || pair.Value.Basis is null || pair.Value.Basis.Length != 64)
                 throw new InvalidDataException("弹窗草稿身份无效。");
-            ValidateInputs(pair.Value.Inputs);
+            if (pair.Key.StartsWith(OdbPostprocessDraftRecovery.ComparisonDialogKind + " · ", StringComparison.Ordinal))
+                ValidateComparisonInputs(pair.Value.Inputs);
+            else ValidateInputs(pair.Value.Inputs);
         }
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in Sources)
@@ -47,10 +49,27 @@ public sealed class OdbPostprocessRecoveryDraft
             throw new InvalidDataException("恢复草稿的配置与ODB身份不对应。");
     }
 
-    private static void ValidateInputs(Dictionary<string, string> inputs)
+    private static void ValidateInputs(Dictionary<string, string> inputs, int maximumEntries = 256)
     {
-        if (inputs is null || inputs.Count > 256 || inputs.Any(p => p.Key.Length > 1024 || p.Value is null || p.Value.Length > 65536))
+        if (inputs is null || inputs.Count > maximumEntries || inputs.Any(p => p.Key.Length > 1024 || p.Value is null || p.Value.Length > 65536))
             throw new InvalidDataException("恢复草稿输入过大或格式无效。");
+    }
+
+    private void ValidateComparisonInputs(Dictionary<string, string> inputs)
+    {
+        var fields = OdbPostprocessParameterComparison.Fields.Select(field => field.Key).ToHashSet(StringComparer.Ordinal);
+        ValidateInputs(inputs, Sources.Count * fields.Count);
+        long characters = 0;
+        foreach (var (key, value) in inputs)
+        {
+            var slash = key.IndexOf('/');
+            if (slash < 1 || !int.TryParse(key.AsSpan(0, slash), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                || index >= Sources.Count || !fields.Contains(key[(slash + 1)..])
+                || index.ToString(CultureInfo.InvariantCulture) != key[..slash])
+                throw new InvalidDataException("对照草稿的模型或参数标识无效。");
+            characters += key.Length + value.Length;
+            if (characters > 256L * 65536) throw new InvalidDataException("对照草稿输入内容过大。");
+        }
     }
 
     public bool Matches(string root, string basis, IEnumerable<OdbDraftSource> sources) =>
@@ -60,6 +79,7 @@ public sealed class OdbPostprocessRecoveryDraft
 
 public static class OdbPostprocessDraftRecovery
 {
+    public const string ComparisonDialogKind = "对照提取参数";
     // Prepare new rows without modifying the live page or reusing prior scan validity.
     public static IReadOnlyList<OdbFileRow> PrepareRows(OdbPostprocessRecoveryDraft draft, IEnumerable<OdbFileRow> current)
     {

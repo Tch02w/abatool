@@ -1,12 +1,14 @@
 # Windows 发布构建（F026）
 
-2026-11-19：最新干净1d3c981完整0aba6269fe34及安装候选9a463a0e6dc8包含XLSX按需预览、结果目录身份和此前队列/传输修复。1689清单文件全摘要、包内依赖及11项冻结HTTP通过；安装器126168153字节、NotSigned、正式标识未安装。本轮未改安装模板，不重复生命周期；旧aa87c2237002仅证明此前6b4负载的8步与14数据文件保留。新原生窗口无法定位，原生业务及无SDK目标机仍待。准确产物与边界见[当前状态](../08-handoff/CURRENT_STATUS.md)和TASK-001顶部。
+2026-11-24 从干净提交 `51cc69f` 生成的完整目录是 `GPTWork/release-win-x64-7857f4955208/AbaqusTools`。它包含队列表头对齐、浅色分隔线和同步横向滚动。1691 个文件逐项通过大小及 SHA256 检查，清单本身的 SHA256 为 `5a3d1605e39dc23c36128334d7099db90c8b95244f24c408f11078c6adca6b67`。
+
+本次验证覆盖 19 个 Abaqus worker 脚本和 16 个 WinUI 资源。`Controls/QueueTableView.xbf`、`Pages/JobQueuePage.xbf` 和应用 PRI 与已验收的开发输出逐字节一致。正式客户端启动包内后台后，读取了本机资源和队列，完成参数预览、入队、编辑保留和显式复位，并在空闲时正常退出。7 项包内依赖检查和逐文件结果保存在 `GPTWork/release-table-audit-20261124/verification.json`。安装候选的校验值见[安装说明](INSTALLATION.md)。
 
 ## 应用资源发布门槛（2026-11-18）
 
 真实目录包启动发现既有 `dotnet publish` 没有收集本应用的 XBF 和 PRI，主窗口加载报 `Cannot locate resource from 'ms-appx:///MainWindow.xaml'`，退出 `0xc000027b`。旧目录/安装候选的摘要、依赖、后台和安装生命周期通过只证明这些范围，**不证明原生程序能启动**。缺少应用资源的旧候选保留追溯，撤出可运行候选；准确新入口见当前状态。
 
-`winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj` 的 `PublishWorkbenchXamlResources` 在 `ComputeFilesToPublish` 后把 SDK 本次生成的 `GeneratedXamlDest` 与应用 PRI 加入发布列表，保持相对目录；源编译资源缺失即失败，不用历史输出目录的宽泛通配复制。`packaging/build_release.py` 在生成清单前检查资源，`packaging/build_installer.py` / `verify_winui_resources` 在接受负载时再次检查。检查覆盖根目录、Pages 和 Controls 当前 XAML 对应的 XBF 及 `AbaqusTools.WinUI.pri`，当前共 15 个；空文件或与清单一致地漏列仍拒绝。新增 XAML 若放到其他目录，须同时扩展发布门槛和功能索引。
+`winui/AbaqusTools.WinUI/AbaqusTools.WinUI.csproj` 的 `PublishWorkbenchXamlResources` 在 `ComputeFilesToPublish` 后把 SDK 本次生成的 `GeneratedXamlDest` 与应用 PRI 加入发布列表，保持相对目录；源编译资源缺失即失败，不用历史输出目录的宽泛通配复制。`packaging/build_release.py` 在生成清单前检查资源，`packaging/build_installer.py` / `verify_winui_resources` 在接受负载时再次检查。检查覆盖根目录、Pages 和 Controls 当前 XAML 对应的 XBF 及 `AbaqusTools.WinUI.pri`，在本候选中共 16 个。空文件或遗漏资源会导致构建失败。新增 XAML 若放到其他目录，须同时扩展发布门槛和功能索引。
 
 `tests/common/test_installer_manifest.py` 覆盖主窗口、页面、数字控件与 PRI 的缺失/空文件，且证明旧库存读取模式不能生成缺资源安装器。清单检查不是资源语义/原生启动证明；最终候选仍须从实际发布目录启动，核对包内后台、草稿和退出。
 

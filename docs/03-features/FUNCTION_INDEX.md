@@ -4,7 +4,7 @@ F004表格布局（2026-11-24）：`winui/AbaqusTools.WinUI/Controls/QueueTableV
 
 F009/F023远端状态观察：`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / ReadRemoteStateAsync、GetRemoteServersAsync、GetActiveRemoteTransfersAsync、GetRemoteTransferAsync分离连接与响应限时；`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` / RecoverTransfersAsync、ObserveTransferAsync、OnPageUnloaded、ShowTransferObservationWarning保留任务身份、区分读取失败与传输终态、只读恢复。测试`tests/winui_host/RemoteObservationChecks.cs`、`tests/winui_host/test_shutdown_api.py`及`tests/winui/test_shell_contract.py`；范围见[传输说明](REMOTE_TRANSFERS.md)。
 
-F026 最新发布证据：干净1d3c981 → 完整目录0aba6269fe34 → 安装候选9a463a0e6dc8；1689清单文件/19worker/15应用资源、全摘要/依赖和11项冻结HTTP通过。最新版原生目录初次加载已观察，实际点击/视觉仍受阻。此前6b4负载的测试身份安装/升级/卸载aa87c2237002通过，14个数据文件保留；此历史证据不扩大到新负载生命周期。最新正式标识未安装、NotSigned。见[当前状态](../08-handoff/CURRENT_STATUS.md)和[原生验收步骤](../06-testing/NATIVE_ACCEPTANCE.md)。
+F026 当前目录包来自干净提交 `51cc69f`，目录代号 `7857f4955208`，未签名安装候选 `898e84573199`。1691 个清单文件的摘要、19 个 worker、16 项界面资源、包内依赖及冻结后台检查通过。完整包已在本机打开并接回两个隔离模拟作业，执行停止并关闭。安装候选未安装；既有安装生命周期证据属于较早的负载。详见[发布构建](../05-development/RELEASE.md)和[迁移记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 
 F012/F013真实后台崩溃补验：`packaging/verify_real_merge_backend_crash.py` / `verify`，复用`packaging/verify_real_merge_interruption.py`的HTTP/进程身份/摘要工具。只中断自有冻结后台，保持经身份核实的真实Abaqus校验进程存活至恢复核对，再恢复其执行；验证中断记录、同请求不重放、旧结果及来源摘要、工作区保留和三次启动持久化。--later第三源路径启用真实两阶段批量检查，包括恢复后继续拒绝重放、第二阶段未提交。回执real-merge-backend-crash-9597d1bc621d及real-batch-backend-crash-453005f06383的verification.json；范围及退出码见[安全合并](ODB_MERGE.md)和[批量任务](ODB_RESULT_BATCH.md)。
 

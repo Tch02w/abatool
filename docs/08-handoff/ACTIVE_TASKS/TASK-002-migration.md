@@ -1,5 +1,13 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-24 · 队列表格进入完整目录与安装候选
+
+从已推送的干净 `51cc69f` 执行 `packaging/build_release.py --no-restore` 和 `packaging/build_installer.py`（版本 `0.1.0`），使用项目 `.venv` 和 G 盘临时目录。构建会话 4416 退出 0，完整目录为 `GPTWork/release-win-x64-7857f4955208/AbaqusTools`，正式标识安装器在 `GPTWork/installer-win-x64-898e84573199`。清单包含 1691 个文件，核对 16 项 WinUI 资源及全部文件摘要通过。包内队列表格、页面 XBF 和 PRI 与已实际操作的开发输出一致，重新编译后的应用 DLL 摘要有差异。
+
+包内 `--check-bundle` 的 7 项依赖检查通过。由本提交构建的 C# 主机使用 `--launch-bundle` 和 `--execution-options`，验证后台身份、资源和队列读取、参数预览/入队、编辑保留、复位和空闲退出。两个检查进程均退出 0，独立服务描述符已移除。回执 `GPTWork/release-table-audit-20261124/verification.json` 保存命令结果、资源清单、程序与安装器摘要。GitHub `main` 经 `git ls-remote` 实查指向完整提交 `51cc69fff9d2a593b40228c22be1f584afab30f3`，此提交树含根目录 README 和 `docs/repowiki` 的 7 份 Markdown 文档，其中包含使用手册与开发交接入口。
+
+安装器签名状态为 `NotSigned`。正式标识安装、无 SDK 目标机和本次构建的安装生命周期仍待验。后续原生检验请标明使用的完整包或开发输出，并按各页面任务回执追踪。安装文件、摘要及使用步骤见[安装说明](../../05-development/INSTALLATION.md)。
+
 ## 2026-11-24 · 桌面通道恢复，完成部分原生验收并修复队列表格
 
 CUA在成功截图后可正常点击和输入。原先连续输入失败属于历史阻塞，当前目标继续进行。F021目录草稿/索引隔离、侧栏刷新、实际CSV导出、显式切换、非法目录防旧操作、真实Excel预览及完整剪贴板、空闲退出已补验，准确范围见[TASK-001](TASK-001-postprocessing.md)顶部。用户新反馈的队列表头偏移和浅色行列线已实现，110项生产控件通过，实际候选页点击、等待/刷新及窄窗口滚动通过，见[TASK-004](TASK-004-ui-interaction.md)顶部。

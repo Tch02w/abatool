@@ -1,6 +1,12 @@
 # TASK-002：后续迁移、完善与整理
 
-后处理分组的实现、真实工程输出和桌面验收已转入 [TASK-001](TASK-001-postprocessing.md) 的 F022 记录。后文针对 `ee1f79f` 及更早版本的待办保留其原观察日期。跨模型批量修改参数、无开发环境 Windows 和远端异常工况仍有待验项。
+## 2026-11-24 · 多模型参数对照与持久空组的发布候选
+
+干净提交 `4d55265eedd17cf155f049ea565b49ac29594aa7` 由项目 `.venv` 调用 `packaging/build_release.py --no-restore` 构建。完整目录为 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools`。独立复核 1692 个文件的大小和 SHA256，15 项 XBF 与通过 148 项原生控件检查的开发版本逐字节一致，PRI 在内共 16 项界面资源齐全。包内冻结后台验证了 7 项依赖及 19 个 worker 脚本。正式 C# 客户端验证进程来源、资源和队列读取，回读 B 组发布记录、部分完成及取消状态后，确认活动列表为空并安全关闭。
+
+Inno Setup 使用同一干净提交编译正式应用标识安装候选，路径为 `GPTWork/installer-win-x64-66c59ff3a8e2/AbaqusTools-0.1.0-win-x64-setup.exe`，构建回执及完整摘要见 [发布构建](../../05-development/RELEASE.md) 和 [安装说明](../../05-development/INSTALLATION.md)。独立核验记录为 `GPTWork/release-parameter-comparison-4d55265-20261124/verification.json`。该候选未签名，正式标识安装、无开发环境 Windows 及真实远端异常待验收。
+
+GJA/GJB 的只读扫描、参数对照、离屏业务页 10 项保存/重试检查，以及解锁后的可见窗口待验项，见 [TASK-001](TASK-001-postprocessing.md)。以下版本的窗口身份、已验分支和待办对应记录时点。
 
 ## 2026-11-24 · 联合修复目录包、同负载安装验证与续接
 

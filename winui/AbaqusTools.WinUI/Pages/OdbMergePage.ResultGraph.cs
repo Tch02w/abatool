@@ -45,7 +45,8 @@ public sealed partial class OdbMergePage
 
     private void OnGraphPlansRequested(object? sender, OdbResultBatchPlan batch)
     {
-        if (_operationBusy || _previewBusy || _batchBusy || !batch.Valid || batch.Plans.Count == 0)
+        if (MergeModeComboBox.SelectedIndex != 0 || _operationBusy || _previewBusy || _batchBusy
+            || !batch.Valid || batch.Plans.Count == 0)
         {
             return;
         }

@@ -7,6 +7,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbMergeExecution.cs" Link="OdbMergeExecution.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbResultGraphContracts.cs" Link="OdbResultGraphContracts.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbResultBatchRunner.cs" Link="OdbResultBatchRunner.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/RestartResultPlanContracts.cs" Link="RestartResultPlanContracts.cs" />
   </ItemGroup>

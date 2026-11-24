@@ -36,10 +36,7 @@ from modules.submitter.local_job_execution import (
     execute_local_job,
 )
 from modules.submitter.models import QueueItem
-from modules.submitter.queue_scheduler import (
-    oldjob_name_from_item,
-    queue_item_matches_oldjob_path,
-)
+from modules.submitter.restart_topology import RestartTopology
 from modules.submitter.runtime_observation import LocalJobObservation
 from modules.submitter.scheduling import ExecutionEventKind
 
@@ -201,6 +198,11 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         else:
             raise ApiProblem(400, "INVALID_LOCAL_QUEUE_ACTION", "不支持该本机队列控制操作")
         return self.snapshot()
+
+    def edit_queue_item(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        # Use the same lock order as dispatch: runtime first, queue transaction second.
+        with self._lock:
+            return self.queue_service.execute(payload, scheduling=self._active or self._dispatching)
 
     def _start(self, payload: Mapping[str, Any]) -> None:
         unknown = sorted(
@@ -439,6 +441,7 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         ready_ids: list[str] = []
 
         def mutation(_candidates: list[QueueItem], queue_items: list[QueueItem]) -> None:
+            topology = None
             for item in queue_items:
                 if item.status not in {STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY}:
                     continue
@@ -450,16 +453,14 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
                         item.message = "等待本机调度"
                     ready_ids.append(item.item_id)
                     continue
-                dependencies = [candidate for candidate in queue_items
-                                if candidate.item_id != item.item_id
-                                and candidate.job_name.casefold() == oldjob_name_from_item(item).casefold()]
-                if item.oldjob_path:
-                    dependencies = [candidate for candidate in dependencies if queue_item_matches_oldjob_path(item, candidate)]
-                if len(dependencies) > 1:
+                if topology is None:
+                    topology = RestartTopology(queue_items)
+                issue = topology.edit_issue(item)
+                if issue:
                     item.status = STATUS_WAITING_DEPENDENCY
-                    item.message = "存在同名 Restart 前置作业，请指定唯一的前置 ODB 路径"
+                    item.message = issue
                     continue
-                dependency = dependencies[0] if dependencies else None
+                dependency = topology.by_id.get(topology.parents.get(item.job_id, ""))
                 if dependency is None and item.oldjob_path and Path(item.oldjob_path).is_file():
                     if Path(item.oldjob_path).with_suffix(".lck").exists():
                         item.status = STATUS_WAITING_DEPENDENCY

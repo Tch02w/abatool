@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -38,6 +39,37 @@ class RemoteFrontendContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def test_formal_restart_edit_checks_before_mutating_the_original_row(self) -> None:
+        class Host(QtWidgets.QWidget):
+            queue_active = False
+
+            def reconcile_scheduler_state(self):
+                pass
+
+        host = Host()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            old = QueueItem(job_name="parent", inp_path=str(root / "parent.inp"), status="待运行")
+            child = QueueItem(job_name="child", inp_path=str(root / "child.inp"), status="待运行",
+                              run_mode="restart", oldjob_name="parent", oldjob_path=str(root / "parent.odb"))
+            Path(old.inp_path).write_text("*Heading\n", encoding="ascii")
+            Path(child.inp_path).write_text("*Restart, read\n", encoding="ascii")
+            saved = mock.Mock()
+            manager = QueueManagerDialog(host, [old, child], {}, embedded=True, joblist_save_callback=saved)
+            with mock.patch.object(QtWidgets.QMessageBox, "warning") as warning:
+                manager.apply_formal_item_edit_result(child, replace(child, oldjob_path=str(root / "child.odb")))
+                warning.assert_called_once()
+                saved.assert_not_called()
+                self.assertEqual((child.oldjob_name, child.status), ("parent", "待运行"))
+            child.status, child.valid = "运行失败", False
+            child.oldjob_name, child.oldjob_path = "child", str(root / "child.odb")
+            child.message = "当前作业名称不能与 Restart 依赖作业名相同。"
+            manager.apply_formal_item_edit_result(child, replace(child, oldjob_path=str(root / "parent.odb")))
+            self.assertEqual((child.oldjob_name, child.status, child.valid), ("parent", "待运行", True))
+            saved.assert_called_once()
+            manager.close()
+        host.close()
 
     def test_merge_preview_preserves_both_raw_odb_files(self) -> None:
         merge = OdbMergeDraft(

@@ -2,6 +2,8 @@ using AbaqusTools.WinUI.Services;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("execution follows the current mode and checked plan", CheckExecutionCommandAsync),
+    ("populating a saved graph and undoing edits preserve its clean state", GraphEditsAsync),
     ("shared ancestor uses verified auto-numbered output", SharedAncestorAsync),
     ("prefix cache is isolated to one batch", NoCrossBatchReuseAsync),
     ("failed stage prevents descendants and preserves completed targets", FailedStageAsync),
@@ -21,7 +23,41 @@ foreach (var (name, run) in tests)
 }
 Console.WriteLine($"{tests.Length} batch-runner tests passed.");
 
+static Task CheckExecutionCommandAsync()
+{
+    foreach (var mode in new[] { -1, 0, 1, 2 })
+    foreach (var busy in new[] { false, true })
+    foreach (var ready in new[] { false, true })
+    foreach (var chain in new[] { false, true })
+    {
+        var expected = (mode, busy, ready, chain) switch
+        {
+            (0, false, true, true) => OdbMergeCommand.Batch,
+            (1, false, true, false) => OdbMergeCommand.Manual,
+            _ => OdbMergeCommand.None,
+        };
+        Equal(expected, OdbMergeExecution.Resolve(mode, busy, ready, chain),
+            $"mode={mode}, busy={busy}, ready={ready}, chain={chain}");
+    }
+    return Task.CompletedTask;
+}
+
 static string Odb(string name) => Path.Combine(Path.GetTempPath(), "abatool-batch-runner-tests", $"{name}.odb");
+
+static Task GraphEditsAsync()
+{
+    static OdbResultGraphNode Node() => new() { NodeId = "base", Name = "基础", OdbPath = Odb("cube"), InpPath = "cube.inp" };
+    var graph = new OdbResultGraphSnapshot { OutputDirectory = "输出", Nodes = [Node()] };
+    var loaded = Node();
+    Equal(false, graph.HasEdits("输出", [loaded]), "Populating controls with saved values must remain clean.");
+    Equal(true, graph.HasEdits("输出 ", [loaded]), "The raw directory text is part of the editable draft.");
+    Equal(true, graph.HasEdits("输出", []), "Removing a node must be detected.");
+    loaded.Name = "修改";
+    Equal(true, graph.HasEdits("输出", [loaded]), "A node edit must enable save.");
+    loaded.Name = "基础";
+    Equal(false, graph.HasEdits("输出", [loaded]), "Reverting an edit must restore the clean state.");
+    return Task.CompletedTask;
+}
 
 static RestartResultStep Step(int index, string name, string original, string restart, string output) => new()
 {

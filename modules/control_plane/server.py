@@ -697,7 +697,11 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.OK, payload, trace_id)
 
     def _handle_job_queue_command(self, trace_id: str) -> None:
-        payload = self.context.job_queue_service.execute(self._read_json_object())
+        request = self._read_json_object()
+        if request.get("action") == "updateQueueItem":
+            payload = self.context.local_queue_runtime.edit_queue_item(request)
+        else:
+            payload = self.context.job_queue_service.execute(request)
         self._send_json(HTTPStatus.OK, payload, trace_id)
 
     def _handle_local_queue_control(self, trace_id: str) -> None:

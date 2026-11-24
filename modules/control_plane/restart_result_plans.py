@@ -45,6 +45,19 @@ def _parent(
     by_id: Mapping[str, Mapping[str, Any]],
     by_name: Mapping[str, list[Mapping[str, Any]]],
 ) -> Mapping[str, Any] | None:
+    oldjob_name = str(item.get("oldjobName") or "").strip().casefold()
+    path = item.get("oldjobPath")
+    if oldjob_name and oldjob_name == str(item.get("jobName") or "").casefold():
+        raise ValueError(f"{item.get('jobName')} 的前置作业指向自身，无法生成完整结果。")
+    if path and (Path(path).suffix.lower() != ".odb" or (oldjob_name and Path(path).stem.casefold() != oldjob_name)):
+        raise ValueError(f"{item.get('jobName')} 的前置路径与指定的 ODB 不一致。")
+
+    def matches_path(candidate: Mapping[str, Any]) -> bool:
+        directories = [Path(candidate[key]) for key in ("archiveDestination", "effectiveWorkDir") if candidate.get(key)]
+        if candidate.get("inpPath"):
+            directories.append(Path(candidate["inpPath"]).parent)
+        return not path or not directories or Path(path).parent in directories
+
     dependency_ids = item.get("dependencyJobIds")
     if isinstance(dependency_ids, list):
         identifiers = list(dict.fromkeys(str(value or "").strip() for value in dependency_ids))
@@ -55,9 +68,10 @@ def _parent(
             parent = by_id.get(identifiers[0])
             if parent is None:
                 raise ValueError(f"{item.get('jobName')} 指定的前置作业不存在。")
+            if (oldjob_name and str(parent.get("jobName") or "").casefold() != oldjob_name) or not matches_path(parent):
+                raise ValueError(f"{item.get('jobName')} 的前置 ODB 与指定的队列作业不一致。")
             return parent
-    oldjob_name = str(item.get("oldjobName") or "").strip().casefold()
-    candidates = by_name.get(oldjob_name, [])
+    candidates = [candidate for candidate in by_name.get(oldjob_name, []) if matches_path(candidate)]
     if len(candidates) > 1:
         raise ValueError(f"{item.get('jobName')} 的前置名称对应多个作业，请先指定唯一前置作业。")
     return candidates[0] if candidates else None

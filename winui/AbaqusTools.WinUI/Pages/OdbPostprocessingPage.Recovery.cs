@@ -13,6 +13,7 @@ public sealed partial class OdbPostprocessingPage
     private void BeginPostprocessMonitoring(string requestId, string kind)
     {
         _postprocessTracking.Begin(requestId, kind);
+        _resultLocations.Begin(requestId, kind, RootTextBox.Text);
         _postprocessMonitoringSource = new CancellationTokenSource();
     }
 

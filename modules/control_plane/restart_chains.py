@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .contracts import SCHEMA_VERSION
-from .job_queues import read_job_queues
+from modules.submitter.app_paths import JOBLIST_PATH
+from modules.submitter.queue_store import load_joblist_state
+from modules.submitter.restart_topology import RestartTopology
 
-
-def _path_compatible(oldjob_path: str, oldjob_name: str) -> bool:
-    if not oldjob_path:
-        return True
-    try:
-        path = Path(oldjob_path)
-    except (OSError, ValueError):
-        return False
-    return path.suffix.lower() == ".odb" and path.stem.casefold() == oldjob_name.casefold()
+from .contracts import SCHEMA_VERSION, ApiProblem
+from .job_queues import project_job_queues
 
 
 def _cycle_ids(parent_by_child: dict[str, str]) -> set[str]:
@@ -70,15 +63,13 @@ def _output_odb(item: dict[str, Any]) -> str:
 
 
 def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any]:
-    queue = read_job_queues(joblist_path)
-    items = list(queue["queueItems"])
+    _, formal, error = load_joblist_state(joblist_path or JOBLIST_PATH, restore_active_state=False)
+    if error:
+        raise ApiProblem(500, "JOB_QUEUE_STATE_UNREADABLE", "无法读取重启动依赖所在的队列", details={"reason": error})
+    topology = RestartTopology(formal)
+    items = project_job_queues([], formal)["queueItems"]
     by_id = {item["jobId"]: item for item in items if item["jobId"]}
-    by_name: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for item in items:
-        if item["jobName"]:
-            by_name[item["jobName"].casefold()].append(item)
-
-    parent_by_child: dict[str, str] = {}
+    parent_by_child = topology.parents
     parent_name_by_child: dict[str, str] = {}
     missing_children: set[str] = set()
     incompatible_children: set[str] = set()
@@ -89,22 +80,18 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
         if not oldjob_name and not dependency_ids and item["runMode"] != "restart":
             continue
         restart_items.append(item)
-        parent = next((by_id.get(value) for value in dependency_ids if value in by_id), None)
-        if parent is None and oldjob_name:
-            candidates = by_name.get(oldjob_name.casefold(), [])
-            parent = candidates[0] if candidates else None
+        parent = by_id.get(parent_by_child.get(item["jobId"], ""))
         if parent is not None:
-            parent_by_child[item["jobId"]] = parent["jobId"]
             parent_name_by_child[item["jobId"]] = parent["jobName"]
-        elif oldjob_name:
+        else:
             try:
                 external_exists = bool(item["oldjobPath"] and Path(item["oldjobPath"]).is_file())
             except OSError:
                 external_exists = False
-            if not external_exists:
+            if not external_exists or topology.issues.get(item["jobId"], ("", ""))[0] == "missing_parent":
                 missing_children.add(item["jobId"])
             parent_name_by_child[item["jobId"]] = oldjob_name
-        if oldjob_name and not _path_compatible(item["oldjobPath"], oldjob_name):
+        if topology.issues.get(item["jobId"], ("", ""))[0] == "incompatible_path":
             incompatible_children.add(item["jobId"])
 
     cycle_ids = _cycle_ids(parent_by_child)
@@ -119,7 +106,7 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
             message = f"未找到前置作业：{parent_name_by_child.get(job_id, '')}"
         elif job_id in incompatible_children:
             validation_status = "incompatible_path"
-            message = "oldjob 路径与前置作业名称不兼容"
+            message = topology.issues[job_id][1]
         else:
             validation_status = "valid"
             message = "依赖有效"

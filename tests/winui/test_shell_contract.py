@@ -257,9 +257,12 @@ def test_odb_page_routes_its_result_directory_into_the_native_browser() -> None:
     )
 
     assert "OpenResultBrowserAsync" in window
-    assert 'Path.Combine(root, "AbaqusODBPostProcessor_Results")' in odb_page
-    assert "Directory.Exists(resultRoot)" in odb_page
-    assert "SetResultRootAsync" in result_page
+    assert "_resultLocations.Resolve(RootTextBox.Text, _lastDiscoveryRoot," in odb_page
+    assert "_resultLocations.Complete(snapshot)" in odb_page
+    assert "OpenResultBrowserAsync(resultRoot)" in odb_page
+    routed_read = result_page.split("public Task SetResultRootAsync", 1)[1].split("private async Task<bool>", 1)[0]
+    assert "_loads.OpenRootAsync(" in routed_read and "RefreshScopesAsync(explicitRoot: target)" in routed_read
+    assert "if (IsLoaded)" not in routed_read
     assert "Directory.CreateDirectory" not in odb_page
 
 
@@ -837,9 +840,27 @@ def test_restart_result_materialization_is_separate_from_the_job_graph() -> None
     assert "MergeNode" not in restart_page
     assert "合并节点" not in restart_xaml
     assert "LoadMaterializationPlan" in merge_page
-    assert "ExecuteMaterializationPlanAsync" in merge_page
+    assert "个节点 · {snapshot.NodeCount} 个重启动作业" in restart_page
+    assert "{_nodes.Count} 个节点" in restart_page
     assert 'x:Name="MaterializationPlanCard"' in merge_xaml
     assert 'x:Name="MaterializationStepsList"' in merge_xaml
+
+
+def test_merge_execute_button_and_click_dispatch_use_the_same_checked_plan() -> None:
+    page = (WINUI_ROOT / "Pages" / "OdbMergePage.xaml.cs").read_text(encoding="utf-8")
+    graph = (WINUI_ROOT / "Pages" / "OdbMergePage.ResultGraph.cs").read_text(encoding="utf-8")
+    editor = (WINUI_ROOT / "Controls" / "OdbResultGraphEditor.xaml.cs").read_text(encoding="utf-8")
+    assert "ExecuteButton.IsEnabled = ExecutionCommand != OdbMergeCommand.None;" in page
+    click = page.split("private async void OnExecuteClicked(", 1)[1].split("private async void OnStopClicked", 1)[0]
+    assert click.index("switch (ExecutionCommand)") < click.index("await ExecuteResultBatchAsync();")
+    assert click.index("case OdbMergeCommand.Manual:") < click.index("await PreviewDraftAsync()")
+    assert click.index("preview.WillOverwrite && !await ConfirmOverwriteAsync") < click.index("StartOdbMergeAsync(")
+    mode_change = graph.split("private void OnMergeModeChanged(", 1)[1].split("private void OnResultGraphChanged", 1)[0]
+    assert "DetachMaterializationPlan();" in mode_change and "InvalidatePlan();" in mode_change
+    assert "MergeModeComboBox.SelectedIndex != 0" in graph.split("private void OnGraphPlansRequested(", 1)[1].split("private async Task", 1)[0]
+    assert 'kind = "graph"' in graph and 'kind = "restart"' in graph
+    assert "if (requestVersion != _planRequestVersion) return;" in editor
+    assert "_savedSnapshot.HasEdits(OutputDirectoryTextBox.Text, _nodes)" in editor
 
 
 def test_postprocess_partial_scan_recovery_cannot_overwrite_workspace() -> None:

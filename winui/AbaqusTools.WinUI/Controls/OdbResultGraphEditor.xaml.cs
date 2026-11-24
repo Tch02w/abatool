@@ -30,6 +30,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
     private bool _requestBusy;
     private bool _executionBusy;
     private bool _initialLoadDeferred;
+    private int _planRequestVersion;
 
     public OdbResultGraphEditor()
     {
@@ -42,6 +43,8 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     public event EventHandler<OdbResultBatchPlan>? PlansRequested;
     public event EventHandler? GraphChanged;
+
+    public void InvalidatePlanRequest() => _planRequestVersion++;
 
     // Expose a copy: the explorer can inspect the current draft without mutating it.
     public OdbResultGraphSnapshot? Snapshot => _savedSnapshot is null && _nodes.Count == 0
@@ -342,6 +345,8 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
+        if (node.Name == NodeNameTextBox.Text && node.OdbPath == NodeOdbTextBox.Text
+            && node.InpPath == NodeInpTextBox.Text) return;
         node.Name = NodeNameTextBox.Text;
         node.OdbPath = NodeOdbTextBox.Text;
         node.InpPath = NodeInpTextBox.Text;
@@ -360,7 +365,10 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     private void MarkDraftChanged()
     {
-        HasUnsavedChanges = true;
+        // WinUI can deliver TextChanged after programmatic field population.
+        var changed = _savedSnapshot is not null && _savedSnapshot.HasEdits(OutputDirectoryTextBox.Text, _nodes);
+        if (!changed && !HasUnsavedChanges) return;
+        HasUnsavedChanges = changed;
         GraphInfoBar.IsOpen = false;
         RefreshInteractionState();
         GraphChanged?.Invoke(this, EventArgs.Empty);
@@ -506,12 +514,16 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
+        // The new check supersedes the last generated graph plan, even if it fails.
+        GraphChanged?.Invoke(this, EventArgs.Empty);
         OdbResultBatchPlan? readyPlan = null;
+        var requestVersion = _planRequestVersion;
         _requestBusy = true;
         RefreshInteractionState();
         try
         {
             var plan = await App.Current.ControlPlane.PreviewOdbResultGraphPlansAsync(targetIds);
+            if (requestVersion != _planRequestVersion) return;
             if (!plan.Valid || plan.Plans.Count == 0)
             {
                 ShowState("结果生成计划需要修正",
@@ -664,14 +676,10 @@ public sealed partial class OdbResultGraphEditor : UserControl
         };
         void OnTargetChanged(object sender, RoutedEventArgs args)
         {
-            if (target.IsChecked is true)
-            {
-                _targets.Add(node.NodeId);
-            }
-            else
-            {
-                _targets.Remove(node.NodeId);
-            }
+            var changed = target.IsChecked is true
+                ? _targets.Add(node.NodeId)
+                : _targets.Remove(node.NodeId);
+            if (changed) GraphChanged?.Invoke(this, EventArgs.Empty);
             RefreshInteractionState();
         }
         target.Checked += OnTargetChanged;

@@ -11,12 +11,38 @@ internal sealed class ResultBrowserLoadCoordinator
     private long _recordRevision;
     private long _contextRevision;
     private long _indexRevision;
+    private readonly TaskCompletionSource _initialIndexCheck = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource _leftPage = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private long _routeRevision;
 
     public bool IsRefreshingScopes { get; private set; }
     public bool IsIndexing { get; private set; }
     public bool CanLoadRecords => !IsRefreshingScopes && !IsIndexing;
     public long ContextRevision => _contextRevision;
     public long IndexRevision => _indexRevision;
+    public bool CanAutoReadRoot => _initialIndexCheck.Task.IsCompleted && _routeRevision == 0;
+    public bool InitialIndexChecked => _initialIndexCheck.Task.IsCompleted;
+
+    public void CompleteInitialIndexCheck() => _initialIndexCheck.TrySetResult();
+
+    public void LeavePage()
+    {
+        _leftPage.TrySetResult();
+        _leftPage = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _routeRevision = 0;
+    }
+
+    public async Task OpenRootAsync(string root, Func<bool> fileBusy, Action blocked, Func<string, Task> read)
+    {
+        var revision = ++_routeRevision;
+        var left = _leftPage.Task;
+        // Session fields restore on the first Loaded. Reattaching a cached page can also
+        // start an older sidebar read before the frame reports IsLoaded.
+        await Task.WhenAny(_initialIndexCheck.Task, left);
+        if (left.IsCompleted || revision != _routeRevision) return;
+        if (IsIndexing || fileBusy()) { blocked(); return; }
+        await read(root);
+    }
 
     public bool IsCurrentIndexRequest(long revision) => revision == _indexRevision;
 

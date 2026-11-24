@@ -1,6 +1,8 @@
 using AbaqusTools.WinUI.Models;
 using AbaqusTools.WinUI.Services;
 
+PostprocessResultLocationChecks.Run();
+
 static void Check(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);

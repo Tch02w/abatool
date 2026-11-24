@@ -4,6 +4,8 @@
 
 本次验证覆盖 19 个 Abaqus worker 脚本和 16 个 WinUI 资源。`Controls/QueueTableView.xbf`、`Pages/JobQueuePage.xbf` 和应用 PRI 与已验收的开发输出逐字节一致。正式客户端启动包内后台后，读取了本机资源和队列，完成参数预览、入队、编辑保留和显式复位，并在空闲时正常退出。7 项包内依赖检查和逐文件结果保存在 `GPTWork/release-table-audit-20261124/verification.json`。安装候选的校验值见[安装说明](INSTALLATION.md)。
 
+同一负载的测试标识安装程序已通过中文路径首次安装、从旧版 `6b4ade1` 升级、卸载和数据保留检查。本机 8 项检查的回执为 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。正式标识安装和无开发环境机器仍待验证。
+
 ## 应用资源发布门槛（2026-11-18）
 
 真实目录包启动发现既有 `dotnet publish` 没有收集本应用的 XBF 和 PRI，主窗口加载报 `Cannot locate resource from 'ms-appx:///MainWindow.xaml'`，退出 `0xc000027b`。旧目录/安装候选的摘要、依赖、后台和安装生命周期通过只证明这些范围，**不证明原生程序能启动**。缺少应用资源的旧候选保留追溯，撤出可运行候选；准确新入口见当前状态。

@@ -37,6 +37,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private bool _discoveryBusy;
     private string? _lastDiscoveryRoot;
+    private readonly OdbPostprocessResultLocations _resultLocations = new();
     private readonly Dictionary<string, List<string>> _groupMemberOrder = new(StringComparer.OrdinalIgnoreCase);
     private readonly OdbPostprocessWorkspaceStore _workspaceStore = new(Path.Combine(
         WorkbenchProfile.Current.StateDirectory, "postprocess-workspaces"));
@@ -75,6 +76,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         OdbList.ItemsSource = _odbItems;
+        RootTextBox.TextChanged += (_, _) =>
+        {
+            _resultLocations.InputChanged(RootTextBox.Text);
+            OpenResultsButton.IsEnabled = !_discoveryBusy && !_postprocessBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);
+        };
         App.Current.Session.Register(this, "odb-postprocessing", ["RootTextBox", "RecursiveCheckBox", "GroupNameTextBox", "GroupOperationComboBox"], async () =>
         {
             await WorkbenchSession.WaitForIdleAsync(() => _discoveryBusy || _postprocessRecoveryBusy, "后处理目录读取或恢复");
@@ -183,8 +189,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 return false;
             }
 
-            BeginPostprocessMonitoring(snapshot.Request.ClientRequestId, snapshot.Kind);
-
             if (snapshot.Kind == "odb.postprocess.scan" && snapshot.Request.Paths.Count > 0)
             {
                 RestoreRowsFromPostprocessRequest(snapshot.Request);
@@ -194,6 +198,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 RootTextBox.Text = snapshot.Request.Root;
             }
 
+            BeginPostprocessMonitoring(snapshot.Request.ClientRequestId, snapshot.Kind);
             _activePostprocessOperationId = snapshot.OperationId;
             _activePostprocessKind = snapshot.Kind;
             _lastPostprocessVersion = -1;
@@ -674,23 +679,27 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenResultsClicked(object sender, RoutedEventArgs e)
     {
-        var root = RootTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(root))
+        try
         {
-            ShowWarning("请先选择 ODB 根目录。", "无法打开结果浏览");
-            return;
+            var roots = _resultLocations.Resolve(RootTextBox.Text, _lastDiscoveryRoot,
+                OdbList.SelectedItems.OfType<OdbFileRow>().Select(row => row.Path), _odbItems.Select(row => row.Path));
+            var resultRoot = roots[0];
+            if (roots.Count > 1)
+            {
+                var choices = new ListView { MaxHeight = 320, SelectionMode = ListViewSelectionMode.Single };
+                foreach (var path in roots) choices.Items.Add(new TextBlock { Text = path, TextWrapping = TextWrapping.Wrap });
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = XamlRoot, Title = "选择要浏览的结果目录", Content = choices,
+                    PrimaryButtonText = "打开", CloseButtonText = "取消", IsPrimaryButtonEnabled = false
+                };
+                choices.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = choices.SelectedIndex >= 0;
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                resultRoot = roots[choices.SelectedIndex];
+            }
+            await App.Current.MainWindow.OpenResultBrowserAsync(resultRoot);
         }
-
-        var resultRoot = Path.Combine(root, "AbaqusODBPostProcessor_Results");
-        if (!Directory.Exists(resultRoot))
-        {
-            ShowWarning(
-                $"尚未找到结果目录：{resultRoot}{Environment.NewLine}请先完成后处理提取。",
-                "结果目录不存在");
-            return;
-        }
-
-        await App.Current.MainWindow.OpenResultBrowserAsync(resultRoot);
+        catch (Exception error) { ShowWarning(error.Message, "无法打开结果浏览"); }
     }
 
     private async void OnAnalyzeClicked(object sender, RoutedEventArgs e)
@@ -1426,6 +1435,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private void CompletePostprocessOperation(OdbPostprocessOperationSnapshot snapshot)
     {
         if (_activePostprocessOperationId != snapshot.OperationId) return;
+        _resultLocations.Complete(snapshot);
         if (snapshot.Status == "succeeded" && snapshot.Result is { } result)
         {
             if (snapshot.Kind == "odb.postprocess.scan")
@@ -1436,6 +1446,12 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 }
                 MarkPostprocessRowsWithoutConfiguration("没有返回 ODB 结构结果。", result.Items.Select(item => item.Path));
                 PostprocessPhaseText.Text = $"结构读取完成 · {result.Count} 个 ODB · 缓存命中 {result.CacheHits}";
+            }
+            else if (!OdbPostprocessResultLocations.HasPublishedOutputs(result))
+            {
+                MarkPostprocessRowsIncomplete("未发布结果", "回执缺少已发布的结果目录。");
+                PostprocessPhaseText.Text = "后处理结束 · 未收到完整的结果目录";
+                ShowWarning("请查看运行日志核对输出。", "没有可打开的已发布结果");
             }
             else
             {
@@ -1869,7 +1885,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         RunPostprocessButton.IsEnabled = idle
             && selectedRows.Length > 0
             && selectedRows.All(row => row.HasPostprocessConfiguration);
-        OpenResultsButton.IsEnabled = !_discoveryBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);
+        OpenResultsButton.IsEnabled = !_discoveryBusy && !_postprocessBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);
         ParallelWorkersNumberBox.IsEnabled = idle;
         GroupNameTextBox.IsEnabled = idle;
         GroupOperationComboBox.IsEnabled = idle;

@@ -50,6 +50,11 @@ from modules.submitter.queue_scheduler import (
     queue_item_conflict_key,
 )
 from modules.submitter.queue_store import load_joblist_state, save_joblist_state
+from modules.submitter.restart_dependency import RestartDependencyLifecycle
+from modules.submitter.restart_topology import (
+    RestartTopology,
+    legacy_restart_edit_failure,
+)
 
 from .contracts import SCHEMA_VERSION, ApiProblem
 from .job_drafts import LocalJobDraftPreviewRequest
@@ -238,7 +243,7 @@ class JobQueueService:
         with self._lock:
             return self._load()
 
-    def execute(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def execute(self, payload: Mapping[str, Any], *, scheduling=False) -> dict[str, Any]:
         if payload.get("schemaVersion") != SCHEMA_VERSION:
             raise ApiProblem(
                 400,
@@ -268,6 +273,7 @@ class JobQueueService:
                 payload,
                 candidates,
                 queue_items,
+                scheduling=scheduling,
             )
             if changed:
                 save_joblist_state(candidates, queue_items, self.path)
@@ -300,6 +306,7 @@ class JobQueueService:
         payload: Mapping[str, Any],
         candidates: list[QueueItem],
         queue_items: list[QueueItem],
+        *, scheduling=False,
     ) -> tuple[int, str, dict[str, Any]]:
         if action in {"updateQueueItem", "requeueQueueItems", "removeQueueItems", "moveQueueItem", "clearFinished"}:
             requested = {value for value in payload.get("itemIds", []) if isinstance(value, str)} if isinstance(payload.get("itemIds", []), list) else set()
@@ -330,7 +337,7 @@ class JobQueueService:
             _require_fields(payload, {"draft"})
             return self._enqueue_draft(payload, candidates, queue_items)
         if action == "updateQueueItem":
-            return self._update_queue_item(payload, candidates, queue_items)
+            return self._update_queue_item(payload, candidates, queue_items, scheduling=scheduling)
         if action == "setQueueHold":
             _require_fields(payload, {"itemIds", "held"})
             return self._set_queue_hold(payload, queue_items)
@@ -667,7 +674,7 @@ class JobQueueService:
         existing_paths = {
             _path_key(item.inp_path) for item in queue_items if item.inp_path
         }
-        added = 0
+        added: list[QueueItem] = []
         for item in selected:
             if _path_key(item.inp_path) in existing_paths:
                 continue
@@ -679,11 +686,16 @@ class JobQueueService:
             item.selected = False
             queue_items.append(item)
             existing_paths.add(_path_key(item.inp_path))
-            added += 1
+            added.append(item)
         candidates[:] = [
             item for item in candidates if item.item_id not in selected_ids
         ]
-        return added, f"已将 {added} 个候选作业加入正式队列", {}
+        restart_items = [item for item in added if item.run_mode == "restart" or item.dependency_job_ids]
+        if restart_items:
+            topology = RestartTopology(queue_items)
+            for item in restart_items:
+                self._require_valid_dependency(topology, item)
+        return len(added), f"已将 {len(added)} 个候选作业加入正式队列", {}
 
     def _enqueue_draft(
         self,
@@ -725,6 +737,8 @@ class JobQueueService:
                 details={"conflictingItemId": conflict.item_id},
             )
         queue_items.append(item)
+        if item.run_mode == "restart":
+            self._require_valid_dependency(RestartTopology(queue_items), item)
         return 1, f"作业 {item.job_name} 已加入正式队列", {"itemId": item.item_id}
 
     def _update_queue_item(
@@ -732,6 +746,7 @@ class JobQueueService:
         payload: Mapping[str, Any],
         candidates: list[QueueItem],
         queue_items: list[QueueItem],
+        *, scheduling=False,
     ) -> tuple[int, str, dict[str, Any]]:
         allowed = {
             "itemId",
@@ -746,19 +761,47 @@ class JobQueueService:
         }
         _require_fields(payload, allowed)
         item = self._find_item(queue_items, _text(payload, "itemId"), "正式队列作业")
-        self._require_editable(item)
+        before = asdict(item)
+        repair = legacy_restart_edit_failure(item)
+        if not repair and item.status not in EDITABLE_STATUSES:
+            raise ApiProblem(409, "QUEUE_ITEM_NOT_EDITABLE", "当前状态不允许编辑该作业")
+        relocated = any(field in payload and _text(payload, field) != getattr(item, attr)
+                        for field, attr in (("jobName", "job_name"), ("calculationRootDir", "calculation_root_dir")))
+        dependency_only = "oldjobPath" in payload and set(payload) <= {"schemaVersion", "action", "itemId", "oldjobPath"}
+        reselect = dependency_only and item.dependency_job_ids and _text(payload, "oldjobPath") == item.oldjob_path
+        prior_topology = RestartTopology(queue_items) if relocated or reselect else None
+        if reselect and item.job_id in prior_topology.issues:
+            item.dependency_job_ids = []
+            RestartDependencyLifecycle.clear_queue_item(item)
         self._apply_edits(item, payload)
+        dependency_changed = relocated or any(getattr(item, key) != before[key] for key in (
+            "oldjob_name", "oldjob_path", "dependency_job_ids"))
+        if scheduling and (dependency_changed or repair):
+            raise ApiProblem(409, "RESTART_EDIT_DURING_DISPATCH", "请先停止队列调度，再修改重启动依赖")
+        if repair and ("oldjobPath" not in payload or item.oldjob_path == before["oldjob_path"]
+                       or any(getattr(item, key) != before[key] for key in (
+                           "job_name", "cores", "gpu_count", "explicit_precision", "output_precision",
+                           "memory", "priority", "fortran_path", "calculation_root_dir", "archive_dir"))):
+            raise ApiProblem(409, "QUEUE_ITEM_NOT_EDITABLE", "该历史记录仅允许纠正前置作业 ODB")
+        if dependency_changed or repair or dependency_only:
+            topology = RestartTopology(queue_items)
+            self._require_valid_dependency(topology, item, allow_unassigned=True)
+            if relocated:
+                for child, parent in prior_topology.parents.items():
+                    if parent == item.job_id and child != parent:
+                        self._require_valid_dependency(topology, topology.by_id[child])
         self._validate_item(item, candidates, queue_items)
+        if not item.valid:
+            raise ApiProblem(400, "INVALID_QUEUE_ITEM_EDIT", item.message)
+        if repair:
+            item.scheduler_state = "PENDING"
+            item.pending_reason = ""
         if item.run_mode == "restart" and not item.oldjob_name:
             item.status = STATUS_WAITING_DEPENDENCY
             item.message = "未选择有效的 Restart 前置作业"
         else:
-            item.status = STATUS_PENDING_RUN if item.valid else STATUS_FAILED
-            item.message = (
-                "用户暂停调度"
-                if item.valid and item.held
-                else ("待提交" if item.valid else item.message)
-            )
+            item.status = STATUS_PENDING_RUN
+            item.message = "用户暂停调度" if item.held else "待提交"
         return 1, "正式队列作业设置已更新", {}
 
     @staticmethod
@@ -804,6 +847,11 @@ class JobQueueService:
                 "所选作业中包含不能重新排队的状态；状态未知的原作业请先扫描核对",
                 details={"itemIds": blocked},
             )
+        restart_items = [item for item in selected if item.run_mode == "restart" or item.dependency_job_ids]
+        if restart_items:
+            topology = RestartTopology(queue_items)
+            for item in restart_items:
+                JobQueueService._require_valid_dependency(topology, item)
         for item in selected:
             item.status = STATUS_PENDING_RUN
             item.scheduler_state = ""
@@ -879,9 +927,10 @@ class JobQueueService:
         raise ApiProblem(404, "QUEUE_ITEM_NOT_FOUND", f"未找到{label}")
 
     @staticmethod
-    def _require_editable(item: QueueItem) -> None:
-        if item.status not in EDITABLE_STATUSES:
-            raise ApiProblem(409, "QUEUE_ITEM_NOT_EDITABLE", "当前状态不允许编辑该作业")
+    def _require_valid_dependency(topology: RestartTopology, item: QueueItem, *, allow_unassigned=False) -> None:
+        issue = topology.edit_issue(item, allow_unassigned=allow_unassigned)
+        if issue:
+            raise ApiProblem(409, "INVALID_RESTART_DEPENDENCY", issue, details={"itemId": item.item_id})
 
     def _apply_edits(self, item: QueueItem, payload: Mapping[str, Any]) -> None:
         try:
@@ -911,8 +960,11 @@ class JobQueueService:
             if not -10000 <= priority <= 10000:
                 raise ApiProblem(400, "INVALID_PRIORITY", "priority 超出允许范围")
             item.priority = priority
-        if "oldjobPath" in payload:
+        if "oldjobPath" in payload and (_text(payload, "oldjobPath") != item.oldjob_path or (
+            not item.oldjob_path and set(payload) <= {"schemaVersion", "action", "itemId", "oldjobPath"}
+        )):
             item.dependency_job_ids = []
+            RestartDependencyLifecycle.clear_queue_item(item)
             item.oldjob_path = _text(payload, "oldjobPath")
             item.oldjob_name = derive_oldjob_name(item.oldjob_path)
             item.oldjob_dir = (

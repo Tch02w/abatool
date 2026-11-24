@@ -68,7 +68,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             EmptyChainPanel.Visibility = snapshot.NodeCount == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            ChainSummaryText.Text = $"{snapshot.ChainCount} 条链 · {snapshot.NodeCount} 个作业";
+            ChainSummaryText.Text = $"{snapshot.ChainCount} 条链 · {_nodes.Count} 个节点 · {snapshot.NodeCount} 个重启动作业";
             CycleCheckText.Text = CheckText(snapshot.Checks.CycleCount);
             MissingCheckText.Text = CheckText(snapshot.Checks.MissingParentCount);
             PathCheckText.Text = CheckText(snapshot.Checks.IncompatiblePathCount);
@@ -372,22 +372,11 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
 
         try
         {
-            var queue = await App.Current.ControlPlane.GetJobQueuesAsync();
-            var item = queue.QueueItems.FirstOrDefault(candidate => string.Equals(
-                candidate.ItemId,
-                node.ItemId,
-                StringComparison.Ordinal));
-            if (item is null)
-            {
-                ShowError("正式队列中的作业已不存在，请刷新依赖链。");
-                return;
-            }
-
             var oldjobBox = new TextBox
             {
                 Header = "前置作业 ODB",
-                Text = item.OldjobPath,
-                PlaceholderText = "留空可移除 Restart 依赖",
+                Text = node.OldjobPath,
+                PlaceholderText = "输入或选择前置作业的 .odb 路径",
             };
             var chooseButton = new Button
             {
@@ -405,13 +394,13 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             var panel = new StackPanel { Spacing = 10, Width = 520 };
             panel.Children.Add(new TextBlock
             {
-                Text = $"作业：{item.JobName}",
+                Text = $"作业：{node.JobName}",
             });
             panel.Children.Add(oldjobBox);
             panel.Children.Add(chooseButton);
             panel.Children.Add(new TextBlock
             {
-                Text = "保存后会重新计算依赖关系、提交阶段和循环校验。不会移动或删除任何文件。",
+                Text = "保存前会检查循环和前置作业。前置作业尚在队列中时可填写预期 ODB 路径；留空后，含 Restart 指令的作业会等待指定前置。",
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "TextFillColorSecondaryBrush"],
                 TextWrapping = TextWrapping.Wrap,
@@ -431,33 +420,16 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             }
 
             var oldjobPath = oldjobBox.Text.Trim();
-            if (!string.IsNullOrWhiteSpace(oldjobPath)
-                && (!File.Exists(oldjobPath)
-                    || !string.Equals(Path.GetExtension(oldjobPath), ".odb", StringComparison.OrdinalIgnoreCase)))
-            {
-                ShowError("前置作业必须是当前可访问的 .odb 文件，也可以留空以移除依赖。");
-                return;
-            }
-
-            await App.Current.ControlPlane.UpdateJobQueueItemAsync(
-                item.ItemId,
-                candidate: false,
-                item.JobName,
-                item.Cores,
-                item.Memory,
-                item.Priority,
-                oldjobPath,
-                item.FortranPath);
+            await App.Current.ControlPlane.UpdateRestartDependencyAsync(node.ItemId, oldjobPath);
             await RefreshAsync();
-            App.Current.MainWindow.ReportPageStatus($"已更新 {item.JobName} 的重启动依赖");
         }
         catch (ControlPlaneException exception)
         {
-            ShowError(exception.ToDisplayMessage());
+            ShowError(exception.ToDisplayMessage(), "重启动依赖未保存");
         }
         catch (Exception exception)
         {
-            ShowError(exception.Message);
+            ShowError(exception.Message, "重启动依赖未保存");
         }
     }
 
@@ -483,9 +455,9 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         return (await picker.PickSingleFileAsync())?.Path;
     }
 
-    private void ShowError(string message)
+    private void ShowError(string message, string title = "依赖链读取失败")
     {
-        ChainInfoBar.Title = "依赖链读取失败";
+        ChainInfoBar.Title = title;
         ChainInfoBar.Message = message;
         ChainInfoBar.Severity = InfoBarSeverity.Error;
         ChainInfoBar.IsOpen = true;

@@ -15,6 +15,20 @@ public sealed class OdbResultGraphSnapshot
     public int Revision { get; init; }
     public string OutputDirectory { get; init; } = string.Empty;
     public IReadOnlyList<OdbResultGraphNode> Nodes { get; init; } = [];
+
+    internal bool HasEdits(string outputDirectory, IReadOnlyList<OdbResultGraphNode> editedNodes)
+    {
+        if (OutputDirectory != outputDirectory || Nodes.Count != editedNodes.Count) return true;
+        for (var index = 0; index < Nodes.Count; index++)
+        {
+            var saved = Nodes[index];
+            var edited = editedNodes[index];
+            if (saved.NodeId != edited.NodeId || saved.ParentNodeId != edited.ParentNodeId
+                || saved.Name != edited.Name || saved.OdbPath != edited.OdbPath || saved.InpPath != edited.InpPath)
+                return true;
+        }
+        return false;
+    }
 }
 
 public sealed class OdbResultBatchPlan

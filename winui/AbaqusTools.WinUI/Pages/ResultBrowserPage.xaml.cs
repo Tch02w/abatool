@@ -52,7 +52,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         InitializeComponent();
         Controls.InfoBarLayout.Track(StatusMessagesPanel, ErrorInfoBar, WarningInfoBar, IndexInfoBar);
         _explorerAdapter = new ResultExplorerAdapter(
-            () => FileOperationBusy || _scopeBusy || _indexBusy
+            () => !_loads.InitialIndexChecked || FileOperationBusy || _scopeBusy || _indexBusy
                 || (_location.LoadedRoot is null && string.IsNullOrWhiteSpace(RootTextBox.Text))
                 ? Task.CompletedTask : RefreshScopesAsync(_selectedScope?.Path, _location.LoadedRoot),
             SelectExplorerItem,
@@ -72,6 +72,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _loads.LeavePage();
+        base.OnNavigatedFrom(e);
+    }
+
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         if (_recoveryAttempted)
@@ -89,26 +95,27 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
 
         var recoveredIndex = await RecoverActiveIndexOperationAsync();
-        if (!recoveredIndex
+        if (!recoveredIndex && _loads.CanAutoReadRoot && !_scopeBusy && IsLoaded
             && Directory.Exists(RootTextBox.Text) && ScopeTree.RootNodes.Count == 0)
         {
             await RefreshScopesAsync();
         }
     }
 
-    public async Task SetResultRootAsync(string root)
+    public Task SetResultRootAsync(string root)
     {
-        if (FileOperationBusy || _indexBusy) throw new InvalidOperationException("请等待当前结果索引、导出或清理结束。");
         if (string.IsNullOrWhiteSpace(root))
         {
             throw new ArgumentException("结果根目录不能为空。", nameof(root));
         }
 
-        RootTextBox.Text = Path.GetFullPath(root.Trim());
-        if (IsLoaded)
-        {
-            await RefreshScopesAsync();
-        }
+        return _loads.OpenRootAsync(Path.GetFullPath(root.Trim()), () => FileOperationBusy,
+            () => ShowWarning("请等待当前结果索引、导出或清理结束后再打开目标目录。", "暂时无法切换目录"),
+            target =>
+            {
+                RootTextBox.Text = target;
+                return RefreshScopesAsync(explicitRoot: target);
+            });
     }
 
     private async Task<bool> RecoverActiveIndexOperationAsync()
@@ -140,6 +147,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             recoveredIndex = true;
             _activeIndexOperationId = snapshot.OperationId;
             _loads.BeginIndex();
+            _loads.CompleteInitialIndexCheck();
             indexRequest = _loads.IndexRevision;
             var owner = indexRequest.Value;
             RootTextBox.Text = snapshot.Request.Root;
@@ -173,6 +181,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         finally
         {
+            _loads.CompleteInitialIndexCheck();
             if (indexRequest is { } owner)
             {
                 ClearIndexBusyState(owner);

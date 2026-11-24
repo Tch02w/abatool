@@ -23,6 +23,7 @@ try
     await NonTerminalIndexCannotRefreshAsync();
     RecordRequestsAreInvalidated();
     await ResultBrowserLocationChecks.RunAsync();
+    await ExplicitResultRoutesAsync();
     CheckTablePreview();
     CheckRecyclePaths();
     Console.WriteLine("10 result-browser asynchronous lifecycle checks and table preview checks passed");
@@ -69,6 +70,57 @@ static void CheckRecyclePaths()
 
 static TaskCompletionSource<string> PendingDiscovery() =>
     new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+static async Task ExplicitResultRoutesAsync()
+{
+    var loads = new ResultBrowserLoadCoordinator();
+    var location = new ResultBrowserLocation { DraftRoot = "known" };
+    var blocked = 0;
+    var fileBusy = false;
+    Task Read(string root, Task<string> reply)
+    {
+        var read = location.BeginRead(root);
+        return loads.RefreshScopesAsync(() => reply, location.ClearLoadedRoot, value => location.Apply(read, value),
+            () => Task.CompletedTask, error => throw error, () => { });
+    }
+    Task Route(string target) => loads.OpenRootAsync(target, () => fileBusy, () => blocked++, root =>
+    {
+        location.DraftRoot = root;
+        return Read(root, Task.FromResult(root));
+    });
+    var beforeLoaded = Route("GJA");
+    var latest = Route("GJB");
+    Check(!beforeLoaded.IsCompleted && !latest.IsCompleted && !loads.CanAutoReadRoot, "First Loaded must restore fields before explicit routing");
+    location.DraftRoot = "restored known";
+    loads.CompleteInitialIndexCheck();
+    await Task.WhenAll(beforeLoaded, latest);
+    Check(location.RequireLoadedRoot() == "GJB" && location.DraftRoot == "GJB", "Restored draft or an older route displaced the target");
+
+    loads.LeavePage();
+    var oldReply = PendingDiscovery();
+    var attachmentRefresh = Read("known", oldReply.Task);
+    await Route("GJB");
+    oldReply.SetResult("known");
+    await attachmentRefresh;
+    Check(location.RequireLoadedRoot() == "GJB" && location.DraftRoot == "GJB", "Cached page published a stale explorer response");
+    await Route("GJA");
+    Check(location.RequireLoadedRoot() == "GJA", "A route to the already visible page must still perform a read");
+    fileBusy = true;
+    await Route("forbidden");
+    fileBusy = false;
+    loads.BeginIndex();
+    await Route("forbidden");
+    loads.EndIndex();
+    Check(blocked == 2 && location.RequireLoadedRoot() == "GJA", "Active file or index operations must retain their source");
+
+    var coldPage = new ResultBrowserLoadCoordinator();
+    var left = coldPage.OpenRootAsync("abandoned", () => false, () => { }, _ => throw new Exception("Left page opened a pending route"));
+    coldPage.LeavePage();
+    await left;
+    coldPage.CompleteInitialIndexCheck();
+    Check(coldPage.CanAutoReadRoot, "A departed cold route must allow a normal draft restore on return");
+    Console.WriteLine("6 native result route lifecycle regressions passed");
+}
 
 static void CheckTablePreview()
 {

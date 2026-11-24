@@ -40,6 +40,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
 
+    private OdbMergeCommand ExecutionCommand => OdbMergeExecution.Resolve(
+        MergeModeComboBox.SelectedIndex, _previewBusy || _operationBusy || _batchBusy,
+        _planReady, _batchPlan is not null || _materializationPlan is not null);
+
     public void LoadMaterializationPlan(RestartResultPlan plan)
     {
         if (_batchBusy || _operationBusy || _previewBusy)
@@ -48,6 +52,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             return;
         }
         MergeModeComboBox.SelectedIndex = 0;
+        ResultGraphEditor.InvalidatePlanRequest();
         _batchPlan = null;
         _materializationPlan = plan;
         MaterializationPlanCard.Visibility = Visibility.Visible;
@@ -55,11 +60,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             $"目标节点：{plan.TargetJobName} · 仅沿该节点的唯一祖先路径生成完整 ODB；兄弟分支不会参与。";
         MaterializationAncestryList.ItemsSource = plan.Ancestry;
         MaterializationStepsList.ItemsSource = plan.Steps;
-        if (plan.Steps.FirstOrDefault() is { } first)
-        {
-            ApplyMaterializationStep(first, first.OriginalOdb);
-        }
-        _planReady = plan.Valid;
+        _planReady = plan.Valid && plan.Steps.Count > 0;
         MergePlanSummaryText.Text = plan.Valid
             ? $"完整结果计划包含 {plan.Steps.Count} 个顺序合并步骤。"
             : string.Join(Environment.NewLine, plan.Issues);
@@ -203,7 +204,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private async void OnPreviewClicked(object sender, RoutedEventArgs e)
     {
-        if (_previewBusy || _operationBusy)
+        if (MergeModeComboBox.SelectedIndex != 1 || _previewBusy || _operationBusy || _batchBusy)
         {
             return;
         }
@@ -236,21 +237,15 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private async void OnExecuteClicked(object sender, RoutedEventArgs e)
     {
-        if (_previewBusy || _operationBusy)
+        switch (ExecutionCommand)
         {
-            return;
-        }
-
-        if (MergeModeComboBox.SelectedIndex == 0)
-        {
-            ShowPlanState("在结果图中选择目标", "勾选节点后生成计划，或批量生成所有末端节点的计划。", InfoBarSeverity.Informational);
-            return;
-        }
-
-        if (_batchPlan is not null || _materializationPlan is not null)
-        {
-            await ExecuteMaterializationPlanAsync();
-            return;
+            case OdbMergeCommand.Batch:
+                await ExecuteResultBatchAsync();
+                return;
+            case OdbMergeCommand.Manual:
+                break;
+            default:
+                return;
         }
 
         _previewBusy = true;
@@ -401,17 +396,6 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private Task ExecuteMaterializationPlanAsync() => ExecuteResultBatchAsync();
-
-    private void ApplyMaterializationStep(RestartResultStep step, string originalOdb)
-    {
-        OriginalOdbTextBox.Text = originalOdb;
-        RestartOdbTextBox.Text = step.RestartOdb;
-        OutputOdbTextBox.Text = step.OutputOdb;
-        ResultNamingComboBox.SelectedIndex = 2;
-        _planReady = true;
-    }
-
     private void OnClearMaterializationClicked(object sender, RoutedEventArgs e)
     {
         DetachMaterializationPlan();
@@ -421,6 +405,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void DetachMaterializationPlan()
     {
+        ResultGraphEditor.InvalidatePlanRequest();
         _displayedBatchId = null;
         _resumableBatchId = null;
         _batchPlan = null;
@@ -780,8 +765,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         ResultNamingComboBox.IsEnabled = editingEnabled;
         ConflictPolicyComboBox.IsEnabled = editingEnabled;
         PreviewButton.IsEnabled = editingEnabled && MergeModeComboBox.SelectedIndex == 1;
-        ExecuteButton.IsEnabled = editingEnabled && _planReady
-            && (MergeModeComboBox.SelectedIndex == 1 || _materializationPlan is not null || _batchPlan is not null);
+        ExecuteButton.IsEnabled = ExecutionCommand != OdbMergeCommand.None;
         StopButton.IsEnabled = (_operationBusy || _batchBusy) && !_cancelRequested;
     }
 

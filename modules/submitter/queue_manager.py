@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 
 from .app_paths import CONFIG_PATH
@@ -48,6 +49,7 @@ from .queue_scheduler import (
 )
 from .queue_store import atomic_write_json
 from .restart_dependency import RestartDependencyLifecycle
+from .restart_topology import RestartTopology, legacy_restart_edit_failure
 from .ui_components import (
     SegmentedSpinBox,
     WorkbenchComboBox,
@@ -1663,6 +1665,12 @@ class QueueManagerDialog(QtWidgets.QDialog):
             return
         if not self.confirm_selected_candidates_action(selected_items):
             return
+        topology = RestartTopology([*self.queue_items, *selected_items])
+        for item in selected_items:
+            issue = topology.edit_issue(item)
+            if issue:
+                QtWidgets.QMessageBox.warning(self, "重启动依赖无效", issue)
+                return
         existing = {os.path.normcase(item.inp_path) for item in self.queue_items}
         added_ids = set()
         for item in selected_items:
@@ -1701,41 +1709,60 @@ class QueueManagerDialog(QtWidgets.QDialog):
     def queue_item_is_editable(self, item: QueueItem) -> bool:
         return item.status in (STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY)
 
-    def apply_formal_item_edit_result(self, item: QueueItem) -> None:
-        self.detect_restart(item)
-        self.validate_candidate(item)
-        if item.run_mode == "restart" and not self.restart_dependency_resolved(item):
-            item.status = STATUS_WAITING_DEPENDENCY
-            item.message = "未选择有效的 Restart 前置作业"
+    def apply_formal_item_edit_result(self, item: QueueItem, proposed: QueueItem) -> None:
+        self.detect_restart(proposed)
+        self.validate_candidate(proposed)
+        proposed_queue = [proposed if other is item else other for other in self.queue_items]
+        issue = RestartTopology(proposed_queue).edit_issue(proposed, allow_unassigned=True)
+        repair = legacy_restart_edit_failure(item)
+        if not self.queue_item_is_editable(item) and not repair:
+            issue = "当前状态不允许编辑该作业"
+        elif item.oldjob_path != proposed.oldjob_path and self.host_window.queue_active:
+            issue = "请先停止队列调度，再修改重启动依赖"
+        elif repair and (item.oldjob_path == proposed.oldjob_path or any(
+            getattr(item, key) != getattr(proposed, key) for key in ("cores", "memory", "priority", "fortran_path")
+        )):
+            issue = "该历史记录仅允许纠正前置作业 ODB"
+        if issue or not proposed.valid:
+            self.refresh_queue_table()
+            QtWidgets.QMessageBox.warning(self, "作业设置未保存", issue or proposed.message)
+            return
+        if repair:
+            proposed.scheduler_state = "PENDING"
+            proposed.pending_reason = ""
+        if proposed.run_mode == "restart" and not self.restart_dependency_resolved(proposed):
+            proposed.status = STATUS_WAITING_DEPENDENCY
+            proposed.message = "未选择有效的 Restart 前置作业"
         else:
-            item.status = STATUS_PENDING_RUN if item.valid else STATUS_FAILED
-            item.message = ("用户暂停调度" if item.held else "待提交") if item.valid else item.message
+            proposed.status = STATUS_PENDING_RUN
+            proposed.message = "用户暂停调度" if item.held else "待提交"
+        vars(item).update(vars(proposed))
+        self.refresh_queue_table()
+        self.request_joblist_save()
 
     def on_queue_item_double_clicked(self, table_item: QtWidgets.QTableWidgetItem) -> None:
         row_key = self.table_row_key(self.queue_table, table_item.row())
         item = self.queue_item_by_row_key(row_key)
         if item is None:
             return
-        if not self.queue_item_is_editable(item):
+        column = table_item.column()
+        if not self.queue_item_is_editable(item) and not (
+            column == FORMAL_RESTART_COLUMN and legacy_restart_edit_failure(item)
+        ):
             QtWidgets.QMessageBox.information(self, "编辑队列作业", "只能编辑待运行或等待前置的作业。")
             return
 
-        column = table_item.column()
         if column == FORMAL_RESTART_COLUMN:
             oldjob_path = self.select_oldjob_odb_file(item.oldjob_path or item.oldjob_dir)
             if oldjob_path:
-                self.apply_oldjob_file_to_item(item, oldjob_path)
-                self.apply_formal_item_edit_result(item)
-                self.refresh_queue_table()
-                self.request_joblist_save()
+                proposed = replace(item)
+                self.apply_oldjob_file_to_item(proposed, oldjob_path)
+                self.apply_formal_item_edit_result(item, proposed)
             return
         if column == FORMAL_FORTRAN_COLUMN:
             path = self.select_fortran_file(item.fortran_path or self.default_work_dir())
             if path:
-                item.fortran_path = path
-                self.apply_formal_item_edit_result(item)
-                self.refresh_queue_table()
-                self.request_joblist_save()
+                self.apply_formal_item_edit_result(item, replace(item, fortran_path=path))
             return
         if column in (FORMAL_CORE_COLUMN, FORMAL_MEMORY_COLUMN, FORMAL_PRIORITY_COLUMN):
             self.queue_table.editItem(table_item)
@@ -1754,23 +1781,22 @@ class QueueManagerDialog(QtWidgets.QDialog):
             return
 
         value = table_item.text().strip()
+        proposed = replace(item)
         if column == FORMAL_CORE_COLUMN:
             try:
-                item.cores = max(0, min(999, int(value)))
+                proposed.cores = max(0, min(999, int(value)))
             except ValueError:
                 self.refresh_queue_table()
                 return
         elif column == FORMAL_MEMORY_COLUMN:
-            item.memory = value
+            proposed.memory = value
         else:
             try:
-                item.priority = max(-10000, min(10000, int(value)))
+                proposed.priority = max(-10000, min(10000, int(value)))
             except ValueError:
                 self.refresh_queue_table()
                 return
-        self.apply_formal_item_edit_result(item)
-        self.refresh_queue_table()
-        self.request_joblist_save()
+        self.apply_formal_item_edit_result(item, proposed)
 
     def cancel_selected_pending(self) -> None:
         selected_keys = self.selected_table_row_keys(self.queue_table)
@@ -1823,6 +1849,14 @@ class QueueManagerDialog(QtWidgets.QDialog):
         if not item_ids:
             QtWidgets.QMessageBox.information(self, "重新排队", "请选择失败、取消或状态丢失的作业。")
             return
+        restart_items = [item for item in self.queue_items if item.item_id in item_ids and item.run_mode == "restart"]
+        if restart_items:
+            topology = RestartTopology(self.queue_items)
+            for item in restart_items:
+                issue = topology.edit_issue(item)
+                if issue:
+                    QtWidgets.QMessageBox.warning(self, "重启动依赖无效", issue)
+                    return
         self.host_window.requeue_terminal_queue_items(item_ids)
 
     def edit_selected_pending(self) -> None:
@@ -1831,7 +1865,7 @@ class QueueManagerDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.information(self, "编辑队列作业", "请选择一个待运行作业。")
             return
         item = self.queue_items[rows[0]]
-        if item.status not in (STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY):
+        if not self.queue_item_is_editable(item) and not legacy_restart_edit_failure(item):
             QtWidgets.QMessageBox.information(self, "编辑队列作业", "只能编辑待运行或等待前置的作业。")
             return
 
@@ -1866,17 +1900,15 @@ class QueueManagerDialog(QtWidgets.QDialog):
         buttons.rejected.connect(dialog.reject)
         if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
             return
-        item.cores = core_spin.value()
-        item.priority = priority_spin.value()
-        item.memory = memory_edit.text().strip()
+        proposed = replace(item, cores=core_spin.value(), priority=priority_spin.value(),
+                           memory=memory_edit.text().strip(), fortran_path=fortran_edit.text().strip())
         oldjob_path = oldjob_edit.text().strip()
         if oldjob_path != item.oldjob_path:
-            self.clear_resolved_oldjob_info(item)
-        item.oldjob_path = oldjob_path
-        item.fortran_path = fortran_edit.text().strip()
-        self.apply_formal_item_edit_result(item)
-        self.refresh_queue_table()
-        self.request_joblist_save()
+            self.clear_resolved_oldjob_info(proposed)
+            proposed.oldjob_path = oldjob_path
+            proposed.oldjob_name = derive_oldjob_name(oldjob_path)
+            proposed.oldjob_dir = str(Path(oldjob_path).parent) if oldjob_path else ""
+        self.apply_formal_item_edit_result(item, proposed)
 
     def terminate_selected_running(self) -> None:
         item_ids = []

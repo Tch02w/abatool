@@ -12,13 +12,15 @@
                 <Grid RowSpacing="10">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="依赖拓扑 · 重启动计算图谱" />
-                        <TextBlock x:Name="ChainSummaryText" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0 条链 · 0 个作业" />
-                        <Button x:Name="ZoomOutButton" Grid.Column="2" Margin="8,0,0,0" Click="OnZoomOutClicked" Content="−" ToolTipService.ToolTip="缩小" />
-                        <Button x:Name="ZoomInButton" Grid.Column="3" Margin="6,0,0,0" Click="OnZoomInClicked" Content="＋" ToolTipService.ToolTip="放大" />
-                        <Button x:Name="RefreshButton" Grid.Column="4" Margin="8,0,0,0" Click="OnRefreshClicked" Content="刷新依赖" />
-                        <Button Grid.Column="5" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="依赖拓扑 · 重启动计算图谱" />
+                            <TextBlock x:Name="ChainSummaryText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0 条链 · 0 个节点 · 0 个重启动作业" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button x:Name="ZoomOutButton" Grid.Column="1" Margin="8,0,0,0" Click="OnZoomOutClicked" Content="−" ToolTipService.ToolTip="缩小" />
+                        <Button x:Name="ZoomInButton" Grid.Column="2" Margin="6,0,0,0" Click="OnZoomInClicked" Content="＋" ToolTipService.ToolTip="放大" />
+                        <Button x:Name="RefreshButton" Grid.Column="3" Margin="8,0,0,0" Click="OnRefreshClicked" Content="刷新依赖" />
+                        <Button Grid.Column="4" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
                     </Grid>
                     <InfoBar x:Name="ChainInfoBar" Grid.Row="1" IsClosable="False" IsOpen="True" Message="正式队列中尚无包含 oldjob 的真实作业。" Severity="Informational" Title="没有重启动依赖" />
                     <Grid Grid.Row="2" Background="{ThemeResource LayerFillColorDefaultBrush}">

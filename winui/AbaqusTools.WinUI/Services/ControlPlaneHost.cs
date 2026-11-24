@@ -1412,6 +1412,15 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             },
             cancellationToken);
 
+    public Task<JobQueueCommandResponse> UpdateRestartDependencyAsync(
+        string itemId, string oldjobPath, CancellationToken cancellationToken = default) =>
+        ExecuteJobQueueCommandAsync(new JobQueueCommandRequest
+        {
+            Action = "updateQueueItem",
+            ItemId = itemId.Trim(),
+            OldjobPath = oldjobPath.Trim(),
+        }, cancellationToken);
+
     public Task<JobQueueCommandResponse> SetJobQueueHoldAsync(
         IReadOnlyList<string> itemIds,
         bool held,

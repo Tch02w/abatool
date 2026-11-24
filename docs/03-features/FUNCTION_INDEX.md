@@ -1,4 +1,9 @@
 # 功能定位索引
+| 11 月 24 日修复 | 生产入口及定位 | 验证 |
+|---|---|---|
+| `F011` 重启动前置关系 | `modules/submitter/restart_topology.py` / RestartTopology，`modules/control_plane/job_queue_commands.py`，`winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml.cs` | `tests/control_plane/test_restart_dependency_edits.py`，原生旧记录修复见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) |
+| `F012/F013` 合并执行与结果图初次载入 | `winui/AbaqusTools.WinUI/Services/OdbMergeExecution.cs` / Resolve，`winui/AbaqusTools.WinUI/Controls/OdbResultGraphEditor.xaml.cs` | `tests/winui_batch/Program.cs`，三级链的发布与只读复核见 [批量结果](ODB_RESULT_BATCH.md) |
+| `F021` 后处理打开已发布目录 | `winui/AbaqusTools.WinUI/Services/OdbPostprocessResultLocations.cs` 解析成功回执及可用目录，`winui/AbaqusTools.WinUI/Services/ResultBrowserLoadCoordinator.cs` / OpenRootAsync 协调显式切换与页面恢复 | `tests/winui_postprocess/PostprocessResultLocationChecks.cs`、`tests/winui_results/Program.cs`，已知截面及双根连续导航见 [TASK-001](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) |
 
 F004表格布局（2026-11-24）：`winui/AbaqusTools.WinUI/Controls/QueueTableView.xaml`、同名.xaml.cs / List、ApplyKind、UpdateWidth统一表头和虚拟列表的滚动与容器；`winui/AbaqusTools.WinUI/Controls/QueueTableRow.cs` / CandidateColumns、FormalColumns、BuildCells定义列、对齐、浅色行列线、截断及勾选。`winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs`通过CandidateTable.List / FormalTable.List继续使用既有更新、命令和双击逻辑。`tests/winui_explorer/App.xaml.cs` / CheckQueueTableAsync直接加载生产控件；`tests/winui/test_shell_contract.py`核对迁移后的接线。约定见[界面交互](UI_INTERACTION.md)，实际业务观察见TASK-004。
 

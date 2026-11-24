@@ -7,6 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessResultLocations.cs" Link="OdbPostprocessResultLocations.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbComparisonGroups.cs" Link="OdbComparisonGroups.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs" Link="OdbPostprocessWorkspaceStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessDraftRecovery.cs" Link="OdbPostprocessDraftRecovery.cs" />

@@ -38,6 +38,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private bool _discoveryBusy;
     private bool _updatingSelection;
     private string? _lastDiscoveryRoot;
+    private bool _updatingRunScopes;
+    private string? _scopeCatalogRoot;
+    private List<OdbRunScope>? _runScopeChoices;
     private readonly OdbPostprocessResultLocations _resultLocations = new();
     private readonly Dictionary<string, List<string>> _groupMemberOrder = new(StringComparer.OrdinalIgnoreCase);
     private readonly OdbPostprocessWorkspaceStore _workspaceStore = new(Path.Combine(
@@ -77,11 +80,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ActivateExplorerOdbAsync);
         NavigationCacheMode = NavigationCacheMode.Required;
         OdbList.ItemsSource = _odbItems;
-        RootTextBox.TextChanged += (_, _) =>
-        {
-            _resultLocations.InputChanged(RootTextBox.Text);
-            OpenResultsButton.IsEnabled = !_discoveryBusy && !_postprocessBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);
-        };
+        UpdateRunScopeChoices();
+        RootTextBox.TextChanged += (_, _) => RefreshInteractionState();
         App.Current.Session.Register(this, "odb-postprocessing", ["RootTextBox", "RecursiveCheckBox", "GroupNameTextBox", "GroupOperationComboBox"], async () =>
         {
             await WorkbenchSession.WaitForIdleAsync(() => _discoveryBusy || _postprocessRecoveryBusy, "后处理目录读取或恢复");
@@ -461,12 +461,17 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             if (canApply?.Invoke() is false || App.Current.Session.IsClosing) return false;
 
             var sameRoot = _lastDiscoveryRoot is not null
-                && string.Equals(PathKey(_lastDiscoveryRoot), PathKey(result.Root), StringComparison.OrdinalIgnoreCase);
+                && string.Equals(PathKey(_lastDiscoveryRoot), PathKey(result.Root), StringComparison.OrdinalIgnoreCase)
+                && !_unreadableWorkspaces.Contains(PathKey(result.Root));
             var refreshed = OdbDiscoveryReconciler.Reconcile(result.Odbs, previousRows, selectedPaths, sameRoot);
             OdbPostprocessWorkspace? saved = null;
             if (!sameRoot)
             {
-                try { saved = _workspaceStore.Load(result.Root); }
+                try
+                {
+                    saved = _workspaceStore.Load(result.Root);
+                    _unreadableWorkspaces.Remove(PathKey(result.Root));
+                }
                 catch (Exception exception)
                 {
                     _unreadableWorkspaces.Add(PathKey(result.Root));
@@ -517,6 +522,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
             RootTextBox.Text = result.Root;
             _lastDiscoveryRoot = result.Root;
+            _resultLocations.DiscoveryAccepted(result.Root);
             if (!sameRoot) await LoadWorkspaceRecoveryAsync(result.Root, saved);
             ResultCountText.Text = $"{result.Count} 个";
             DiscoveryMetadataText.Text = $"游标 {result.EventCursor} · {FormatDiscoveryId(result.DiscoveryId)}";
@@ -559,6 +565,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void UpdateExplorer()
     {
+        UpdateRunScopeChoices();
         var groups = OdbComparisonGroups.ForBrowser(_odbItems, SavedGroupNames())
             .Select(group => WorkbenchExplorerAdapterBase.Group(
                 group.Unassigned ? "postprocess:ungrouped" : $"postprocess:group:{group.Name}",
@@ -1333,14 +1340,54 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async Task RunPostprocessAsync()
     {
-        if (_postprocessBusy || _compatibilityBusy || _discoveryBusy || UpgradeBlocksEditing)
+        if (!RunPostprocessButton.IsEnabled)
         {
             return;
         }
-        var rows = OdbList.SelectedItems.OfType<OdbFileRow>().ToArray();
-        var groups = OdbComparisonGroups.ForExecution(rows);
-        var submission = BuildQueueRequest(rows, groups);
+        var submission = BuildScopedQueueRequest();
         if (submission is not null && SaveWorkspace()) await SubmitGroupQueueAsync(submission);
+    }
+
+    private void UpdateRunScopeChoices()
+    {
+        var previous = RunScopeComboBox.SelectedItem as OdbRunScope;
+        var choices = new List<OdbRunScope> { new(OdbRunScopeKind.Selection), new(OdbRunScopeKind.SingleModel) };
+        choices.AddRange(KnownGroupNames().Select(name => new OdbRunScope(OdbRunScopeKind.NamedGroup, name)));
+        var sameRoot = string.Equals(_scopeCatalogRoot, _lastDiscoveryRoot, StringComparison.OrdinalIgnoreCase);
+        if (sameRoot && _runScopeChoices is not null && _runScopeChoices.SequenceEqual(choices)) return;
+        var selectedIndex = -1;
+        if (_runScopeChoices is null) selectedIndex = 0;
+        else if (previous is not null && (sameRoot || previous.Kind != OdbRunScopeKind.NamedGroup))
+            selectedIndex = choices.FindIndex(item => item.Kind == previous.Kind
+                && string.Equals(item.GroupName, previous.GroupName, StringComparison.OrdinalIgnoreCase));
+        _updatingRunScopes = true;
+        try
+        {
+            _runScopeChoices = choices;
+            RunScopeComboBox.ItemsSource = choices;
+            // A deleted group or a new workspace must not silently widen the request.
+            RunScopeComboBox.SelectedIndex = selectedIndex;
+            _scopeCatalogRoot = _lastDiscoveryRoot;
+        }
+        finally { _updatingRunScopes = false; }
+    }
+
+    private void OnRunScopeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (!_updatingRunScopes && RunPostprocessButton is not null) RefreshInteractionState();
+    }
+
+    private OdbScopedRunPlan ResolveRunScope(IEnumerable<OdbFileRow> selectedRows) => OdbScopedRunPlan.Resolve(
+        RunScopeComboBox.SelectedItem as OdbRunScope, selectedRows, _odbItems, RootTextBox.Text, _lastDiscoveryRoot,
+        _groupQueue is { IsTerminal: false } queue ? queue.Root : null, _groupQueue?.Groups,
+        _lastDiscoveryRoot is null || !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot)));
+
+    private OdbPostprocessRunCreateRequest? BuildScopedQueueRequest()
+    {
+        var plan = ResolveRunScope(OdbList.SelectedItems.OfType<OdbFileRow>());
+        if (plan.CanRun) return BuildQueueRequest(plan.Rows, plan.Groups);
+        ShowWarning(plan.Summary, "请核对运行范围");
+        return null;
     }
 
     private OdbPostprocessRunCreateRequest? BuildQueueRequest(OdbFileRow[] rows, IReadOnlyList<OdbExecutionGroup> selectedGroups)
@@ -1368,42 +1415,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ShowWarning("请填写 1 至 60 之间的整数帧率。", "输出设置无效");
             return null;
         }
-        var timing = CaptureOutputOptions();
-        var groups = selectedGroups
-            .Select(group => new OdbPostprocessGroupDraft
-            {
-                Id = StableGroupDraftId(RootTextBox.Text, group),
-                Name = group.Name,
-                Members = OdbComparisonGroups.OrderMembers(group.Members,
-                    !group.Standalone && _groupMemberOrder.TryGetValue(group.Name, out var order) ? order : [])
-                    .Select(row => row.Path).ToArray(),
-                Standalone = group.Standalone,
-                LegendOverrides = !group.Standalone && _legendOverridesByGroup.TryGetValue(group.Name, out var overrides)
-                    ? overrides
-                    : new Dictionary<string, OdbLegendOverride>(),
-            })
-            .ToArray();
-        return new OdbPostprocessRunCreateRequest
-        {
-            ClientRequestId = Guid.NewGuid().ToString("D"),
-            Root = RootTextBox.Text.Trim(),
-            ParallelWorkers = ParallelWorkerCount(),
-            ForceRescan = ForceRescanCheckBox.IsChecked is true,
-            FullTimehistoryFreebody = FullTimehistoryCheckBox.IsChecked is true,
-            RebarMethod = SelectedTag(RebarMethodComboBox, "element_cut"),
-            ExpectedLongitudinalRebarCount = (int)Math.Round(ExpectedRebarCountNumberBox.Value),
-            ImageSizeUnit = SelectedTag(ImageUnitComboBox, "px"),
-            ImageWidth = (int)Math.Round(ImageWidthNumberBox.Value),
-            ImageHeight = (int)Math.Round(ImageHeightNumberBox.Value),
-            ExportWhiteBackgroundPng = WhiteBackgroundCheckBox.IsChecked is true,
-            ExportTransparentBackgroundPng = TransparentBackgroundCheckBox.IsChecked is true,
-            AnimationFps = timing.AnimationFps,
-            AnimationDurationSeconds = DurationMode ? timing.AnimationDurationSeconds : null,
-            RebarCutToleranceMm = RebarToleranceNumberBox.Value,
-            Jobs = rows.Select(row => row.PostprocessJob!.Clone()).ToArray(),
-            Groups = groups,
-        };
-
+        return OdbScopedRunPlan.BuildRequest(RootTextBox.Text, rows, selectedGroups, CaptureOutputOptions(),
+            ForceRescanCheckBox.IsChecked is true, _groupMemberOrder, _legendOverridesByGroup);
     }
 
     private async void OnCancelPostprocessClicked(object sender, RoutedEventArgs e)
@@ -1957,9 +1970,10 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         ConfigureButton.Content = selectedCount > 1 ? "对照提取参数…" : "编辑提取参数";
         ConfigureButton.IsEnabled = idle && selectedRows.Length > 0
             && selectedRows.All(row => row.ScanDetails is { Error.Length: 0 } && row.PostprocessJob is not null);
-        RunPostprocessButton.IsEnabled = idle
-            && selectedRows.Length > 0
-            && selectedRows.All(row => row.HasPostprocessConfiguration);
+        var runScope = ResolveRunScope(selectedRows);
+        RunScopePreviewText.Text = runScope.Summary;
+        RunScopeComboBox.IsEnabled = idle;
+        RunPostprocessButton.IsEnabled = idle && runScope.CanRun;
         OpenResultsButton.IsEnabled = !_discoveryBusy && !_postprocessBusy && !string.IsNullOrWhiteSpace(RootTextBox.Text);
         ParallelWorkersNumberBox.IsEnabled = idle;
         GroupNameTextBox.IsEnabled = idle;

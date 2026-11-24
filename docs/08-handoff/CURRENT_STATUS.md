@@ -1,5 +1,7 @@
 # 当前状态与接续点
 
+F022 的运行范围已经接入工作台。GJA 属于 A、B，GJB 只属于 A 的实页数据验证了只选 B 时只提交 GJA，独立模型使用自身色标，批量则按各组的顺序和图例出图。空工作区的组名、图例、持久化与确认删除已在离屏页面通过。[开发及验收记录](ACTIVE_TASKS/TASK-001-postprocessing.md)
+
 当前 Windows x64 目录包为 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools`，可直接启动其中的 `AbaqusTools.WinUI.exe`。安装候选为 `GPTWork/installer-win-x64-66c59ff3a8e2/AbaqusTools-0.1.0-win-x64-setup.exe`。两者来自同一干净提交 `4d55265`，1692 个清单文件已逐项核对。安装候选未签名，正式标识安装及无开发环境 Windows 仍待实测。[发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
 
 11 月 24 日，F022 已接入多模型参数对照和预建空组。多选已读取结构的 ODB 后可以逐个修改，也可以只复制勾选的字段。148 项原生控件回归包含真实 GJA/GJB 扫描和 64 模型分页。另在实际后处理页离屏触发控件，10 项检查覆盖两模型取消、重开、文件写入失败和重试，只保存指定字段。桌面仍锁定，可见窗口内的参数对照和空组操作待实点。[准确续接点](ACTIVE_TASKS/TASK-001-postprocessing.md)

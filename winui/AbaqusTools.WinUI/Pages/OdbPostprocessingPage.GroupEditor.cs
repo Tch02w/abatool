@@ -25,10 +25,17 @@ public sealed partial class OdbPostprocessingPage
         var jobs = plan.Jobs.ToDictionary(job => job.Path, job => job.Clone(), StringComparer.OrdinalIgnoreCase);
         var sameRoot = _lastDiscoveryRoot is not null && string.Equals(PathKey(queue.Root), PathKey(_lastDiscoveryRoot),
             StringComparison.OrdinalIgnoreCase);
-        var local = sameRoot && !DraftPending ? OdbComparisonGroups.ForExecution(_odbItems).FirstOrDefault(candidate =>
-            candidate.Standalone == entry.Standalone && (entry.Standalone
-                ? string.Equals(PathKey(candidate.Members[0].Path), PathKey(entry.Members[0]), StringComparison.OrdinalIgnoreCase)
-                : string.Equals(candidate.Name, entry.Name, StringComparison.OrdinalIgnoreCase))) : null;
+        OdbExecutionGroup? local = null;
+        if (sameRoot && !DraftPending)
+        {
+            if (entry.Standalone)
+            {
+                if (entry.Members.Count == 1 && FindRow(entry.Members[0]) is { } row)
+                    local = new(row.Name, [row], true);
+            }
+            else local = OdbComparisonGroups.ForExecution(_odbItems).FirstOrDefault(candidate =>
+                !candidate.Standalone && string.Equals(candidate.Name, entry.Name, StringComparison.OrdinalIgnoreCase));
+        }
         if (local is not null)
             foreach (var row in local.Members.Where(row => row.HasPostprocessConfiguration && row.PostprocessJob is not null))
                 if (jobs.TryAdd(row.Path, row.PostprocessJob!.Clone())) members.Add(row.Path);

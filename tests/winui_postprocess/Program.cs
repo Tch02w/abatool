@@ -31,6 +31,8 @@ try
     // Verify this executable's failure contract without a Windows crash dialog.
     if (args.Contains("--verify-failure-exit"))
         throw new InvalidOperationException("Intentional test-runner failure-exit verification");
+    ScopedRunChecks.Run(Scan());
+    if (args.Contains("--scope-checks")) return;
     ParameterComparisonChecks.Run();
     if (args.Length == 2 && args[0] == "--draft-checks") await PostprocessDraftChecks.RunAsync(args[1]);
     else RunChecks();

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using AbaqusTools.WinUI.Models;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
@@ -57,20 +55,18 @@ public sealed partial class OdbPostprocessingPage
         return false;
     }
 
-    private static string StableGroupDraftId(string root, OdbExecutionGroup group)
-    {
-        var identity = group.Standalone ? "odb|" + PathKey(group.Members[0].Path) : "group|" + group.Name.Trim();
-        var bytes = Encoding.UTF8.GetBytes((PathKey(root) + "|" + identity).ToUpperInvariant());
-        return "g-" + Convert.ToHexString(SHA256.HashData(bytes))[..32].ToLowerInvariant();
-    }
-
     private async Task SubmitGroupQueueAsync(OdbPostprocessRunCreateRequest run)
     {
         if (_groupQueueCommandBusy || _queueUnconfirmed || _groupQueueUnavailable) return;
         if (_groupQueue is { IsTerminal: false } existing)
         {
             if (!AcceptsPendingChanges(existing)) return;
-            await ChangeGroupQueueAsync(existing, PostprocessGroupQueueAction.Append, run);
+            if (await ChangeGroupQueueAsync(existing, PostprocessGroupQueueAction.Append, run) && _groupQueue is { } updated)
+            {
+                var added = updated.Groups.Count - existing.Groups.Count;
+                if (added > 0) ForceRescanCheckBox.IsChecked = false;
+                App.Current.MainWindow.ReportPageStatus($"已追加 {added} 项，共提交 {run.Groups.Count} 项");
+            }
             return;
         }
         _groupQueueCommandBusy = true;
@@ -290,7 +286,7 @@ public sealed partial class OdbPostprocessingPage
             && !_postprocessBusy && !_compatibilityBusy && !_discoveryBusy && !_upgradeBusy;
         GroupQueuePanel.Visibility = queue is not null || _queueUnconfirmed ? Visibility.Visible : Visibility.Collapsed;
         GroupQueueEditHint.Visibility = queue is { IsTerminal: false } ? Visibility.Visible : Visibility.Collapsed;
-        RunPostprocessButton.Content = queue is { IsTerminal: false } ? "追加所选组" : "运行后处理";
+        RunPostprocessButton.Content = queue is { IsTerminal: false } ? "追加到队列" : "运行后处理";
         var canChangePending = canControl && AcceptsPendingChanges(queue);
         RunPostprocessButton.IsEnabled &= !_queueUnconfirmed && !_groupQueueUnavailable && (queue is null || queue.IsTerminal || canChangePending);
         CancelPostprocessButton.Content = queue?.IsActive == true && !_postprocessBusy ? "取消当前组" : "停止当前操作";

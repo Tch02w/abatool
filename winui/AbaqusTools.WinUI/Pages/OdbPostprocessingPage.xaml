@@ -292,6 +292,10 @@
                                 <ProgressBar x:Name="PostprocessProgress" Height="6" Maximum="100" Value="0" />
                                 <TextBlock x:Name="PostprocessPercentText" Grid.Column="1" VerticalAlignment="Center" Text="0%" />
                             </Grid>
+                            <ComboBox x:Name="RunScopeComboBox" Header="运行范围" HorizontalAlignment="Stretch"
+                                      PlaceholderText="请选择运行范围" SelectionChanged="OnRunScopeChanged" />
+                            <TextBlock x:Name="RunScopePreviewText" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                                       Style="{StaticResource CaptionTextBlockStyle}" />
                             <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                 <Button x:Name="RunPostprocessButton" HorizontalAlignment="Stretch" Click="OnRunPostprocessClicked" Content="运行后处理" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
                                 <Button x:Name="CancelPostprocessButton" Grid.Column="1" HorizontalAlignment="Stretch" Click="OnCancelPostprocessClicked" Content="停止当前操作" IsEnabled="False" />

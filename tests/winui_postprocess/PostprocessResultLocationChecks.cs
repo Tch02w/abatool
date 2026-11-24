@@ -61,6 +61,12 @@ internal static class PostprocessResultLocationChecks
             Equal(Resolve(sourceB), b);
             locations.SetGroupQueueResult("empty-queue", root, new OdbPostprocessResult());
             Missing(() => Resolve());
+            // Typing a different directory cannot release the empty receipt. Neither
+            // can a failed discovery or a successful refresh of the same directory.
+            Missing(() => locations.Resolve(other, root, [sourceA], Discover()));
+            Missing(() => Resolve(sourceA));
+            locations.DiscoveryAccepted(root + Path.DirectorySeparatorChar);
+            Missing(() => Resolve(sourceA));
             foreach (var state in new[] { "failed", "cancelled" })
             {
                 locations.Begin(state, "odb.postprocess.run", root);
@@ -73,9 +79,11 @@ internal static class PostprocessResultLocationChecks
             locations.Begin("moved", "odb.postprocess.run", root);
             locations.Complete(Snapshot("moved", "succeeded", [a], Path.Combine(b, "missing")));
             Missing(() => Resolve());
-            locations.InputChanged(other);
             Missing(() => locations.Resolve(other, root, [sourceA], Discover()));
+            Missing(() => Resolve(sourceA));
+            locations.DiscoveryAccepted(other);
             Equal(locations.Resolve(other, other, [sourceA], []).ToArray(), unrelated);
+            locations.DiscoveryAccepted(root);
             Equal(Resolve(sourceA), a, top);
             Console.WriteLine("Postprocess result routing checks passed (nested roots, selection, generic extraction, stale requests and existing results)");
         }

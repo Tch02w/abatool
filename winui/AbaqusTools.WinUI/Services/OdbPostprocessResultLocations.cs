@@ -8,9 +8,9 @@ internal sealed class OdbPostprocessResultLocations
     private string? _requestId;
     private OdbPostprocessResult? _result;
 
-    public void InputChanged(string input)
+    public void DiscoveryAccepted(string root)
     {
-        if (Paths.Equals(_root, FullPath(input))) return;
+        if (Paths.Equals(_root, FullPath(root))) return;
         _root = null;
         _requestId = null;
         _result = null;
@@ -80,7 +80,7 @@ internal sealed class OdbPostprocessResultLocations
             && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
-    private static string? FullPath(string? path)
+    internal static string? FullPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path.Trim())) return null;
         try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path.Trim())); }

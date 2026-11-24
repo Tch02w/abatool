@@ -281,6 +281,10 @@ def test_odb_page_routes_its_result_directory_into_the_native_browser() -> None:
     assert "OpenResultBrowserAsync" in window
     assert "_resultLocations.Resolve(RootTextBox.Text, _lastDiscoveryRoot," in odb_page
     assert "_resultLocations.Complete(snapshot)" in odb_page
+    discovery = odb_page.split("private async Task<bool> DiscoverCoreAsync", 1)[1].split("catch (ControlPlaneException", 1)[0]
+    accepted = discovery.split("_lastDiscoveryRoot = result.Root;", 1)[1]
+    assert "_resultLocations.DiscoveryAccepted(result.Root);" in accepted
+    assert odb_page.count("_resultLocations.DiscoveryAccepted(") == 1
     assert "OpenResultBrowserAsync(resultRoot)" in odb_page
     routed_read = result_page.split("public Task SetResultRootAsync", 1)[1].split("private async Task<bool>", 1)[0]
     assert "_loads.OpenRootAsync(" in routed_read and "RefreshScopesAsync(explicitRoot: target)" in routed_read
@@ -907,15 +911,23 @@ def test_postprocess_partial_scan_recovery_cannot_overwrite_workspace() -> None:
 
 def test_postprocess_execution_uses_isolated_group_identity() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
-    assert "OdbComparisonGroups.ForExecution(rows)" in page
-    assert "Standalone = group.Standalone" in page
-    assert "!group.Standalone && _legendOverridesByGroup.TryGetValue" in page
-    assert "OdbComparisonGroups.OrderMembers(group.Members," in page
+    scope = (WINUI_ROOT / "Services" / "OdbScopedRunPlan.cs").read_text(encoding="utf-8")
+    assert "OdbComparisonGroups.ForExecution(rows)" in scope
+    assert "Standalone = group.Standalone" in scope
+    assert "!group.Standalone && legends.TryGetValue" in scope
+    assert "OdbComparisonGroups.OrderMembers(group.Members," in scope
+    assert "var submission = BuildScopedQueueRequest();" in page
+    assert "if (plan.CanRun) return BuildQueueRequest(plan.Rows, plan.Groups);" in page
+    assert "RunPostprocessButton.IsEnabled = idle && runScope.CanRun;" in page
+    assert "_groupQueue?.Groups," in page
+    assert "_lastDiscoveryRoot is null || !_unreadableWorkspaces.Contains(PathKey(_lastDiscoveryRoot))" in page
+    assert "_unreadableWorkspaces.Remove(PathKey(result.Root));" in page
     drafts = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.Drafts.cs").read_text(encoding="utf-8")
     assert "GroupMemberOrder = _groupMemberOrder.ToDictionary" in drafts
     xaml = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml").read_text(encoding="utf-8")
     assert 'Click="OnGroupOrderClicked"' in xaml
     assert 'Click="OnManageGroupsClicked"' in xaml
+    assert 'x:Name="RunScopeComboBox" Header="运行范围"' in xaml
     assert "OdbComparisonGroups.ChangeGroup(_odbItems, oldName," in page
     assert 'Click="OnCreateGroupsClicked"' in xaml
     assert "ManageGroupsButton.IsEnabled = CreateGroupsButton.IsEnabled" in page

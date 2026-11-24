@@ -9,6 +9,8 @@
   <ItemGroup>
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessResultLocations.cs" Link="OdbPostprocessResultLocations.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbComparisonGroups.cs" Link="OdbComparisonGroups.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbScopedRunPlan.cs" Link="OdbScopedRunPlan.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessGroupQueueContracts.cs" Link="OdbPostprocessGroupQueueContracts.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessParameterComparison.cs" Link="OdbPostprocessParameterComparison.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs" Link="OdbPostprocessWorkspaceStore.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/OdbPostprocessDraftRecovery.cs" Link="OdbPostprocessDraftRecovery.cs" />

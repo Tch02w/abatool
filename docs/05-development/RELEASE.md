@@ -1,10 +1,10 @@
 # Windows 发布构建（F026）
 
-2026-11-24 从干净提交 `51cc69f` 生成的完整目录是 `GPTWork/release-win-x64-7857f4955208/AbaqusTools`。它包含队列表头对齐、浅色分隔线和同步横向滚动。1691 个文件逐项通过大小及 SHA256 检查，清单本身的 SHA256 为 `5a3d1605e39dc23c36128334d7099db90c8b95244f24c408f11078c6adca6b67`。
+2026-11-24 从干净提交 `ee1f79f5fa1fb6d3cd66cf783d042a734845c4ba` 生成 `GPTWork/release-win-x64-15bec5c3e691/AbaqusTools`。它包含两张队列表的对齐与浅色行列线、重启动依赖校验、ODB 合并执行修复和已发布结果的目录选择。清单 1691 个文件的大小及 SHA256 全部匹配，清单 SHA256 为 `7b78c1919b9b9f1d454659a74eed6ccb1efb4cadf0843303c57e733478388bf5`。
 
-本次验证覆盖 19 个 Abaqus worker 脚本和 16 个 WinUI 资源。`Controls/QueueTableView.xbf`、`Pages/JobQueuePage.xbf` 和应用 PRI 与已验收的开发输出逐字节一致。正式客户端启动包内后台后，读取了本机资源和队列，完成参数预览、入队、编辑保留和显式复位，并在空闲时正常退出。7 项包内依赖检查和逐文件结果保存在 `GPTWork/release-table-audit-20261124/verification.json`。安装候选的校验值见[安装说明](INSTALLATION.md)。
+检查覆盖 19 个 Abaqus worker 和 16 项 WinUI 资源，队列表格和作业队列等 6 项 XBF 与联合开发版相同。C# 客户端实际启动冻结后台、读取资源及队列，验证 GPU/精度预览、入队与复位，空闲退出成功。7 项依赖检查及摘要见 `GPTWork/release-chain-navigation-ee1f79f-20261124/verification.json`。[安装候选](INSTALLATION.md)
 
-同一负载的测试标识安装程序已通过中文路径首次安装、从旧版 `6b4ade1` 升级、卸载和数据保留检查。本机 8 项检查的回执为 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。正式标识安装和无开发环境机器仍待验证。
+上一版 `51cc69f` 已在本机验证安装、升级、卸载与数据保留，历史回执为 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。新负载的测试标识安装情况见[安装说明](INSTALLATION.md)。
 
 ## 应用资源发布门槛（2026-11-18）
 

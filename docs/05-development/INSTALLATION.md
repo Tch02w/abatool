@@ -1,12 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-2026-11-24 的 Windows x64 安装候选使用版本号 `0.1.0`，应用标识为 `AbaqusTools.Workbench.WinUI3`。安装程序位于 `GPTWork/installer-win-x64-898e84573199/AbaqusTools-0.1.0-win-x64-setup.exe`，大小 126195982 字节，SHA256 为 `88c2e451625992e233eca88180fb5b285fab12ba1bce1115f821c9b6820edab1`。
+Windows x64 安装候选版本为 `0.1.0`，应用标识为 `AbaqusTools.Workbench.WinUI3`。程序在 `GPTWork/installer-win-x64-7f9e23f7bf10/AbaqusTools-0.1.0-win-x64-setup.exe`，大小 126224149 字节，SHA256 为 `7372887117f42d69cdf5160bb7bc700d3eca970ccbe2bdab0d94b5266d6fac9a`。
 
-Inno Setup 7.1.1 使用干净提交 `51cc69f` 的安装脚本和完整目录编译。编译前后均核验了清单文件，最终安装程序的 Authenticode 状态是 `NotSigned`。正式标识安装和无开发环境目标机仍待实测。构建来源见[发布构建](RELEASE.md)。
+Inno Setup 7.1.1 使用干净提交 `ee1f79f` 的脚本和完整目录构建。正式安装候选为 `NotSigned`，正式标识安装和无开发环境目标机仍待实测。[发布构建](RELEASE.md)
 
-同一目录包另用测试标识 `AbaqusTools.Workbench.WinUI3.Test.fa0dbad4b19e` 编译，用于本机安装、升级和卸载验收。旧版 `6b4ade1` 首次安装到 G 盘含中文和空格的目录，运行中的后台能阻止升级和卸载。正常退出后升级到 `51cc69f`，开始菜单指向新版本，安装后的客户端成功读取资源和队列并退出。升级前核对的 1 个数据文件、卸载前核对的 14 个数据文件在相应操作后 SHA256 均一致。卸载清除了测试登记和快捷方式，并保留用户自行添加的文件。8 项检查及摘要保存在 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。
+上一目录包 `51cc69f` 的测试标识安装验收回执为 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。运行中的后台能阻止升级和卸载，空闲后正常升级和卸载，用户数据摘要保持一致。
 
 ## 使用
+
+当前负载的测试标识安装程序位于 `GPTWork/installer-win-x64-a2fc9bd03b73`。在本机 G 盘的中文路径，从同一测试标识的 `51cc69f` 升级至 `ee1f79f`。首次安装、运行中拒绝升级/卸载、正常退出后升级、安装后访问冻结后台、卸载与数据保留共 8 项通过。升级前的 1 个文件与卸载前的 14 个数据文件逐项摘要一致。测试登记及快捷方式已移除，用户文件保留。回执为 `GPTWork/installer-lifecycle-34e68d8d7ff7/verification.json`。
 
 1. 正常结束任务并退出工作台，再运行 `AbaqusTools-0.1.0-win-x64-setup.exe`。如果曾选择“后台继续”，先重新打开工作台，等待任务结束后正常退出。
 2. 默认按用户安装到 `%LOCALAPPDATA%/Programs/AbaqusTools`，不要求管理员权限。也可选择本机空目录；拒绝磁盘根目录、网络路径、目录链接及含其他文件的陌生目录。

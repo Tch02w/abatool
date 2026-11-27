@@ -518,6 +518,13 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             cancellationToken,
             timeout: TimeSpan.FromSeconds(40));
 
+    public Task<RemoteServersSnapshot> CancelHostKeyReviewAsync(RemoteServerProfile profile,
+        string observedFingerprint, CancellationToken cancellationToken) =>
+        ExecuteRemoteServerCommandAsync(new RemoteServerCommandRequest
+        {
+            Action = "cancelHostKeyReview", Profile = profile, ConfirmFingerprint = observedFingerprint,
+        }, cancellationToken);
+
     public Task<RemoteServersSnapshot> RefreshRemoteServerAsync(
         CancellationToken cancellationToken = default) =>
         ExecuteRemoteServerCommandAsync(

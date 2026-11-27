@@ -1,5 +1,11 @@
 # Windows 安装、升级与卸载（F026）
 
+当前 Windows x64 安装程序为 `GPTWork/installer-current-3ff3fa2-20261128/source/GPTWork/installer-win-x64-155f36183eb7/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-e0eb0cd89e8c/AbaqusTools/AbaqusTools.WinUI.exe`。两者均来自干净提交 `3ff3fa2`。安装程序版本为 `0.1.0`，大小为 126488882 字节，SHA256 为 `f5ae410ef74edc155abaee0bc22b129bf619c83bd1f7154f03b9fe2034854e2d`，签名状态为 NotSigned。
+
+在 G 盘测试标识下，中文向导完成了目录选择、返回、安装和完成，安装后逐文件核对了 1697 项负载及发布清单。另从上一修正版（构建器 `648f5b4`，应用 `c4bbe73`）升级到本版，8 项检查通过，覆盖运行中拒绝升级和卸载、退出后升级、从实际安装目录读取资源和队列，以及卸载保留用户文件。旧版安装、新版升级和新版普通向导日志均为零异常、零抑制弹窗。升级前 1 个、卸载前 16 个应用数据文件的 SHA256 保持一致，测试登记和快捷方式均已移除。完整回执为 `GPTWork/installer-current-3ff3fa2-20261128/verified.json`。正式标识安装与独立无开发环境 Windows 仍待验收。[免安装包校验](RELEASE.md)
+
+## 上一修正版（构建器 648f5b4）
+
 浮动通知版的 Windows x64 安装程序为 `GPTWork/installer-final-c4bbe73-20261128/source/GPTWork/installer-win-x64-1357614b12b3/AbaqusTools-0.1.0-win-x64-setup.exe`。直接启动同版本可打开项目目录下的 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。[免安装版发布记录](RELEASE.md)
 
 安装程序版本为 `0.1.0`，应用标识为 `AbaqusTools.Workbench.WinUI3`。安装器构建脚本取自干净提交 `648f5b4`，应用负载取自 `c4bbe73`。文件大小为 126480996 字节，SHA256 为 `2f0a625e5a21a7dd11178f6af312fc6f372d5641a778758928fb818358eed247`，签名状态为 NotSigned。普通安装器和专用测试安装器使用相同的 1697 个文件和发布清单。汇总回执为 `GPTWork/installer-final-c4bbe73-20261128/verified-fix.json`。
@@ -8,7 +14,7 @@
 
 11 月 28 日撤回使用旧构建器生成的安装候选（包括 `069e05f63988` 和下列历史安装包）。旧版文件校验使用仍含 `{app}` 的目标路径，导致中文安装向导逐文件弹错；静默操作会抑制错误框并返回成功。重现日志为 `GPTWork/installer-final-c4bbe73-20261128/wizard-638132640b/wizard.log`。修正版将清单 SHA256 写入 Inno 的文件条目，编译时按文件核对摘要，解包写入时由 Inno 检查数据。验收同时读取安装日志并重新计算磁盘文件摘要。独立修改测试夹具的 XBF 后，真实编译器拒绝生成安装器。[Inno 文件校验说明](https://jrsoftware.org/inno-setup/documentation/topic_filessection.htm)
 
-## 历史安装候选
+## 已撤回的历史安装候选
 
 上一版 Windows x64 安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。文件大小 126373281 字节，SHA256 为 `2bfb23aaf9c60be85e2b8673bdc70763bd7b9626d08361b3d11850602b155b14`。[目录包与校验回执](RELEASE.md)
 

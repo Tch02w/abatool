@@ -1,5 +1,9 @@
 # 验收记录与已知缺口
 
+## 2026-11-28 · 程序发布、性能与页面操作
+
+本轮全量离屏回归 1164 项与 9 项子检查通过，旧 Qt 启动另测 1 项。Windows 安装向导逐文件弹错已实际复现并修复。直接浏览在 12,000 个文件的目录中完成 24 页正向与 23 页反向核对；另有结果导出取消、关窗、系统回收与重建索引的原生记录。两份工程日志的重放、三台同缩放显示器和重启动图谱八节点验收各有独立边界。[应用与安装](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) · [结果浏览](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [工程日志与显示器](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md) · [待验条件](COMPLETION_AUDIT.md)
+
 ## 2026-11-27 · Windows 候选和工程出图
 
 提交 `98d1bc7` 的 1131 项自动回归与 9 项子检查通过，另一次 Windows 实际启动检查通过。1692 个目录包文件逐项核对通过，专用测试身份从 `1fc22fd` 升级、卸载的 8 项检查通过。F022 的真实加载步按 B、A 两组先后发布，静态与动画各自使用预设色标。[安装与回归记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) · [工程输入与输出](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)

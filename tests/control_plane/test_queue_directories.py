@@ -4,7 +4,11 @@ import pytest
 
 from modules.control_plane.contracts import ApiProblem
 from modules.control_plane.job_queue_commands import JobQueueService
-from modules.submitter.constants import STATUS_COMPLETED, STATUS_PENDING_RUN, STATUS_RUNNING
+from modules.submitter.constants import (
+    STATUS_COMPLETED,
+    STATUS_PENDING_RUN,
+    STATUS_RUNNING,
+)
 from modules.submitter.models import QueueItem
 from modules.submitter.queue_store import load_joblist_state, save_joblist_state
 
@@ -38,7 +42,7 @@ def test_selective_batch_preserves_invalid_candidate_and_untouched_row(tmp_path,
     b = job(tmp_path, "sourceB", "B", fortran_path=str(tmp_path / "missing.for"))
     untouched = job(tmp_path, "sourceC", "C")
     save_joblist_state([a, b, untouched], [], service.path)
-    fields = dict(itemIds=[a.item_id, b.item_id], calculationRootDir=str(root), archiveDir=str(archive))
+    fields = {"itemIds": [a.item_id, b.item_id], "calculationRootDir": str(root), "archiveDir": str(archive)}
     response = edit(service, "setCandidateDirectories", **fields)
     assert response["changed"] == 2
     A, B, C = response["snapshot"]["candidates"]
@@ -92,18 +96,18 @@ def test_batch_rejects_stale_selection_invalid_path_and_unsafe_cleanup_atomicall
     snapshot = service.path.read_bytes()
     # B's original source already lies in <root>/B.
     for fields, code in [
-        (dict(itemIds=[a.item_id, "vanished"], archiveDir=str(archive)), "QUEUE_ITEM_NOT_FOUND"),
-        (dict(itemIds=[a.item_id, ""], archiveDir=str(archive)), "INVALID_QUEUE_COMMAND_FIELD"),
-        (dict(itemIds=[]), "EMPTY_QUEUE_COMMAND_SELECTION"),
-        (dict(itemIds=[a.item_id]), "EMPTY_DIRECTORY_EDIT"),
-        (dict(itemIds=[a.item_id], calculationRootDir=a.inp_path), "INVALID_QUEUE_DIRECTORY"),
-        (dict(itemIds=[a.item_id], archiveDir="."), "INVALID_QUEUE_DIRECTORY"),
-        (dict(itemIds=[a.item_id], archiveDir=str(tmp_path / "missing")), "INVALID_QUEUE_DIRECTORY"),
-        (dict(itemIds=[a.item_id], archiveDir=str(Path(a.inp_path).parent)), "INVALID_QUEUE_DIRECTORY"),
-        (dict(itemIds=[a.item_id], cleanupAfterArchive=True), "INVALID_QUEUE_CLEANUP"),
-        (dict(itemIds=[a.item_id], cleanupAfterArchive="true"), "INVALID_QUEUE_COMMAND_FIELD"),
-        (dict(itemIds=[a.item_id, b.item_id], calculationRootDir=str(tmp_path),
-              archiveDir=str(archive), cleanupAfterArchive=True), "INVALID_QUEUE_CLEANUP"),
+        ({"itemIds": [a.item_id, "vanished"], "archiveDir": str(archive)}, "QUEUE_ITEM_NOT_FOUND"),
+        ({"itemIds": [a.item_id, ""], "archiveDir": str(archive)}, "INVALID_QUEUE_COMMAND_FIELD"),
+        ({"itemIds": []}, "EMPTY_QUEUE_COMMAND_SELECTION"),
+        ({"itemIds": [a.item_id]}, "EMPTY_DIRECTORY_EDIT"),
+        ({"itemIds": [a.item_id], "calculationRootDir": a.inp_path}, "INVALID_QUEUE_DIRECTORY"),
+        ({"itemIds": [a.item_id], "archiveDir": "."}, "INVALID_QUEUE_DIRECTORY"),
+        ({"itemIds": [a.item_id], "archiveDir": str(tmp_path / "missing")}, "INVALID_QUEUE_DIRECTORY"),
+        ({"itemIds": [a.item_id], "archiveDir": str(Path(a.inp_path).parent)}, "INVALID_QUEUE_DIRECTORY"),
+        ({"itemIds": [a.item_id], "cleanupAfterArchive": True}, "INVALID_QUEUE_CLEANUP"),
+        ({"itemIds": [a.item_id], "cleanupAfterArchive": "true"}, "INVALID_QUEUE_COMMAND_FIELD"),
+        ({"itemIds": [a.item_id, b.item_id], "calculationRootDir": str(tmp_path),
+              "archiveDir": str(archive), "cleanupAfterArchive": True}, "INVALID_QUEUE_CLEANUP"),
     ]:
         with pytest.raises(ApiProblem) as rejected:
             edit(service, "setCandidateDirectories", **fields)
@@ -161,7 +165,7 @@ def test_partial_batch_preserves_unassigned_restart_and_blocks_cleanup_for_missi
     a = job(tmp_path, "source", "Restart")
     Path(a.inp_path).write_text("*Heading\n*RESTART, READ\n", encoding="ascii")
     save_joblist_state([a], [], service.path)
-    fields = dict(itemIds=[a.item_id], calculationRootDir=str(root), archiveDir=str(archive))
+    fields = {"itemIds": [a.item_id], "calculationRootDir": str(root), "archiveDir": str(archive)}
     row = edit(service, "setCandidateDirectories", **fields)["snapshot"]["candidates"][0]
     assert row["runMode"] == "restart" and not row["oldjobName"]
     with pytest.raises(ApiProblem) as unassigned:
@@ -179,8 +183,8 @@ def test_enqueue_from_original_draft_keeps_existing_defaults_and_explicit_cleanu
     root, archive = tmp_path / "ssd", tmp_path / "output"
     root.mkdir()
     archive.mkdir()
-    draft = dict(schemaVersion=1, inpFile=source, jobName="Draft", cpus=1, memoryValue="80", memoryUnit="%",
-                 priority=0, maxParallel=1, useSsdCalculation=True, calculationRootDir=str(root), archiveDir=str(archive))
+    draft = {"schemaVersion": 1, "inpFile": source, "jobName": "Draft", "cpus": 1, "memoryValue": "80", "memoryUnit": "%",
+                 "priority": 0, "maxParallel": 1, "useSsdCalculation": True, "calculationRootDir": str(root), "archiveDir": str(archive)}
     row = edit(service, "enqueueDraft", draft=draft)["snapshot"]["queueItems"][0]
     assert row["archiveAfterComplete"] and row["cleanupAfterArchive"]
     edit(service, "updateQueueItem", itemId=row["itemId"], cleanupAfterArchive=False)

@@ -36,6 +36,8 @@
 
 `POST /api/v1/remote-server-commands` 的 `refresh` / `disconnect` 可附已有结构的非敏感 `profile`，含主机、端口、用户名、指纹、计算目录、Abaqus命令与允许目录。后台在同一通信锁内用server_identity核对当前连接，再执行动作；不匹配返回409 `REMOTE_CONNECTION_CHANGED`，不刷新/断开其他服务器。WinUI新入口携带发起时身份；旧客户端省略profile的调用保持兼容。配置名称不是身份替代，密码或私钥内容不随此请求发送。
 
+已保存的服务器密钥发生变化时，`connect` 返回 409 `REMOTE_HOST_KEY_CHANGED`。快照的 `connection.pendingFingerprint` 提供此次观察到的指纹。用户从独立来源核实后，用同一份已保存配置和 `confirmFingerprint` 重新连接；后台核对配置和本次握手的密钥，认证成功后按请求的 `saveProfile` 保存。放弃核对发送 `cancelHostKeyReview`，带上原 `profile` 与观察到的 `confirmFingerprint`。已失效的核对返回 409 `REMOTE_HOST_KEY_REVIEW_EXPIRED`。资源刷新失败时快照清空 `resource`。[连接操作](03-features/REMOTE_JOBS.md)
+
 ### GPU 与精度补充（2026-11-18，F028）
 
 本机草稿/入队 draft、远端预览/创建增加可选 `gpuCount`（null 或 0–1024 整数）、`explicitPrecision`（default/off/explicit/both/constraint）、`outputPrecision`（default/single/full）。缺省均沿用环境，GPU=0 明确关闭；拒绝布尔、小数 GPU 及未知/null 精度。错误 400 `INVALID_EXECUTION_OPTIONS`。Explicit 双精度配单个用户子程序 .obj/.o 同样在启动前拒绝。

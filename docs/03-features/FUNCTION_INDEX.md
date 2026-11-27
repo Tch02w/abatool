@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的 `HostKeyChanged` 提供观察值，`modules/control_plane/remote_servers.py` 的 `_connect` 在同一配置二次认证后更新信任记录。`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` 的连接窗口核对用户独立取得的指纹，并在断线时清空旧资源。控制面回归见 `tests/control_plane/test_remote_servers_api.py`。[连接与换钥](REMOTE_JOBS.md)
+
 F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `check_install_log` 除磁盘校验外，还检查安装期间是否出现异常和被自动关闭的弹窗。回归覆盖在 `tests/common/test_installer_manifest.py`。[安装与升级](../05-development/INSTALLATION.md)
 
 F021 直接浏览的分页与稳定排序在 `modules/control_plane/results.py` 的 `_direct_page` 和 `_direct_order`，WinUI 通过 `winui/AbaqusTools.WinUI/Services/ResultContracts.cs` 的 `PageAnchor` 取首末行，在 `Pages/ResultBrowserPage.xaml.cs` 的 `LoadRecordsAsync` 发起翻页。专项检查见 `tests/control_plane/test_results_api.py` 和 `tests/winui_host/Program.cs`。[性能与翻页验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)

@@ -13,6 +13,7 @@ from typing import Any, Protocol
 from modules.submitter.app_paths import APP_DATA_DIR
 from modules.submitter.queue_store import atomic_write_json
 from modules.submitter.remote_connection import (
+    HostKeyChanged,
     HostKeyConfirmationRequired,
     RemoteConnectionError,
     RemoteConnectionManager,
@@ -196,6 +197,7 @@ class RemoteServerService:
         self._connection_status = "disconnected"
         self._connected_profile_name = ""
         self._pending_fingerprint = ""
+        self._rotation: tuple[ServerProfileDraft, str] | None = None
         self._resource: dict[str, Any] | None = None
         self._last_error = ""
         self._publish_snapshot_locked()
@@ -264,11 +266,22 @@ class RemoteServerService:
                 except RemoteConnectionError as exc:
                     raise ApiProblem(409, "REMOTE_CONNECTION_CHANGED", str(exc)) from exc
             if action == "saveProfile":
-                self._save_profile(_profile_from_payload(payload.get("profile")))
+                profile = _profile_from_payload(payload.get("profile"))
+                self._check_saved_pin(profile)
+                self._save_profile(profile)
             elif action == "deleteProfile":
                 self._delete_profile(_text(payload, "profileName", required=True))
             elif action == "connect":
                 self._connect(payload)
+            elif action == "cancelHostKeyReview":
+                profile = _profile_from_payload(payload.get("profile"))
+                observed = normalize_fingerprint(_text(payload, "confirmFingerprint", required=True))
+                if self._rotation == (profile, observed):
+                    self._rotation = None
+                    self._pending_fingerprint = ""
+                    self._connected_profile_name = ""
+                    self._connection_status = "disconnected"
+                    self._last_error = ""
             elif action == "refresh":
                 self._refresh()
             elif action == "disconnect":
@@ -395,6 +408,12 @@ class RemoteServerService:
                 self._connected_profile_name = ""
                 self._resource = None
 
+    def _check_saved_pin(self, profile: ServerProfileDraft) -> ServerProfileDraft | None:
+        saved = self._profiles.get(profile.profile_name)
+        if saved and saved.host_fingerprint and saved.host_fingerprint != profile.host_fingerprint:
+            raise ApiProblem(409, "REMOTE_PROFILE_KEY_CONFLICT", "配置中的主机指纹已变更，请重新载入该配置并核对。")
+        return saved
+
     def _connect(self, payload: Mapping[str, Any]) -> None:
         profile_payload = payload.get("profile")
         if profile_payload is None:
@@ -434,6 +453,13 @@ class RemoteServerService:
                 details={"message": self._load_error},
             )
         confirmed = normalize_fingerprint(_text(payload, "confirmFingerprint"))
+        saved = self._check_saved_pin(profile)
+        rotation = self._rotation
+        self._rotation = None
+        self._pending_fingerprint = ""
+        replacing_pin = bool(profile.host_fingerprint and confirmed and confirmed != profile.host_fingerprint)
+        if replacing_pin and (saved != profile or rotation != (profile, confirmed)):
+            raise ApiProblem(409, "REMOTE_HOST_KEY_REVIEW_EXPIRED", "主机指纹核对已失效，请从已保存的配置重新连接。")
         if confirmed:
             profile = ServerProfileDraft(
                 **{
@@ -453,6 +479,15 @@ class RemoteServerService:
             resource = self._manager.connect(
                 ServerConnectionRequest(profile=profile, credentials=credentials)
             )
+        except HostKeyChanged as exc:
+            self._connection_status = "error"
+            self._last_error = str(exc)
+            if not confirmed and saved == profile:
+                self._rotation = (profile, exc.fingerprint)
+                self._connected_profile_name = profile.profile_name
+                self._pending_fingerprint = exc.fingerprint
+                raise ApiProblem(409, "REMOTE_HOST_KEY_CHANGED", str(exc)) from exc
+            raise ApiProblem(502, "REMOTE_CONNECTION_FAILED", str(exc)) from exc
         except HostKeyConfirmationRequired as exc:
             self._connection_status = "confirmationRequired"
             self._pending_fingerprint = exc.fingerprint
@@ -471,7 +506,13 @@ class RemoteServerService:
             }
         )
         if save_profile:
-            self._save_profile(verified_profile)
+            try:
+                self._save_profile(verified_profile)
+            except OSError as exc:
+                self._manager.disconnect()
+                self._connection_status = "error"
+                self._last_error = f"无法保存已验证的服务器配置：{exc}"
+                raise ApiProblem(500, "REMOTE_PROFILE_SAVE_FAILED", self._last_error) from exc
         self._connection_status = "connected"
         self._connected_profile_name = verified_profile.profile_name
         self._pending_fingerprint = ""
@@ -489,12 +530,14 @@ class RemoteServerService:
             self._resource = self._manager.refresh()
         except RemoteConnectionError as exc:
             self._connection_status = "error"
+            self._resource = None
             self._last_error = str(exc)
             raise ApiProblem(502, "REMOTE_REFRESH_FAILED", str(exc)) from exc
         self._connection_status = "connected"
         self._last_error = ""
 
     def _disconnect(self) -> None:
+        self._rotation = None
         profile_name = self._manager.disconnect()
         self._connection_status = "disconnected"
         self._connected_profile_name = ""
@@ -518,8 +561,9 @@ class RemoteServerService:
                 "服务器配置文件损坏，已拒绝覆盖原文件",
                 details={"message": self._load_error},
             )
-        self._profiles[profile.profile_name] = profile
-        self._persist_profiles()
+        self._persist_profiles({**self._profiles, profile.profile_name: profile})
+        self._rotation = None
+        self._pending_fingerprint = ""
 
     def _delete_profile(self, profile_name: str) -> None:
         if self._load_error:
@@ -529,11 +573,13 @@ class RemoteServerService:
                 "服务器配置文件损坏，已拒绝覆盖原文件",
                 details={"message": self._load_error},
             )
-        if profile_name == self._connected_profile_name:
+        if self._connection_status == "connected" and profile_name == self._connected_profile_name:
             raise ApiProblem(409, "REMOTE_PROFILE_CONNECTED", "请先断开该服务器")
-        if self._profiles.pop(profile_name, None) is None:
+        if profile_name not in self._profiles:
             raise ApiProblem(404, "REMOTE_PROFILE_NOT_FOUND", "服务器配置不存在")
-        self._persist_profiles()
+        self._persist_profiles({name: profile for name, profile in self._profiles.items() if name != profile_name})
+        self._rotation = None
+        self._pending_fingerprint = ""
 
     def _load_profiles(self) -> tuple[dict[str, ServerProfileDraft], str]:
         try:
@@ -553,11 +599,12 @@ class RemoteServerService:
             return {}, exc.message
         return profiles, ""
 
-    def _persist_profiles(self) -> None:
+    def _persist_profiles(self, profiles: dict[str, ServerProfileDraft]) -> None:
         atomic_write_json(
             self._profiles_path,
-            {"profiles": [_profile_payload(profile) for profile in self._profiles.values()]},
+            {"profiles": [_profile_payload(profile) for profile in profiles.values()]},
         )
+        self._profiles = profiles
 
     def _snapshot_locked(self) -> dict[str, Any]:
         return {

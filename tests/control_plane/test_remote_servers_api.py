@@ -10,7 +10,9 @@ from typing import Any
 import pytest
 
 from modules.submitter.remote_connection import (
+    HostKeyChanged,
     HostKeyConfirmationRequired,
+    RemoteConnectionError,
     ServerConnectionRequest,
 )
 from tests.control_plane.test_api import (
@@ -189,6 +191,65 @@ def profile_payload() -> dict[str, Any]:
 
 def command(action: str, **values: Any) -> dict[str, Any]:
     return {"schemaVersion": 1, "action": action, **values}
+
+
+def test_saved_host_rotation_requires_review_and_verified_login(tmp_path):
+    class RotatedHost(FakeRemoteManager):
+        fingerprint = "SHA256:replacement"
+
+        def connect(self, request):
+            pin = request.profile.host_fingerprint
+            if pin != self.fingerprint:
+                raise HostKeyChanged(pin, self.fingerprint)
+            if not request.credentials.password:
+                raise RemoteConnectionError("认证失败")
+            self._profile = request.profile
+            self.connected_name = request.profile.profile_name
+            return {"host_fingerprint": pin, "connected": True}
+
+        def refresh(self):
+            raise RemoteConnectionError("连接已断开")
+
+    host = RotatedHost()
+    profile = {**profile_payload(), "hostFingerprint": "SHA256:original"}
+    pin = host.fingerprint
+    store = tmp_path / "server_profiles.json"
+    with running_control_plane(tmp_path, remote_manager=host) as runtime:
+        def call(action, **fields):
+            result = api_request(runtime, "/api/v1/remote-server-commands", method="POST",
+                                 payload=command(action, **fields))
+            return result[0], json_response(result)
+
+        def connect(**fields):
+            return call("connect", profileName=profile["profileName"], **fields)
+
+        def current():
+            return json_response(api_request(runtime, "/api/v1/remote-servers"))["connection"]
+
+        assert call("saveProfile", profile=profile)[0] == 200
+        before = store.read_bytes()
+        assert connect(confirmFingerprint=pin)[0] == 409
+        assert connect()[1]["error"]["code"] == "REMOTE_HOST_KEY_CHANGED"
+        assert current()["pendingFingerprint"] == pin
+        assert call("cancelHostKeyReview", profile=profile, confirmFingerprint=pin)[0] == 200
+        assert current()["status"] == "disconnected"
+        assert connect(confirmFingerprint=pin)[0] == 409
+        assert connect()[0] == 409
+        assert call("connect", profile={**profile, "port": 2200}, confirmFingerprint=pin)[0] == 409
+        assert call("saveProfile", profile={**profile, "hostFingerprint": pin})[0] == 409
+        assert connect()[0] == 409
+        assert connect(confirmFingerprint=pin)[0] == 502
+        assert connect()[0] == 409
+        host.fingerprint = "SHA256:third"
+        assert connect(confirmFingerprint=pin)[0] == 502
+        assert store.read_bytes() == before
+        assert connect()[0] == 409
+        new_pin = host.fingerprint
+        status, result = connect(confirmFingerprint=new_pin, credentials={"password": "fixture-input"})
+        assert status == 200 and result["profiles"][0]["hostFingerprint"] == new_pin
+        assert new_pin in store.read_text(encoding="utf-8")
+        assert call("refresh")[0] == 502
+        assert current()["status"] == "error" and current()["resource"] is None
 
 
 @pytest.mark.parametrize("action", ["refresh", "disconnect"])

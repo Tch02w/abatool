@@ -43,6 +43,12 @@ class HostKeyConfirmationRequired(RemoteConnectionError):
         self.fingerprint = fingerprint
 
 
+class HostKeyChanged(RemoteConnectionError):
+    def __init__(self, expected: str, actual: str) -> None:
+        super().__init__(f"服务器主机指纹已变化，已拒绝连接。\n已保存：{expected}\n本次获取：{actual}")
+        self.fingerprint = actual
+
+
 class RemoteTransferCancelled(RemoteConnectionError):
     """Raised by a cooperative SFTP progress callback."""
 
@@ -159,11 +165,7 @@ class _PinnedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
         if not self.expected_fingerprint:
             raise HostKeyConfirmationRequired(actual)
         if actual != self.expected_fingerprint:
-            raise RemoteConnectionError(
-                "服务器主机指纹已变化，已拒绝连接。"
-                f"\n已保存：{self.expected_fingerprint}"
-                f"\n本次获取：{actual}"
-            )
+            raise HostKeyChanged(self.expected_fingerprint, actual)
 
 
 def _remote_replace_file_script(source: str, destination: str) -> str:
@@ -844,6 +846,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "HostKeyChanged",
     "HostKeyConfirmationRequired",
     "RemoteConnectionError",
     "RemoteConnectionManager",

@@ -1,10 +1,12 @@
 # 当前状态与接续点
 
+11 月 28 日在回环 SSH 的真实握手及 WinUI 资源页测试了断线、错误密码、旧钥拒绝和换钥核验。项目保留原配置，只有新指纹匹配并通过重新认证才更新。[远端连接验收](ACTIVE_TASKS/TASK-002-migration.md)
+
 11 月 28 日已修复安装向导逐文件弹出错误的问题。浮动通知版的重建安装器已通过测试标识的普通向导、升级、卸载与数据保留检查，详见[安装说明](../05-development/INSTALLATION.md)。开发中的结果浏览对 12,000 个普通文件直接翻页时，六个位置的临时分配峰值从约 23.02 MB 降至 1.34 MB。[测量条件](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
 11 月 28 日源码修复了重启动图谱放大后的滚动范围，以及编辑前置 ODB 被拒绝时输入丢失的问题。八节点链通过 10 项离屏 WinUI 与实际后台检查。结果浏览另用 256 MiB 的普通文件验证导出中取消和部分失败后的重试。[重启动链](ACTIVE_TASKS/TASK-002-migration.md) · [导出验收](ACTIVE_TASKS/TASK-001-postprocessing.md) · [其余交付条件](../06-testing/COMPLETION_AUDIT.md)
 
-当前免安装程序为 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`，对应程序提交 `c4bbe73`。源码已推送至 GitHub main，包清单和包内实测见[发布记录](../05-development/RELEASE.md)。
+已推送的 `3ff3fa2` 免安装版包含上述分页与重启动链修复。正式 C# 客户端连接包内后台，在 12,000 个文件中从首页翻到第 24 页再回首页，共核对 23,500 个返回行。可运行程序、安装候选和摘要以[发布记录](../05-development/RELEASE.md)与[安装说明](../05-development/INSTALLATION.md)页首为准。
 
 11 月 28 日，八个页面改用右下角操作通知。队列折叠区在固定的可见区域内滚动，窗体上沿和保存按钮已通过实窗测量。数字输入使用左右分置的浅底减加键及实心信息图标。[交互和验证](ACTIVE_TASKS/TASK-004-ui-interaction.md)
 

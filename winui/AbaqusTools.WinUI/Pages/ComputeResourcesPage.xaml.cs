@@ -651,13 +651,24 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         RemoteServerCredentials credentials)
     {
         RemoteServersSnapshot? result = null;
+        bool keyChanged = false;
         await RunRemoteActionAsync(
             async token =>
             {
-                result = await App.Current.ControlPlane.ConnectRemoteServerAsync(
-                    profile,
-                    credentials,
-                    cancellationToken: token);
+                try
+                {
+                    result = await App.Current.ControlPlane.ConnectRemoteServerAsync(
+                        profile, credentials, cancellationToken: token);
+                }
+                catch (ControlPlaneException error) when (error.Code == "REMOTE_HOST_KEY_CHANGED")
+                {
+                    var current = await App.Current.ControlPlane.GetRemoteServersAsync(token);
+                    if (current.Connection.Status != "error" || current.Connection.ProfileName != profile.ProfileName
+                        || string.IsNullOrWhiteSpace(current.Connection.PendingFingerprint))
+                        throw;
+                    result = current;
+                    keyChanged = true;
+                }
                 return result;
             },
             "正在验证服务器连接",
@@ -668,7 +679,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             App.Current.MainWindow.ReportPageStatus("服务器连接已建立");
             return;
         }
-        if (result?.Connection.Status != "confirmationRequired")
+        if (result is null || (!keyChanged && result.Connection.Status != "confirmationRequired"))
         {
             return;
         }
@@ -701,9 +712,34 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
         };
+        if (keyChanged)
+        {
+            var verified = new TextBox { Header = "管理员独立提供的 SHA256 指纹", PlaceholderText = "粘贴经其他可信渠道取得的完整指纹" };
+            confirmation.Title = "服务器主机密钥已变化";
+            confirmation.PrimaryButtonText = "验证并重新连接";
+            confirmation.IsPrimaryButtonEnabled = false;
+            confirmation.Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = $"连接 {profile.Username}@{profile.Host}:{profile.Port} 时发现指纹与记录不符。请先向管理员核实密钥更换。", TextWrapping = TextWrapping.Wrap },
+                    new TextBox { Header = "已保存的指纹", Text = profile.HostFingerprint, IsReadOnly = true },
+                    new TextBox { Header = "本次服务器提供的指纹", Text = fingerprint, IsReadOnly = true },
+                    verified,
+                },
+            };
+            verified.TextChanged += (_, _) => confirmation.IsPrimaryButtonEnabled =
+                string.Equals(fingerprint, verified.Text.Trim().TrimEnd('='), StringComparison.Ordinal);
+        }
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
         {
-            ShowInfo("服务器主机指纹尚未确认。", InfoBarSeverity.Informational, "已取消首次服务器连接");
+            if (keyChanged)
+            {
+                await RunRemoteActionAsync(token => App.Current.ControlPlane.CancelHostKeyReviewAsync(
+                    profile, fingerprint, token), "已取消重新连接，原主机指纹已保留", showSuccess: false);
+            }
+            else ShowInfo("服务器主机指纹尚未确认。", InfoBarSeverity.Informational, "已取消首次服务器连接");
             return;
         }
 
@@ -925,7 +961,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         ResourceNodes.Add(ResourceNodeRow.FromLocal(_localSnapshot));
         foreach (var profile in _remoteSnapshot.Profiles)
         {
-            var resource = string.Equals(
+            var resource = _remoteSnapshot.Connection.Status == "connected" && string.Equals(
                 _remoteSnapshot.Connection.ProfileName,
                 profile.ProfileName,
                 StringComparison.Ordinal)

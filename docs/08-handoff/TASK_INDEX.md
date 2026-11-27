@@ -1,5 +1,9 @@
 # 任务索引
 
+F008 断线资源清除和已保存服务器换钥复核的实现、隔离 SSH 实测及 WinUI 操作见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+
+F005 工程日志滚动超过后台缓冲后仍能复制当前选区与切换作业的实测，见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F021 已索引 CSV 的系统回收、还原及重建索引见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 F026 普通向导安装时逐文件弹错及其修复见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)，可用候选及对应版本见[安装说明](../05-development/INSTALLATION.md)。
 
 F021 大目录直接浏览页与 12,000 个文件的前后对照见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。

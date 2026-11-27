@@ -1,5 +1,7 @@
 # Windows 安装、升级与卸载（F026）
 
+需要 11 月 28 日的浮动通知和左右浅底加减键时，打开项目目录下的 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。此更新提供免安装目录包，下文的旧安装程序对应上一版界面。[免安装版发布记录](RELEASE.md)
+
 Windows x64 安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。文件大小 126373281 字节，SHA256 为 `2bfb23aaf9c60be85e2b8673bdc70763bd7b9626d08361b3d11850602b155b14`。正式标识安装与独立无开发环境目标机仍待实测。[目录包与校验回执](RELEASE.md)
 
 普通安装器当前未签名。专用测试安装器位于 `GPTWork/installer-win-x64-04eb75c80023/AbaqusTools-0.1.0-win-x64-setup.exe`，SHA256 为 `8fc70f8f4487d7879439b39dc22e25ff1425ca5d3084260033c15880e0d9e777`。其标识 `AbaqusTools.Workbench.WinUI3.Test.fa0dbad4b19e` 用于隔离验收。两份安装器均含 1694 个清单条目及发布清单自身。

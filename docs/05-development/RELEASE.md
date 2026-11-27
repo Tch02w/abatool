@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 目录包来自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。在项目目录打开 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。此版本包含队列表格行列线、手册中的明暗主题示例及缺少混凝土损伤场时的提取修复。清单含 1694 条文件记录，其 SHA256 为 `c5c09bd897e97adb52aaddc114d3ea5d7ca56918edf4a6c4d7f0dd3705d0d677`。[Windows 安装候选](INSTALLATION.md)
+当前 Windows x64 免安装版来自干净提交 `c4bbe7314bd53753fd31e5063e59b851b1434ae8`。在项目目录打开 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。该包包含浮动通知、左减右加的浅底数字键、队列编辑和无索引结果浏览。1697 项清单文件逐一核对大小和 SHA256，16 个 XBF、应用 PRI 和主 DLL 与本次编译输出一致。冻结后台依赖、正式客户端启动和关闭、队列目录编辑及失效选择回滚通过。回执为 `GPTWork/release-queue-portable-c4bbe73-20261128-004448/verification.json`，发布清单 SHA256 为 `0eedc41cec45e545cd5acdc6d3abbd47f0251f39e7c1929e5d34152a28c8459d`。独立无 SDK 机器待实测。
+
+### 上一安装候选 9d862b5
+
+该目录包位于 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools`。此版本包含队列表格行列线、手册中的明暗主题示例及缺少混凝土损伤场时的提取修复。清单含 1694 条文件记录，其 SHA256 为 `c5c09bd897e97adb52aaddc114d3ea5d7ca56918edf4a6c4d7f0dd3705d0d677`。[Windows 安装候选](INSTALLATION.md)
 
 本次对照了随包的 19 个 Abaqus worker 与源码，以及工程验收时的 9 份生产输入摘要。15 个编译页面资源与原生验收版本相同，冻结后台通过 7 项依赖检查，正式客户端可读取队列历史并正常退出。逐文件结果为 `GPTWork/release-damage-9d862b5-20261127/verification.json`。目录包的后台还实际调用 Abaqus/CAE 完成 GJA 工程 B 组的 `Pile_Gra` 两帧提取。两份数值 CSV 与源码版逐字节一致。[出图与数值验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
 

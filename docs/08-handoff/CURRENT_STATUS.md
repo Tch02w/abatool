@@ -1,5 +1,7 @@
 # 当前状态与接续点
 
+当前免安装程序为 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`，对应程序提交 `c4bbe73`。源码已推送至 GitHub main，包清单和包内实测见[发布记录](../05-development/RELEASE.md)。
+
 11 月 28 日，八个页面改用右下角操作通知。队列折叠区在固定的可见区域内滚动，窗体上沿和保存按钮已通过实窗测量。数字输入使用左右分置的浅底减加键及实心信息图标。[交互和验证](ACTIVE_TASKS/TASK-004-ui-interaction.md)
 
 11 月 28 日，结果浏览可以在时间或模型目录缺少有效索引时逐层查看已有文件。在原生工作台的两个进程中验证了文件预览、导出内容、重开恢复目录和手动建立索引，再读取新根目录时会切换到新结果。[结果浏览记录](ACTIVE_TASKS/TASK-001-postprocessing.md)

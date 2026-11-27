@@ -98,6 +98,17 @@ def user_data_hashes(work):
     return result
 
 
+def check_install_log(path, *, historical=False):
+    log = path.read_text(encoding="utf-8-sig")
+    if "Installation process succeeded." not in log:
+        raise ValueError(f"Installer did not log completion: {path}")
+    errors = log.count("Exception message:")
+    suppressed = log.count("for suppressed message box")
+    if (errors or suppressed) and not historical:
+        raise ValueError(f"Installer reported {errors} exceptions and {suppressed} suppressed dialogs: {path}")
+    return {"exceptions": errors, "suppressedDialogs": suppressed}
+
+
 def verify(old_report, new_report, host, *, legacy_old=False):
     reports = [json.loads(path.read_text(encoding="utf-8")) for path in (old_report, new_report)]
     old, new = reports
@@ -233,6 +244,10 @@ def verify(old_report, new_report, host, *, legacy_old=False):
         report["userDataBeforeUninstall"] = before_uninstall
         step("uninstall removes registered versions and registration while retaining user file")
         step("upgrade and uninstall retain every isolated application data file and SHA256")
+        # Inspect logs after uninstall so an apparent success with hidden error dialogs
+        # fails acceptance without leaving the test identity installed.
+        report["oldInstallLog"] = check_install_log(work / "install-old.log", historical=legacy_old)
+        report["newUpgradeLog"] = check_install_log(work / "upgrade-new.log")
         verified_bundle(Path(old["bundle"]), require_ui_resources=not legacy_old)
         verified_bundle(Path(new["bundle"]))
         report["status"] = "verified"

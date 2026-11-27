@@ -136,12 +136,6 @@ begin
   if Error <> '' then RaiseException(Error);
 end;
 
-procedure VerifyInstalledFile(ExpectedHash: String);
-begin
-  if CompareText(GetSHA256OfFile(CurrentFileName), ExpectedHash) <> 0 then
-    RaiseException('文件校验失败，安装已停止：' + CurrentFileName);
-end;
-
 function InitializeUninstall: Boolean;
 var
   Error: String;

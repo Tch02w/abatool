@@ -55,12 +55,28 @@ def test_render_uses_versioned_payload_and_exact_hashes(bundle, tmp_path):
     assert report["testOnly"] and report["appId"].endswith(".Test.abcdef123456")
     assert report["fileCount"] == 4 + len(installer.required_winui_resources())
     assert "{{payload}" in script
-    for entry in json.loads((bundle / "release-manifest.json").read_text())["files"].values():
-        assert f"VerifyInstalledFile('{entry['sha256']}')" in script
+    rows = [line for line in script.splitlines() if line.startswith("Source:")]
+    assert len(rows) == report["fileCount"] + 1
+    for line in rows:
+        source = Path(line.split('"')[1].replace("{{", "{"))
+        assert f'Hash: "{installer.digest(source)}"' in line
+        assert "AfterInstall:" not in line and "dontverifychecksum" not in line.lower()
     assert "[InstallDelete]" not in script and "[UninstallDelete]" not in script
     assert "[Run]" not in script
     assert "CloseApplications=no" in script and "PrivilegesRequired=lowest" in script
     assert "[Icons]" in script and "BeforeInstall: GuardInstall" in script
+
+
+@pytest.mark.parametrize("warning", ["Exception message:", "Defaulting to OK for suppressed message box (OK):"])
+def test_silent_installer_cannot_hide_dialogs_in_a_success_log(tmp_path, monkeypatch, warning):
+    monkeypatch.syspath_prepend(str(Path(SPEC.origin).parent))
+    from verify_installer import check_install_log
+
+    log = tmp_path / "setup.log"
+    log.write_text(warning + "\nInstallation process succeeded.\n", encoding="utf-8-sig")
+    with pytest.raises(ValueError, match="suppressed dialogs"):
+        check_install_log(log)
+    assert sum(check_install_log(log, historical=True).values()) == 1
 
 
 @pytest.mark.parametrize("version", ['1.2', '1.2.65536', '1.2.3\nAppId=other', 'alpha'])

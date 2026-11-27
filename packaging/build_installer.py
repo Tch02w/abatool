@@ -96,9 +96,9 @@ def render(bundle: Path, output: Path, version: str, *, test_id: str | None = No
         destination = "{app}\\versions\\" + payload_id + ("" if directory == "." else "\\" + directory.replace('{', '{{'))
         source = str(bundle / relative).replace('{', '{{')
         files.append(f'Source: {quoted(source)}; DestDir: {quoted(destination)}; Flags: ignoreversion; '
-                     f'AfterInstall: VerifyInstalledFile(\'{entry["sha256"]}\')')
+                     f'Hash: {quoted(entry["sha256"])}')
     files.append(f'Source: {quoted(str(marker).replace("{", "{{"))}; DestDir: "{{app}}"; '
-                 f'DestName: ".abatool-installation"; Flags: ignoreversion; AfterInstall: VerifyInstalledFile(\'{digest(marker)}\')')
+                 f'DestName: ".abatool-installation"; Flags: ignoreversion; Hash: {quoted(digest(marker))}')
     substitutions = {
         "APP_ID": app_id, "APP_NAME": app_name, "VERSION": version,
         "VERSION_INFO": ".".join((version.split('.') + ['0'])[:4]),

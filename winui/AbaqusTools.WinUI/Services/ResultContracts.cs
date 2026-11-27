@@ -78,6 +78,11 @@ public sealed class ResultScopeNode
         : $"{Name}  ·  {IndexStateDisplay}";
 }
 
+public sealed record ResultDirectPageAnchor(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("isDirectory")] bool IsDirectory,
+    [property: JsonPropertyName("direction")] string Direction);
+
 internal sealed class ResultRecordsRequest
 {
     [JsonPropertyName("schemaVersion")]
@@ -95,6 +100,10 @@ internal sealed class ResultRecordsRequest
     [JsonPropertyName("directDirectory")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DirectDirectory { get; init; }
+
+    [JsonPropertyName("directAnchor")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResultDirectPageAnchor? DirectAnchor { get; init; }
 
     [JsonPropertyName("section")]
     public string Section { get; init; } = "all";
@@ -160,6 +169,13 @@ public sealed class ResultRecordsResponse
     [JsonPropertyName("indexMetadata")]
     public IReadOnlyDictionary<string, string> IndexMetadata { get; init; } =
         new Dictionary<string, string>();
+
+    public ResultDirectPageAnchor? PageAnchor(bool before)
+    {
+        if (Source != "direct" || Records.Count == 0) return null;
+        var edge = before ? Records[0] : Records[^1];
+        return new(edge.Name, edge.IsDirectory, before ? "before" : "after");
+    }
 }
 
 public sealed class ResultRecordItem

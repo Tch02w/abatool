@@ -149,11 +149,8 @@ def classify_result(path: Path) -> ResultRecord:
 
     suffix = path.suffix.casefold()
     parents = {part.casefold() for part in path.parts}
-    variable = _variable_from_path(path)
-    variable_label = VARIABLE_LABELS.get(variable, variable or "场变量")
-    transparent = any(part.endswith("_transparent") for part in parents)
-
     if suffix == ".gif" or "animations" in parents:
+        variable_label = VARIABLE_LABELS.get(_variable_from_path(path), "场变量")
         return ResultRecord(
             path,
             "动画",
@@ -174,6 +171,8 @@ def classify_result(path: Path) -> ResultRecord:
         or "frames_transparent" in parents
         or "contours_transparent" in parents
     ):
+        variable_label = VARIABLE_LABELS.get(_variable_from_path(path), "场变量")
+        transparent = any(part.endswith("_transparent") for part in parents)
         kind = "透明背景云图" if transparent else "Abaqus 原始云图"
         return ResultRecord(path, "云图", f"{variable_label}；{kind}")
     if suffix == ".csv":

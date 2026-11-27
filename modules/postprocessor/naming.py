@@ -6,7 +6,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
 _SAMPLE_RE = re.compile(
     r"^(?P<sample>GJA-(?P<gja_index>\d+)|D(?:800|1000|1200|1400(?:_17)?|1600))",
     re.IGNORECASE,
@@ -23,7 +22,7 @@ def natural_sort_key(value: str) -> tuple[tuple[int, object], ...]:
     """Sort embedded decimal numbers numerically instead of lexicographically."""
 
     return tuple(
-        (0, int(part)) if part.isdigit() else (1, part.casefold())
+        (0, int(part)) if part.isdecimal() else (1, part.casefold())
         for part in re.split(r"(\d+)", str(value))
         if part
     )

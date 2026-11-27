@@ -573,6 +573,20 @@ static async Task CheckResultsApi(string descriptorPath, string root, string bat
     var last = second.Records[^1];
     var filtered = await Page(0, last.Name);
     if (!filtered.Records.Any(r => r.Path == last.Path)) throw new Exception("Filtered page lost selected file");
+    var directory = Path.GetDirectoryName(csvPath)!;
+    Task<ResultRecordsResponse> Direct(ResultDirectPageAnchor? anchor = null) =>
+        host.GetResultRecordsAsync(root, batch, batch, "all", "", "", false,
+            directDirectory: directory, directAnchor: anchor);
+    var directFirst = await Direct();
+    var directLast = await Direct(directFirst.PageAnchor(before: false));
+    var directBack = await Direct(directLast.PageAnchor(before: true));
+    if (directLast.Offset != 500 || directLast.Records.Count != 2 || directLast.HasMore
+        || !directBack.Records.Select(r => r.Name).SequenceEqual(directFirst.Records.Select(r => r.Name)))
+        throw new Exception("Direct page boundaries lost or reordered files");
+    var secondRow = directFirst.Records[1];
+    var partial = await Direct(new(secondRow.Name, secondRow.IsDirectory, "before"));
+    if (partial.Offset != 0 || !partial.HasMore || partial.Records.Single().Path != directFirst.Records[0].Path)
+        throw new Exception("A shortened first page should remain navigable");
     var csv = await host.GetResultPreviewAsync(root, csvPath);
     var limited = await host.GetResultPreviewAsync(root, csvPath, 2);
     var xlsx = await host.GetResultPreviewAsync(root, xlsxPath);

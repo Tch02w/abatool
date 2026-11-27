@@ -863,6 +863,19 @@ def test_restart_chain_page_uses_the_control_plane_dependency_model() -> None:
     assert 'x:Name="CycleCheckText"' in xaml
 
 
+def test_restart_graph_uses_scrollviewer_zoom_and_validates_in_the_open_editor() -> None:
+    page = (WINUI_ROOT / "Pages" / "RestartChainPage.xaml.cs").read_text(encoding="utf-8")
+    xaml = (WINUI_ROOT / "Pages" / "RestartChainPage.xaml").read_text(encoding="utf-8")
+    viewer = xaml.split('x:Name="RestartGraphScrollViewer"', 1)[1].split(">", 1)[0]
+    assert 'ZoomMode="Enabled"' in viewer and "viewer.ChangeView(" in page
+    assert "RestartGraphCanvas.RenderTransform" not in page
+
+    save = page.split("dialog.PrimaryButtonClick +=", 1)[1].split("await dialog.ShowAsync()", 1)[0]
+    assert save.index("args.GetDeferral()") < save.index("await App.Current.ControlPlane.UpdateRestartDependencyAsync")
+    assert save.index("UpdateRestartDependencyAsync") < save.index("args.Cancel = false")
+    assert "error.Visibility = Visibility.Visible" in save and "deferral.Complete()" in save
+
+
 def test_restart_result_materialization_is_separate_from_the_job_graph() -> None:
     host = (WINUI_ROOT / "Services" / "ControlPlaneHost.cs").read_text(
         encoding="utf-8"

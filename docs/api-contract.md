@@ -4,6 +4,12 @@
 
 ## 启动与就绪
 
+### 结果目录直接翻页（F021）
+
+`POST /api/v1/result-records` 的 `directDirectory` 模式可附 `directAnchor`，例如 `{"name":"curve500.csv","isDirectory":false,"direction":"after"}`。`after` 取该顺序位置之后的一页，`before` 取之前最近的一页，两个方向均按正序返回。名称和类型只用于排序比较，边界文件已删除时仍可定位。只接受单项名称、布尔类型以及这两个方向；将该字段用于索引查询或提供非法边界返回 400 `INVALID_DIRECT_ANCHOR`。
+
+带边界时服务器按当前目录和请求筛选条件重新计算并返回 `offset`、`filteredCount` 和 `hasMore`；目录增删可使返回位置与原来预计的偏移不同。向前翻到开头时可能少于 `limit` 项且仍有后页。首次读取、刷新和变更目录省略边界；仅使用 `offset` 的客户端继续按绝对偏移分页。
+
 ### 历史远端作业输出（F005/F009/F010）
 
 `POST /api/v1/remote-file-listings` 和下载方向的 `POST /api/v1/remote-transfers` 接受可选 `sourceOperationId`，为远端作业的 32 位小写十六进制编号。普通资源页省略此字段。提供编号时从持久作业记录解析对应的服务器身份，作业下载还要匹配已登记的输出路径。目录请求遇到不同连接返回 409 `REMOTE_CONNECTION_CHANGED`。已受理的下载在执行文件操作前核对连接，错服时状态为 failed，保留目标文件。编号加入传输幂等签名并随该任务的 request 返回。未知作业返回 404，错误编号、未登记的输出和以作业身份上传均返回 400。

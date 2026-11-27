@@ -23,7 +23,8 @@
                         <Button Grid.Column="4" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
                     </Grid>
                     <Grid Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                        <ScrollViewer x:Name="RestartGraphScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ZoomMode="Disabled">
+                        <ScrollViewer x:Name="RestartGraphScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                      ZoomMode="Enabled" MinZoomFactor="0.65" MaxZoomFactor="1.5">
                             <Canvas x:Name="RestartGraphCanvas" MinWidth="860" MinHeight="520" Background="Transparent" />
                         </ScrollViewer>
                         <StackPanel x:Name="EmptyChainPanel" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="8">

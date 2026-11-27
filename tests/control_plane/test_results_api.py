@@ -251,6 +251,76 @@ def test_direct_browse_pages_a_large_directory_with_a_damaged_index(tmp_path):
     assert index_path(batch).read_bytes() == b"damaged index"
 
 
+def test_direct_page_anchors_stay_ordered_as_files_change(tmp_path):
+    from modules.control_plane.results import list_result_records
+
+    batch = tmp_path / "group" / "batch"
+    model = batch / "model"
+    model.mkdir(parents=True)
+    (model / "²").mkdir()
+    for name in ("x2.csv", "x1.csv", "x01.csv", "x10.csv", "x3.csv", "notes.txt"):
+        (model / name).touch()
+    params = {"schemaVersion": 1, "root": str(tmp_path), "scope": str(model),
+              "timeDirectory": str(batch), "directDirectory": str(model), "limit": 2}
+
+    def turn(page, direction, **kwargs):
+        edge = page["records"][0 if direction == "before" else -1]
+        anchor = {"name": edge["name"], "isDirectory": edge["isDirectory"], "direction": direction}
+        return list_result_records(params | {"directAnchor": anchor} | kwargs)
+
+    def names(page):
+        return [r["name"] for r in page["records"]]
+
+    first = list_result_records(params)
+    assert names(first) == ["²", "notes.txt"]
+    second = turn(first, "after")
+    assert names(second) == ["x01.csv", "x1.csv"] and second["offset"] == 2
+    assert turn(second, "before") == first
+    # Insert ahead of the visible page and rename its last row out of the way.
+    (model / "added.csv").touch()
+    (model / "x1.csv").rename(model / "x20.csv")
+    third = turn(second, "after")
+    assert names(third) == ["x2.csv", "x3.csv"] and third["offset"] == 4
+    assert third["filteredCount"] == 8 and third["hasMore"]
+    last = turn(third, "after")
+    assert names(last) == ["x10.csv", "x20.csv"] and not last["hasMore"]
+    assert turn(last, "before") == third
+    assert names(turn(third, "before")) == ["notes.txt", "x01.csv"]
+    # Changed contents can make the preceding page shorter than the page size.
+    filtered = turn(second, "before", section="data", query="x0")
+    assert not filtered["records"] and filtered["offset"] == 0 and filtered["hasMore"]
+    assert filtered["totalCount"] == 8 and filtered["filteredCount"] == 1
+    (model / "x2.csv").unlink()
+    assert names(turn(second, "after")) == ["x3.csv", "x10.csv"]
+    assert names(list_result_records(params)) == ["²", "added.csv"]
+
+
+def test_direct_paging_rejects_invalid_arguments_before_scanning(tmp_path, monkeypatch):
+    from modules.control_plane import results
+    from modules.control_plane.contracts import ApiProblem
+
+    batch = tmp_path / "group" / "batch"
+    batch.mkdir(parents=True)
+    params = {"schemaVersion": 1, "root": str(tmp_path), "timeDirectory": str(batch), "scope": str(batch)}
+    anchor = {"name": "row1.csv", "isDirectory": False, "direction": "after"}
+    direct = params | {"directDirectory": str(batch)}
+    monkeypatch.setattr(results, "_direct_records", lambda *_: pytest.fail("invalid request scanned directory"))
+    for update, expected in [
+        ({"directAnchor": None}, "INVALID_DIRECT_ANCHOR"),
+        ({"directAnchor": anchor | {"name": "../x.csv"}}, "INVALID_DIRECT_ANCHOR"),
+        ({"directAnchor": anchor | {"isDirectory": 1}}, "INVALID_DIRECT_ANCHOR"),
+        ({"directAnchor": anchor | {"direction": []}}, "INVALID_DIRECT_ANCHOR"),
+        ({"limit": 501}, "INVALID_LIMIT"), ({"offset": -1}, "INVALID_OFFSET"),
+        ({"section": "_"}, "INVALID_RESULT_SECTION"), ({"query": []}, "INVALID_RESULT_FILTER"),
+    ]:
+        with pytest.raises(ApiProblem) as error:
+            results.list_result_records(direct | update)
+        assert error.value.code == expected
+    with pytest.raises(ApiProblem) as error:
+        results.list_result_records(params | {"directAnchor": anchor})
+    assert error.value.code == "INVALID_DIRECT_ANCHOR"
+
+
 def test_xlsx_preview_returns_real_workbook_values_and_rejects_bad_shared_references(tmp_path):
     from tests.postprocessor.test_result_xlsx_preview import workbook
 

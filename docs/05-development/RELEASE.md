@@ -2,6 +2,8 @@
 
 当前 Windows x64 免安装版来自干净提交 `c4bbe7314bd53753fd31e5063e59b851b1434ae8`。在项目目录打开 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。该包包含浮动通知、左减右加的浅底数字键、队列编辑和无索引结果浏览。1697 项清单文件逐一核对大小和 SHA256，16 个 XBF、应用 PRI 和主 DLL 与本次编译输出一致。冻结后台依赖、正式客户端启动和关闭、队列目录编辑及失效选择回滚通过。回执为 `GPTWork/release-queue-portable-c4bbe73-20261128-004448/verification.json`，发布清单 SHA256 为 `0eedc41cec45e545cd5acdc6d3abbd47f0251f39e7c1929e5d34152a28c8459d`。独立无 SDK 机器待实测。
 
+同负载安装候选使用修复后构建器 `648f5b4`，正式安装程序 SHA256 为 `2f0a625e5a21a7dd11178f6af312fc6f372d5641a778758928fb818358eed247`。专用标识在中文向导中完成安装，并分别验证了旧版升级与卸载的 8 项检查。修正版向导和升级日志均无异常或被抑制的错误框。此前使用旧构建器的安装程序已撤回，原免安装版可继续使用。正式标识的安装和独立无开发环境机器仍待验收。[安装程序位置与实测范围](INSTALLATION.md)
+
 ### 上一安装候选 9d862b5
 
 该目录包位于 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools`。此版本包含队列表格行列线、手册中的明暗主题示例及缺少混凝土损伤场时的提取修复。清单含 1694 条文件记录，其 SHA256 为 `c5c09bd897e97adb52aaddc114d3ea5d7ca56918edf4a6c4d7f0dd3705d0d677`。[Windows 安装候选](INSTALLATION.md)

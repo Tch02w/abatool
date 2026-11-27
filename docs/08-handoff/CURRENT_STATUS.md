@@ -1,5 +1,9 @@
 # 当前状态与接续点
 
+11 月 28 日已修复安装向导逐文件弹出错误的问题。浮动通知版的重建安装器已通过测试标识的普通向导、升级、卸载与数据保留检查，详见[安装说明](../05-development/INSTALLATION.md)。开发中的结果浏览对 12,000 个普通文件直接翻页时，六个位置的临时分配峰值从约 23.02 MB 降至 1.34 MB。[测量条件](ACTIVE_TASKS/TASK-001-postprocessing.md)
+
+11 月 28 日源码修复了重启动图谱放大后的滚动范围，以及编辑前置 ODB 被拒绝时输入丢失的问题。八节点链通过 10 项离屏 WinUI 与实际后台检查。结果浏览另用 256 MiB 的普通文件验证导出中取消和部分失败后的重试。[重启动链](ACTIVE_TASKS/TASK-002-migration.md) · [导出验收](ACTIVE_TASKS/TASK-001-postprocessing.md) · [其余交付条件](../06-testing/COMPLETION_AUDIT.md)
+
 当前免安装程序为 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`，对应程序提交 `c4bbe73`。源码已推送至 GitHub main，包清单和包内实测见[发布记录](../05-development/RELEASE.md)。
 
 11 月 28 日，八个页面改用右下角操作通知。队列折叠区在固定的可见区域内滚动，窗体上沿和保存按钮已通过实窗测量。数字输入使用左右分置的浅底减加键及实心信息图标。[交互和验证](ACTIVE_TASKS/TASK-004-ui-interaction.md)
@@ -18,7 +22,9 @@ F004 候选区和正式队列的表头及内容采用同一套列宽，明暗主
 
 F022 的运行范围已经接入工作台。GJA 属于 A、B，GJB 只属于 A 的实页数据验证了只选 B 时只提交 GJA，独立模型使用自身色标，批量则按各组的顺序和图例出图。空工作区的组名、图例、持久化与确认删除已在离屏页面通过。[开发及验收记录](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
-当前 Windows x64 目录包为 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools`，打开其中的 `AbaqusTools.WinUI.exe` 即可使用。安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装脚本均取自 `9d862b5`，1694 个负载文件逐项核对通过。正式标识安装和无开发环境 Windows 仍待实测。[工程运行记录](ACTIVE_TASKS/TASK-001-postprocessing.md) · [发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
+## 历史版本与验收时间点
+
+11 月 27 日的 `9d862b5` 目录包与安装候选曾核对 1694 个负载文件。下文记录各日期的程序、环境与测试限制；当前可用包见本页开头。[工程运行记录](ACTIVE_TASKS/TASK-001-postprocessing.md) · [发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
 
 11 月 24 日，F022 已接入多模型参数对照和预建空组。多选已读取结构的 ODB 后可以逐个修改，也可以只复制勾选的字段。148 项原生控件回归包含真实 GJA/GJB 扫描和 64 模型分页。另在实际后处理页离屏触发控件，10 项检查覆盖两模型取消、重开、文件写入失败和重试，只保存指定字段。桌面仍锁定，可见窗口内的参数对照和空组操作待实点。[准确续接点](ACTIVE_TASKS/TASK-001-postprocessing.md)
 

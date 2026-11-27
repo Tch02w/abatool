@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import csv
+import heapq
 import os
 import stat
 from collections import Counter
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from operator import itemgetter
 from pathlib import Path
 from typing import Any
 from xml.etree.ElementTree import ParseError
@@ -30,7 +32,6 @@ from modules.postprocessor.result_catalog import (
     preview_row_limit,
     read_csv_preview,
     read_xlsx_preview,
-    record_matches_section,
     result_section,
 )
 from modules.postprocessor.result_index import (
@@ -290,8 +291,7 @@ def _direct_directory(payload: Mapping[str, Any], root: Path) -> Path:
     return directory
 
 
-def _direct_records(directory: Path) -> list[ResultRecord]:
-    records: list[ResultRecord] = []
+def _direct_records(directory: Path) -> Iterator[ResultRecord]:
     try:
         with os.scandir(directory) as entries:
             for entry in entries:
@@ -304,15 +304,75 @@ def _direct_records(directory: Path) -> list[ResultRecord]:
                     continue
                 if stat.S_ISDIR(info.st_mode):
                     if not (path / INCOMPLETE_OUTPUT_MARKER).is_file():
-                        records.append(
-                            ResultRecord(path, "文件夹", "进入此目录", section="other",
-                                         mtime_ns=info.st_mtime_ns, is_directory=True)
-                        )
+                        yield ResultRecord(path, "文件夹", "进入此目录", section="other",
+                                           mtime_ns=info.st_mtime_ns, is_directory=True)
                 elif stat.S_ISREG(info.st_mode):
-                    records.append(replace(classify_result(path), size=info.st_size, mtime_ns=info.st_mtime_ns))
+                    yield replace(classify_result(path), size=info.st_size, mtime_ns=info.st_mtime_ns)
     except OSError as exc:
         raise ApiProblem(400, "DIRECT_DIRECTORY_UNAVAILABLE", f"无法读取当前目录：{exc}") from exc
-    return records
+
+
+@dataclass(frozen=True)
+class _DirectPageAnchor:
+    name: str
+    is_directory: bool
+    before: bool
+
+
+def _direct_anchor(payload: Mapping[str, Any]) -> _DirectPageAnchor | None:
+    if "directAnchor" not in payload:
+        return None
+    value = payload["directAnchor"]
+    if (
+        "directDirectory" not in payload
+        or not isinstance(value, dict)
+        or set(value) != {"name", "isDirectory", "direction"}
+        or not isinstance(name := value["name"], str)
+        or not 1 <= len(name) <= 255
+        or name in {".", ".."}
+        or Path(name).name != name
+        or "\x00" in name
+        or not isinstance(value["isDirectory"], bool)
+        or value["direction"] not in ("before", "after")
+    ):
+        raise ApiProblem(400, "INVALID_DIRECT_ANCHOR", "直接浏览翻页需要当前页边界条目的名称、类型和翻页方向")
+    return _DirectPageAnchor(name, value["isDirectory"], value["direction"] == "before")
+
+
+def _direct_order(name: str, is_directory: bool) -> tuple:
+    return not is_directory, natural_sort_key(name), name
+
+
+def _direct_page(
+    records: Iterable[ResultRecord], offset: int, limit: int, anchor: _DirectPageAnchor | None,
+) -> tuple[list[ResultRecord], int]:
+    if anchor is None:
+        prefix = heapq.nsmallest(offset + limit, records, key=lambda r: _direct_order(r.path.name, r.is_directory))
+        return prefix[offset:], offset
+
+    boundary = _direct_order(anchor.name, anchor.is_directory)
+    preceding = 0
+
+    def candidates():
+        nonlocal preceding
+        for record in records:
+            key = _direct_order(record.path.name, record.is_directory)
+            if anchor.before:
+                if key < boundary:
+                    preceding += 1
+                    yield key, record
+            elif key > boundary:
+                yield key, record
+            else:
+                preceding += 1
+
+    # Backward paging keeps the nearest earlier rows, then restores display order.
+    if anchor.before:
+        ranked = heapq.nlargest(limit, candidates(), key=itemgetter(0))
+        ranked.reverse()
+        return [record for _, record in ranked], preceding - len(ranked)
+    ranked = heapq.nsmallest(limit, candidates(), key=itemgetter(0))
+    return [record for _, record in ranked], preceding
 
 
 def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -324,6 +384,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "scope",
         "timeDirectory",
         "directDirectory",
+        "directAnchor",
         "section",
         "query",
         "useCase",
@@ -340,6 +401,41 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_time_directory, str):
         raise ApiProblem(400, "INVALID_TIME_DIRECTORY", "timeDirectory 必须是路径字符串")
 
+    anchor = _direct_anchor(payload)
+    offset = payload.get("offset", 0)
+    limit = payload.get("limit", 200)
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        raise ApiProblem(400, "INVALID_OFFSET", "offset 必须是非负整数")
+    if (
+        not isinstance(limit, int)
+        or isinstance(limit, bool)
+        or not 1 <= limit <= MAX_RESULT_PAGE_SIZE
+    ):
+        raise ApiProblem(
+            400,
+            "INVALID_LIMIT",
+            "limit 超出允许范围",
+            details={"minimum": 1, "maximum": MAX_RESULT_PAGE_SIZE},
+        )
+    include_internal = payload.get("includeInternal", False)
+    if not isinstance(include_internal, bool):
+        raise ApiProblem(400, "INVALID_INCLUDE_INTERNAL", "includeInternal 必须是布尔值")
+    section = payload.get("section", "all")
+    if not isinstance(section, str) or section not in RESULT_SECTIONS:
+        raise ApiProblem(
+            400,
+            "INVALID_RESULT_SECTION",
+            "section 不是受支持的结果分类",
+            details={"supported": sorted(RESULT_SECTIONS)},
+        )
+    query = payload.get("query", "")
+    use_case = payload.get("useCase", "")
+    if not isinstance(query, str) or not isinstance(use_case, str):
+        raise ApiProblem(400, "INVALID_RESULT_FILTER", "query 和 useCase 必须是字符串")
+    query_text = query.strip().casefold()
+    use_case_text = use_case.strip().casefold()
+
+    records: Iterable[ResultRecord]
     metadata: dict[str, str] = {}
     source = "shared_asset"
     if "directDirectory" in payload:
@@ -379,78 +475,49 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
             if record.path.name != ASSET_MANIFEST_NAME
         ]
 
-    include_internal = payload.get("includeInternal", False)
-    if not isinstance(include_internal, bool):
-        raise ApiProblem(400, "INVALID_INCLUDE_INTERNAL", "includeInternal 必须是布尔值")
-    if not include_internal:
-        records = [record for record in records if not record.internal]
+    total_count = filtered_count = recommended_count = 0
+    primary_counts: Counter[str] = Counter()
+    use_cases: set[str] = set()
 
-    section = payload.get("section", "all")
-    if not isinstance(section, str) or section not in RESULT_SECTIONS:
-        raise ApiProblem(
-            400,
-            "INVALID_RESULT_SECTION",
-            "section 不是受支持的结果分类",
-            details={"supported": sorted(RESULT_SECTIONS)},
-        )
-    query = payload.get("query", "")
-    use_case = payload.get("useCase", "")
-    if not isinstance(query, str) or not isinstance(use_case, str):
-        raise ApiProblem(400, "INVALID_RESULT_FILTER", "query 和 useCase 必须是字符串")
-    query_text = query.strip().casefold()
-    use_case_text = use_case.strip().casefold()
+    def matching_records() -> Iterator[ResultRecord]:
+        nonlocal total_count, filtered_count, recommended_count
+        for record in records:
+            if record.internal and not include_internal:
+                continue
+            primary = result_section(record)
+            total_count += 1
+            primary_counts[primary] += 1
+            recommended_count += record.recommended
+            use_cases.add(record.use_case)
+            if section == "common" and not record.recommended:
+                continue
+            if section not in ("all", "common", primary):
+                continue
+            if use_case_text and record.use_case.casefold() != use_case_text:
+                continue
+            if query_text:
+                haystack = "\n".join((record.path.name, str(record.path), record.use_case, record.description))
+                if query_text not in haystack.casefold():
+                    continue
+            filtered_count += 1
+            yield record
 
-    def matches(record: ResultRecord) -> bool:
-        if not record_matches_section(record, section):
-            return False
-        if use_case_text and record.use_case.casefold() != use_case_text:
-            return False
-        if not query_text:
-            return True
-        haystack = "\n".join(
-            (
-                record.path.name,
-                str(record.path),
-                record.use_case,
-                record.description,
-            )
-        ).casefold()
-        return query_text in haystack
-
-    filtered = [record for record in records if matches(record)]
     if source == "direct":
-        filtered.sort(key=lambda record: (not record.is_directory, natural_sort_key(record.path.name)))
+        page, offset = _direct_page(matching_records(), offset, limit, anchor)
     else:
-        filtered.sort(
+        ordered = sorted(
+            matching_records(),
             key=lambda record: (
                 not record.recommended,
                 record.use_case.casefold(),
                 natural_sort_key(record.path.name),
                 str(record.path).casefold(),
-            )
+            ),
         )
-
-    offset = payload.get("offset", 0)
-    limit = payload.get("limit", 200)
-    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
-        raise ApiProblem(400, "INVALID_OFFSET", "offset 必须是非负整数")
-    if (
-        not isinstance(limit, int)
-        or isinstance(limit, bool)
-        or not 1 <= limit <= MAX_RESULT_PAGE_SIZE
-    ):
-        raise ApiProblem(
-            400,
-            "INVALID_LIMIT",
-            "limit 超出允许范围",
-            details={"minimum": 1, "maximum": MAX_RESULT_PAGE_SIZE},
-        )
-    page = filtered[offset : offset + limit]
-    use_cases = sorted({record.use_case for record in records}, key=str.casefold)
-    primary_counts = Counter(result_section(record) for record in records)
+        page = ordered[offset : offset + limit]
     section_counts = {key: primary_counts[key] for key, _label in SECTION_TABS}
-    section_counts["common"] = sum(record.recommended for record in records)
-    section_counts["all"] = len(records)
+    section_counts["common"] = recommended_count
+    section_counts["all"] = total_count
     return {
         "schemaVersion": SCHEMA_VERSION,
         "root": str(root),
@@ -458,12 +525,12 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "source": source,
         **({"directDirectory": str(directory)} if source == "direct" else {}),
         "records": [_record_payload(record, scope) for record in page],
-        "totalCount": len(records),
-        "filteredCount": len(filtered),
+        "totalCount": total_count,
+        "filteredCount": filtered_count,
         "offset": offset,
         "limit": limit,
-        "hasMore": offset + len(page) < len(filtered),
-        "useCases": use_cases,
+        "hasMore": offset + len(page) < filtered_count,
+        "useCases": sorted(use_cases, key=str.casefold),
         "sectionCounts": section_counts,
         "indexMetadata": metadata,
     }

@@ -1781,7 +1781,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         bool includeInternal,
         CancellationToken cancellationToken = default,
         int offset = 0,
-        string? directDirectory = null)
+        string? directDirectory = null,
+        ResultDirectPageAnchor? directAnchor = null)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(scope))
         {
@@ -1803,6 +1804,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 Scope = scope.Trim(),
                 TimeDirectory = timeDirectory?.Trim() ?? string.Empty,
                 DirectDirectory = directDirectory,
+                DirectAnchor = directAnchor,
                 Section = string.IsNullOrWhiteSpace(section) ? "all" : section.Trim(),
                 Query = query?.Trim() ?? string.Empty,
                 UseCase = useCase?.Trim() ?? string.Empty,
@@ -1819,10 +1821,12 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             || response.Records.Any(record => !StringComparer.OrdinalIgnoreCase.Equals(
                 Path.GetDirectoryName(record.Path), directDirectory))))
             throw new ControlPlaneException("结果记录不属于请求的直接浏览目录，请重新读取目录。");
-        if (response.Offset != offset || response.Records.Count > response.Limit ||
-            (response.Records.Count > 0 && (long)offset + response.Records.Count > response.FilteredCount) ||
-            response.HasMore != ((long)offset + response.Records.Count < response.FilteredCount) ||
-            (response.HasMore && response.Records.Count != response.Limit))
+        var pageEnd = (long)response.Offset + response.Records.Count;
+        var partialFirstPage = directAnchor?.Direction == "before" && response.Offset == 0;
+        if ((directAnchor is null && response.Offset != offset) || response.Records.Count > response.Limit ||
+            ((directAnchor is not null || response.Records.Count > 0) && pageEnd > response.FilteredCount) ||
+            response.HasMore != (pageEnd < response.FilteredCount) ||
+            (response.HasMore && response.Records.Count != response.Limit && !partialFirstPage))
         {
             throw new ControlPlaneException("结果列表分页响应不一致，请重新读取目录。");
         }

@@ -592,16 +592,16 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnPreviousPageClicked(object sender, RoutedEventArgs e)
     {
         if (!_recordsBusy && _displayedPage is { Offset: > 0 } page)
-            await LoadRecordsAsync(Math.Max(0, page.Offset - page.Limit));
+            await LoadRecordsAsync(Math.Max(0, page.Offset - page.Limit), page.PageAnchor(before: true));
     }
 
     private async void OnNextPageClicked(object sender, RoutedEventArgs e)
     {
         if (!_recordsBusy && _displayedPage is { HasMore: true } page)
-            await LoadRecordsAsync(page.Offset + page.Records.Count);
+            await LoadRecordsAsync(page.Offset + page.Records.Count, page.PageAnchor(before: false));
     }
 
-    private async Task LoadRecordsAsync(int? pageOffset = null)
+    private async Task LoadRecordsAsync(int? pageOffset = null, ResultDirectPageAnchor? directAnchor = null)
     {
         var scope = _selectedScope;
         if (scope is null || !_loads.CanLoadRecords || _location.LoadedRoot is null)
@@ -630,7 +630,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             var response = await App.Current.ControlPlane.GetResultRecordsAsync(
                 query.Root, query.Scope, query.TimeDirectory, query.Section, query.Query,
-                query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0, directDirectory: query.DirectDirectory);
+                query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0, directDirectory: query.DirectDirectory,
+                directAnchor: directAnchor);
             if (!_loads.IsCurrentRecordRequest(request))
             {
                 return;
@@ -656,6 +657,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 : "请选择结果";
             if (response.Offset > 0 && _records.Count == 0)
                 EmptyResultsText.Text = "当前页已无结果，请返回上一页或重新筛选。";
+            else if (_records.Count == 0 && response.HasMore)
+                EmptyResultsText.Text = "此位置之前已无结果，点击「下一页」查看当前目录。";
             PageRange.Text = _records.Count == 0 ? $"共 {response.FilteredCount} 条" :
                 $"第 {response.Offset + 1}–{response.Offset + _records.Count} 条，共 {response.FilteredCount} 条";
             RecordPager.Visibility = response.Offset > 0 || response.HasMore ? Visibility.Visible : Visibility.Collapsed;

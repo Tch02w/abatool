@@ -1,8 +1,16 @@
 # Windows 安装、升级与卸载（F026）
 
-需要 11 月 28 日的浮动通知和左右浅底加减键时，打开项目目录下的 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。此更新提供免安装目录包，下文的旧安装程序对应上一版界面。[免安装版发布记录](RELEASE.md)
+浮动通知版的 Windows x64 安装程序为 `GPTWork/installer-final-c4bbe73-20261128/source/GPTWork/installer-win-x64-1357614b12b3/AbaqusTools-0.1.0-win-x64-setup.exe`。直接启动同版本可打开项目目录下的 `GPTWork/release-win-x64-b3de1167dc27/AbaqusTools/AbaqusTools.WinUI.exe`。[免安装版发布记录](RELEASE.md)
 
-Windows x64 安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。文件大小 126373281 字节，SHA256 为 `2bfb23aaf9c60be85e2b8673bdc70763bd7b9626d08361b3d11850602b155b14`。正式标识安装与独立无开发环境目标机仍待实测。[目录包与校验回执](RELEASE.md)
+安装程序版本为 `0.1.0`，应用标识为 `AbaqusTools.Workbench.WinUI3`。安装器构建脚本取自干净提交 `648f5b4`，应用负载取自 `c4bbe73`。文件大小为 126480996 字节，SHA256 为 `2f0a625e5a21a7dd11178f6af312fc6f372d5641a778758928fb818358eed247`，签名状态为 NotSigned。普通安装器和专用测试安装器使用相同的 1697 个文件和发布清单。汇总回执为 `GPTWork/installer-final-c4bbe73-20261128/verified-fix.json`。
+
+本机 G 盘的测试标识已实际走过中文向导的目标位置、准备安装、上一步、安装和完成。返回时保留所选中文路径，安装文件与清单逐项一致，随后卸载并核对了快捷方式和登记的移除。向导记录为 `GPTWork/installer-final-c4bbe73-20261128/wizard-e90ae0d2e3/stages.json`。另从 `9d862b5` 旧包升级至本版，8 项检查通过，覆盖运行中阻止升级和卸载、退出后升级、已安装后台的资源与队列读取，以及正常卸载。升级前 1 个、卸载前 16 个数据文件摘要逐项一致。修正版向导和修正版静默升级日志均为 0 个异常、0 个被抑制的提示框。正式标识的实际安装和无开发环境的独立 Windows 机器仍待验收。
+
+11 月 28 日撤回使用旧构建器生成的安装候选（包括 `069e05f63988` 和下列历史安装包）。旧版文件校验使用仍含 `{app}` 的目标路径，导致中文安装向导逐文件弹错；静默操作会抑制错误框并返回成功。重现日志为 `GPTWork/installer-final-c4bbe73-20261128/wizard-638132640b/wizard.log`。修正版将清单 SHA256 写入 Inno 的文件条目，编译时按文件核对摘要，解包写入时由 Inno 检查数据。验收同时读取安装日志并重新计算磁盘文件摘要。独立修改测试夹具的 XBF 后，真实编译器拒绝生成安装器。[Inno 文件校验说明](https://jrsoftware.org/inno-setup/documentation/topic_filessection.htm)
+
+## 历史安装候选
+
+上一版 Windows x64 安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。文件大小 126373281 字节，SHA256 为 `2bfb23aaf9c60be85e2b8673bdc70763bd7b9626d08361b3d11850602b155b14`。[目录包与校验回执](RELEASE.md)
 
 普通安装器当前未签名。专用测试安装器位于 `GPTWork/installer-win-x64-04eb75c80023/AbaqusTools-0.1.0-win-x64-setup.exe`，SHA256 为 `8fc70f8f4487d7879439b39dc22e25ff1425ca5d3084260033c15880e0d9e777`。其标识 `AbaqusTools.Workbench.WinUI3.Test.fa0dbad4b19e` 用于隔离验收。两份安装器均含 1694 个清单条目及发布清单自身。
 
@@ -58,7 +66,7 @@ Windows x64 安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-
 
 检查器应构建到普通GPTWork目录，如 `dotnet build tests/winui_host/ControlPlaneHost.Tests.csproj --no-restore -o GPTWork/installer-lifecycle-host`，避免不同Windows执行账户无法访问pytest创建的私有目录。验证器在任何安装前执行检查器纯状态检查；工具不可运行则直接停止，不留下新安装。后台正常退出后记录data/post-data/installed-host内实际数据库及旁文件，升级和卸载分别核对完整文件清单与SHA256；这些数据必须完整保留。该项不等于验证所有历史配置的数据库格式迁移。
 
-本机隔离验证不能替代无开发环境目标机。正式身份、签名/SmartScreen及安装向导原生操作仍需验收。
+测试标识的本机向导与静默安装分别验收。正式身份、签名/SmartScreen 及无开发环境目标机仍待验证。
 
 ## 工具依据
 

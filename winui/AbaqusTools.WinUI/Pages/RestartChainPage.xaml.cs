@@ -15,7 +15,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
     private bool _refreshBusy;
     private RestartChainNode? _selectedNode;
     private Button? _selectedGraphButton;
-    private double _graphZoom = 1;
+    private bool _planPending;
     private readonly RestartChainExplorerAdapter _explorerAdapter;
 
     public RestartChainPage()
@@ -49,8 +49,8 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         RefreshButton.IsEnabled = false;
         try
         {
-            var selectedItemId = _selectedNode?.ItemId;
             var snapshot = await App.Current.ControlPlane.GetRestartChainsAsync();
+            var selectedItemId = _selectedNode?.ItemId;
             _nodes.Clear();
             foreach (var node in snapshot.GraphNodes.Count > 0
                          ? snapshot.GraphNodes
@@ -103,9 +103,14 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
     {
         RestartGraphCanvas.Children.Clear();
         _selectedGraphButton = null;
-        if (_nodes.Count == 0)
+        if (_selectedNode is null)
         {
             ApplySelectedNode(null, null);
+        }
+        if (_nodes.Count == 0)
+        {
+            RestartGraphCanvas.ClearValue(WidthProperty);
+            RestartGraphCanvas.ClearValue(HeightProperty);
             return;
         }
 
@@ -162,7 +167,6 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         var maxRows = _nodes.GroupBy(node => Math.Max(1, node.Stage)).Max(group => group.Count());
         RestartGraphCanvas.Width = Math.Max(860, 72 + maxStage * (nodeWidth + horizontalGap));
         RestartGraphCanvas.Height = Math.Max(520, 72 + maxRows * (nodeHeight + verticalGap));
-        ApplyGraphZoom();
     }
 
     private void UpdateExplorer(RestartChainSnapshot snapshot)
@@ -283,7 +287,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             button.BorderBrush = ResourceBrush("AccentFillColorDefaultBrush");
         }
 
-        GenerateFullResultButton.IsEnabled = node.IsRestart
+        GenerateFullResultButton.IsEnabled = !_planPending && node.IsRestart
             && string.Equals(node.ValidationStatus, "valid", StringComparison.Ordinal);
         EditDependencyButton.IsEnabled = node.IsRestart;
         LocateInQueueButton.IsEnabled = !string.IsNullOrWhiteSpace(node.ItemId);
@@ -300,10 +304,13 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         {
             return;
         }
+        _planPending = true;
         GenerateFullResultButton.IsEnabled = false;
         try
         {
             var plan = await App.Current.ControlPlane.CreateRestartResultPlanAsync(node.ItemId);
+            if (!IsLoaded || _selectedNode?.ItemId != node.ItemId)
+                return;
             if (!plan.Valid)
             {
                 ShowError(plan.Issues.Count > 0
@@ -323,31 +330,26 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         }
         finally
         {
-            GenerateFullResultButton.IsEnabled = node.IsRestart
-                && string.Equals(node.ValidationStatus, "valid", StringComparison.Ordinal);
+            _planPending = false;
+            ApplySelectedNode(_selectedNode, _selectedGraphButton);
         }
     }
 
     private void OnZoomOutClicked(object sender, RoutedEventArgs e)
     {
-        _graphZoom = Math.Max(0.65, _graphZoom - 0.1);
-        ApplyGraphZoom();
+        ChangeZoom(-0.1f);
     }
 
     private void OnZoomInClicked(object sender, RoutedEventArgs e)
     {
-        _graphZoom = Math.Min(1.5, _graphZoom + 0.1);
-        ApplyGraphZoom();
+        ChangeZoom(0.1f);
     }
 
-    private void ApplyGraphZoom()
+    private void ChangeZoom(float delta)
     {
-        RestartGraphCanvas.RenderTransformOrigin = new Windows.Foundation.Point(0, 0);
-        RestartGraphCanvas.RenderTransform = new ScaleTransform
-        {
-            ScaleX = _graphZoom,
-            ScaleY = _graphZoom,
-        };
+        var viewer = RestartGraphScrollViewer;
+        var factor = Math.Clamp(viewer.ZoomFactor + delta, viewer.MinZoomFactor, viewer.MaxZoomFactor);
+        viewer.ChangeView(null, null, factor, disableAnimation: true);
     }
 
     private static Brush ResourceBrush(string key) =>
@@ -387,12 +389,26 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
                     oldjobBox.Text = selectedPath;
                 }
             };
-            var panel = new StackPanel { Spacing = 10, Width = 520 };
+            var error = new TextBlock
+            {
+                Visibility = Visibility.Collapsed,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ResourceBrush("SystemFillColorCriticalBrush"),
+                IsTextSelectionEnabled = true,
+            };
+            string? rejectedPath = null;
+            oldjobBox.TextChanged += (_, _) =>
+            {
+                if (oldjobBox.Text.Trim() != rejectedPath)
+                    error.Visibility = Visibility.Collapsed;
+            };
+            var panel = new StackPanel { Spacing = 10 };
             panel.Children.Add(new TextBlock
             {
                 Text = $"作业：{node.JobName}",
             });
             panel.Children.Add(oldjobBox);
+            panel.Children.Add(error);
             panel.Children.Add(chooseButton);
             panel.Children.Add(new TextBlock
             {
@@ -405,19 +421,41 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             {
                 XamlRoot = XamlRoot,
                 Title = "编辑重启动依赖",
-                Content = panel,
+                Content = Controls.ServerDialogLayout.Content(panel),
                 PrimaryButtonText = "保存并重新校验",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary,
             };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            Controls.ServerDialogLayout.KeepExistingWidth(dialog);
+            dialog.PrimaryButtonClick += async (_, args) =>
             {
-                return;
-            }
+                var deferral = args.GetDeferral();
+                args.Cancel = true;
+                var requestedPath = oldjobBox.Text.Trim();
+                oldjobBox.IsReadOnly = true;
+                chooseButton.IsEnabled = false;
+                try
+                {
+                    await App.Current.ControlPlane.UpdateRestartDependencyAsync(node.ItemId, requestedPath);
+                    args.Cancel = false;
+                }
+                catch (Exception exception)
+                {
+                    rejectedPath = requestedPath;
+                    error.Text = exception is ControlPlaneException api ? api.ToDisplayMessage() : exception.Message;
+                    error.Visibility = Visibility.Visible;
+                    oldjobBox.Focus(FocusState.Programmatic);
+                }
+                finally
+                {
+                    oldjobBox.IsReadOnly = false;
+                    chooseButton.IsEnabled = true;
+                    deferral.Complete();
+                }
+            };
 
-            var oldjobPath = oldjobBox.Text.Trim();
-            await App.Current.ControlPlane.UpdateRestartDependencyAsync(node.ItemId, oldjobPath);
-            await RefreshAsync("重启动依赖已保存");
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                await RefreshAsync("重启动依赖已保存");
         }
         catch (ControlPlaneException exception)
         {

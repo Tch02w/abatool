@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `check_install_log` 除磁盘校验外，还检查安装期间是否出现异常和被自动关闭的弹窗。回归覆盖在 `tests/common/test_installer_manifest.py`。[安装与升级](../05-development/INSTALLATION.md)
+
+F021 直接浏览的分页与稳定排序在 `modules/control_plane/results.py` 的 `_direct_page` 和 `_direct_order`，WinUI 通过 `winui/AbaqusTools.WinUI/Services/ResultContracts.cs` 的 `PageAnchor` 取首末行，在 `Pages/ResultBrowserPage.xaml.cs` 的 `LoadRecordsAsync` 发起翻页。专项检查见 `tests/control_plane/test_results_api.py` 和 `tests/winui_host/Program.cs`。[性能与翻页验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
+
+F011 重启动链图谱和依赖编辑在 `winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml` 及同名 .xaml.cs。图谱使用原生滚动视图缩放；`OnEditDependencyClicked` 在控制面校验通过后关闭编辑框。后台原子更新和无效依赖见 `tests/control_plane/test_restart_dependency_edits.py`。[操作说明](../repowiki/user-guide.md#重启动链) · [原生验收记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
+
 F029 工作台操作通知。八个页面共用 `winui/AbaqusTools.WinUI/MainWindow.xaml.cs` 的 `ShowFeedback`。提醒卡片及计时、暂停和关闭逻辑在 `winui/AbaqusTools.WinUI/Controls/WorkbenchFeedbackHost.xaml` 和同名 .xaml.cs，作业未读记录仍由 F027 管理。原生验证见 `tests/winui_explorer/FeedbackChecks.cs` 和 `tests/winui/test_engineering_page_feedback.py`。[通知行为](UI_INTERACTION.md) · [实际窗口验收](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md)
 
 F021 未建索引时的逐层浏览由 `modules/control_plane/results.py` 的 `_direct_directory`、`_direct_records` 和 `list_result_records` 提供。WinUI 入口为 `winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.xaml.cs` 的 `OnDirectBrowseClicked`，目录范围由 `Services/ResultBrowserLocation.cs`（同一项目）的 `ResultDirectLocation` 保存。测试见 `tests/control_plane/test_results_api.py`、`tests/winui_results/ResultBrowserLocationChecks.cs`。[使用说明](../repowiki/postprocessor.md)
@@ -128,7 +134,7 @@ F021预览性能与目录身份补充：`modules/postprocessor/result_catalog.py
 | F027 作业结束提醒与未读恢复 | `modules/control_plane/job_notifications.py` / `JobNotificationManager`；F005 `_store_result`、F010 `_touch_locked`；`winui/AbaqusTools.WinUI/MainWindow.Notifications.cs`、`winui/AbaqusTools.WinUI/Services/JobNotificationContracts.cs`、`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.Notifications.cs`；[提醒说明](JOB_NOTIFICATIONS.md) | `tests/control_plane/test_job_notifications.py`、`tests/winui_host/JobNotificationChecks.cs`；`packaging/verify_local_memory.py` 的 `--notifications` 模式 |
 | F028 GPU 与精度选项 | `modules/submitter/execution_options.py` / `parse_execution_options`、`execution_arguments`；F003 草稿、F004 队列编辑、F005 执行、F010 远端恢复；`winui/AbaqusTools.WinUI/Controls/ExecutionOptionsEditor.cs`、`winui/AbaqusTools.WinUI/Services/ExecutionOptionsContracts.cs`；[使用及默认兼容](EXECUTION_OPTIONS.md) | `tests/control_plane/test_execution_options.py`、`tests/winui_host/ExecutionOptionChecks.cs`、`tests/winui_host/test_execution_options_api.py` |
 
-F026 安装/升级/卸载：`packaging/build_installer.py` / `verified_bundle`、`render`、`build`；`packaging/installer.iss.in` / `PrepareToInstall`、`VerifyInstalledFile`、`InitializeUninstall`；`packaging/verify_installer.py` / `verify`、`user_data_hashes`先检查验收主机可执行性，升级/卸载保留实际测试数据完整摘要。清单回归 `tests/common/test_installer_manifest.py`，真实隔离生命周期回执见TASK-002。目录与失败规则见[安装说明](../05-development/INSTALLATION.md)。
+F026 安装、升级和卸载由 `packaging/build_installer.py` 的 `verified_bundle`、`render`、`build` 生成。占用和卸载保护见 `packaging/installer.iss.in` 的 `PrepareToInstall`、`InitializeUninstall`。生命周期检查在 `packaging/verify_installer.py` 的 `verify`、`user_data_hashes`、`check_install_log`。清单回归在 `tests/common/test_installer_manifest.py`。[真实隔离验收](../05-development/INSTALLATION.md)
 
 ## 跨功能修改提示
 

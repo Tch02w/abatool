@@ -1,5 +1,11 @@
 # 任务索引
 
+F026 普通向导安装时逐文件弹错及其修复见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)，可用候选及对应版本见[安装说明](../05-development/INSTALLATION.md)。
+
+F021 大目录直接浏览页与 12,000 个文件的前后对照见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
+F011 的图谱缩放、依赖校验失败后在原框修改和选中节点已删除时的处理见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。F021 的大文件导出取消、部分失败和重试见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 F029 八页右下角通知、F004 编辑弹窗折叠时的位置以及 F025 最终数字键和说明图标归入 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 
 F021 缺少有效索引时的直接浏览、导出和目录恢复见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
@@ -53,7 +59,7 @@ F022 分组运行、待办编辑、取消后续行、后台接回及 GJB 工程�
 | ID | 任务 | 状态 | 关联功能 | 说明 |
 |---|---|---|---|---|
 | TASK-001 | 优先恢复结果提取与结果查看 | F020 同组色标、双模型 GIF 两种模式已复核（11 月 18 日），F021分页和宽表已验证；结果选择崩溃已修复，单CSV预览/导出/退出已确认，其他业务交互待验 | F014–F022 | [准确记录](ACTIVE_TASKS/TASK-001-postprocessing.md) |
-| TASK-002 | 完整迁移、性能、界面与文档发布 | `9d862b5` 完整包、同负载测试标识安装升级及卸载通过。新增弹窗可见窗口交互分项记录，正式标识安装、独立目标机与远端特殊工况待验 | F001–F028 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) |
+| TASK-002 | 完整迁移、性能、界面与文档发布 | 开发与验收继续进行。八个页面、安装、独立目标机及远端特殊工况分别登记 | F001–F029 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) · [交付核对](../06-testing/COMPLETION_AUDIT.md) |
 | TASK-003 | 建立功能定位和持续维护交接体系 | 本次建档完成；后续维护持续执行 | F001–F024 | [文档记录](COMPLETED_TASKS/TASK-003-documentation.md) |
 | TASK-004 | 日志选区、数字输入、参数说明与窗口布局 | 队列表格列线/对齐、日志拖选跨刷新和服务器表单已获得实际窗口证据；跨屏与工程负载继续验证 | F001/F002/F003/F004/F005/F007/F008/F022/F025 | [准确记录](ACTIVE_TASKS/TASK-004-ui-interaction.md) |
 

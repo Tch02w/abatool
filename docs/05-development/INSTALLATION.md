@@ -1,6 +1,12 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-current-5a056db-20261128/source/GPTWork/installer-win-x64-614f8574eaba/AbaqusTools-0.1.0-win-x64-setup.exe`，对应干净提交 `5a056db`。版本 `0.1.0`，大小 126550417 字节，SHA-256 为 `83fbed26b3717249e800943721281c56a8a582b05817dc17207c5c034f765ddd`，签名状态为 NotSigned。免安装程序的目录、版本来源及文件摘要见[发布记录](RELEASE.md)。
+当前 Windows x64 安装程序为 `GPTWork/installer-result-sort-20261128/source/GPTWork/installer-win-x64-c09329df1efe/AbaqusTools-0.1.0-win-x64-setup.exe`，应用提交 `1b899eb`，版本 `0.1.0`，大小 126566445 字节，SHA-256 为 `99e0dcb315735bcbb380ff8bc35d4936186af71dd3b6257504e21cc50938ff59`，尚未签名。免安装入口和清单摘要见[发布记录](RELEASE.md)。
+
+本机使用独立安装标识从 `5a056db` 升级，通过 8 项检查。中文向导完成安装，1698 个负载文件与清单逐项一致，67 份文档的 752 个相对文件链接均可达。升级前 1 份、卸载前 16 份数据的摘要保持一致，安装、升级和中文向导三份日志均无异常。免安装程序另在 G 盘独立中文目录启动，PATH 中无 Python、.NET 与 Abaqus，加载的 174 个前台模块和 87 个后台模块均来自程序目录或 Windows。前后台正常关闭。回执在 `GPTWork/installer-result-sort-20261128/verified.json` 和 `GPTWork/installer-result-sort-20261128/run-a65f9f13/verification.json`。独立无开发工具 Windows 上的实际安装仍待验证。
+
+## 历史版本 5a056db
+
+`GPTWork/installer-current-5a056db-20261128/source/GPTWork/installer-win-x64-614f8574eaba/AbaqusTools-0.1.0-win-x64-setup.exe` 对应干净提交 `5a056db`。版本 `0.1.0`，大小 126550417 字节，SHA-256 为 `83fbed26b3717249e800943721281c56a8a582b05817dc17207c5c034f765ddd`，签名状态为 NotSigned。
 
 在 G 盘用独立安装标识完成了从 `de319eb` 到 `5a056db` 的 8 项生命周期核对，以及普通中文向导的选择目录、返回、安装和完成操作。已安装的 1698 个负载文件与清单一致，安装目录内 README 的提交号正确，4 个相对链接可打开。升级和卸载分别保留 1 份及 16 份已核对的应用数据。三份安装日志均无异常或被抑制的弹窗。回执 `GPTWork/installer-current-5a056db-20261128/verified.json`。本机未使用正式标识安装，独立无开发工具的 Windows 环境仍待验收。
 

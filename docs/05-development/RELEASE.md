@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-95266ae051fc/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `5a056db4e4d42b1fcfe5e27344ff687f107af869`。数字框使用左减、右加和两侧浅底圆角键。此版新增本机作业的 STA 增量表，随包 README 可直接打开程序与离线手册。1698 个文件逐项校验，清单 SHA-256 为 `b0f38bc8344a6f22f9c5edc9257882be50e287bba11c911b6f0f5be7ec214690`。包内完整性及正式客户端回执为 `GPTWork/release-queue-portable-5a056db-20261128-050539/verification.json`。[安装说明](INSTALLATION.md) · [数字框实窗](../repowiki/images/job-queue-toolbar.png)
+当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-6f351f8e595d/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `1b899eb03f3b10246e2fd9f3a3ccbcc8f8279a52`。此版恢复全范围结果排序、资源状态筛选及私钥文件选择。1698 项清单文件已核对，清单 SHA-256 为 `4e616d16b0d7606476b3646fd477df906d25b2947f2009d19658bdcbed7f273b`。包内共享数字框资源与通过 74 项原生检查的版本相同，展示左减右加、居中数字和浅底圆角按钮。包内完整性及正式客户端回执为 `GPTWork/release-queue-portable-1b899eb-20261128-053528/verification.json`。[安装说明](INSTALLATION.md) · [队列数字框实窗](../repowiki/images/job-queue-toolbar.png)
+
+### 历史版本 5a056db
+
+`GPTWork/release-win-x64-95266ae051fc/AbaqusTools/AbaqusTools.WinUI.exe` 来自干净提交 `5a056db4e4d42b1fcfe5e27344ff687f107af869`。此版新增本机作业的 STA 增量表，随包 README 可直接打开程序与离线手册。1698 个文件逐项校验，清单 SHA-256 为 `b0f38bc8344a6f22f9c5edc9257882be50e287bba11c911b6f0f5be7ec214690`。包内完整性及正式客户端回执为 `GPTWork/release-queue-portable-5a056db-20261128-050539/verification.json`。
 
 ### 前一版 de319eb
 

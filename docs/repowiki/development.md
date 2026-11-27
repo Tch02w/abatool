@@ -30,6 +30,10 @@ pytest默认收集tests，生成目录保留在GPTWork。不同源码阶段的�
 
 不提交 `.venv`、IDE 配置、`bin/obj`、Python 缓存、测试临时目录、ODB/求解器输出、应用数据库或日志。用户配置和队列保存在应用数据目录，不应复制进仓库。
 
+## PySide 队列回滚
+
+需要在 PySide 中继续处理 WinUI 保存的队列时，从当前项目根目录运行 `.\.venv\Scripts\python.exe .\main.py`。项目保留的 PySide 入口能识别新版队列字段。实际检查中，仅更改另一条候选的勾选并保存后，原作业的 GPU 数量和 ODB 场输出精度仍保持设置值。迁移前版本 `f5e9484` 可以读回旧字段，但用它重新保存队列会丢弃上述两项设置。[双向读写实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--旧队列双向读写与-pyside-回滚)
+
 ## 发布前检查
 
 1. 全量 Python 测试、Ruff 和 WinUI Release 构建通过。

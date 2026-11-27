@@ -12,6 +12,8 @@
 
 ## 2026-11-28 · 右下角通知、队列折叠区和数字键
 
+已核对新版 `850f753` 与以下实窗截图所用的 `c4bbe73`。队列表单与数字框相关源码一致，两包的 `JobQueuePage.xbf` 和 `WorkbenchNumberBoxResources.xbf` 也分别逐字节相同。下图展示的左减右加、浅灰键面及居中数值适用于这两个版本。[浅色工具栏实图](../../repowiki/images/job-queue-toolbar.png) · [编辑作业实图](../../repowiki/images/job-queue-editor.png)。本次深色验证使用生产控件，已检查普通、悬停、按下和禁用状态。
+
 最终免安装版 `c4bbe73` 已在 G 盘独立配置中打开正式队列的 `Formal_003` 编辑框。工具栏和表单均显示左减、居中数值、右加及浅底圆角按钮，右边框、折叠区箭头和保存按钮完整可见。实窗截图与启动记录见 `GPTWork/queue-edit-navigation-20261127/currentFinalC4bbe73`。该窗口已留给用户查看，40 项正式作业均处于暂停调度状态，验收期间未启动求解。另有 5 项新建作业与作业概览的原生交互检查通过，覆盖空草稿、有效命令预览、STA 文件消失以及后台轮询，见 `GPTWork/feedback-notification-menu-20261128/extra/native.json`。
 
 最终发布包和本地免安装启动路径见[发布记录](../../05-development/RELEASE.md)。154 项原生控件检查和两次真实窗口核对的汇总为 `GPTWork/feedback-host-20261128/desktop-verification.json`。结束提醒实测覆盖一次弹出、叉号关闭后保留未读、后台重复轮询、通过作业菜单反复打开及标为已读。三次测量菜单下方导航顶缘均为 38 DIP。12 项实际界面检查及 18 项后台回归见 `GPTWork/feedback-notification-menu-20261128/verification.json`。

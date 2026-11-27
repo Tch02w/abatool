@@ -1,8 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-e0eb0cd89e8c/AbaqusTools/AbaqusTools.WinUI.exe`。应用和安装器均来自干净提交 `3ff3fa22142890040ad9fb1ae9cb3bd2525b9f86`。本版包含大结果目录浏览的内存优化和重启动依赖编辑修复。1697 个文件已逐项校验，发布清单 SHA256 为 `101fe3b077441747d1cfa30938301c7f64687222735dd5c8032e3b216ad5076a`，目录包回执为 `GPTWork/release-queue-portable-3ff3fa2-20261128-011319/verification.json`。
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-d76d5340404a/AbaqusTools/AbaqusTools.WinUI.exe`。应用和安装器均来自干净提交 `850f75314d48692549e0316b6bfa7cc54f58b92e`。本版包含 SSH 主机密钥更换时的指纹确认、大结果目录浏览的内存优化和重启动依赖编辑修复。1697 个文件已逐项校验，发布清单 SHA256 为 `0423c4a350227f15623692b4fcdee3e219071d5171b677b5a9e5851a9465d5af`，目录包回执为 `GPTWork/release-queue-portable-850f753-20261128-013239/verification.json`。
 
-同一负载的安装程序 SHA256 为 `f5ae410ef74edc155abaee0bc22b129bf619c83bd1f7154f03b9fe2034854e2d`。测试标识的中文向导、升级和卸载已实际验证，三份安装日志均无异常或抑制弹窗。测试身份、数据保留范围及独立目标机的待验条件见[当前安装候选](INSTALLATION.md)。
+同一负载的安装程序 SHA256 为 `ee8ad45b2464f0d9ca8c6b9c8f44f1a01ed866e9dfbb5643fdf09a8c5f68ee45`。测试标识的中文向导、从 `3ff3fa2` 升级及卸载均已实际验证，三份安装日志均无异常或抑制弹窗。测试身份、数据保留范围及独立目标机的待验条件见[当前安装候选](INSTALLATION.md)。
+
+上一版 `3ff3fa2` 的目录包回执为 `GPTWork/release-queue-portable-3ff3fa2-20261128-011319/verification.json`。同版原生后处理页对产品自带 2021 教程 ODB 的取消、升级、备份与 2025 只读数值复核见[旧版 ODB 升级说明](../03-features/POSTPROCESSING.md)。
 
 ### 上一免安装版 c4bbe73 与修正版安装器
 

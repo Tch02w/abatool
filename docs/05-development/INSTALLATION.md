@@ -1,8 +1,10 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-current-3ff3fa2-20261128/source/GPTWork/installer-win-x64-155f36183eb7/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-e0eb0cd89e8c/AbaqusTools/AbaqusTools.WinUI.exe`。两者均来自干净提交 `3ff3fa2`。安装程序版本为 `0.1.0`，大小为 126488882 字节，SHA256 为 `f5ae410ef74edc155abaee0bc22b129bf619c83bd1f7154f03b9fe2034854e2d`，签名状态为 NotSigned。
+当前 Windows x64 安装程序为 `GPTWork/installer-current-850f753-20261128/source/GPTWork/installer-win-x64-0edc18aea1b3/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-d76d5340404a/AbaqusTools/AbaqusTools.WinUI.exe`。两者均来自干净提交 `850f753`。安装程序版本为 `0.1.0`，大小为 126495187 字节，SHA256 为 `ee8ad45b2464f0d9ca8c6b9c8f44f1a01ed866e9dfbb5643fdf09a8c5f68ee45`，签名状态为 NotSigned。
 
-在 G 盘测试标识下，中文向导完成了目录选择、返回、安装和完成，安装后逐文件核对了 1697 项负载及发布清单。另从上一修正版（构建器 `648f5b4`，应用 `c4bbe73`）升级到本版，8 项检查通过，覆盖运行中拒绝升级和卸载、退出后升级、从实际安装目录读取资源和队列，以及卸载保留用户文件。旧版安装、新版升级和新版普通向导日志均为零异常、零抑制弹窗。升级前 1 个、卸载前 16 个应用数据文件的 SHA256 保持一致，测试登记和快捷方式均已移除。完整回执为 `GPTWork/installer-current-3ff3fa2-20261128/verified.json`。正式标识安装与独立无开发环境 Windows 仍待验收。[免安装包校验](RELEASE.md)
+在 G 盘独立测试标识下，中文向导完成了目录选择、返回、安装和完成，安装后逐文件核对了 1697 项负载及发布清单。另从 `3ff3fa2` 升级至 `850f753`，8 项检查通过，覆盖运行中拒绝升级和卸载、退出后升级、从实际安装目录读取资源和队列、卸载后保留用户文件。旧版安装、新版升级和新版普通向导三份日志均为零异常、零抑制弹窗。升级前 1 个、卸载前 16 个应用数据文件的 SHA256 保持一致，测试登记和快捷方式均已移除。完整回执为 `GPTWork/installer-current-850f753-20261128/verified.json`。正式标识安装与独立无开发环境 Windows 仍待验收。[免安装包校验](RELEASE.md)
+
+上一轮从 `c4bbe73`（构建器 `648f5b4`）升级至 `3ff3fa2` 的 8 项检查、普通向导和数据保留回执为 `GPTWork/installer-current-3ff3fa2-20261128/verified.json`。
 
 ## 上一修正版（构建器 648f5b4）
 

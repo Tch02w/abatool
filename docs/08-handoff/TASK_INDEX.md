@@ -1,5 +1,7 @@
 # 任务索引
 
+F014/F015 用官方 2021 样例在 WinUI 完成兼容性检查、预览、取消、确认升级及数值对照。[样例与检查记录](ACTIVE_TASKS/TASK-001-postprocessing.md#2026-11-28--官方-2021-odb-的原生升级)
+
 F008 断线资源清除和已保存服务器换钥复核的实现、隔离 SSH 实测及 WinUI 操作见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 F005 工程日志滚动超过后台缓冲后仍能复制当前选区与切换作业的实测，见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F021 已索引 CSV 的系统回收、还原及重建索引见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。

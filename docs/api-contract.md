@@ -12,11 +12,17 @@
 
 单独提交的刷新优先于等待中的批量成员。每个索引以独立文件锁保护并原子发布。发布后到达的取消请求保留成功结果。后台进程重启后，重新提交范围会跳过已经发布的索引，原进程中的批次编号随进程结束失效。
 
+### 结果记录排序（F021）
+
+`POST /api/v1/result-records` 在指定范围内先筛选和排序，再分页。可选的 `sortBy` 接受 `default`、`recommended`、`useCase`、`name`、`description`、`path`、`size` 或 `modified`。`sortDescending` 接受布尔值，省略时升序。省略 `sortBy`、传 `null` 或 `default` 都沿用该来源的默认顺序。响应回显实际的 `sortBy` 和 `sortDescending`，默认顺序统一回显 `default` 和 `false`。非法字段值或方向类型返回 400 `INVALID_RESULT_SORT`。
+
+索引和公共数据版本查询的默认顺序为推荐优先、用途、自然文件名、路径。直接浏览默认文件夹优先，同类按自然文件名排序。自选顺序在直接浏览中也保留文件夹优先。名称和路径按自然序比较。路径采用 `relativePath`，范围内是相对路径，引用范围外的公共资产时保留完整路径。大小按字节、修改时间按纳秒数比较。无有效值的记录排在所属类型末尾，同值继续按自然文件名、原名、路径区分。索引及公共数据版本用 `offset` 翻页。
+
 ### 结果目录直接翻页（F021）
 
-`POST /api/v1/result-records` 的 `directDirectory` 模式可附 `directAnchor`，例如 `{"name":"curve500.csv","isDirectory":false,"direction":"after"}`。`after` 取该顺序位置之后的一页，`before` 取之前最近的一页，两个方向均按正序返回。名称和类型只用于排序比较，边界文件已删除时仍可定位。只接受单项名称、布尔类型以及这两个方向；将该字段用于索引查询或提供非法边界返回 400 `INVALID_DIRECT_ANCHOR`。
+`directDirectory` 只列当前目录一层。首次读取、刷新、更换排序、筛选或目录时省略 `directAnchor` 并从 `offset: 0` 开始。响应非空时，首行和末行的 `sortAnchor` 可用于翻页，只有一条记录时共用该行。客户端原样传回边界行的 `name`、`isDirectory`、`sortAnchor`，并加入 `direction`。`after` 使用末行取下一页，`before` 使用首行取相邻上一页。两者都以请求的显示顺序返回。默认顺序兼容旧边界，例如 `{"name":"curve500.csv","isDirectory":false,"direction":"after"}`。
 
-带边界时服务器按当前目录和请求筛选条件重新计算并返回 `offset`、`filteredCount` 和 `hasMore`；目录增删可使返回位置与原来预计的偏移不同。向前翻到开头时可能少于 `limit` 项且仍有后页。首次读取、刷新和变更目录省略边界；仅使用 `offset` 的客户端继续按绝对偏移分页。
+自选顺序的边界保存当时的排序值，边界文件已删除也能定位。自选顺序缺少令牌、令牌损坏、与目录、排序字段、升降方向或行身份不符，或索引查询携带直接浏览边界，返回 400 `INVALID_DIRECT_ANCHOR`。带边界的请求根据本次目录内容重新计算 `offset`、`filteredCount` 和 `hasMore`。向前翻到开头时可能少于 `limit` 条且仍有下一页。目录持续变化时各次请求读取各自的现状。仅用绝对偏移的调用也可翻页，深页会分段扫描。每页上限为 500 项。
 
 ### 历史远端作业输出（F005/F009/F010）
 

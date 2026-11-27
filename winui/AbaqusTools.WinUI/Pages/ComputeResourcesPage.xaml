@@ -61,10 +61,15 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="资源节点" />
-                            <TextBlock x:Name="QueueSummaryText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="队列作业：0" />
-                        </StackPanel>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <ComboBox x:Name="ResourceStatusFilter" SelectedIndex="0" AutomationProperties.Name="筛选资源节点">
+                                <ComboBoxItem Content="全部资源" Tag="all" />
+                                <ComboBoxItem Content="在线" Tag="online" />
+                                <ComboBoxItem Content="未连接" Tag="offline" />
+                            </ComboBox>
+                            <TextBlock x:Name="QueueSummaryText" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="队列作业：0" TextTrimming="CharacterEllipsis" />
+                        </Grid>
                         <Button x:Name="RefreshButton" Grid.Column="1" Click="OnRefreshClicked" Content="刷新所选资源" />
                         <Button x:Name="AddServerButton" Grid.Column="2" Click="OnAddServerClicked" Style="{StaticResource AccentButtonStyle}" Content="添加服务器" />
                         <Button x:Name="ConnectButton" Grid.Column="3" Click="OnConnectClicked" Content="连接" IsEnabled="False" />
@@ -101,6 +106,8 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="NoMatchingResourcesText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="没有符合此条件的资源" Visibility="Collapsed" />
                 </Grid>
             </Border>
 
@@ -117,7 +124,7 @@
                         <TextBlock x:Name="DetailNameText" FontSize="20" FontWeight="SemiBold" Text="请选择资源" />
                         <TextBlock x:Name="DetailEndpointText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="—" />
                     </StackPanel>
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="ResourceDetailFields" Grid.Row="2" VerticalScrollBarVisibility="Auto">
                         <Grid ColumnSpacing="12" RowSpacing="10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="90" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>

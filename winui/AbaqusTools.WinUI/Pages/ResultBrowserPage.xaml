@@ -4,6 +4,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:AbaqusTools.WinUI.Controls">
 
+    <Page.Resources>
+        <Style x:Key="ResultSortHeaderStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="3,0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+    </Page.Resources>
+
     <Grid Padding="{StaticResource WorkbenchPagePadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -200,19 +210,24 @@
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <Grid Padding="12,0" ColumnSpacing="10">
+                        <Grid x:Name="SortHeaders" Padding="12,0" ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="42" />
+                                <ColumnDefinition Width="56" />
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="140" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" Text="推荐" />
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="数据用途" />
-                            <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="文件与内容" />
-                            <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="大小" />
-                            <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="修改时间" />
+                            <Button x:Name="SortRecommendedButton" Content="推荐" Tag="recommended"
+                                    Style="{StaticResource ResultSortHeaderStyle}" Click="OnSortClicked" />
+                            <Button x:Name="SortUseCaseButton" Grid.Column="1" Content="数据用途" Tag="useCase"
+                                    Style="{StaticResource ResultSortHeaderStyle}" Click="OnSortClicked" />
+                            <Button x:Name="SortNameButton" Grid.Column="2" Content="文件与内容" Tag="name"
+                                    Style="{StaticResource ResultSortHeaderStyle}" Click="OnSortClicked" />
+                            <Button x:Name="SortSizeButton" Grid.Column="3" Content="大小" Tag="size"
+                                    Style="{StaticResource ResultSortHeaderStyle}" Click="OnSortClicked" />
+                            <Button x:Name="SortModifiedButton" Grid.Column="4" Content="修改时间" Tag="modified"
+                                    Style="{StaticResource ResultSortHeaderStyle}" Click="OnSortClicked" />
                         </Grid>
                         <ListView
                             x:Name="ResultList"
@@ -224,7 +239,7 @@
                                 <DataTemplate>
                                     <Grid Padding="8" ColumnSpacing="10" DoubleTapped="OnResultRowDoubleTapped">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="42" />
+                                            <ColumnDefinition Width="56" />
                                             <ColumnDefinition Width="180" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="120" />
@@ -346,6 +361,10 @@
                             <MenuFlyout>
                                 <MenuFlyoutItem x:Name="CopyPathButton" Text="复制路径" Click="OnCopyPathClicked" IsEnabled="False" />
                                 <MenuFlyoutItem x:Name="ExportButton" Text="导出所选" Click="OnExportClicked" IsEnabled="False" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem x:Name="SortPathMenuItem" Text="按文件路径排序" Tag="path" Click="OnSortClicked" />
+                                <MenuFlyoutItem x:Name="SortDescriptionMenuItem" Text="按文件说明排序" Tag="description" Click="OnSortClicked" />
+                                <MenuFlyoutItem x:Name="ResetSortMenuItem" Text="恢复默认排序" Tag="default" Click="OnSortClicked" />
                                 <MenuFlyoutSeparator />
                                 <MenuFlyoutItem x:Name="RecycleButton" Text="移到回收站" Click="OnRecycleClicked" IsEnabled="False" />
                             </MenuFlyout>

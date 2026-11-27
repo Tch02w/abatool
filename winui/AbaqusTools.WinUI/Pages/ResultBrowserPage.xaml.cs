@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -41,6 +42,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private bool _recycleBusy;
     private ResultRecordsRequest? _appliedQuery;
     private ResultRecordsResponse? _displayedPage;
+    private (string Key, bool Descending) _sort = ("default", false);
+    private (string Key, bool Descending)? _pendingSort;
     private bool _indexBusy => _loads.IsIndexing;
     private bool _cancelIndexRequested;
     private bool _updatingFilters;
@@ -70,6 +73,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             captureContext: values => _direct?.Capture(values));
         _location.DraftRoot = RootTextBox.Text;
         Loaded += OnPageLoaded;
+        UpdateSortIndicators();
         RefreshInteractionState();
     }
 
@@ -78,6 +82,14 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         _loads.LeavePage();
+        if (_recordsBusy && _displayedPage is { } page)
+        {
+            _loads.InvalidateRecords();
+            _recordsBusy = false;
+            _pendingSort = null;
+            ResultStatusText.Text = ResultPageStatus(page);
+            RefreshInteractionState();
+        }
         base.OnNavigatedFrom(e);
     }
 
@@ -355,10 +367,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         _appliedQuery = null;
         _displayedPage = null;
+        _pendingSort = null;
         RecordPager.Visibility = Visibility.Collapsed;
         _loads.InvalidateRecords();
         _recordsBusy = false;
-        ResultList.SelectedItem = null;
+        ResultList.SelectedItems.Clear();
         _records.Clear();
         ResetPreview();
         IndexInfoBar.IsOpen = false;
@@ -469,12 +482,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             ExpandAncestors(node);
             return;
         }
-        if (item.Kind == ExplorerItemKind.ResultRecord)
+        if (!_recordsBusy && item.Kind == ExplorerItemKind.ResultRecord)
         {
             var record = _records.FirstOrDefault(candidate => string.Equals(
                 candidate.Path,
                 item.Path,
-                StringComparison.OrdinalIgnoreCase));
+                StringComparison.Ordinal));
             if (record is not null)
             {
                 ResultList.SelectedItem = record;
@@ -487,11 +500,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         if (FileOperationBusy) return;
         SelectExplorerItem(item);
-        if (item.Kind == ExplorerItemKind.ResultRecord
+        if (!_recordsBusy && !_indexBusy && !_scopeBusy && item.Kind == ExplorerItemKind.ResultRecord
             && _records.FirstOrDefault(candidate => string.Equals(
                 candidate.Path,
                 item.Path,
-                StringComparison.OrdinalIgnoreCase)) is { } record
+                StringComparison.Ordinal)) is { } record
             && !record.Internal)
         {
             if (record.IsDirectory) await EnterDirectFolderAsync(record);
@@ -610,7 +623,53 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             await LoadRecordsAsync(page.Offset + page.Records.Count, page.PageAnchor(before: false));
     }
 
-    private async Task LoadRecordsAsync(int? pageOffset = null, ResultDirectPageAnchor? directAnchor = null)
+    private async void OnSortClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string key } || _appliedQuery is null ||
+            _scopeBusy || _indexBusy || FileOperationBusy || App.Current.Session.IsClosing) return;
+
+        var current = _pendingSort ?? _sort;
+        var descending = key != "default" && (key == current.Key ? !current.Descending : key is "recommended" or "size" or "modified");
+        await LoadRecordsAsync(0, sort: (key, descending));
+    }
+
+    private static string ResultPageStatus(ResultRecordsResponse page)
+    {
+        var status = $"{page.FilteredCount} 个结果 · {SourceDisplay(page.Source)}";
+        if (page.SortBy is "path" or "description")
+            status += $" · {(page.SortBy == "path" ? "文件路径" : "文件说明")}{(page.SortDescending ? "降序" : "升序")}";
+        return status;
+    }
+
+    private void UpdateSortIndicators()
+    {
+        var arrow = _sort.Descending ? " ↓" : " ↑";
+        var direction = _sort.Descending ? "降序" : "升序";
+        void SetHeader(Button button, string label, string sortLabel)
+        {
+            var active = (string)button.Tag == _sort.Key;
+            button.Content = active ? label + arrow : label;
+            var action = $"按{sortLabel}排序" + (active ? $"，当前{direction}" : "");
+            AutomationProperties.SetName(button, action);
+            ToolTipService.SetToolTip(button, action);
+        }
+        void SetMenu(MenuFlyoutItem item, string label)
+        {
+            var active = (string)item.Tag == _sort.Key;
+            item.Text = active ? label + arrow : label;
+            AutomationProperties.SetName(item, active ? $"{label}，当前{direction}" : label);
+        }
+        SetHeader(SortRecommendedButton, "推荐", "推荐状态");
+        SetHeader(SortUseCaseButton, "数据用途", "数据用途");
+        SetHeader(SortNameButton, "文件与内容", "文件名");
+        SetHeader(SortSizeButton, "大小", "文件大小");
+        SetHeader(SortModifiedButton, "修改时间", "修改时间");
+        SetMenu(SortPathMenuItem, "按文件路径排序");
+        SetMenu(SortDescriptionMenuItem, "按文件说明排序");
+    }
+
+    private async Task LoadRecordsAsync(int? pageOffset = null, ResultDirectPageAnchor? directAnchor = null,
+        (string Key, bool Descending)? sort = null)
     {
         var scope = _selectedScope;
         if (scope is null || !_loads.CanLoadRecords || _location.LoadedRoot is null)
@@ -618,7 +677,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        // Page within the last applied filters, even if an unsubmitted search is in the editor.
+        // Paging and sorting operate on the applied query, even with unsubmitted text in the editor.
         var query = pageOffset.HasValue ? _appliedQuery : new ResultRecordsRequest
         {
             Root = _location.RequireLoadedRoot(),
@@ -630,7 +689,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             IncludeInternal = ShowInternalCheckBox.IsChecked is true,
         };
         if (query is null) return;
+        var requestedSort = sort ?? _sort;
+        var selectedPaths = sort.HasValue ? SelectedRecords().Select(record => record.Path).ToHashSet(StringComparer.Ordinal) : null;
         var request = _loads.InvalidateRecords();
+        var restorePreview = false;
+        _pendingSort = sort;
         _recordsBusy = true;
         IndexInfoBar.IsOpen = false;
         ResultStatusText.Text = "正在读取结果记录…";
@@ -640,20 +703,26 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             var response = await App.Current.ControlPlane.GetResultRecordsAsync(
                 query.Root, query.Scope, query.TimeDirectory, query.Section, query.Query,
                 query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0, directDirectory: query.DirectDirectory,
-                directAnchor: directAnchor);
+                directAnchor: directAnchor, sortBy: requestedSort.Key, sortDescending: requestedSort.Descending);
             if (!_loads.IsCurrentRecordRequest(request))
             {
                 return;
             }
 
-            ResultList.SelectedItem = null;
+            ResultList.SelectedItems.Clear();
             ResetPreview();
             _appliedQuery = query;
             _displayedPage = response;
+            if (_sort != (response.SortBy, response.SortDescending))
+            {
+                _sort = (response.SortBy, response.SortDescending);
+                UpdateSortIndicators();
+            }
             _records.Clear();
             foreach (var record in response.Records)
             {
                 _records.Add(record);
+                if (selectedPaths?.Contains(record.Path) == true) ResultList.SelectedItems.Add(record);
             }
             UpdateExplorer();
 
@@ -671,13 +740,14 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             PageRange.Text = _records.Count == 0 ? $"共 {response.FilteredCount} 条" :
                 $"第 {response.Offset + 1}–{response.Offset + _records.Count} 条，共 {response.FilteredCount} 条";
             RecordPager.Visibility = response.Offset > 0 || response.HasMore ? Visibility.Visible : Visibility.Collapsed;
-            ResultStatusText.Text = $"{response.FilteredCount} 个结果 · {SourceDisplay(response.Source)}";
+            ResultStatusText.Text = ResultPageStatus(response);
             if (_records.Count > 0) ResultList.ScrollIntoView(_records[0]);
             ScopeStatusText.Text = scope.IndexStateDisplay.Length > 0
                 ? $"{scope.Name} · {scope.IndexStateDisplay}"
                 : scope.Name;
             App.Current.MainWindow.ReportPageStatus(
                 $"结果浏览 · {response.FilteredCount} 个匹配文件");
+            restorePreview = selectedPaths is { Count: > 0 } && ResultList.SelectedItems.Count > 0;
         }
         catch (ControlPlaneException exception) when (
             _loads.IsCurrentRecordRequest(request)
@@ -695,7 +765,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             if (_loads.IsCurrentRecordRequest(request))
             {
-                ResultStatusText.Text = pageOffset.HasValue ? "翻页失败，仍显示原页" : "结果记录读取失败";
+                ResultStatusText.Text = sort.HasValue ? "排序失败，仍显示原页" :
+                    pageOffset.HasValue ? "翻页失败，仍显示原页" : "结果记录读取失败";
                 ShowError(exception is ControlPlaneException problem ? problem.ToDisplayMessage() : exception.Message,
                     "结果记录读取失败");
             }
@@ -705,9 +776,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             if (_loads.IsCurrentRecordRequest(request))
             {
                 _recordsBusy = false;
+                _pendingSort = null;
                 RefreshInteractionState();
             }
         }
+        if (restorePreview && _loads.IsCurrentRecordRequest(request)) await UpdateSelectionPreviewAsync();
     }
 
     private void UpdateUseCases(IReadOnlyList<string> useCases, string selected)
@@ -943,7 +1016,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnResultSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (FileOperationBusy) return;
+        if (_recordsBusy || FileOperationBusy) return;
+        await UpdateSelectionPreviewAsync();
+    }
+
+    private async Task UpdateSelectionPreviewAsync()
+    {
         var primary = SelectedRecords().FirstOrDefault();
         if (primary is { Internal: false, IsDirectory: false })
         {
@@ -1042,7 +1120,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenFileClicked(object sender, RoutedEventArgs e)
     {
-        if (ResultList.SelectedItem is not ResultRecordItem { Internal: false } record) return;
+        if (!OpenFileButton.IsEnabled || ResultList.SelectedItem is not ResultRecordItem { Internal: false } record
+            || !_records.Contains(record)) return;
         if (record.IsDirectory)
         {
             await EnterDirectFolderAsync(record);
@@ -1066,7 +1145,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnRevealFileClicked(object sender, RoutedEventArgs e)
     {
-        if (ResultList.SelectedItem is not ResultRecordItem record)
+        if (!RevealFileButton.IsEnabled || ResultList.SelectedItem is not ResultRecordItem record || !_records.Contains(record))
         {
             return;
         }
@@ -1093,6 +1172,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void OnCopyPathClicked(object sender, RoutedEventArgs e)
     {
+        if (!CopyPathButton.IsEnabled) return;
         var records = SelectedRecords();
         if (records.Count == 0)
         {
@@ -1180,7 +1260,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private IReadOnlyList<ResultRecordItem> SelectedRecords()
     {
-        return ResultList.SelectedItems.OfType<ResultRecordItem>().ToArray();
+        return ResultList.SelectedItems.OfType<ResultRecordItem>().Where(_records.Contains).ToArray();
     }
 
     private void ResetPreview()
@@ -1218,6 +1298,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private void RefreshInteractionState()
     {
         var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !FileOperationBusy;
+        var canSort = !_scopeBusy && !_indexBusy && !FileOperationBusy && _displayedPage is not null;
+        foreach (var button in SortHeaders.Children.OfType<Button>()) button.IsEnabled = canSort;
+        SortPathMenuItem.IsEnabled = SortDescriptionMenuItem.IsEnabled = canSort;
+        ResetSortMenuItem.IsEnabled = canSort && (_pendingSort ?? _sort).Key != "default";
         ResultList.IsEnabled = idle;
         var selected = SelectedRecords();
         var first = selected.FirstOrDefault();

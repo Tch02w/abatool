@@ -87,7 +87,8 @@ public sealed class ResultScopeNode
 public sealed record ResultDirectPageAnchor(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("isDirectory")] bool IsDirectory,
-    [property: JsonPropertyName("direction")] string Direction);
+    [property: JsonPropertyName("direction")] string Direction,
+    [property: JsonPropertyName("sortAnchor"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortAnchor = null);
 
 internal sealed class ResultRecordsRequest
 {
@@ -111,6 +112,14 @@ internal sealed class ResultRecordsRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ResultDirectPageAnchor? DirectAnchor { get; init; }
 
+    [JsonPropertyName("sortBy")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SortBy { get; init; }
+
+    [JsonPropertyName("sortDescending")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SortDescending { get; init; }
+
     [JsonPropertyName("section")]
     public string Section { get; init; } = "all";
 
@@ -132,6 +141,12 @@ internal sealed class ResultRecordsRequest
 
 public sealed class ResultRecordsResponse
 {
+    [JsonPropertyName("sortBy")]
+    public string SortBy { get; init; } = "default";
+
+    [JsonPropertyName("sortDescending")]
+    public bool SortDescending { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; }
 
@@ -180,12 +195,15 @@ public sealed class ResultRecordsResponse
     {
         if (Source != "direct" || Records.Count == 0) return null;
         var edge = before ? Records[0] : Records[^1];
-        return new(edge.Name, edge.IsDirectory, before ? "before" : "after");
+        return new(edge.Name, edge.IsDirectory, before ? "before" : "after", edge.SortAnchor);
     }
 }
 
 public sealed class ResultRecordItem
 {
+    [JsonPropertyName("sortAnchor")]
+    public string? SortAnchor { get; init; }
+
     [JsonPropertyName("path")]
     public string Path { get; init; } = string.Empty;
 

@@ -1,5 +1,7 @@
 # 任务索引
 
+结果浏览页的全范围排序与分页见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。计算资源页的在线筛选、轮询和私钥选择见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#资源筛选和私钥选择)。
+
 F013 合并覆盖遇到输出占用，以及释放占用后重新预览、重试的结果见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--odb-合并发布时目标被占用)。
 
 F005 作业概览的 STA 增量表、读取范围、工程日志重放及原生滚动、选区检查见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md#2026-11-28--本机作业的-sta-增量与固定表头)。F026 免安装程序的运行库加载来源见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--随包运行库的实际来源)。

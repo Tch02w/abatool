@@ -612,6 +612,23 @@ static async Task CheckResultsApi(string descriptorPath, string root, string bat
     var partial = await Direct(new(secondRow.Name, secondRow.IsDirectory, "before"));
     if (partial.Offset != 0 || !partial.HasMore || partial.Records.Single().Path != directFirst.Records[0].Path)
         throw new Exception("A shortened first page should remain navigable");
+
+    Task<ResultRecordsResponse> BySize(string? direct, int offset = 0, ResultDirectPageAnchor? anchor = null) =>
+        host.GetResultRecordsAsync(root, batch, batch, "all", "", "", false, offset: offset,
+            directDirectory: direct, directAnchor: anchor, sortBy: "size", sortDescending: true);
+    var indexedBySize = await BySize(null);
+    var indexedTail = await BySize(null, indexedBySize.Records.Count);
+    var directBySize = await BySize(directory);
+    var sizeTail = await BySize(directory, anchor: directBySize.PageAnchor(before: false));
+    var sizeBack = await BySize(directory, anchor: sizeTail.PageAnchor(before: true));
+    var indexedOrder = indexedBySize.Records.Concat(indexedTail.Records).ToArray();
+    var directOrder = directBySize.Records.Concat(sizeTail.Records).ToArray();
+    if (indexedOrder.Length != first.FilteredCount || indexedOrder[0].Path != csvPath ||
+        !indexedOrder.Select(r => r.SizeBytes).SequenceEqual(indexedOrder.Select(r => r.SizeBytes).OrderDescending()) ||
+        indexedOrder.Select(r => r.Path).Distinct().Count() != indexedOrder.Length ||
+        !directOrder.Select(r => r.Path).SequenceEqual(indexedOrder.Select(r => r.Path)) ||
+        !sizeBack.Records.Select(r => r.Path).SequenceEqual(directBySize.Records.Select(r => r.Path)))
+        throw new Exception("Global size order or cursor round trip differs across result sources");
     var csv = await host.GetResultPreviewAsync(root, csvPath);
     var limited = await host.GetResultPreviewAsync(root, csvPath, 2);
     var xlsx = await host.GetResultPreviewAsync(root, xlsxPath);

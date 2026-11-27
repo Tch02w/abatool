@@ -18,6 +18,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private CancellationTokenSource _transferObservationSource = new();
     private bool _busy;
     private bool _backgroundRefreshBusy;
+    private bool _resourceRowsInitialized;
     private readonly ResourceExplorerAdapter _explorerAdapter;
     private TaskCompletionSource _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -32,7 +33,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             SelectExplorerResource);
         _remoteRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _remoteRefreshTimer.Tick += OnRemoteRefreshTimerTick;
-        App.Current.Session.Register(this, "compute-resources", [],
+        ResourceStatusFilter.SelectionChanged += (_, _) => RebuildRows();
+        App.Current.Session.Register(this, "compute-resources", [nameof(ResourceStatusFilter)],
             () => WorkbenchSession.WaitForIdleAsync(() => (_busy && string.IsNullOrEmpty(_activeTransferId)) || _backgroundRefreshBusy, "服务器操作"),
             _remoteRefreshTimer.Stop, _remoteRefreshTimer.Start);
         Loaded += OnPageLoaded;
@@ -82,6 +84,9 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     public bool SelectConnectedServer(string profile)
     {
+        if (ResourceStatusFilter.SelectedIndex == 2 && _remoteSnapshot.Connection.Status == "connected"
+            && _remoteSnapshot.Connection.ProfileName == profile)
+            ResourceStatusFilter.SelectedIndex = 0;
         var row = ResourceNodes.FirstOrDefault(row => row.Key == $"remote:{profile}");
         if (row is null) return false;
         ResourceList.SelectedItem = row;
@@ -166,6 +171,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             if (_transferRecoveryPending) return;
         }
         var commands = App.Current.Commands;
+        if (ResourceList.SelectedItem is null) return;
         if (ResourceList.SelectedItem is ResourceNodeRow { IsLocal: false })
         {
             if (SelectedRemoteProfile() is { } profile) await RefreshConnectedServerAsync(profile);
@@ -288,17 +294,28 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async void OnUploadRemoteFileClicked(object sender, RoutedEventArgs e)
+    private static async Task<Windows.Storage.StorageFile?> PickLocalFileAsync(string confirmText)
     {
         var picker = new FileOpenPicker
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            CommitButtonText = "选择要上传的文件",
+            CommitButtonText = confirmText,
         };
         picker.FileTypeFilter.Add("*");
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-        var source = await picker.PickSingleFileAsync();
+        return await picker.PickSingleFileAsync();
+    }
+
+    private async void OnUploadRemoteFileClicked(object sender, RoutedEventArgs e)
+    {
+        Windows.Storage.StorageFile? source;
+        try { source = await PickLocalFileAsync("选择要上传的文件"); }
+        catch (Exception exception)
+        {
+            ShowError($"无法选择上传文件。{exception.Message}");
+            return;
+        }
         if (source is null)
         {
             return;
@@ -826,11 +843,39 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             TextWrapping = TextWrapping.Wrap,
             Visibility = Visibility.Collapsed,
         };
+        var browsePrivateKey = new Button
+        {
+            Content = "选择文件…",
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Height = Controls.ServerDialogLayout.InputHeight,
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(browsePrivateKey, "选择 SSH 私钥文件");
+        var privateKeyRow = new Grid { ColumnSpacing = 8 };
+        privateKeyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        privateKeyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        privateKeyRow.Children.Add(privateKeyBox);
+        Grid.SetColumn(browsePrivateKey, 1);
+        privateKeyRow.Children.Add(browsePrivateKey);
+        browsePrivateKey.Click += async (_, _) =>
+        {
+            browsePrivateKey.IsEnabled = false;
+            try
+            {
+                var key = await PickLocalFileAsync("选择 SSH 私钥");
+                if (key is not null) privateKeyBox.Text = key.Path;
+            }
+            catch (Exception exception)
+            {
+                validationText.Text = $"无法选择私钥文件。{exception.Message}";
+                validationText.Visibility = Visibility.Visible;
+            }
+            finally { browsePrivateKey.IsEnabled = true; }
+        };
 
         void UpdateAuthenticationFields()
         {
             var mode = authenticationBox.SelectedItem?.ToString() ?? "用户名/密码";
-            privateKeyBox.Visibility = mode == "SSH 私钥"
+            privateKeyRow.Visibility = mode == "SSH 私钥"
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             secretBox.Visibility = mode == "SSH Agent"
@@ -846,7 +891,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         panel.Children.Add(Controls.ServerDialogLayout.EndpointRow(hostBox, portBox));
         panel.Children.Add(usernameBox);
         panel.Children.Add(authenticationBox);
-        panel.Children.Add(privateKeyBox);
+        panel.Children.Add(privateKeyRow);
         panel.Children.Add(secretBox);
         panel.Children.Add(computeRootBox);
         panel.Children.Add(allowedRootsBox);
@@ -956,21 +1001,34 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private void RebuildRows()
     {
-        var selectedKey = (ResourceList.SelectedItem as ResourceNodeRow)?.Key ?? "local";
-        ResourceNodes.Clear();
-        ResourceNodes.Add(ResourceNodeRow.FromLocal(_localSnapshot));
+        var selectedKey = _resourceRowsInitialized ? (ResourceList.SelectedItem as ResourceNodeRow)?.Key : "local";
+        _resourceRowsInitialized = true;
+        var incoming = new List<ResourceNodeRow> { ResourceNodeRow.FromLocal(_localSnapshot) };
         foreach (var profile in _remoteSnapshot.Profiles)
         {
-            var resource = _remoteSnapshot.Connection.Status == "connected" && string.Equals(
+            var connected = _remoteSnapshot.Connection.Status == "connected" && string.Equals(
                 _remoteSnapshot.Connection.ProfileName,
                 profile.ProfileName,
-                StringComparison.Ordinal)
-                ? _remoteSnapshot.Connection.Resource
-                : null;
-            ResourceNodes.Add(ResourceNodeRow.FromRemote(profile, resource));
+                StringComparison.Ordinal);
+            incoming.Add(ResourceNodeRow.FromRemote(profile, connected, connected ? _remoteSnapshot.Connection.Resource : null));
         }
-        ResourceList.SelectedItem = ResourceNodes.FirstOrDefault(item => item.Key == selectedKey)
-            ?? ResourceNodes.FirstOrDefault();
+        var filter = (ResourceStatusFilter.SelectedItem as ComboBoxItem)?.Tag as string;
+        if (filter == "online") incoming.RemoveAll(row => !row.IsConnected);
+        if (filter == "offline") incoming.RemoveAll(row => row.IsLocal || row.IsConnected);
+        for (var i = 0; i < incoming.Count; i++)
+        {
+            var next = incoming[i];
+            if (i == ResourceNodes.Count) ResourceNodes.Add(next);
+            else
+            {
+                var previous = ResourceNodes[i];
+                if (next.ActiveJobs.SequenceEqual(previous.ActiveJobs)) next.ActiveJobs = previous.ActiveJobs;
+                if (previous != next) ResourceNodes[i] = next;
+            }
+        }
+        while (ResourceNodes.Count > incoming.Count) ResourceNodes.RemoveAt(ResourceNodes.Count - 1);
+        ResourceList.SelectedItem = ResourceNodes.FirstOrDefault(item => item.Key == selectedKey);
+        NoMatchingResourcesText.Visibility = ResourceNodes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ApplySelection();
         UpdateExplorer();
     }
@@ -1000,7 +1058,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             Title = row.Name,
             Subtitle = $"{row.StatusDisplay} · CPU {row.CpuDisplay} · 内存 {row.MemoryDisplay}",
             Status = row.StatusDisplay,
-            Badge = row.IsConnected ? "在线" : "未连接",
+            Badge = row.StatusDisplay,
             Path = row.ComputeRoot,
             IconGlyph = row.IsLocal ? "\uE770" : "\uE968",
         };
@@ -1033,8 +1091,13 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     {
         if (ResourceList.SelectedItem is not ResourceNodeRow row)
         {
+            DetailNameText.Text = "请选择资源";
+            DetailEndpointText.Text = string.Empty;
+            ResourceDetailFields.Visibility = Visibility.Collapsed;
+            UpdateButtons();
             return;
         }
+        ResourceDetailFields.Visibility = Visibility.Visible;
         DetailNameText.Text = row.Name;
         DetailEndpointText.Text = row.Endpoint;
         DetailStatusText.Text = row.StatusDisplay;
@@ -1069,7 +1132,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         var row = ResourceList.SelectedItem as ResourceNodeRow;
         var isRemote = row is { IsLocal: false };
         var connected = commands.CanUseSelectedRemote(SelectedRemoteProfile()?.ProfileName);
-        RefreshButton.IsEnabled = isRemote ? connected : commands.CanRefreshLocal;
+        RefreshButton.IsEnabled = row is not null && (isRemote ? connected : commands.CanRefreshLocal);
         AddServerButton.IsEnabled = !_busy;
         ConnectButton.IsEnabled = !_busy && isRemote && row is { IsConnected: false };
         EditButton.IsEnabled = !_busy && isRemote;
@@ -1099,7 +1162,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         bool Connect);
 }
 
-public sealed class ResourceNodeRow
+public sealed record ResourceNodeRow
 {
     public string Key { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -1144,13 +1207,14 @@ public sealed class ResourceNodeRow
 
     public static ResourceNodeRow FromRemote(
         RemoteServerProfile profile,
+        bool connected,
         RemoteResourceSnapshot? resource) =>
         new()
         {
             Key = $"remote:{profile.ProfileName}",
             Name = profile.ProfileName,
             Endpoint = $"{profile.Username}@{profile.Host}:{profile.Port}",
-            StatusDisplay = resource is null ? "未连接" : "在线",
+            StatusDisplay = connected ? "在线" : "未连接",
             CpuDisplay = resource?.CpuDisplay ?? "未获取",
             MemoryDisplay = resource?.MemoryDisplay ?? "未获取",
             QueueDisplay = resource is null
@@ -1167,6 +1231,6 @@ public sealed class ResourceNodeRow
                 ? "—"
                 : resource.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
             ActiveJobs = resource?.ActiveJobs ?? [],
-            IsConnected = resource is not null,
+            IsConnected = connected,
         };
 }

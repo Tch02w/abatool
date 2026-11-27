@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import csv
 import heapq
+import json
 import os
 import stat
+import zlib
 from collections import Counter
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from operator import itemgetter
@@ -244,11 +246,24 @@ def _record_from_index(time_directory: Path, row: Mapping[str, Any]) -> ResultRe
     )
 
 
-def _record_payload(record: ResultRecord, scope: Path) -> dict[str, Any]:
+def _shared_record_metadata(record: ResultRecord) -> ResultRecord:
     try:
-        relative_path = str(record.path.relative_to(scope))
+        info = record.path.lstat()
+    except OSError:
+        return record
+    if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+        return record
+    return replace(record, size=info.st_size, mtime_ns=info.st_mtime_ns)
+
+
+def _relative_path(path: Path, scope: Path) -> str:
+    try:
+        return str(path.relative_to(scope))
     except ValueError:
-        relative_path = str(record.path)
+        return str(path)
+
+
+def _record_payload(record: ResultRecord, scope: Path) -> dict[str, Any]:
     modified_at = ""
     if record.mtime_ns > 0:
         modified_at = (
@@ -258,7 +273,7 @@ def _record_payload(record: ResultRecord, scope: Path) -> dict[str, Any]:
         )
     return {
         "path": str(record.path),
-        "relativePath": relative_path,
+        "relativePath": _relative_path(record.path, scope),
         "name": record.path.name,
         "suffix": record.path.suffix.casefold(),
         "useCase": record.use_case,
@@ -337,6 +352,97 @@ class _DirectPageAnchor:
     name: str
     is_directory: bool
     before: bool
+    token: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _Descending:
+    value: Any
+
+    def __lt__(self, other: _Descending) -> bool:
+        return self.value > other.value
+
+
+@dataclass(frozen=True, slots=True)
+class _ResultSort:
+    field: str
+    descending: bool
+    scope: Path
+
+    def value(self, record: ResultRecord) -> str | int | bool | None:
+        if self.field == "recommended":
+            return record.recommended
+        if self.field == "useCase":
+            return record.use_case or None
+        if self.field == "description":
+            return record.description or None
+        if self.field == "path":
+            return _relative_path(record.path, self.scope)
+        if self.field == "size":
+            return record.size if record.size >= 0 else None
+        if self.field == "modified":
+            return record.mtime_ns if record.mtime_ns > 0 else None
+        return record.path.name
+
+    def order(self, value: Any, name: str, is_directory: bool) -> tuple:
+        name_key = natural_sort_key(name)
+        if self.field == "default":
+            return not is_directory, name_key, name
+        if self.field == "name":
+            primary = name_key
+        elif self.field == "path":
+            primary = natural_sort_key(value)
+        elif isinstance(value, str):
+            primary = value.casefold()
+        else:
+            primary = value
+        if self.descending and primary is not None:
+            primary = _Descending(primary)
+        return not is_directory, value is None, primary, name_key, name
+
+    def direct_key(self, record: ResultRecord) -> tuple:
+        return self.order(self.value(record), record.path.name, record.is_directory)
+
+    def catalog_key(self, record: ResultRecord) -> tuple:
+        path = str(record.path)
+        if self.field == "default":
+            return not record.recommended, record.use_case.casefold(), natural_sort_key(record.path.name), path.casefold()
+        return *self.direct_key(record), path.casefold(), path
+
+    def cursor(self, record: ResultRecord, directory: Path) -> str:
+        data = json.dumps([1, self.field, self.descending, str(directory), record.path.name, record.is_directory,
+                           self.value(record)], separators=(",", ":"))
+        return f"{zlib.crc32(data.encode('ascii')):08x}.{data}"
+
+    def boundary(self, anchor: _DirectPageAnchor, directory: Path) -> tuple:
+        if anchor.token is None and self.field == "default":
+            return self.order(anchor.name, anchor.name, anchor.is_directory)
+        try:
+            if anchor.token is None or len(anchor.token) > 512 * 1024:
+                raise ValueError
+            checksum, separator, encoded = anchor.token.partition(".")
+            if not separator or checksum != f"{zlib.crc32(encoded.encode('ascii')):08x}":
+                raise ValueError
+            data = json.loads(encoded)
+            if (not isinstance(data, list) or len(data) != 7 or type(data[0]) is not int or data[0] != 1
+                or data[1] != self.field or data[2] is not self.descending or data[3] != str(directory)
+                or data[4] != anchor.name or data[5] is not anchor.is_directory):
+                raise ValueError
+            value = data[6]
+            if self.field in {"default", "name", "path"}:
+                expected = _relative_path(directory / anchor.name, self.scope) if self.field == "path" else anchor.name
+                valid = value == expected
+            elif self.field == "recommended":
+                valid = type(value) is bool
+            elif self.field in {"size", "modified"}:
+                valid = value is None or (type(value) is int and value >= (1 if self.field == "modified" else 0))
+            else:
+                valid = value is None or (isinstance(value, str) and bool(value))
+            if not valid:
+                raise ValueError
+        except (ValueError, RecursionError) as exc:
+            raise ApiProblem(400, "INVALID_DIRECT_ANCHOR", "翻页边界与当前目录或排序不一致，请重新读取当前页") from exc
+        return self.order(value, anchor.name, anchor.is_directory)
 
 
 def _direct_anchor(payload: Mapping[str, Any]) -> _DirectPageAnchor | None:
@@ -346,37 +452,51 @@ def _direct_anchor(payload: Mapping[str, Any]) -> _DirectPageAnchor | None:
     if (
         "directDirectory" not in payload
         or not isinstance(value, dict)
-        or set(value) != {"name", "isDirectory", "direction"}
-        or not isinstance(name := value["name"], str)
+        or set(value) - {"name", "isDirectory", "direction", "sortAnchor"}
+        or not isinstance(name := value.get("name"), str)
         or not 1 <= len(name) <= 255
         or name in {".", ".."}
         or Path(name).name != name
         or "\x00" in name
-        or not isinstance(value["isDirectory"], bool)
-        or value["direction"] not in ("before", "after")
+        or not isinstance(value.get("isDirectory"), bool)
+        or value.get("direction") not in ("before", "after")
+        or (value.get("sortAnchor") is not None and not isinstance(value["sortAnchor"], str))
     ):
         raise ApiProblem(400, "INVALID_DIRECT_ANCHOR", "直接浏览翻页需要当前页边界条目的名称、类型和翻页方向")
-    return _DirectPageAnchor(name, value["isDirectory"], value["direction"] == "before")
-
-
-def _direct_order(name: str, is_directory: bool) -> tuple:
-    return not is_directory, natural_sort_key(name), name
+    return _DirectPageAnchor(name, value["isDirectory"], value["direction"] == "before", value.get("sortAnchor"))
 
 
 def _direct_page(
-    records: Iterable[ResultRecord], offset: int, limit: int, anchor: _DirectPageAnchor | None,
+    records: Callable[[], Iterator[ResultRecord]], offset: int, limit: int,
+    anchor: _DirectPageAnchor | None, sort: _ResultSort, directory: Path,
 ) -> tuple[list[ResultRecord], int]:
     if anchor is None:
-        prefix = heapq.nsmallest(offset + limit, records, key=lambda r: _direct_order(r.path.name, r.is_directory))
-        return prefix[offset:], offset
+        # Legacy callers can jump by offset. Cap the heap even for a deep jump;
+        # ordinary first/next/previous page requests each scan the directory once.
+        remaining = offset
+        boundary = None
+        while True:
+            keyed = ((sort.direct_key(row), row) for row in records())
+            candidates = ((key, row) for key, row in keyed if boundary is None or key > boundary)
+            count = min(remaining + limit, MAX_RESULT_PAGE_SIZE)
+            ranked = heapq.nsmallest(count, candidates, key=itemgetter(0))
+            if remaining < len(ranked) and remaining + limit <= count:
+                return [row for _, row in ranked[remaining:]], offset
+            if len(ranked) < count:
+                return [row for _, row in ranked[remaining:]], offset
+            # If the desired page straddles this chunk, use its last skipped
+            # row as the boundary and collect the full requested page next.
+            skipped = min(remaining, count)
+            boundary = ranked[skipped - 1][0]
+            remaining -= skipped
 
-    boundary = _direct_order(anchor.name, anchor.is_directory)
+    boundary = sort.boundary(anchor, directory)
     preceding = 0
 
     def candidates():
         nonlocal preceding
-        for record in records:
-            key = _direct_order(record.path.name, record.is_directory)
+        for record in records():
+            key = sort.direct_key(record)
             if anchor.before:
                 if key < boundary:
                     preceding += 1
@@ -409,6 +529,8 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "query",
         "useCase",
         "includeInternal",
+        "sortBy",
+        "sortDescending",
         "offset",
         "limit",
     }
@@ -416,6 +538,15 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
     root = _resolve_directory(_required_path(payload, "root"), code_prefix="RESULT_ROOT")
     scope = _resolve_directory(_required_path(payload, "scope"), code_prefix="RESULT_SCOPE")
     _require_below(scope, root, field="scope")
+    sort_by = payload.get("sortBy")
+    sort_by = "default" if sort_by is None else sort_by
+    descending = payload.get("sortDescending", False)
+    if not isinstance(sort_by, str) or sort_by not in {"default", "recommended", "useCase", "description",
+                                                         "name", "path", "size", "modified"}:
+        raise ApiProblem(400, "INVALID_RESULT_SORT", "结果排序字段无效")
+    if not isinstance(descending, bool):
+        raise ApiProblem(400, "INVALID_RESULT_SORT", "sortDescending 必须是布尔值")
+    sort = _ResultSort(sort_by, descending and sort_by != "default", scope)
 
     raw_time_directory = payload.get("timeDirectory", "")
     if not isinstance(raw_time_directory, str):
@@ -460,7 +591,6 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
     source = "shared_asset"
     if "directDirectory" in payload:
         directory = _direct_directory(payload, root)
-        records = _direct_records(directory)
         source = "direct"
     elif raw_time_directory.strip():
         time_directory = _resolve_directory(
@@ -489,26 +619,24 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         metadata = loaded.metadata
         source = "index"
     else:
-        records = [
-            record
-            for record in collect_result_records(scope)
-            if record.path.name != ASSET_MANIFEST_NAME
-        ]
+        records = (_shared_record_metadata(record) for record in collect_result_records(scope)
+                   if record.path.name != ASSET_MANIFEST_NAME)
 
     total_count = filtered_count = recommended_count = 0
     primary_counts: Counter[str] = Counter()
     use_cases: set[str] = set()
 
-    def matching_records() -> Iterator[ResultRecord]:
+    def matching_records(rows: Iterable[ResultRecord], count: bool = True) -> Iterator[ResultRecord]:
         nonlocal total_count, filtered_count, recommended_count
-        for record in records:
+        for record in rows:
             if record.internal and not include_internal:
                 continue
             primary = result_section(record)
-            total_count += 1
-            primary_counts[primary] += 1
-            recommended_count += record.recommended
-            use_cases.add(record.use_case)
+            if count:
+                total_count += 1
+                primary_counts[primary] += 1
+                recommended_count += record.recommended
+                use_cases.add(record.use_case)
             if section == "common" and not record.recommended:
                 continue
             if section not in ("all", "common", primary):
@@ -519,22 +647,23 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
                 haystack = "\n".join((record.path.name, str(record.path), record.use_case, record.description))
                 if query_text not in haystack.casefold():
                     continue
-            filtered_count += 1
+            if count:
+                filtered_count += 1
             yield record
 
     if source == "direct":
-        page, offset = _direct_page(matching_records(), offset, limit, anchor)
+        def scan() -> Iterator[ResultRecord]:
+            return matching_records(_direct_records(directory), count=total_count == 0)
+
+        page, offset = _direct_page(scan, offset, limit, anchor, sort, directory)
     else:
-        ordered = sorted(
-            matching_records(),
-            key=lambda record: (
-                not record.recommended,
-                record.use_case.casefold(),
-                natural_sort_key(record.path.name),
-                str(record.path).casefold(),
-            ),
-        )
+        ordered = sorted(matching_records(records), key=sort.catalog_key)
         page = ordered[offset : offset + limit]
+    page_payload = [_record_payload(record, scope) for record in page]
+    if source == "direct" and page:
+        page_payload[0]["sortAnchor"] = sort.cursor(page[0], directory)
+        if len(page) > 1:
+            page_payload[-1]["sortAnchor"] = sort.cursor(page[-1], directory)
     section_counts = {key: primary_counts[key] for key, _label in SECTION_TABS}
     section_counts["common"] = recommended_count
     section_counts["all"] = total_count
@@ -544,7 +673,9 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "scope": str(scope),
         "source": source,
         **({"directDirectory": str(directory)} if source == "direct" else {}),
-        "records": [_record_payload(record, scope) for record in page],
+        "sortBy": sort.field,
+        "sortDescending": sort.descending,
+        "records": page_payload,
         "totalCount": total_count,
         "filteredCount": filtered_count,
         "offset": offset,

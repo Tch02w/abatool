@@ -1792,13 +1792,17 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         CancellationToken cancellationToken = default,
         int offset = 0,
         string? directDirectory = null,
-        ResultDirectPageAnchor? directAnchor = null)
+        ResultDirectPageAnchor? directAnchor = null,
+        string? sortBy = null,
+        bool sortDescending = false)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(scope))
         {
             throw new ArgumentException("结果根目录和浏览范围不能为空。");
         }
 
+        var requestedOrder = sortBy is null or "default" ? null : sortBy;
+        var descending = requestedOrder is not null && sortDescending;
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             _shutdownSource.Token);
@@ -1815,6 +1819,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 TimeDirectory = timeDirectory?.Trim() ?? string.Empty,
                 DirectDirectory = directDirectory,
                 DirectAnchor = directAnchor,
+                SortBy = requestedOrder,
+                SortDescending = descending,
                 Section = string.IsNullOrWhiteSpace(section) ? "all" : section.Trim(),
                 Query = query?.Trim() ?? string.Empty,
                 UseCase = useCase?.Trim() ?? string.Empty,
@@ -1824,6 +1830,11 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             "结果记录",
             effectiveSource.Token);
         ValidateResultRecordsResponse(response);
+        if (response.SortBy != (requestedOrder ?? "default") || response.SortDescending != descending
+            || (directDirectory is not null && requestedOrder is not null && response.Records.Count > 0
+                && (string.IsNullOrEmpty(response.Records[0].SortAnchor)
+                    || string.IsNullOrEmpty(response.Records[^1].SortAnchor))))
+            throw new ControlPlaneException("返回的结果排序与请求不一致，请重新读取目录。");
         if (directDirectory is not null && (response.Source != "direct"
             || !StringComparer.OrdinalIgnoreCase.Equals(response.DirectDirectory, directDirectory)
             || !StringComparer.OrdinalIgnoreCase.Equals(response.Scope, scope)

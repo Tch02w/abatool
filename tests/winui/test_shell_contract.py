@@ -75,6 +75,21 @@ def _named_element(root: ET.Element, name: str) -> ET.Element:
     return next(element for element in root.iter() if element.attrib.get(XAML_NAME) == name)
 
 
+def test_result_sort_headers_match_record_columns_and_offer_secondary_orders():
+    page = ET.parse(WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml").getroot()
+    headers = _named_element(page, "SortHeaders")
+    record_list = _named_element(page, "ResultList")
+    def columns(panel: ET.Element):
+        return [col.attrib["Width"] for col in panel.findall(".//{*}ColumnDefinition")]
+
+    assert columns(headers) == columns(record_list)
+    buttons = sorted(headers.findall("{*}Button"), key=lambda button: int(button.get("Grid.Column", 0)))
+    assert [button.get("Tag") for button in buttons] == ["recommended", "useCase", "name", "size", "modified"]
+    menu = [_named_element(page, name) for name in ("SortPathMenuItem", "SortDescriptionMenuItem", "ResetSortMenuItem")]
+    assert [item.get("Tag") for item in menu] == ["path", "description", "default"]
+    assert all(control.get("Click") == "OnSortClicked" for control in buttons + menu)
+
+
 def test_result_export_and_recycle_register_the_entire_operation_before_dialogs():
     page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.Export.cs").read_text(encoding="utf-8")
     assert page.index("PendingResultFileOperation = completion.Task") < page.index("PickSingleFolderAsync")

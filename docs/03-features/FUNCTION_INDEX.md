@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F007/F008 资源状态筛选、列表增量更新和私钥文件选择位于 `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml` 和同目录的 `ComputeResourcesPage.xaml.cs`，入口为 `RebuildRows`、`ApplySelection`、`ShowServerDialogAsync` 与 `PickLocalFileAsync`。[筛选和认证](REMOTE_JOBS.md#在资源页找到服务器) · [原生验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#资源筛选和私钥选择)
+
 F026 随包启动说明由 `packaging/release_inventory.py` 的 `write_release_manifest` 使用 `packaging/portable-readme.md.in` 生成。`packaging/build_release.py` 的 `copy_release_docs` 收集离线手册。`tests/common/test_release_readme.py` 核对提交号、文件摘要和搬到其他目录后的文档链接。[构建与清单](../05-development/RELEASE.md)
 
 F005 本机 STA 增量表位于 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml`、同目录的 `JobOverviewPage.xaml.cs` 及 `winui/AbaqusTools.WinUI/Services/StaIncrementPreview.cs`。文件有界读取、字段解析、可选列和替换后的重读见 `tests/winui_logs/StaIncrementChecks.cs`。[运行日志与阅读位置](UI_INTERACTION.md#作业概览运行日志f005) · [使用步骤](../repowiki/user-guide.md#作业概览和日志)
@@ -16,7 +18,7 @@ F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的
 
 F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `check_install_log` 除磁盘校验外，还检查安装期间是否出现异常和被自动关闭的弹窗。回归覆盖在 `tests/common/test_installer_manifest.py`。[安装与升级](../05-development/INSTALLATION.md)
 
-F021 直接浏览的分页与稳定排序在 `modules/control_plane/results.py` 的 `_direct_page` 和 `_direct_order`，WinUI 通过 `winui/AbaqusTools.WinUI/Services/ResultContracts.cs` 的 `PageAnchor` 取首末行，在 `Pages/ResultBrowserPage.xaml.cs` 的 `LoadRecordsAsync` 发起翻页。专项检查见 `tests/control_plane/test_results_api.py` 和 `tests/winui_host/Program.cs`。[性能与翻页验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
+F021 结果排序与分页由 `modules/control_plane/results.py` 的 `_ResultSort`、`_direct_page` 和 `list_result_records` 提供。WinUI 的 `Pages/ResultBrowserPage.xaml` 和同名代码文件通过 `OnSortClicked`、`LoadRecordsAsync`、`UpdateSortIndicators` 管理排序与选区。宿主在 `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` 的 `GetResultRecordsAsync` 校验响应，`Services/ResultContracts.cs` 的 `ResultRecordsResponse.PageAnchor` 取直接浏览的首末行边界。测试见 `tests/control_plane/test_result_record_sort.py`、`tests/control_plane/test_results_api.py`、`tests/winui/test_shell_contract.py` 和 `tests/winui_host/Program.cs`。[结果排序协议](../api-contract.md#结果记录排序f021) · [核验记录](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
 
 F011 重启动链图谱和依赖编辑在 `winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml` 及同名 .xaml.cs。图谱使用原生滚动视图缩放；`OnEditDependencyClicked` 在控制面校验通过后关闭编辑框。后台原子更新和无效依赖见 `tests/control_plane/test_restart_dependency_edits.py`。[操作说明](../repowiki/user-guide.md#重启动链) · [原生验收记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
 

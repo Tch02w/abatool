@@ -88,9 +88,10 @@ def primary(viewport, variable, refinement, position):
 
 
 def ring_coverage(frame, concrete_region, centroids, z_min, z_max, threshold, z_bins=100, angle_bins=36):
-    if "DAMAGET" not in frame.fieldOutputs: return 0.0
     occupied, height = {}, max(z_max-z_min, 1.0)
-    values = frame.fieldOutputs["DAMAGET"].getSubset(region=concrete_region).values
+    values = frame.fieldOutputs["DAMAGET"].getSubset(
+        region=concrete_region, position=INTEGRATION_POINT, readOnly=True
+    ).values
     for value in values:
         try: damage = float(value.data)
         except (TypeError, ValueError): damage = float(value.data[0])
@@ -126,6 +127,18 @@ def active_specs(config):
                  if config.get("reinforcement_mode", "required") != "none" or spec[2] != "rebar")
 
 
+def unavailable_reason(frame, variable, concrete_region):
+    if variable not in frame.fieldOutputs:
+        return "field_absent"
+    if variable in ("DAMAGET", "DAMAGEC"):
+        values = frame.fieldOutputs[variable].getSubset(
+            region=concrete_region, position=INTEGRATION_POINT, readOnly=True
+        ).values
+        if not len(values):
+            return "no_concrete_integration_points"
+    return None
+
+
 def scan(config):
     odb = session.openOdb(name=os.path.abspath(config["odb_path"]), readOnly=True)
     viewport = session.Viewport(name="Legend Limit Scanner", origin=(0, 0), width=160, height=110)
@@ -153,6 +166,7 @@ def scan(config):
 
     region_names = {"pile": config["pile_display_set"], "concrete": concrete_name,
                     "soil": soil_name, "rebar": "rebar"}
+    unavailable = {}
     for spec, variable, region_key, refinement, position, soil_section in active_specs(config):
         set_group(viewport, region_names[region_key], rebar_labels)
         if soil_section:
@@ -162,35 +176,52 @@ def scan(config):
                 normal=(0.0, 1.0, 0.0), axis2=(0.0, 0.0, 1.0), followDeformation=OFF)
             cut.setValues(showModelAboveCut=OFF, showModelBelowCut=OFF, showModelOnCut=ON, showFreeBodyCut=OFF)
             viewport.odbDisplay.setValues(viewCut=ON, viewCutNames=(cut_name,))
-        primary(viewport, variable, refinement, position)
-        viewport.odbDisplay.display.setValues(plotState=(CONTOURS_ON_DEF,))
-        viewport.odbDisplay.contourOptions.setValues(minAutoCompute=ON, maxAutoCompute=ON)
+        active_step = None
         for item in catalog:
             frame = odb.steps[item["StepName"]].frames[item["FrameIndex"]]
-            if variable not in frame.fieldOutputs: continue
+            reason = unavailable_reason(frame, variable, concrete_region)
+            if reason:
+                unavailable.setdefault(spec, {}).setdefault(reason, []).append(item["SequenceIndex"])
+                continue
             viewport.odbDisplay.setFrame(step=item["StepIndex"], frame=item["FrameIndex"])
+            if active_step != item["StepIndex"]:
+                primary(viewport, variable, refinement, position)
+                viewport.odbDisplay.display.setValues(plotState=(CONTOURS_ON_DEF,))
+                viewport.odbDisplay.contourOptions.setValues(minAutoCompute=ON, maxAutoCompute=ON)
+                active_step = item["StepIndex"]
             viewport.forceRefresh()
             item["ranges"][spec] = {"min": float(viewport.odbDisplay.contourOptions.autoMinValue),
                                      "max": float(viewport.odbDisplay.contourOptions.autoMaxValue)}
 
     damage_threshold = float(config["settings"]["damage_threshold"])
     coverage_threshold = float(config["settings"].get("damage_angular_coverage", 0.9))
-    first_fracture = None
+    first_observed = None
+    missing_damage = []
     for item in catalog:
-        maximum = item["ranges"].get("PILE_CON_DAMAGET", {}).get("max", 0.0)
+        maximum = item["ranges"].get("PILE_CON_DAMAGET", {}).get("max")
+        if maximum is None:
+            item.update(MaxDAMAGET=None, DamageAngularCoverage=None, FractureCandidate=None)
+            missing_damage.append(item["SequenceIndex"])
+            continue
         coverage = 0.0
         if maximum >= damage_threshold:
             frame = odb.steps[item["StepName"]].frames[item["FrameIndex"]]
             coverage = ring_coverage(frame, concrete_region, concrete_centroids, z_min, z_max, damage_threshold)
         item["MaxDAMAGET"] = maximum; item["DamageAngularCoverage"] = coverage
         item["FractureCandidate"] = maximum >= damage_threshold and coverage >= coverage_threshold
-        if item["FractureCandidate"] and first_fracture is None: first_fracture = item["SequenceIndex"]
+        if item["FractureCandidate"] and first_observed is None: first_observed = item["SequenceIndex"]
+    first_fracture = first_observed
+    if missing_damage and first_observed is not None and missing_damage[0] < first_observed:
+        first_fracture = None
     before = None if first_fracture in (None, 0) else first_fracture-1
     result = {"odb_path": os.path.abspath(config["odb_path"]), "comparison_group": config.get("comparison_group", ""),
         "reinforcement_mode": config.get("reinforcement_mode", "required"),
         "longitudinal_material": material, "longitudinal_element_count": len(rebar_centroids),
         "range_method": "Abaqus contourOptions.autoMinValue/autoMaxValue on active display group",
+        "unavailable_fields": unavailable,
         "frame_catalog": catalog, "auto_detection": {"method": "DAMAGET threshold plus angular coverage by depth bin",
+        "evaluated_frames": len(catalog)-len(missing_damage), "total_frames": len(catalog),
+        "first_observed_candidate_sequence_index": first_observed,
         "damage_threshold": damage_threshold, "coverage_threshold": coverage_threshold,
         "first_fracture_sequence_index": first_fracture, "prefracture_sequence_index": before}}
     odb.close(); return result

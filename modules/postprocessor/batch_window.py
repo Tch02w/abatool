@@ -1162,6 +1162,8 @@ class MainWindow(_base.MainWindow):
                     -1 if detected is None else int(detected)
                 )
             payload["selected_sequence_indices"] = indices
+            if "unavailable_fields" in range_scan:
+                payload["unavailable_fields"] = range_scan["unavailable_fields"]
             tagged(path, f"帧选择={indices}；自动断裂前帧={detected}")
             return path, {
                 "payload": payload,

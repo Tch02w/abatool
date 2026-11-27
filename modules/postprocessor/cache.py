@@ -18,7 +18,7 @@ from typing import Any
 from .config import save_json
 
 CACHE_SCHEMA_VERSION = 2
-NUMERIC_PIPELINE_VERSION = 2
+NUMERIC_PIPELINE_VERSION = 3
 SAMPLE_SIZE = 64 * 1024
 CACHE_KINDS = ("compatibility", "initial", "prescan", "numeric")
 
@@ -511,6 +511,7 @@ def prescan_config_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         "damage_angular_coverage",
     )
     return {
+        "prescan_pipeline_version": 2,
         **{key: payload.get(key) for key in keys},
         "settings": {
             key: settings.get(key) for key in prescan_setting_keys

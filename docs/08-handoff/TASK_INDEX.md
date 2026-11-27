@@ -1,5 +1,7 @@
 # 任务索引
 
+F017/F020 混凝土损伤缺失与实测零的区分、GJA 两帧自重步的分组出图和 CSV 核验见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F004 使用正式目录包重验两表各 40 行的显示，见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+
 F022 组间执行顺序的设置、草稿和入队顺序归入 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F005/F009/F010 历史作业的原服务器归属、目录浏览与输出下载归入 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 11 月 27 日的 Windows x64 候选取自 `98d1bc7`。F004 的浅色和深色队列示例已收入[使用手册](../repowiki/user-guide.md#作业队列)，两表各 40 行的原生滚动验收见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 的目录包、从 `1fc22fd` 升级和卸载实测见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。

@@ -241,6 +241,8 @@ class MainWindow(QMainWindow):
                 if payload["frame_mode"] == "auto" and override >= 0:
                     indices = sorted(set([indices[-1], override]))
                 payload["selected_sequence_indices"] = indices; payload["range_scan"] = range_scan
+                if "unavailable_fields" in range_scan:
+                    payload["unavailable_fields"] = range_scan["unavailable_fields"]
                 auto = range_scan.get("auto_detection", {}); detected = auto.get("prefracture_sequence_index")
                 if override < 0: payload["prefracture_sequence_index"] = -1 if detected is None else int(detected)
                 prepared.append({"row": row, "output_dir": output_dir, "config_path": config_path,

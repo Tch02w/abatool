@@ -1019,6 +1019,8 @@ class MainWindow(_previous.MainWindow):
                 if override < 0:
                     payload["prefracture_sequence_index"] = -1 if detected is None else int(detected)
                 payload["selected_sequence_indices"] = indices
+                if "unavailable_fields" in range_scan:
+                    payload["unavailable_fields"] = range_scan["unavailable_fields"]
                 prepared[path] = {
                     "payload": payload,
                     "range_scan": range_scan,

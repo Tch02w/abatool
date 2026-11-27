@@ -39,6 +39,29 @@ def scalar(value):
         return float(data[0])
 
 
+def concrete_damage_values(frame, variable, region):
+    if variable not in frame.fieldOutputs:
+        return None, "field_absent"
+    values = frame.fieldOutputs[variable].getSubset(
+        region=region, position=INTEGRATION_POINT, readOnly=True
+    ).values
+    if not len(values):
+        return None, "no_concrete_integration_points"
+    return values, "available"
+
+
+def damage_metrics(frame, concrete_region, threshold):
+    tension_values, tension_status = concrete_damage_values(frame, "DAMAGET", concrete_region)
+    compression_values, compression_status = concrete_damage_values(frame, "DAMAGEC", concrete_region)
+    tension = None if tension_values is None else builtins.max(scalar(v) for v in tension_values)
+    compression = None if compression_values is None else builtins.max(scalar(v) for v in compression_values)
+    return {
+        "MaxDAMAGET": tension, "MaxDAMAGEC": compression,
+        "ThresholdCandidate": None if tension is None else tension >= threshold,
+        "DAMAGETStatus": tension_status, "DAMAGECStatus": compression_status,
+    }
+
+
 def vector_sum(values, width=3):
     output = [0.0] * width
     for value in values:
@@ -1249,14 +1272,7 @@ damage_rows = []
 for item in timeline:
     frame = item["frame"]
     row = dict((name, item[name]) for name in timeline_headers)
-    for variable in ("DAMAGET", "DAMAGEC"):
-        maximum = 0.0
-        if variable in frame.fieldOutputs:
-            values = frame.fieldOutputs[variable].getSubset(region=concrete_region).values
-            if values:
-                maximum = max(scalar(value) for value in values)
-        row["Max" + variable] = maximum
-    row["ThresholdCandidate"] = row["MaxDAMAGET"] >= float(settings["damage_threshold"])
+    row.update(damage_metrics(frame, concrete_region, float(settings["damage_threshold"])))
     damage_rows.append(row)
 write_csv(os.path.join(data_dir, "damage_scan.csv"), list(damage_rows[0].keys()), damage_rows)
 
@@ -1308,6 +1324,9 @@ def set_static_limits(spec):
     viewport.odbDisplay.contourOptions.setValues(minAutoCompute=ON, maxAutoCompute=ON)
 
 
+unavailable_fields = config.get("unavailable_fields", {})
+
+
 def render(spec):
     if spec.get("longitudinal") and not reinforcement_enabled:
         return
@@ -1342,17 +1361,29 @@ def render(spec):
             viewVector=tuple(float(value) for value in settings["camera_view_vector"]),
             cameraUpVector=tuple(float(value) for value in settings["camera_up_vector"]),
         )
-    primary_variable(spec["variable"], spec.get("refinement"))
     state = (CONTOURS_ON_UNDEF,) if spec.get("undeformed") else (CONTOURS_ON_DEF,)
-    viewport.odbDisplay.display.setValues(plotState=state)
-    set_static_limits(spec)
-    viewport.view.fitView()
+    missing = set(index for indices in unavailable_fields.get(spec["name"], {}).values()
+                  for index in indices)
     written = []
-    last_rendered_item = None
+    target_written = False
     for animation_index, item in enumerate(timeline):
+        if item["SequenceIndex"] in missing:
+            continue
+        status = "available"
         if spec["variable"] not in item["frame"].fieldOutputs:
+            status = "field_absent"
+        elif "unavailable_fields" not in config and spec["variable"] in ("DAMAGET", "DAMAGEC"):
+            _, status = concrete_damage_values(item["frame"], spec["variable"], concrete_region)
+        if status != "available":
+            if "unavailable_fields" in config:
+                raise RuntimeError("Field availability changed since prescan: {0}, sequence {1}".format(spec["name"], item["SequenceIndex"]))
+            unavailable_fields.setdefault(spec["name"], {}).setdefault(status, []).append(item["SequenceIndex"])
             continue
         viewport.odbDisplay.setFrame(step=item["StepIndex"], frame=item["FrameIndex"])
+        if not written:
+            primary_variable(spec["variable"], spec.get("refinement"))
+            viewport.odbDisplay.display.setValues(plotState=state)
+            viewport.view.fitView()
         set_animation_limits(spec)
         base = os.path.join(
             folder,
@@ -1361,13 +1392,15 @@ def render(spec):
         try:
             session.printToFile(fileName=base, format=PNG, canvasObjects=(viewport,))
             written.append(base + ".png")
-            last_rendered_item = item
+            if item["SequenceIndex"] == timeline[-1]["SequenceIndex"]:
+                target_written = True
         except Exception:
             log("RENDER FAILED {0} {1}\n{2}".format(spec["name"], animation_index, traceback.format_exc()))
-    if last_rendered_item is not None:
+            raise
+    if target_written:
         viewport.odbDisplay.setFrame(
-            step=last_rendered_item["StepIndex"],
-            frame=last_rendered_item["FrameIndex"],
+            step=timeline[-1]["StepIndex"],
+            frame=timeline[-1]["FrameIndex"],
         )
         set_static_limits(spec)
         static_base = os.path.join(contour_dir, spec["name"] + "_LAST")
@@ -1379,6 +1412,7 @@ def render(spec):
             )
         except Exception:
             log("STATIC RENDER FAILED {0}\n{1}".format(spec["name"], traceback.format_exc()))
+            raise
     log("RENDER {0}: {1} frames".format(spec["name"], len(written)))
 
 
@@ -1415,6 +1449,7 @@ metadata = {
     "longitudinal_material": longitudinal_material_name,
     "comparison_group": config.get("comparison_group", ""),
     "legend_ranges": config.get("legend_ranges", {}),
+    "unavailable_fields": unavailable_fields,
     "rebar_method": rebar_method,
     "RebarSectionRule": REBAR_SECTION_RULE,
     "RebarInterpolationRule": REBAR_INTERPOLATION_METHOD,

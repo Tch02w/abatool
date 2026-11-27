@@ -231,6 +231,31 @@ def primary_variable(variable, refinement):
 
 applied_legends = {"static": {}, "animation": {}}
 scanned_sequences = {name: set(indices) for name, indices in config.get("legend_scan_sequences", {}).items()}
+unavailable_fields = config.get("unavailable_fields", {})
+unavailable_sequences = {
+    name: set(index for indices in reasons.values() for index in indices)
+    for name, reasons in unavailable_fields.items()
+}
+
+
+def field_available(spec, item, frame):
+    name, variable, index = spec["name"], spec["variable"], int(item["SequenceIndex"])
+    if index in unavailable_sequences.get(name, ()):
+        return False
+    if variable not in frame.fieldOutputs:
+        reason = "field_absent"
+    elif "unavailable_fields" not in config and variable in ("DAMAGET", "DAMAGEC"):
+        region = odb.rootAssembly.elementSets[spec["set"]]
+        if len(frame.fieldOutputs[variable].getSubset(region=region, position=INTEGRATION_POINT, readOnly=True).values):
+            return True
+        reason = "no_concrete_integration_points"
+    else:
+        return True
+    if "unavailable_fields" in config:
+        raise RuntimeError("Field availability changed since prescan: {0}, sequence {1}".format(name, index))
+    unavailable_fields.setdefault(name, {}).setdefault(reason, []).append(index)
+    unavailable_sequences.setdefault(name, set()).add(index)
+    return False
 
 
 def check_member_scan(spec, item, ranges, kind):
@@ -378,7 +403,7 @@ def render(spec):
         step_index = int(item["StepIndex"])
         frame_index = int(item["FrameIndex"])
         frame = list(odb.steps.values())[step_index].frames[frame_index]
-        if spec["variable"] not in frame.fieldOutputs:
+        if not field_available(spec, item, frame):
             continue
         viewport.odbDisplay.setFrame(step=step_index, frame=frame_index)
         if not written:
@@ -399,16 +424,15 @@ def render(spec):
                 raise IOError("Empty frame image")
             written.append(base + ".png")
         except Exception:
-            if config.get("render_request_id"):
-                raise
             log("RENDER FAILED {0} {1}\n{2}".format(
                 spec["name"], animation_index, traceback.format_exc()
             ))
+            raise
     static_item = selected_timeline[-1]
     step_index = int(static_item["StepIndex"])
     frame_index = int(static_item["FrameIndex"])
     static_frame = list(odb.steps.values())[step_index].frames[frame_index]
-    if spec["variable"] in static_frame.fieldOutputs:
+    if field_available(spec, static_item, static_frame):
         viewport.odbDisplay.setFrame(step=step_index, frame=frame_index)
         check_member_scan(spec, static_item, legend_ranges, "静态云图")
         set_static_limits(spec)
@@ -422,11 +446,10 @@ def render(spec):
             if config.get("render_request_id") and not os.path.getsize(static_base + ".png"):
                 raise IOError("Empty static contour image")
         except Exception:
-            if config.get("render_request_id"):
-                raise
             log("STATIC RENDER FAILED {0}\n{1}".format(
                 spec["name"], traceback.format_exc()
             ))
+            raise
     log("RENDER {0}: {1} frames".format(spec["name"], len(written)))
 
 
@@ -444,6 +467,7 @@ else:
 metadata.update(
     {
         "comparison_group": config["comparison_group"],
+        "unavailable_fields": unavailable_fields,
         "reinforcement_mode": config.get("reinforcement_mode", "required"),
         "legend_ranges": legend_ranges,
         "contour_sequences": [spec["name"] for spec in specs if spec["name"] in applied_legends["animation"]],

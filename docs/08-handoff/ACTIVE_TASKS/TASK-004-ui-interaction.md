@@ -1,5 +1,11 @@
 # TASK-004：日志选区稳定与数字输入样式
 
+## 2026-11-27 · 在 98d1bc7 发布包中核对两张队列表格
+
+在独立配置中打开 `release-win-x64-1fcb773bec3c` 的正式程序，候选区和正式队列各有 40 行测试数据，正式作业均暂停调度。实窗可见两表序号居中、名称和 INP 路径左对齐、首行长名称在本列省略；每一行下方和相邻列之间均有分隔线。实窗图为 `GPTWork/queue-visible-98d1bc7-20261127/queue-official-window.jpg`。检查后正常关闭该实例。
+
+同一生产页面的独立原生渲染另外生成浅色、深色整页 PNG，均为 1704 × 1051。逐像素检查候选表的 7 条、正式表的 11 条内部竖线：表头与前三行完全对齐，横线、竖线均占 1 像素。两表的首行名称和第二行路径都实际触发省略。两种主题图分别为 `GPTWork/queue-visible-98d1bc7-20261127/v1/queue-light.png` 和同目录 `queue-dark.png`。与此前候选截图及 40 行验收所用的表格实现、编译界面资源的来源核对见 `GPTWork/queue-visible-98d1bc7-20261127/verified.json`。所有测试数据均在 G 盘，未启动求解。
+
 深色主题下使用相同控件和尺寸核对，七个表头分界与浅色版完全相同。深灰数据行上的分隔线为 RGB 71/71/71，表头分隔线为 RGB 81/81/81，均只占一个像素。深色示例图及读图检查为 `GPTWork/native-parameter-comparison-20261124/tabledark1/queue-dividers.png` 和同目录 `verified-pixels.json`。
 
 11 月 25 日使用 WinUI 自身的 RenderTargetBitmap 将生产候选表、三行示例数据和浅色主题渲染为 1350 × 165 PNG。读图核实八列有七条内部竖线，表头和各行的分界在同一像素位置，白底上分隔线为 RGB 233/233/233、厚 1 像素。序号居中，长名称在名称列内显示省略号。图片及读图回执为 `GPTWork/native-parameter-comparison-20261124/table1/queue-dividers.png` 和同目录 `verified-pixels.json`。正式队列与 40 行滚动的实际窗口记录见下文。

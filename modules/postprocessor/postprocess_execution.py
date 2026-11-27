@@ -507,6 +507,11 @@ def _execute_group(
                 -1 if detected is None else int(detected)
             )
         payload["selected_sequence_indices"] = indices
+        if "unavailable_fields" in range_scan:
+            payload["unavailable_fields"] = range_scan["unavailable_fields"]
+            for field, reasons in range_scan["unavailable_fields"].items():
+                missing = sum(len(sequences) for sequences in reasons.values())
+                tagged(path, f"{field} 在 {missing}/{len(range_scan['frame_catalog'])} 帧缺少可用场输出，这些帧跳过该云图。")
         tagged(path, f"帧选择={indices}；自动断裂前帧={detected}")
         return path, {
             "payload": payload,

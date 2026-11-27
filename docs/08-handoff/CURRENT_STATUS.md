@@ -1,5 +1,9 @@
 # 当前状态与接续点
 
+11 月 27 日，`98d1bc7` 的实际作业队列用 40 个候选、40 个暂停调度的正式作业重新验收。两表序号居中，长名称和路径在各自列内省略，浅色和深色主题的表头与正文分隔线对齐。[实际窗口和像素核对](ACTIVE_TASKS/TASK-004-ui-interaction.md) · [手册示例](../repowiki/user-guide.md#作业队列)
+
+F017/F020 修复了混凝土损伤场缺失引起的预扫描失败。用同一 GJA 工程的 `Pile_Gra` 两帧重跑 B、A 两组，分别生成 9 个有效变量的云图与动画，损伤峰值及阈值判断留空。[工程和数值核对](ACTIVE_TASKS/TASK-001-postprocessing.md)
+
 11 月 25 日，源码已补上对比组之间的执行顺序。原生后处理页两次进程中的 33 项检查，以及生产 HTTP 队列取组顺序已核对。远端历史作业的工作目录和 STA/MSG/DAT 下载已绑定原服务器，两台同路径替身与正式客户端验证通过。[对比组验收](ACTIVE_TASKS/TASK-001-postprocessing.md) · [远端作业验收](ACTIVE_TASKS/TASK-002-migration.md)
 
 F004 候选区和正式队列的表头及内容采用同一套列宽，明暗主题均有细行列线。[原生渲染和滚动验收](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 同负载安装、升级和卸载已通过 8 项检查，16 个应用数据文件在卸载前后内容一致。[安装实测](../05-development/INSTALLATION.md)

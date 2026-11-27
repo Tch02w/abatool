@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F017/F020 的逐帧损伤可用性由 `modules/postprocessor/abaqus_scripts/scan_legend_limits.py` 的 `unavailable_reason` 及 `extract_job.py` 的 `damage_metrics` 核对。`modules/postprocessor/abaqus_scripts/render_group_contours_core.py` 按预扫覆盖范围出图。`modules/postprocessor/cache.py` 的数值、预扫描配置签名分别决定缓存复用。回归见 `tests/postprocessor/test_damage_availability.py`。[场输出与图例约定](POSTPROCESSING.md)
+
 F022 对比组间的执行顺序保存于 `winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs` 的 `GroupExecutionOrder`。组名和独立模型位置由 `OdbComparisonGroups.OrderExecutionGroups` 处理，运行范围与追加共用 `OdbScopedRunPlan.Resolve`。原生排序与完整预览在 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.GroupExecutionOrder.cs`，域测试在 `tests/winui_postprocess/GroupExecutionOrderChecks.cs`。[分组使用说明](../repowiki/postprocessor.md)
 
 F005/F009/F010 历史远端作业目录和输出由 `modules/control_plane/remote_jobs.py` 的 `file_access_identity` 从作业记录解析。目录与文件读取在 `modules/control_plane/remote_servers.py` 核对实际连接，异步传输在 `modules/control_plane/remote_transfers.py` 保留作业编号。界面入口在 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs` 和 `winui/AbaqusTools.WinUI/Pages/RemoteFileBrowserDialog.cs`。跨服务器、重开后台与传输排队的回归见 `tests/control_plane/test_remote_job_output_access.py`，C# 客户端见 `tests/winui_host/RemoteObservationChecks.cs`。[远端输出规则](REMOTE_TRANSFERS.md)

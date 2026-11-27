@@ -1,5 +1,13 @@
 # TASK-001：数据提取与后处理应用交付
 
+## 2026-11-27 · 无损伤场的工程分析步
+
+以前在 `Pile_Gra` 的 CAE 视口设置 DAMAGET 时失败，两组均无发布结果。现在用同一工程的两帧，从正式 HTTP 后台重新执行 B、A。两个子任务分别成功，每组产出 9 张静态图、18 张 PNG 动画帧、9 个 GIF，未生成 DAMAGET 或 DAMAGEC 的图。运行日志分别报告两个损伤场在 2/2 帧无输出。公共资产 `data/damage_scan.csv` 的两行中，拉、压峰值及拉伸阈值判定均为空，两个状态列均为 `field_absent`。运行回执位于 `GPTWork/damage-fix-real-20261127/queue-terminal.json`，操作标识 `5c541705fbe1446aac32cca01d3a3a81`。对照有损伤输出的加载步和源文件摘要见下节。
+
+兼容入口已补充无预扫描信息时的积分点核对，并把静态图绑定到实际所选末帧。用最终 worker 在独立结果目录重新执行，操作 `584752418446411b8f4f1006aac036fe` 的 B、A 子任务均成功。输入代码摘要、两组结果和原件摘要分别见 `GPTWork/damage-fix-final-20261127/source-manifest.json`、`queue-terminal.json`、`finished.json`。后处理、后台接口和文档联查 372 项通过，最终损伤、图例、分组出图及文档复核另有 92 项通过。报告分别在 `GPTWork/damage-integration-20261127/results.xml` 和 `final-core.xml`。
+
+最终两份混凝土 Mises GIF 逐帧解码均为 480 × 320、2 帧、0.08 秒。两组静态及动画的实际色标分别为 B 的 1–31、A 的 0–63。两个损伤变量均无误生成的云图或 GIF。逐文件回执 `GPTWork/damage-fix-final-20261127/verification.json` 同时核对原始 ODB 及 9 份生产源码摘要。
+
 ## 2026-11-27 · 组间顺序与独立色标的工程核对
 
 使用 `GJA-1-R_U100D.odb` 的 G 盘隔离副本，只选 `Load-U`。原生页面的计划把默认 A、B 调整为 B、A，正式 HTTP 队列依次启动两组。B 完成 199 毫秒后 A 启动。两个真实 CAE 视口的混凝土 Mises 上下限分别为 B 的 1–31 和 A 的 0–63，静态图和动画均与各自的设定一致。每组产出 11 张静态云图、1111 张动画帧图和 11 份 GIF。两个 Mises GIF 都实际解码出 101 帧，480 × 320，时长 4.04 秒。两组共用的数值资产有 101 行，最后一行 U3 为 100 mm、RF3 为 595754 N。原始 ODB 和隔离副本的 SHA256 一致，未启动求解。

@@ -4,6 +4,8 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 首次使用可从[安装说明](docs/05-development/INSTALLATION.md)和[八个页面的操作手册](docs/repowiki/user-guide.md)开始。队列支持对齐的行列线与保留选区的刷新。后处理支持运行中追加对比组、编辑等待组、取消单组后继续，并能在重开前台时接回队列。各项的工程测试、桌面实测及待验范围见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
 
+队列中的并行上限可以直接输入，也可以点击两侧的浅底减号和加号。悬停在参数旁的 **i** 可查看说明。[队列工具栏实图](docs/repowiki/images/job-queue-toolbar.png)
+
 ## 功能
 
 浏览尚未建索引的提取结果时，可以选择模型、点「直接浏览当前目录」，逐层查看并导出文件。大目录每页显示 500 项，前后翻页都以当前页的首尾文件为准。[结果浏览手册](docs/repowiki/postprocessor.md)

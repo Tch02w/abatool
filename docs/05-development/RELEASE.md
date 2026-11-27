@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-d76d5340404a/AbaqusTools/AbaqusTools.WinUI.exe`。应用和安装器均来自干净提交 `850f75314d48692549e0316b6bfa7cc54f58b92e`。本版包含 SSH 主机密钥更换时的指纹确认、大结果目录浏览的内存优化和重启动依赖编辑修复。1697 个文件已逐项校验，发布清单 SHA256 为 `0423c4a350227f15623692b4fcdee3e219071d5171b677b5a9e5851a9465d5af`，目录包回执为 `GPTWork/release-queue-portable-850f753-20261128-013239/verification.json`。
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-3f6c82f499dd/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `a20e35de0e4b21d395f1f2e97bcf3aaffef538c8`。本版含队列自动刷新及历史库启动修复。1697 个文件逐项校验，发布清单 SHA256 为 `6d294fc66fd9acfb93d13d68ea1646a0b94cecd99287ad54f29c28178fc38dc5`。正式 C# 客户端与包内后台完成读写及空闲关闭检查，默认读取、无等待读取在空闲时返回相同的两条正式作业。完整回执为 `GPTWork/release-queue-portable-a20e35d-20261128-024839/verification.json`。[安装程序](INSTALLATION.md)
+
+### 前一版 850f753
+
+免安装入口为 `GPTWork/release-win-x64-d76d5340404a/AbaqusTools/AbaqusTools.WinUI.exe`。应用和安装器均来自干净提交 `850f75314d48692549e0316b6bfa7cc54f58b92e`。本版包含 SSH 主机密钥更换时的指纹确认、大结果目录浏览的内存优化和重启动依赖编辑修复。1697 个文件已逐项校验，发布清单 SHA256 为 `0423c4a350227f15623692b4fcdee3e219071d5171b677b5a9e5851a9465d5af`，目录包回执为 `GPTWork/release-queue-portable-850f753-20261128-013239/verification.json`。
 
 同一负载的安装程序 SHA256 为 `ee8ad45b2464f0d9ca8c6b9c8f44f1a01ed866e9dfbb5643fdf09a8c5f68ee45`。测试标识的中文向导、从 `3ff3fa2` 升级及卸载均已实际验证，三份安装日志均无异常或抑制弹窗。测试身份、数据保留范围及独立目标机的待验条件见[当前安装候选](INSTALLATION.md)。
 

@@ -4,6 +4,8 @@
 
 ## 2026-11-28 · 程序发布、性能与页面操作
 
+最终程序 `a20e35d` 的完整回归为 1175 项与 9 个子检查通过，547.78 秒，零失败、零跳过。原生 Qt 回滚入口单独 1 项通过。WinUI 队列写入时的选区、概览首次读取和远端日志另有 7 项原生实测。ODB 文件占用后重试与写入前意外中断后的接回分别有 12 项和 5 项原生检查。[全量记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) · [队列与概览](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md) · [升级实测](NATIVE_ACCEPTANCE.md#旧版-odb-升级)
+
 新版冻结后台使用官方 2021 ODB 的隔离副本，完成真实文件占用引发升级失败、解锁后重试、备份摘要及新版读回检查。另通过 17 项真实回环 SSH 检查。所用程序提交为 `850f753`。[旧版 ODB](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [SSH 与发布](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
 
 应用提交 `850f753` 最新全量离屏回归为 1163 项通过、9 个子检查通过、2 项超时。两项单独复测通过，Qt 原生启动另测 1 项通过。上一个程序基线的 1164 项与 9 个子检查均通过。Windows 安装向导逐文件弹错已实际复现并修复。直接浏览在 12,000 个文件的目录中完成 24 页正向与 23 页反向核对；另有结果导出取消、关窗、系统回收与重建索引的原生记录。两份工程日志的重放、三台同缩放显示器和重启动图谱八节点验收各有独立边界。[应用与安装](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md) · [结果浏览](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [工程日志与显示器](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md) · [待验条件](COMPLETION_AUDIT.md)

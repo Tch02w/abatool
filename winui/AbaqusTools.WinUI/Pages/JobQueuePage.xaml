@@ -28,7 +28,7 @@
                     <Button Grid.Column="6" Click="OnRemoveCandidatesClicked" Content="移除" />
                     <Button Grid.Column="7" Click="OnConfirmCandidatesClicked" Content="确认入队" Style="{StaticResource AccentButtonStyle}" />
                     <StackPanel Grid.Column="8" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
-                        <TextBlock x:Name="CandidateSummaryText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="候选：0 · 已选 0 · 异常 0" />
+                        <TextBlock x:Name="CandidateSummaryText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button x:Name="RefreshQueueButton" Click="OnRefreshClicked" Content="刷新" />
                     </StackPanel>
                 </Grid>
@@ -48,7 +48,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <controls:QueueTableView x:Name="CandidateTable" Grid.RowSpan="2" Kind="Candidate"
                                              CandidateCheckClicked="OnCandidateCheckClicked" />
-                    <StackPanel x:Name="CandidateEmptyPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="5">
+                    <StackPanel x:Name="CandidateEmptyPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" Spacing="5">
                         <FontIcon FontSize="26" Glyph="&#xE8F1;" />
                         <TextBlock Text="尚无候选作业" />
                     </StackPanel>
@@ -64,7 +64,7 @@
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock VerticalAlignment="Center" Style="{StaticResource WorkbenchSectionTitleStyle}" Text="正式队列" />
-                    <TextBlock x:Name="FormalQueueSummaryText" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="队列：0" />
+                    <TextBlock x:Name="FormalQueueSummaryText" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="正在读取队列…" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock VerticalAlignment="Center" Text="同名结果" />
                         <ComboBox x:Name="ExistingResultPolicyComboBox" Width="126" Height="40" VerticalAlignment="Center" VerticalContentAlignment="Center" SelectedIndex="0">
@@ -105,7 +105,7 @@
                 <Grid Grid.Row="3">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <controls:QueueTableView x:Name="FormalTable" Grid.RowSpan="2" Kind="Formal" />
-                    <TextBlock x:Name="FormalQueueEmptyText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Text="尚无正式队列作业" />
+                    <TextBlock x:Name="FormalQueueEmptyText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" Text="尚无正式队列作业" />
                 </Grid>
             </Grid>
         </Border>

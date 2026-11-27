@@ -63,9 +63,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         var ready = _menuReady;
         try
         {
-            await RefreshAsync();
-            if (App.Current.Session.IsClosing || !IsLoaded) return;
-            await RefreshRuntimeAsync(showError: false);
+            if (!_hasReadQueue && App.Current.Commands.QueueKnown) App.Current.Commands.InvalidateQueue();
+            await RefreshRuntimeAsync(showError: true);
             if (IsLoaded && !App.Current.Session.IsClosing) _runtimeTimer.Start();
         }
         finally { ready.TrySetResult(); }
@@ -89,11 +88,6 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private async void OnRefreshClicked(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync(userRequested: true);
-    }
-
-    private async Task RefreshAsync(bool userRequested = false)
-    {
         if (_busy)
         {
             return;
@@ -104,11 +98,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         {
             var snapshot = await App.Current.ControlPlane.GetJobQueuesAsync();
             ApplySnapshot(snapshot);
-            var status = $"队列已读取 · {snapshot.QueueCount} 个正式作业";
-            if (userRequested || !_hasReadQueue)
-                ShowSuccess(userRequested ? "队列已刷新" : "队列已恢复",
-                    $"读取 {snapshot.CandidateCount} 个候选和 {snapshot.QueueCount} 个正式作业。", status);
-            else App.Current.MainWindow.ReportPageStatus(status);
+            ShowSuccess("队列已刷新", $"读取 {snapshot.CandidateCount} 个候选和 {snapshot.QueueCount} 个正式作业。",
+                $"队列已读取 · {snapshot.QueueCount} 个正式作业");
             _hasReadQueue = true;
         }
         catch (ControlPlaneException exception)
@@ -533,8 +524,22 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         var revision = App.Current.Commands.QueueRevision;
         try
         {
-            var runtime = await App.Current.ControlPlane.GetLocalQueueRuntimeAsync();
-            if (App.Current.Commands.QueueObservationIsCurrent(revision)) ApplyRuntime(runtime);
+            var runtime = await App.Current.ControlPlane.GetLocalQueueRuntimeAsync(deferIfBusy: true);
+            if (!IsLoaded || App.Current.Session.IsClosing || !App.Current.Commands.QueueObservationIsCurrent(revision)) return;
+            if (runtime.RefreshPending)
+            {
+                if (!_hasReadQueue) FormalQueueSummaryText.Text = "正在读取队列…";
+                else if (!FormalQueueSummaryText.Text.EndsWith(" · 正在更新", StringComparison.Ordinal))
+                    FormalQueueSummaryText.Text += " · 正在更新";
+                return;
+            }
+            ApplyRuntime(runtime);
+            if (!_hasReadQueue)
+            {
+                _hasReadQueue = true;
+                ShowSuccess("队列已恢复", $"读取 {runtime.Queue.CandidateCount} 个候选和 {runtime.Queue.QueueCount} 个正式作业。",
+                    $"队列已读取 · {runtime.Queue.QueueCount} 个正式作业");
+            }
         }
         catch (ControlPlaneException exception)
         {

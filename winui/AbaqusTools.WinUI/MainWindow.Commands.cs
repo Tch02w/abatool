@@ -33,8 +33,9 @@ public sealed partial class MainWindow
         var revision = commands.QueueRevision;
         try
         {
-            var snapshot = await _controlPlane.GetLocalQueueRuntimeAsync();
-            if (!_windowClosed && commands.QueueObservationIsCurrent(revision)) commands.ApplyQueue(snapshot);
+            var snapshot = await _controlPlane.GetLocalQueueRuntimeAsync(deferIfBusy: true);
+            if (!snapshot.RefreshPending && !_windowClosed && commands.QueueObservationIsCurrent(revision))
+                commands.ApplyQueue(snapshot);
         }
         catch (Exception)
         {

@@ -247,9 +247,11 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if target.path == "/api/v1/local-queue-runtime" and not target.query:
+                wait = self.headers.get("Prefer", "").strip().lower() != "wait=0"
+                snapshot = self.context.local_queue_runtime.snapshot(wait=wait)
                 self._send_json(
                     HTTPStatus.OK,
-                    self.context.local_queue_runtime.snapshot(),
+                    snapshot if snapshot is not None else {"schemaVersion": SCHEMA_VERSION, "refreshPending": True},
                     trace_id,
                 )
                 return
@@ -1330,149 +1332,134 @@ class ControlPlaneRuntime:
         if compatibility_settings_provider is not None:
             operation_kwargs["settings_provider"] = compatibility_settings_provider
         event_history = event_store or EventStore()
-        operation_manager = CompatibilityOperationManager(
-            event_history,
-            **operation_kwargs,
-        )
-        result_index_manager = ResultIndexOperationManager(
-            event_history,
-            **(
-                {"builder": result_index_builder}
-                if result_index_builder is not None
-                else {}
-            ),
-        )
-        odb_merge_kwargs: dict[str, Any] = {}
-        if odb_merge_runner is not None:
-            odb_merge_kwargs["runner"] = odb_merge_runner
-        if odb_merge_command_provider is not None:
-            odb_merge_kwargs["command_provider"] = odb_merge_command_provider
-        odb_merge_manager = OdbMergeOperationManager(
-            event_history,
-            journal_path=self.descriptor_path.with_name("odb-merge-history.sqlite3"),
-            **odb_merge_kwargs,
-        )
-        odb_upgrade_manager = OdbUpgradeOperationManager(
-            journal_path=self.descriptor_path.with_name('odb-upgrade-history.json'),
-            event_store=event_history,
-            **({"runner": odb_upgrade_runner} if odb_upgrade_runner is not None else {}),
-        )
-        postprocess_kwargs: dict[str, Any] = {}
-        if postprocess_scan_runner is not None:
-            postprocess_kwargs["scan_runner"] = postprocess_scan_runner
-        if postprocess_run_runner is not None:
-            postprocess_kwargs["run_runner"] = postprocess_run_runner
-        if postprocess_settings_provider is not None:
-            postprocess_kwargs["settings_provider"] = postprocess_settings_provider
-        postprocess_manager = PostprocessOperationManager(
-            event_history,
-            **postprocess_kwargs,
-        )
-        job_queue_kwargs: dict[str, Any] = {
-            "external_monitor_interval": external_monitor_interval,
-        }
-        if external_job_scanner is not None:
-            job_queue_kwargs["external_job_scanner"] = external_job_scanner
-        job_queue_service = JobQueueService(joblist_path, **job_queue_kwargs)
-        job_notifications = JobNotificationManager(self.descriptor_path.with_name("job-notifications.sqlite3"))
-        local_queue_runtime = LocalQueueRuntimeManager(
-            job_queue_service,
-            event_history,
-            completion_sink=job_notifications.local_finished,
-            **({"runner": local_job_runner} if local_job_runner is not None else {}),
-        )
-        remote_server_service = RemoteServerService(
-            event_history,
-            profiles_path=server_profiles_path,
-            manager=remote_manager,
-        )
-        remote_transfer_manager = RemoteTransferOperationManager(
-            event_history,
-            remote_server_service,
-        )
-        remote_job_manager = RemoteJobOperationManager(
-            event_history,
-            remote_server_service,
-            self.descriptor_path.with_name("remote-jobs.sqlite3"),
-            completion_sink=job_notifications.remote_finished,
-        )
-        odb_result_graph_service = OdbResultGraphService(odb_result_graph_path)
-        odb_result_batch_manager = OdbResultBatchManager(
-            odb_merge_manager, odb_result_graph_service,
-            self.descriptor_path.with_name("odb-result-batches.sqlite3"),
-            joblist_path=job_queue_service.path,
-        )
-        postprocess_group_queue = PostprocessGroupQueueManager(
-            postprocess_manager, self.descriptor_path.with_name("odb-postprocess-group-queues.sqlite3")
-        )
-        context = ControlPlaneContext(
-            token=self.token,
-            instance_id=self.instance_id,
-            started_at=self.started_at,
-            event_store=event_history,
-            operation_manager=operation_manager,
-            result_index_manager=result_index_manager,
-            odb_merge_manager=odb_merge_manager,
-            odb_upgrade_manager=odb_upgrade_manager,
-            postprocess_manager=postprocess_manager,
-            postprocess_group_queue=postprocess_group_queue,
-            job_queue_service=job_queue_service,
-            local_queue_runtime=local_queue_runtime,
-            remote_server_service=remote_server_service,
-            remote_transfer_manager=remote_transfer_manager,
-            remote_job_manager=remote_job_manager,
-            job_notifications=job_notifications,
-            odb_result_graph_service=odb_result_graph_service,
-            odb_result_batch_manager=odb_result_batch_manager,
-        )
-        try:
+        # Release only the services acquired by this attempt if startup fails.
+        with ExitStack() as startup:
+            operation_manager = CompatibilityOperationManager(
+                event_history,
+                **operation_kwargs,
+            )
+            startup.callback(operation_manager.close)
+            result_index_manager = ResultIndexOperationManager(
+                event_history,
+                **(
+                    {"builder": result_index_builder}
+                    if result_index_builder is not None
+                    else {}
+                ),
+            )
+            startup.callback(result_index_manager.close)
+            odb_merge_kwargs: dict[str, Any] = {}
+            if odb_merge_runner is not None:
+                odb_merge_kwargs["runner"] = odb_merge_runner
+            if odb_merge_command_provider is not None:
+                odb_merge_kwargs["command_provider"] = odb_merge_command_provider
+            odb_merge_manager = OdbMergeOperationManager(
+                event_history,
+                journal_path=self.descriptor_path.with_name("odb-merge-history.sqlite3"),
+                **odb_merge_kwargs,
+            )
+            startup.callback(odb_merge_manager.close)
+            odb_upgrade_manager = OdbUpgradeOperationManager(
+                journal_path=self.descriptor_path.with_name('odb-upgrade-history.json'),
+                event_store=event_history,
+                **({"runner": odb_upgrade_runner} if odb_upgrade_runner is not None else {}),
+            )
+            startup.callback(odb_upgrade_manager.close)
+            postprocess_kwargs: dict[str, Any] = {}
+            if postprocess_scan_runner is not None:
+                postprocess_kwargs["scan_runner"] = postprocess_scan_runner
+            if postprocess_run_runner is not None:
+                postprocess_kwargs["run_runner"] = postprocess_run_runner
+            if postprocess_settings_provider is not None:
+                postprocess_kwargs["settings_provider"] = postprocess_settings_provider
+            postprocess_manager = PostprocessOperationManager(
+                event_history,
+                **postprocess_kwargs,
+            )
+            startup.callback(postprocess_manager.close)
+            job_queue_kwargs: dict[str, Any] = {
+                "external_monitor_interval": external_monitor_interval,
+            }
+            if external_job_scanner is not None:
+                job_queue_kwargs["external_job_scanner"] = external_job_scanner
+            job_queue_service = JobQueueService(joblist_path, **job_queue_kwargs)
+            startup.callback(job_queue_service.close)
+            job_notifications = JobNotificationManager(self.descriptor_path.with_name("job-notifications.sqlite3"))
+            startup.callback(job_notifications.close)
+            local_queue_runtime = LocalQueueRuntimeManager(
+                job_queue_service,
+                event_history,
+                completion_sink=job_notifications.local_finished,
+                **({"runner": local_job_runner} if local_job_runner is not None else {}),
+            )
+            startup.callback(local_queue_runtime.close)
+            remote_server_service = RemoteServerService(
+                event_history,
+                profiles_path=server_profiles_path,
+                manager=remote_manager,
+            )
+            startup.callback(remote_server_service.close)
+            remote_transfer_manager = RemoteTransferOperationManager(
+                event_history,
+                remote_server_service,
+            )
+            startup.callback(remote_transfer_manager.close)
+            remote_job_manager = RemoteJobOperationManager(
+                event_history,
+                remote_server_service,
+                self.descriptor_path.with_name("remote-jobs.sqlite3"),
+                completion_sink=job_notifications.remote_finished,
+            )
+            startup.callback(remote_job_manager.close)
+            odb_result_graph_service = OdbResultGraphService(odb_result_graph_path)
+            odb_result_batch_manager = OdbResultBatchManager(
+                odb_merge_manager, odb_result_graph_service,
+                self.descriptor_path.with_name("odb-result-batches.sqlite3"),
+                joblist_path=job_queue_service.path,
+            )
+            startup.callback(odb_result_batch_manager.close)
+            postprocess_group_queue = PostprocessGroupQueueManager(
+                postprocess_manager, self.descriptor_path.with_name("odb-postprocess-group-queues.sqlite3")
+            )
+            startup.callback(postprocess_group_queue.close)
+            context = ControlPlaneContext(
+                token=self.token,
+                instance_id=self.instance_id,
+                started_at=self.started_at,
+                event_store=event_history,
+                operation_manager=operation_manager,
+                result_index_manager=result_index_manager,
+                odb_merge_manager=odb_merge_manager,
+                odb_upgrade_manager=odb_upgrade_manager,
+                postprocess_manager=postprocess_manager,
+                postprocess_group_queue=postprocess_group_queue,
+                job_queue_service=job_queue_service,
+                local_queue_runtime=local_queue_runtime,
+                remote_server_service=remote_server_service,
+                remote_transfer_manager=remote_transfer_manager,
+                remote_job_manager=remote_job_manager,
+                job_notifications=job_notifications,
+                odb_result_graph_service=odb_result_graph_service,
+                odb_result_batch_manager=odb_result_batch_manager,
+            )
             self.httpd = ControlPlaneHttpServer((LOOPBACK_HOST, int(port)), context)
-        except BaseException:
-            postprocess_group_queue.close()
-            odb_result_batch_manager.close()
-            remote_job_manager.close()
-            remote_transfer_manager.close()
-            remote_server_service.close()
-            local_queue_runtime.close()
-            job_queue_service.close()
-            postprocess_manager.close()
-            operation_manager.close()
-            result_index_manager.close()
-            odb_merge_manager.close()
-            odb_upgrade_manager.close()
-            job_notifications.close()
-            raise
-        actual_host, actual_port = self.httpd.server_address[:2]
-        self.host = str(actual_host)
-        self.port = int(actual_port)
-        self.base_url = f"http://{self.host}:{self.port}"
-        descriptor = ControlPlaneDescriptor(
-            instance_id=self.instance_id,
-            pid=os.getpid(),
-            host=self.host,
-            port=self.port,
-            base_url=self.base_url,
-            token=self.token,
-            started_at=self.started_at,
-            launch_token=self.launch_token,
-        )
-        try:
+            startup.callback(self.httpd.server_close)
+            actual_host, actual_port = self.httpd.server_address[:2]
+            self.host = str(actual_host)
+            self.port = int(actual_port)
+            self.base_url = f"http://{self.host}:{self.port}"
+            descriptor = ControlPlaneDescriptor(
+                instance_id=self.instance_id,
+                pid=os.getpid(),
+                host=self.host,
+                port=self.port,
+                base_url=self.base_url,
+                token=self.token,
+                started_at=self.started_at,
+                launch_token=self.launch_token,
+            )
             write_descriptor_atomic(self.descriptor_path, descriptor)
-        except BaseException:
-            self.httpd.server_close()
-            postprocess_group_queue.close()
-            odb_result_batch_manager.close()
-            remote_job_manager.close()
-            remote_transfer_manager.close()
-            remote_server_service.close()
-            local_queue_runtime.close()
-            job_queue_service.close()
-            postprocess_manager.close()
-            operation_manager.close()
-            result_index_manager.close()
-            odb_merge_manager.close()
-            odb_upgrade_manager.close()
-            raise
+            startup.pop_all()
 
     @property
     def event_store(self) -> EventStore:

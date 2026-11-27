@@ -230,10 +230,14 @@ class JobQueueService:
         )
         self._external_monitor.start()
 
-    def snapshot(self) -> dict[str, Any]:
-        with self._lock:
+    def snapshot(self, *, wait: bool = True) -> dict[str, Any] | None:
+        if not self._lock.acquire(blocking=wait):
+            return None
+        try:
             candidates, queue_items = self._load()
             return self._project(candidates, queue_items)
+        finally:
+            self._lock.release()
 
     def _project(self, candidates, items, *, scan_active=None):
         snapshot = project_job_queues(candidates, items)

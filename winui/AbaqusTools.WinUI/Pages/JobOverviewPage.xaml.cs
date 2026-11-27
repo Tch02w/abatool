@@ -73,7 +73,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync();
+        await RefreshAsync(deferIfBusy: true);
         if (IsLoaded)
         {
             _refreshTimer.Start();
@@ -93,10 +93,10 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         object args)
     {
         if (App.Current.Session.IsClosing) return;
-        await RefreshAsync();
+        await RefreshAsync(deferIfBusy: true);
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(bool deferIfBusy = false)
     {
         if (_loading)
         {
@@ -107,7 +107,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         var request = ++_snapshotRequest;
         try
         {
-            var localTask = App.Current.ControlPlane.GetLocalQueueRuntimeAsync();
+            var localTask = App.Current.ControlPlane.GetLocalQueueRuntimeAsync(deferIfBusy: deferIfBusy);
             var remoteTask = App.Current.ControlPlane.ListRemoteJobsAsync();
             await Task.WhenAll(localTask, remoteTask);
             if (!IsLoaded || request != _snapshotRequest)
@@ -116,16 +116,17 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             }
 
             // Read selection after the await: the user may switch jobs while polling.
+            var local = await localTask;
             var selectedKey = _currentEntry?.Key;
-            _runtime = await localTask;
+            if (!local.RefreshPending) _runtime = local;
             _remoteJobs = await remoteTask;
-            var snapshot = _runtime.Queue;
-            var entries = snapshot.QueueItems
+            var snapshot = _runtime?.Queue;
+            var entries = (snapshot?.QueueItems ?? [])
                 .Select(JobOverviewEntry.FromLocal)
                 .Concat(_remoteJobs.Operations.Select(JobOverviewEntry.FromRemote))
                 .ToArray();
             _jobExplorerAdapter.Update(snapshot, _remoteJobs.Operations);
-            JobStatsText.Text = FormatStats(snapshot, _remoteJobs.Operations);
+            JobStatsText.Text = snapshot is null ? $"远端作业 {_remoteJobs.Operations.Count}" : FormatStats(snapshot, _remoteJobs.Operations);
             var selected = entries.FirstOrDefault(
                 item => string.Equals(item.Key, selectedKey, StringComparison.Ordinal))
                 ?? entries.FirstOrDefault(item => item.Active)
@@ -142,9 +143,11 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 _updatingJobSelector = false;
             }
             ApplyJob(selected);
-            OverviewMessageText.Text = selected is null
-                ? "本机正式队列和远端会话中尚无作业。"
-                : $"本机活动 {_runtime.ActiveItemIds.Count} · 远端活动 {_remoteJobs.Operations.Count(item => !item.IsTerminal)}";
+            var localStatus = local.RefreshPending
+                ? (_runtime is null ? "正在读取本机队列…" : "正在更新本机队列…")
+                : $"本机活动 {local.ActiveItemIds.Count}";
+            OverviewMessageText.Text = selected is null && !local.RefreshPending ? "本机正式队列和远端会话中尚无作业。"
+                : $"{localStatus} · 远端活动 {_remoteJobs.Operations.Count(item => !item.IsTerminal)}";
         }
         catch (ControlPlaneException exception)
         {

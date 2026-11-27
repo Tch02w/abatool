@@ -62,6 +62,10 @@
 
 `GET /api/v1/local-queue-runtime` 保留现有结构并增加可选兼容字段 `schedulerMessage`（空字符串表示无调度提示）；`operations[]` 增加 `attemptId`，每次真正分配执行生成新的身份，后台重启观察原作业时保留身份、不重放操作。
 
+从 2026-11-28 起，自动刷新可在此 GET 请求中发送 `Prefer: wait=0`。调度器和队列均可读取时，服务器返回原有完整快照。任一队列锁正被其他线程占用时，服务器立即返回 HTTP 200 和 `{"schemaVersion":1,"refreshPending":true}`。这次响应只表示需要重试。界面保留上次确认的作业、选区与日志，在下一次轮询重新读取。首次读取期间显示「正在读取」，取得完整快照后再显示队列数量。作业概览可独立更新已取得的远端作业。
+
+省略请求头时，服务器等待取得锁后读取。当队列文件损坏等实际读取错误发生时，两种读取都返回原有错误。`wait=0` 只控制队列锁等待，取得锁后的文件读取仍需正常完成。用户指令、提交后核对及关闭流程使用各自的实时读取与校验。旧版服务器忽略该可选请求头并返回完整快照。
+
 `POST /api/v1/local-queue-controls` 的 `start` 在待运行未暂停条目的 Core 未设置时返回 409 `LOCAL_QUEUE_CORE_REQUIRED`，`details.jobNames` 列出作业。队列不足或状态未核对不构成重复提交的许可。资源、依赖和目录等待显示在队列消息与 `pendingReason`；保存/派发异常暂停新派发并设置 `schedulerMessage`。队列文件损坏保留原文件，队列 API 返回 500 `JOB_QUEUE_STATE_UNREADABLE`，不阻止健康检查和其余服务启动。
 
 `POST /api/v1/job-queue-commands` 的 `clearFinished` 保留状态未知条目；删除未知或活动条目返回 409 `ACTIVE_QUEUE_ITEMS_PROTECTED`，重新排队未知条目返回 409 `QUEUE_ITEMS_NOT_REQUEUEABLE`。扫描核对后处于待确认状态的条目允许用户明确重新排队。重启扫描及双文件持久边界见 [本机调度说明](03-features/LOCAL_SCHEDULING.md)。

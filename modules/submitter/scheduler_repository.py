@@ -22,6 +22,10 @@ from .scheduling import (
 SCHEMA_VERSION = 1
 
 
+class _InvalidSchedulerSchema(sqlite3.DatabaseError):
+    """A scheduler table has an incompatible type or is missing a required column."""
+
+
 class SQLiteSchedulerRepository:
     """以事务保存调度快照和事件历史，进程崩溃后仍可恢复。"""
 
@@ -32,20 +36,27 @@ class SQLiteSchedulerRepository:
         self._transaction_depth = 0
         self.recovery_message = ""
         try:
-            self._connection = self._open_connection()
-            self._initialize()
+            self._connect_and_initialize()
         except sqlite3.DatabaseError as exc:
-            try:
-                self._connection.close()
-            except (AttributeError, sqlite3.Error):
-                pass
+            code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
+            if not isinstance(exc, _InvalidSchedulerSchema) and code not in (
+                sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB,
+            ):
+                raise
             recovered_paths = self._preserve_corrupt_database()
             preserved_name = recovered_paths[0].name if recovered_paths else self.path.name
             self.recovery_message = (
                 f"调度状态库损坏，已新建状态库；原文件保留为 {preserved_name}：{exc}"
             )
-            self._connection = self._open_connection()
+            self._connect_and_initialize()
+
+    def _connect_and_initialize(self) -> None:
+        self._connection = self._open_connection()
+        try:
             self._initialize()
+        except BaseException:
+            self._connection.close()
+            raise
 
     def _open_connection(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
@@ -69,9 +80,16 @@ class SQLiteSchedulerRepository:
 
     def _initialize(self) -> None:
         with self._lock, self._connection:
+            ready = self._schema_ready()
             self._connection.execute("PRAGMA journal_mode=WAL")
             self._connection.execute("PRAGMA synchronous=NORMAL")
             self._connection.execute("PRAGMA foreign_keys=ON")
+            if ready:
+                return
+            self._connection.execute("BEGIN IMMEDIATE")
+            # Another process may have finished creating the database while we waited.
+            if self._schema_ready():
+                return
             self._connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS scheduler_meta (
@@ -117,14 +135,20 @@ class SQLiteSchedulerRepository:
                 """
                 INSERT INTO scheduler_meta(key, value)
                 VALUES('schema_version', ?)
-                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                ON CONFLICT(key) DO NOTHING
                 """,
                 (str(SCHEMA_VERSION),),
             )
-            self._validate_schema()
 
-    def _validate_schema(self) -> None:
+    def _schema_ready(self) -> bool:
+        # Triggers have a separate SQLite namespace and may share a table name.
+        objects = {
+            name: kind for name, kind in self._connection.execute(
+                "SELECT lower(name), type FROM sqlite_schema WHERE type IN ('table', 'view', 'index')"
+            )
+        }
         required_columns = {
+            "scheduler_meta": {"key", "value"},
             "scheduler_jobs": {
                 "job_id",
                 "specification_json",
@@ -145,14 +169,27 @@ class SQLiteSchedulerRepository:
                 "occurred_at",
             },
         }
+        version = None
         for table, required in required_columns.items():
-            rows = self._connection.execute(f"PRAGMA table_info({table})").fetchall()
-            actual = {str(row["name"]) for row in rows}
+            if table not in objects:
+                continue
+            if objects[table] != "table":
+                raise _InvalidSchedulerSchema(f"调度状态库对象 {table} 的类型不正确：{objects[table]}")
+            rows = self._connection.execute("SELECT lower(name) FROM pragma_table_info(?)", (table,))
+            actual = {name for (name,) in rows}
             missing = required - actual
             if missing:
-                raise sqlite3.DatabaseError(
+                raise _InvalidSchedulerSchema(
                     f"调度状态库表 {table} 缺少字段：{', '.join(sorted(missing))}"
                 )
+            if table == "scheduler_meta":
+                version = self._connection.execute(
+                    "SELECT value FROM scheduler_meta WHERE key='schema_version'"
+                ).fetchone()
+                if version is not None and version["value"] != str(SCHEMA_VERSION):
+                    raise ValueError(f"无法打开调度状态库版本 {version['value']}，当前支持版本 {SCHEMA_VERSION}。")
+        return (version is not None and required_columns.keys() <= objects.keys()
+                and objects.get("scheduler_events_job_sequence") == "index")
 
     @contextmanager
     def transaction(self) -> Iterator[None]:

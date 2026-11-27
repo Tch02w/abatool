@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import tempfile
+from contextlib import closing
 from pathlib import Path
 
 
@@ -34,16 +36,11 @@ class OperationJournal:
 
                 fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self._owner = owner
-            is_new = not self.path.exists()
+            if not self.path.exists():
+                self._create_database()
             self._database = sqlite3.connect(
                 self.path, timeout=0, check_same_thread=False
             )
-            if is_new:
-                with self._database:
-                    self._database.execute(
-                        f"CREATE TABLE {self._table} (operation_id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
-                    )
-                    self._database.execute("PRAGMA user_version=1")
             if self._database.execute("PRAGMA user_version").fetchone()[0] != 1:
                 raise ValueError("任务记录版本无效")
             if self._database.execute("PRAGMA quick_check").fetchone() != ("ok",):
@@ -53,6 +50,24 @@ class OperationJournal:
             self.close()
             owner.close()
             raise
+
+    def _create_database(self) -> None:
+        # Publish a complete schema while holding the owner lock. A failed first
+        # launch must not leave a partial database that looks like damaged history.
+        fd, filename = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp")
+        os.close(fd)
+        pending = Path(filename)
+        try:
+            with closing(sqlite3.connect(pending, timeout=0)) as database, database:
+                database.execute("PRAGMA synchronous=FULL")
+                database.execute("BEGIN IMMEDIATE")
+                database.execute(
+                    f"CREATE TABLE {self._table} (operation_id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
+                )
+                database.execute("PRAGMA user_version=1")
+            pending.replace(self.path)
+        finally:
+            pending.unlink(missing_ok=True)
 
     def load(self) -> list[dict]:
         rows = self._database.execute(

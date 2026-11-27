@@ -144,8 +144,13 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         )
         self._dispatcher.start()
 
-    def snapshot(self) -> dict[str, Any]:
-        with self._lock:
+    def snapshot(self, *, wait: bool = True) -> dict[str, Any] | None:
+        if not self._lock.acquire(blocking=wait):
+            return None
+        try:
+            queue = self.queue_service.snapshot(wait=wait)
+            if queue is None:
+                return None
             operations = [
                 record.as_payload()
                 for record in sorted(
@@ -167,8 +172,10 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
                     record.item_id for record in self._runs.values() if record.active
                 ],
                 "operations": operations,
-                "queue": self.queue_service.snapshot(),
+                "queue": queue,
             }
+        finally:
+            self._lock.release()
 
     def control(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         with self._lock:

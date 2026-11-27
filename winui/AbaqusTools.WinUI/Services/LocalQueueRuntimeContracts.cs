@@ -25,6 +25,9 @@ internal sealed class LocalQueueControlRequest
 
 public sealed class LocalQueueRuntimeSnapshot
 {
+    [JsonPropertyName("refreshPending")]
+    public bool RefreshPending { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; }
 

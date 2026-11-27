@@ -24,6 +24,16 @@
 
 ## 实现与验收
 
+### 下载中切页与断线重试
+
+在同源离屏 WinUI 页面上，连接 `850f753` 免安装包的后台和只监听本机的限速 SFTP 服务。下载 18 MiB 普通文件时从「计算资源」切到「新建作业」。切回后同一任务的可见进度从 4% 变为 17%，完成后文件 SHA-256 与来源相同。
+
+第二次下载切走后，主动断开该临时服务的连接，后台在接收 1,015,808 字节后记录失败。返回「计算资源」可看到原任务的失败原因，原有目标文件保持原样，临时文件已清理。重新登录后活动任务数为零。再次发起下载才生成新的任务编号，成功后内容与来源一致。三次下载对应三个编号和三次 SFTP 文件打开。
+
+10 项原生检查的记录位于 `GPTWork/native-sftp-navigation-20261128/run-fa431b/verified.json`。文件路径由测试提供，使用真实的页面导航、登录对话框、SFTP 和正式后台。独立服务结束后，另对验收后台执行空闲关闭，进程退出码为 0。物理局域网中断、域账号策略及系统文件选择器点击仍待另验。
+
+### 实现位置和已有传输验收
+
 - `modules/submitter/remote_connection.py` / `list_directory`、`upload_file`、`download_file`、`_sftp_rename`、`_remote_replace_file_script`：实际SSH、路径和文件发布。
 - `modules/control_plane/remote_transfers.py` / `RemoteTransferOperationManager`：串行传输、取消、去重和状态。
 - `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / `ReadRemoteStateAsync`、三个远端状态GET和`PollRemoteTransferUntilTerminalAsync`；`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` / `RecoverTransfersAsync`、`ObserveTransferAsync`、`OnPageUnloaded`：独立计时、状态重查与页面观察取消。前端输入/输出及HTTP协议未更改，不改变SSH登录或实际传输发布。

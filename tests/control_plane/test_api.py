@@ -21,6 +21,39 @@ from modules.control_plane.server import ControlPlaneRuntime
 TEST_TOKEN = "control-plane-test-token"
 
 
+@pytest.mark.parametrize("failure_point", ["LocalQueueRuntimeManager", "write_descriptor_atomic"])
+def test_failed_startup_releases_services_and_allows_retry(tmp_path, monkeypatch, failure_point):
+    from modules.control_plane import server
+
+    descriptor = tmp_path / "runtime" / "control-plane.json"
+    descriptor.parent.mkdir()
+    descriptor.write_text('{"instanceId":"existing-instance"}', encoding="utf-8")
+    started = []
+    original = server.JobNotificationManager
+
+    def capture_notifications(*args, **kwargs):
+        manager = original(*args, **kwargs)
+        started.append(manager)
+        return manager
+
+    def fail(*args, **kwargs):
+        raise OSError("startup fixture")
+
+    try:
+        with monkeypatch.context() as scoped:
+            scoped.setattr(server, "JobNotificationManager", capture_notifications)
+            scoped.setattr(server, failure_point, fail)
+            with pytest.raises(OSError, match="startup fixture"), running_control_plane(tmp_path):
+                pytest.fail("unexpected startup")
+        assert json.loads(descriptor.read_text(encoding="utf-8")) == {"instanceId": "existing-instance"}
+        assert not started[0]._maintenance.is_alive()
+        with running_control_plane(tmp_path) as runtime:
+            assert api_request(runtime, "/api/v1/job-notifications")[0] == 200
+    finally:
+        for manager in started:
+            manager.close()
+
+
 def test_success_response_drains_delayed_optional_command_body(tmp_path, monkeypatch):
     seen = threading.Event()
     with running_control_plane(tmp_path, joblist_path=tmp_path / "joblist.json",

@@ -1590,7 +1590,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
     }
 
     public async Task<LocalQueueRuntimeSnapshot> GetLocalQueueRuntimeAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool deferIfBusy = false)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -1603,7 +1603,10 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             "/api/v1/local-queue-runtime",
             requestBody: null,
             "本机队列运行状态",
-            effectiveSource.Token);
+            effectiveSource.Token,
+            preferNoWait: deferIfBusy);
+        if (deferIfBusy && response.SchemaVersion == 1 && response.RefreshPending)
+            return response;
         ValidateLocalQueueRuntime(response);
         return response;
     }
@@ -1677,7 +1680,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
     private static void ValidateLocalQueueRuntime(LocalQueueRuntimeSnapshot response)
     {
         ValidateJobQueueSnapshot(response.Queue);
-        if (response.SchemaVersion != 1
+        if (response.SchemaVersion != 1 || response.RefreshPending
             || response.MaxParallel < 1
             || response.Operations.Any(operation => string.IsNullOrWhiteSpace(operation.ItemId)))
         {
@@ -2097,7 +2100,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string relativePath,
         object? requestBody,
         string responseLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preferNoWait = false)
     {
         if (requestBody is LocalJobDraftPreviewRequest or RemoteJobRequest
             || requestBody is JobQueueCommandRequest command && (command.Draft is not null
@@ -2111,6 +2115,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                     code: "EXECUTION_OPTIONS_UNSUPPORTED");
         }
         using var request = new HttpRequestMessage(method, BuildEndpoint(descriptor, relativePath));
+        if (preferNoWait)
+            request.Headers.Add("Prefer", "wait=0");
         if (requestBody is not null)
         {
             request.Content = new ByteArrayContent(

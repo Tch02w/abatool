@@ -290,13 +290,13 @@ public sealed class JobMonitorExplorerAdapter : WorkbenchExplorerAdapterBase
     }
 
     public void Update(
-        JobQueueSnapshot localQueue,
+        JobQueueSnapshot? localQueue,
         IReadOnlyList<RemoteJobOperationSnapshot> remoteJobs)
     {
-        _items = localQueue.QueueItems.Select(LocalJobItem)
+        _items = (localQueue?.QueueItems ?? []).Select(LocalJobItem)
             .Concat(remoteJobs.Select(RemoteJobItem))
             .ToArray();
-        Publish(BuildSnapshot());
+        Publish(BuildSnapshot(hasLocalQueue: localQueue is not null));
     }
 
     public override async Task RefreshAsync(CancellationToken cancellationToken)
@@ -319,7 +319,7 @@ public sealed class JobMonitorExplorerAdapter : WorkbenchExplorerAdapterBase
         return Task.CompletedTask;
     }
 
-    private WorkbenchExplorerSnapshot BuildSnapshot()
+    private WorkbenchExplorerSnapshot BuildSnapshot(bool hasLocalQueue)
     {
         var active = _items.Where(item => IsActive(item.Status)).ToArray();
         var waiting = _items.Where(item => IsWaiting(item.Status)).ToArray();
@@ -329,8 +329,9 @@ public sealed class JobMonitorExplorerAdapter : WorkbenchExplorerAdapterBase
         {
             ContextKey = ContextKey,
             Title = "运行作业",
-            Summary = $"运行 {active.Length} · 等待 {waiting.Length} · 异常 {abnormal.Length}",
-            EmptyMessage = "本机正式队列和远端会话中尚无作业",
+            Summary = hasLocalQueue ? $"运行 {active.Length} · 等待 {waiting.Length} · 异常 {abnormal.Length}"
+                : $"正在读取本机队列… · 远端作业 {_items.Count}",
+            EmptyMessage = hasLocalQueue ? "本机正式队列和远端会话中尚无作业" : "正在读取本机队列…",
             RootItems =
             [
                 Group("jobs:active", "运行中", active, active.Length.ToString()),

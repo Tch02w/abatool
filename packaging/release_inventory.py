@@ -40,14 +40,22 @@ def write_inventory(root: Path, bundle: Path) -> int:
             if requirement.marker is None or requirement.marker.evaluate({"extra": ""}):
                 pending.append(requirement.name)
     (notices / "dependencies.json").write_text(json.dumps(dependencies, ensure_ascii=False, indent=2), encoding="utf-8")
+    return write_release_manifest(root, bundle)
+
+
+def write_release_manifest(root: Path, bundle: Path) -> int:
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip())
+    template = (root / "packaging/portable-readme.md.in").read_text(encoding="utf-8")
+    (bundle / "README.md").write_text(template.format(
+        source_commit=revision, source_state="含未提交的改动" if dirty else "与提交一致",
+    ), encoding="utf-8")
     files = {}
     for path in sorted(bundle.rglob("*")):
         if path.is_file() and path != bundle / "release-manifest.json":
             with path.open("rb") as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             files[path.relative_to(bundle).as_posix()] = {"bytes": path.stat().st_size, "sha256": digest}
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip())
     (bundle / "release-manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "architecture": "win-x64", "sourceCommit": revision,
         "sourceDirty": dirty, "pythonVersion": sys.version, "files": files,

@@ -25,6 +25,13 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private long _snapshotRequest;
     private long _jobViewRevision;
     private readonly RuntimeLogUpdateState _runtimeLog;
+    private string? _staContext;
+    private string? _staPath;
+    private StaIncrementReader? _staReader;
+    private StaIncrementReader? _staReadInFlight;
+    private StaIncrementPreview? _pendingSta;
+    private StaIncrementPreview? _displayedSta;
+    private bool _staPointerDown;
 
     public JobOverviewPage()
     {
@@ -39,6 +46,14 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             new PointerEventHandler(OnRuntimeLogPointerFinished), handledEventsToo: true);
         RuntimeLogTextBox.AddHandler(PointerCaptureLostEvent,
             new PointerEventHandler(OnRuntimeLogPointerFinished), handledEventsToo: true);
+        StaRowsTextBox.SelectionChanged += (_, _) => DispatcherQueue.TryEnqueue(FlushStaPreview);
+        StaRowsTextBox.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => _staPointerDown = true), true);
+        foreach (var routedEvent in new[] { PointerReleasedEvent, PointerCanceledEvent, PointerCaptureLostEvent })
+            StaRowsTextBox.AddHandler(routedEvent, new PointerEventHandler((_, _) =>
+            {
+                _staPointerDown = false;
+                DispatcherQueue.TryEnqueue(FlushStaPreview);
+            }), true);
         _jobExplorerAdapter = new JobMonitorExplorerAdapter(
             App.Current.ControlPlane,
             SelectExplorerItem);
@@ -86,6 +101,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         _snapshotRequest++;
         _jobViewRevision++;
         _logPointerDown = false;
+        ResetStaPreview();
     }
 
     private async void OnRefreshTimerTick(
@@ -203,6 +219,9 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
         _currentEntry = entry;
         var item = entry?.LocalItem;
+        StaIncrementsButton.Visibility = item is null ? Visibility.Collapsed : Visibility.Visible;
+        if (item is null) StaIncrementsButton.IsChecked = false;
+        UpdateStaView();
         var remote = entry?.RemoteOperation;
         var operation = item is null
             ? null
@@ -354,36 +373,113 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private void ApplyRuntimeLogUpdate(RuntimeLogTextUpdate? update)
     {
-        RuntimeLogUpdateText.Visibility = _runtimeLog.HasPendingText
+        RuntimeLogUpdateText.Visibility = _runtimeLog.HasPendingText && StaIncrementsButton.IsChecked != true
             ? Visibility.Visible : Visibility.Collapsed;
         if (update is null)
         {
             return;
         }
 
-        var scroll = FindLogScrollViewer(RuntimeLogTextBox);
-        var horizontal = scroll?.HorizontalOffset ?? 0;
-        var vertical = scroll?.VerticalOffset ?? 0;
-        var followTail = update.ResetView || (scroll is not null
-            && RuntimeLogUpdateState.ShouldFollowTail(vertical, scroll.ScrollableHeight));
-        var caret = update.ResetView ? update.Text.Length : RuntimeLogTextBox.SelectionStart;
         _applyingLogText = true;
         try
         {
-            // SetSnapshot returns no update for unchanged text or an active selection.
-            RuntimeLogTextBox.Text = update.Text;
-            RuntimeLogTextBox.Select(Math.Min(caret, update.Text.Length), 0);
-            RuntimeLogTextBox.UpdateLayout();
-            scroll?.ChangeView(
-                update.ResetView ? 0 : horizontal,
-                followTail ? scroll.ScrollableHeight : vertical,
-                null,
-                disableAnimation: true);
+            ApplyLogText(RuntimeLogTextBox, update);
         }
         finally
         {
             _applyingLogText = false;
         }
+    }
+
+    private static void ApplyLogText(TextBox box, RuntimeLogTextUpdate update)
+    {
+        var scroll = FindLogScrollViewer(box);
+        var horizontal = scroll?.HorizontalOffset ?? 0;
+        var vertical = scroll?.VerticalOffset ?? 0;
+        var followTail = update.ResetView || (scroll is not null
+            && RuntimeLogUpdateState.ShouldFollowTail(vertical, scroll.ScrollableHeight));
+        var caret = update.ResetView ? update.Text.Length : box.SelectionStart;
+        box.Text = update.Text;
+        box.Select(Math.Min(caret, update.Text.Length), 0);
+        box.UpdateLayout();
+        scroll?.ChangeView(update.ResetView ? 0 : horizontal,
+            followTail ? scroll.ScrollableHeight : vertical, null, disableAnimation: true);
+    }
+
+    private void OnStaIncrementsChanged(object sender, RoutedEventArgs args) => UpdateStaView();
+
+    private void UpdateStaView()
+    {
+        var item = _currentEntry?.LocalItem;
+        bool show = item is not null && StaIncrementsButton.IsChecked == true;
+        StaIncrementsButton.Content = show ? "返回运行日志" : "STA 增量";
+        StaPreviewPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        RuntimeLogTextBox.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+        RuntimeLogUpdateText.Visibility = !show && _runtimeLog.HasPendingText ? Visibility.Visible : Visibility.Collapsed;
+        if (!show)
+        {
+            if (_staContext is not null) ResetStaPreview();
+            return;
+        }
+
+        var path = Path.GetFileName(item!.JobName) == item.JobName ? OutputFilePath(item, ".sta") : null;
+        var context = $"{item.ItemId}\n{item.AttemptId}\n{path}";
+        if (_staContext != context)
+        {
+            ResetStaPreview();
+            _staContext = context;
+            _staReader = new StaIncrementReader();
+            _staPath = path;
+            ToolTipService.SetToolTip(StaPreviewStatus, path);
+            StaPreviewStatus.Text = path is null ? "当前作业没有可读取的 STA 路径。" : "正在读取 STA 增量…";
+        }
+        if (path is not null && _staReader is not null && _staReadInFlight != _staReader)
+            _ = ReadStaPreviewAsync(path, _staReader);
+    }
+
+    private async Task ReadStaPreviewAsync(string path, StaIncrementReader reader)
+    {
+        _staReadInFlight = reader;
+        try
+        {
+            var preview = await Task.Run(() => reader.Read(path));
+            if (IsLoaded && _staReader == reader)
+            {
+                _pendingSta = preview;
+                FlushStaPreview();
+            }
+        }
+        finally
+        {
+            if (_staReadInFlight == reader) _staReadInFlight = null;
+        }
+    }
+
+    private void ResetStaPreview()
+    {
+        _staContext = null;
+        _staPath = null;
+        _staReader = null;
+        _pendingSta = null;
+        _displayedSta = null;
+        _staPointerDown = false;
+        StaRowsTextBox.Text = "";
+        StaHeaderText.Text = "";
+        StaHorizontalScroll.ChangeView(0, null, null, true);
+    }
+
+    private void FlushStaPreview()
+    {
+        if (_pendingSta is not { } preview || _staPointerDown || StaRowsTextBox.SelectionLength > 0) return;
+        _pendingSta = null;
+        var previous = _displayedSta;
+        if (preview == previous) return;
+        _displayedSta = preview;
+        StaPreviewStatus.Text = $"{Path.GetFileName(_staPath)} · {preview.Status}";
+        StaHorizontalScroll.Visibility = preview.Rows.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (previous?.Header != preview.Header) StaHeaderText.Text = preview.Header;
+        if (previous?.Rows != preview.Rows)
+            ApplyLogText(StaRowsTextBox, new(preview.Rows, ResetView: string.IsNullOrEmpty(previous?.Rows)));
     }
 
     private static ScrollViewer? FindLogScrollViewer(DependencyObject parent)

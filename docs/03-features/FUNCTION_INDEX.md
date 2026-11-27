@@ -1,5 +1,9 @@
 # 功能定位索引
 
+F026 随包启动说明由 `packaging/release_inventory.py` 的 `write_release_manifest` 使用 `packaging/portable-readme.md.in` 生成。`packaging/build_release.py` 的 `copy_release_docs` 收集离线手册。`tests/common/test_release_readme.py` 核对提交号、文件摘要和搬到其他目录后的文档链接。[构建与清单](../05-development/RELEASE.md)
+
+F005 本机 STA 增量表位于 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml`、同目录的 `JobOverviewPage.xaml.cs` 及 `winui/AbaqusTools.WinUI/Services/StaIncrementPreview.cs`。文件有界读取、字段解析、可选列和替换后的重读见 `tests/winui_logs/StaIncrementChecks.cs`。[运行日志与阅读位置](UI_INTERACTION.md#作业概览运行日志f005) · [使用步骤](../repowiki/user-guide.md#作业概览和日志)
+
 F022 未确认数值的检查点通过 `WorkbenchNumberBox.EditingText` 读取编辑框原文，提取参数窗口保存时用 `ParseEditingValue` 检查。恢复一处合法空选择或拒绝已消失的非空项，见 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` 中的 `RestoreInputs`。[原生验证](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#2026-11-28--提取参数未确认输入的恢复)
 
 F021 的根目录与对比组补索引由 `modules/control_plane/results.py` 的 `index_scope_directories`、`modules/control_plane/result_indexing.py` 的 `ResultIndexOperationManager.create_batch` 和 `modules/postprocessor/result_index.py` 的 `build_result_index` 实现。协议与优先级、取消和原子发布的回归见 `tests/control_plane/test_result_index_batches.py`。[操作说明](../repowiki/postprocessor.md#一次补齐多个批次的结果索引)
@@ -46,7 +50,7 @@ F004表格布局（2026-11-24）：`winui/AbaqusTools.WinUI/Controls/QueueTableV
 
 F009/F023远端状态观察：`winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` / ReadRemoteStateAsync、GetRemoteServersAsync、GetActiveRemoteTransfersAsync、GetRemoteTransferAsync分离连接与响应限时；`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` / RecoverTransfersAsync、ObserveTransferAsync、OnPageUnloaded、ShowTransferObservationWarning保留任务身份、区分读取失败与传输终态、只读恢复。测试`tests/winui_host/RemoteObservationChecks.cs`、`tests/winui_host/test_shutdown_api.py`及`tests/winui/test_shell_contract.py`；范围见[传输说明](REMOTE_TRANSFERS.md)。
 
-F026 当前完整目录 `15bec5c3e691` 和未签名安装候选 `7f9e23f7bf10` 来自干净提交 `ee1f79f`。1691 项逐文件校验、16 项 WinUI 资源、7 项冻结依赖以及正式客户端启动和退出通过。查看 [发布构建](../05-development/RELEASE.md)及[安装和升级](../05-development/INSTALLATION.md)。
+F026 历史目录 `15bec5c3e691` 和安装候选 `7f9e23f7bf10` 来自提交 `ee1f79f`。当时完成 1691 项文件校验、16 项 WinUI 资源、7 项冻结依赖以及正式客户端启动和退出。当前候选与对应版本见[发布构建](../05-development/RELEASE.md)及[安装和升级](../05-development/INSTALLATION.md)。
 
 F012/F013真实后台崩溃补验：`packaging/verify_real_merge_backend_crash.py` / `verify`，复用`packaging/verify_real_merge_interruption.py`的HTTP/进程身份/摘要工具。只中断自有冻结后台，保持经身份核实的真实Abaqus校验进程存活至恢复核对，再恢复其执行；验证中断记录、同请求不重放、旧结果及来源摘要、工作区保留和三次启动持久化。--later第三源路径启用真实两阶段批量检查，包括恢复后继续拒绝重放、第二阶段未提交。回执real-merge-backend-crash-9597d1bc621d及real-batch-backend-crash-453005f06383的verification.json；范围及退出码见[安全合并](ODB_MERGE.md)和[批量任务](ODB_RESULT_BATCH.md)。
 

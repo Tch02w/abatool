@@ -17,6 +17,7 @@ try
     RevertedSnapshotClearsPendingUpdate();
     ScrollPolicyPreservesReadingPosition();
     Console.WriteLine("9 runtime-log interaction behavior checks passed");
+    StaIncrementChecks.Run();
 }
 catch (Exception exception)
 {

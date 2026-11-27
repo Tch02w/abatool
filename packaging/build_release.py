@@ -16,6 +16,15 @@ from release_inventory import write_inventory
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def copy_release_docs(root: Path, bundle: Path) -> None:
+    shutil.copytree(root / "docs", bundle / "docs")
+    # The feature index also links to this test's instructions outside docs/.
+    for relative in ("AGENTS.md", "tests/winui_explorer/README.md"):
+        destination = bundle / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / relative, destination)
+
+
 def run(arguments: list[str], log: Path, environment: dict[str, str]) -> None:
     with log.open("w", encoding="utf-8") as stream:
         result = subprocess.run(arguments, cwd=ROOT, env=environment, stdout=stream,
@@ -53,9 +62,7 @@ def main() -> None:
          "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:Platform=x64",
          "-o", str(bundle), *(["--no-restore"] if args.no_restore else [])], output / "winui-publish.log", environment)
     print("Self-contained WinUI published", flush=True)
-    for relative in ("README.md", "AGENTS.md"):
-        shutil.copy2(ROOT / relative, bundle / relative)
-    shutil.copytree(ROOT / "docs", bundle / "docs")
+    copy_release_docs(ROOT, bundle)
     required = ["AbaqusTools.WinUI.exe", "coreclr.dll", "hostfxr.dll", "Microsoft.UI.Xaml.dll",
                 "control-plane/AbaqusTools.ControlPlane.exe",
                 "control-plane/_internal/modules/postprocessor/defaults.json",

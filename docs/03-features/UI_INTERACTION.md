@@ -128,6 +128,12 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 
 ## 作业概览运行日志（F005）
 
+「STA 增量」按需读取所选本机作业的 STA 文件，可从已发布归档或计算目录读取。后台读取最多 8 KiB 文件头和 128 KiB 文件尾来识别 Standard 格式并显示最近 300 条完整增量。保留源文件中的尝试标记、数字精度及能识别的可选列。表头随数据一起横向移动，纵向滚动时保持可见。路径、长度和时间信息未变化时复用已解析结果。选择其他作业后只接受新作业的读取结果。
+
+文件缺失、不可读或格式无法识别时显示原因，仍可返回运行日志。远端作业使用既有的 STA 下载入口。[读表步骤](../repowiki/user-guide.md#作业概览和日志)
+
+读取期间遇到追加，先核对文件身份及本次取样内容。完整记录仍可显示，新行留到下一次更新；若文件已替换、截短或本次读取的内容被改写，则下一轮重新读取。
+
 入口为 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml` 和 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs`。轮询仍为 1.5 秒，来源为本地运行快照与远端作业快照；不修改求解器或日志文件。
 
 `winui/AbaqusTools.WinUI/Services/RuntimeLogUpdateState.cs` 的 `SetSnapshot` / `Flush` 管理显示快照：

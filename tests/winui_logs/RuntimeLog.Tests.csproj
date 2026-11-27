@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../winui/AbaqusTools.WinUI/Services/RuntimeLogUpdateState.cs" Link="RuntimeLogUpdateState.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/StaIncrementPreview.cs" Link="StaIncrementPreview.cs" />
   </ItemGroup>
 </Project>

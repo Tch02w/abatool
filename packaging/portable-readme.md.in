@@ -1,0 +1,15 @@
+# Abaqus Tools 工作台 · Windows x64
+
+在资源管理器中双击本目录的 [AbaqusTools.WinUI.exe](AbaqusTools.WinUI.exe) 启动工作台。安装版也可以从 Windows 开始菜单打开。移动免安装版时，请复制整个程序目录，包括 `control-plane` 子目录。
+
+## 第一次打开
+
+1. 查看窗口底部的「控制面」状态，显示「已连接」后即可操作。目录中已附带 Python 和界面运行库，启动工作台无需另装 Python 或 .NET SDK。
+2. 如已有工作台提取的结果，在「结果浏览」页点「选择文件夹」，选中结果根目录，再点「读取目录」。在结果树选择模型，点击文件即可预览。
+3. 本机求解、读取原始 ODB 或绘制云图需要单独安装 Abaqus。若底部未识别 Abaqus，可在相应页面的「Abaqus 命令」中填入本机 `abaqus.bat` 的完整路径。
+
+有关作业提交、队列和远程服务器的操作，请查阅[工作台使用手册](docs/repowiki/user-guide.md)。提取数据、设置统一云图范围和导出动画见 [ODB 后处理手册](docs/repowiki/postprocessor.md)。
+
+## 核对这份程序的来源
+
+本包的源码提交为 `{source_commit}`，构建时的工作区{source_state}。反馈问题时可以一并提供此提交号。随包的 [release-manifest.json](release-manifest.json) 记录同一提交号、工作区状态以及各文件的 SHA-256 校验值。

@@ -1,6 +1,6 @@
 # 当前状态与接续点
 
-11 月 27 日，`98d1bc7` 的实际作业队列用 40 个候选、40 个暂停调度的正式作业重新验收。两表序号居中，长名称和路径在各自列内省略，浅色和深色主题的表头与正文分隔线对齐。[实际窗口和像素核对](ACTIVE_TASKS/TASK-004-ui-interaction.md) · [手册示例](../repowiki/user-guide.md#作业队列)
+11 月 27 日，在 `9d862b5` 的实际作业队列中核对 40 个候选、40 个暂停调度的正式作业。两表序号居中，长名称和路径在各自列内省略。浅色和深色主题的表头与正文分隔线已在同源控件逐项核对。独立样例窗口保留供查看。[实际窗口和像素核对](ACTIVE_TASKS/TASK-004-ui-interaction.md) · [手册示例](../repowiki/user-guide.md#作业队列)
 
 F017/F020 修复了混凝土损伤场缺失引起的预扫描失败。用同一 GJA 工程的 `Pile_Gra` 两帧重跑 B、A 两组，分别生成 9 个有效变量的云图与动画，损伤峰值及阈值判断留空。[工程和数值核对](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
@@ -10,7 +10,7 @@ F004 候选区和正式队列的表头及内容采用同一套列宽，明暗主
 
 F022 的运行范围已经接入工作台。GJA 属于 A、B，GJB 只属于 A 的实页数据验证了只选 B 时只提交 GJA，独立模型使用自身色标，批量则按各组的顺序和图例出图。空工作区的组名、图例、持久化与确认删除已在离屏页面通过。[开发及验收记录](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
-11 月 27 日的 Windows x64 目录包为 `GPTWork/release-win-x64-1fcb773bec3c/AbaqusTools`，打开其中的 `AbaqusTools.WinUI.exe` 即可使用。安装候选为 `GPTWork/installer-win-x64-d7cfe7a56959/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装脚本均取自 `98d1bc7`，1692 个负载文件逐项核对通过。真实 GJA 加载步按 B、A 顺序出图，两个 Mises 动画均为 101 帧，分别使用各自手动色标。正式标识安装和无开发环境 Windows 仍待实测。[工程运行记录](ACTIVE_TASKS/TASK-001-postprocessing.md) · [发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
+当前 Windows x64 目录包为 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools`，打开其中的 `AbaqusTools.WinUI.exe` 即可使用。安装候选为 `GPTWork/installer-win-x64-3cb0dabd8612/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装脚本均取自 `9d862b5`，1694 个负载文件逐项核对通过。正式标识安装和无开发环境 Windows 仍待实测。[工程运行记录](ACTIVE_TASKS/TASK-001-postprocessing.md) · [发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
 
 11 月 24 日，F022 已接入多模型参数对照和预建空组。多选已读取结构的 ODB 后可以逐个修改，也可以只复制勾选的字段。148 项原生控件回归包含真实 GJA/GJB 扫描和 64 模型分页。另在实际后处理页离屏触发控件，10 项检查覆盖两模型取消、重开、文件写入失败和重试，只保存指定字段。桌面仍锁定，可见窗口内的参数对照和空组操作待实点。[准确续接点](ACTIVE_TASKS/TASK-001-postprocessing.md)
 

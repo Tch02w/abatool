@@ -4,7 +4,7 @@ F017/F020 混凝土损伤缺失与实测零的区分、GJA 两帧自重步的分
 
 F022 组间执行顺序的设置、草稿和入队顺序归入 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F005/F009/F010 历史作业的原服务器归属、目录浏览与输出下载归入 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
-11 月 27 日的 Windows x64 候选取自 `98d1bc7`。F004 的浅色和深色队列示例已收入[使用手册](../repowiki/user-guide.md#作业队列)，两表各 40 行的原生滚动验收见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 的目录包、从 `1fc22fd` 升级和卸载实测见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+11 月 27 日的 Windows x64 候选取自 `9d862b5`。F004 的浅色和深色队列示例已收入[使用手册](../repowiki/user-guide.md#作业队列)，两表各 40 行的原生滚动验收见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。F026 的目录包、从 `98d1bc7` 升级和卸载实测见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 F013 手工合并在真实 restartJoin 运行期间取消，确认无半成品、源文件完整。停止按钮的受理前状态及全量测试记录见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
@@ -47,7 +47,7 @@ F022 分组运行、待办编辑、取消后续行、后台接回及 GJB 工程�
 | ID | 任务 | 状态 | 关联功能 | 说明 |
 |---|---|---|---|---|
 | TASK-001 | 优先恢复结果提取与结果查看 | F020 同组色标、双模型 GIF 两种模式已复核（11 月 18 日），F021分页和宽表已验证；结果选择崩溃已修复，单CSV预览/导出/退出已确认，其他业务交互待验 | F014–F022 | [准确记录](ACTIVE_TASKS/TASK-001-postprocessing.md) |
-| TASK-002 | 完整迁移、性能、界面与文档发布 | `98d1bc7` 完整包、同负载测试标识安装升级及卸载通过。新增弹窗可见窗口交互、正式标识安装、独立目标机与远端特殊工况待验 | F001–F028 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) |
+| TASK-002 | 完整迁移、性能、界面与文档发布 | `9d862b5` 完整包、同负载测试标识安装升级及卸载通过。新增弹窗可见窗口交互分项记录，正式标识安装、独立目标机与远端特殊工况待验 | F001–F028 | [范围与顺序](ACTIVE_TASKS/TASK-002-migration.md) |
 | TASK-003 | 建立功能定位和持续维护交接体系 | 本次建档完成；后续维护持续执行 | F001–F024 | [文档记录](COMPLETED_TASKS/TASK-003-documentation.md) |
 | TASK-004 | 日志选区、数字输入、参数说明与窗口布局 | 队列表格列线/对齐、日志拖选跨刷新和服务器表单已获得实际窗口证据；跨屏与工程负载继续验证 | F001/F002/F003/F004/F005/F007/F008/F022/F025 | [准确记录](ACTIVE_TASKS/TASK-004-ui-interaction.md) |
 

@@ -1,6 +1,12 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 目录包来自干净提交 `98d1bc734884adb630bcc24b998de590dec96b08`。在项目目录打开 `GPTWork/release-win-x64-1fcb773bec3c/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。后处理页支持调整对比组的执行顺序并查看本次实际派发顺序。作业概览按原作业的服务器身份浏览和下载历史文件，目录读取失败后可在弹窗内重试。作业队列保留已验收的表头对齐和浅色行列分隔线。[Windows 安装候选](INSTALLATION.md)
+当前 Windows x64 目录包来自干净提交 `9d862b58f2f6f6e1dd66909f39907721f64d2789`。在项目目录打开 `GPTWork/release-win-x64-d47edac3dd05/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。此版本包含队列表格行列线、手册中的明暗主题示例及缺少混凝土损伤场时的提取修复。清单含 1694 条文件记录，其 SHA256 为 `c5c09bd897e97adb52aaddc114d3ea5d7ca56918edf4a6c4d7f0dd3705d0d677`。[Windows 安装候选](INSTALLATION.md)
+
+本次对照了随包的 19 个 Abaqus worker 与源码，以及工程验收时的 9 份生产输入摘要。15 个编译页面资源与原生验收版本相同，冻结后台通过 7 项依赖检查，正式客户端可读取队列历史并正常退出。逐文件结果为 `GPTWork/release-damage-9d862b5-20261127/verification.json`。目录包的后台还实际调用 Abaqus/CAE 完成 GJA 工程 B 组的 `Pile_Gra` 两帧提取。两份数值 CSV 与源码版逐字节一致。[出图与数值验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
+
+### 上一候选 98d1bc7
+
+目录为 `GPTWork/release-win-x64-1fcb773bec3c/AbaqusTools`，包含对比组执行顺序和历史作业的远端文件修复。
 
 清单内 1692 个文件均已逐项校验，清单自身 SHA256 为 `de052ed24a863127fb44316e8d3233422d9c3612684e914340514ad66c4b090d`。15 个编译界面文件与原生验收资源一致。124 个界面源文件中，远端目录弹窗与其单独复测的源码一致，其余与对比组排序验收源码一致。包内后台通过 7 项依赖检查并核对 19 个 worker 脚本。客户端实际读取了资源以及部分完成、已取消的分组队列历史，随后正常关闭后台。完整回执为 `GPTWork/release-group-order-98d1bc7-20261127/verification.json`。
 

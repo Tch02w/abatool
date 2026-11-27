@@ -1,6 +1,18 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-28 · ODB 合并发布时目标被占用
+
+在 G 盘用真实的小型重启动 ODB 副本预置一个已有目标，保持只读句柄并禁止替换。使用 `de319eb` 的正式后台预览并执行覆盖，Abaqus restartjoin 和逐步校验先完成，发布时 Windows 返回拒绝访问。后台正确记录失败，旧目标的内容、文件编号和修改时间均保留。失败操作清除了暂存及本次新生的备份和校验回执。
+
+关闭占用句柄后重新预览，再次显式执行，生成两个分析步 Load1、Load2，各 5 帧并保留历史输出。操作历史只有第一次失败和第二次成功两项，输入文件的备份与来源摘要相符。真实窗口已打开，本次两笔命令经同包后台接口发出。证据为 `GPTWork/native-merge-publish-lock-de319eb/published1/api-proved.json`。未启动求解。
+
+Abaqus 独立只读复核了新目标两步末帧的 U3（0.01、0.02）和总 RF3（10、20），原对照文件保留 Load3 的 0.03 和 30。窗口的正常关闭未完成。确认没有活动任务并封闭新任务后，仅结束已核对身份的隔离测试进程。最终回执 `GPTWork/native-merge-publish-lock-de319eb/published1/verified.json` 已确认前后台退出、连接文件移除。
+
 ## 2026-11-28 · 随包运行库的实际来源
+
+使用独立测试标识完成了 `de319eb` 至 `5a056db` 的 8 项安装与升级核对，普通中文向导实际安装后的 README 与当前提交一致，四个入口有效。测试登记、快捷方式和自有进程已经清理。详见[安装记录](../../05-development/INSTALLATION.md)和 `GPTWork/installer-current-5a056db-20261128/verified.json`。
+
+程序提交 `5a056db4e4d42b1fcfe5e27344ff687f107af869` 已推送并核对 GitHub main。共 1183 项回归与 9 项子检查通过，原生 Qt 启动另验 1 项。证据为 `GPTWork/restart-page-20261128/regression-20261128-045803/results.xml`、`GPTWork/sta-release-qa-20261128/qt.xml`。新包包含 1698 项负载。在中文路径独立配置上运行当前版本，实测前台 174 个、后台 87 个原生模块来自程序目录或 Windows，资源与队列读取成功，前后台正常退出。回执为 `GPTWork/portable-modules-5a056db-20261128/run-4125f691/verification.json`。[免安装包及摘要](../../05-development/RELEASE.md)
 
 发现免安装包原来的 README 会将用户引向上一个版本的开发机路径。打包时现在使用 `packaging/portable-readme.md.in` 生成用户入口，读取与发布清单相同的提交和改动状态；README 也纳入文件校验。在 `de319eb` 的独立中文路径副本上用正式文档生成流程检查 1698 项，67 份 Markdown 中的 720 个相对链接均可访问。另补齐了功能索引引用的一份离线说明。程序及其他非文档文件与原包逐项匹配。三个定向测试文件共 76 项通过，证据在 `GPTWork/portable-readme-20261128-7f8337f0/receipt.json` 和 `tests.xml`。该副本仅用于核对文档。
 

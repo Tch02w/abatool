@@ -1269,18 +1269,24 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         };
         dialog.PrimaryButtonClick += (_, args) =>
         {
+            var diameterMm = diameter.ParseEditingValue(diameter.EditingText);
+            var frameIndex = prefracture.ParseEditingValue(prefracture.EditingText);
             var error = frameMode.SelectedItem?.ToString() == "手动帧序号"
                 && string.IsNullOrWhiteSpace(manualFrames.Text)
                 ? "手动帧模式必须填写帧序号表达式。"
-                : !double.IsFinite(diameter.Value) || diameter.Value < 1 || diameter.Value > 100
+                : diameterMm is null
                     ? "请填写 1–100 mm 的纵筋直径。"
-                    : !double.IsFinite(prefracture.Value) || prefracture.Value < -1
-                        || prefracture.Value > 1_000_000 || prefracture.Value != Math.Truncate(prefracture.Value)
+                    : frameIndex is null || frameIndex != Math.Truncate(frameIndex.Value)
                         ? "断裂前帧序号应为 -1（自动）或非负整数。"
                         : string.Empty;
             validationMessage.Text = error;
             validationMessage.Visibility = error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             args.Cancel = error.Length > 0;
+            if (!args.Cancel)
+            {
+                current.RebarDiameterMm = diameterMm!.Value;
+                current.PrefractureSequenceIndex = (int)frameIndex!.Value;
+            }
         };
         var inputControls = new Dictionary<string, Control>
         {
@@ -1319,8 +1325,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         current.RebarSet = SelectedText(rebar);
         current.ReinforcementMode = SelectedText(reinforcement) == "有纵筋" ? "required" : "none";
         current.LongitudinalMaterial = material.Text.Trim();
-        current.RebarDiameterMm = diameter.Value;
-        current.PrefractureSequenceIndex = (int)Math.Round(prefracture.Value);
         return current;
     }
 

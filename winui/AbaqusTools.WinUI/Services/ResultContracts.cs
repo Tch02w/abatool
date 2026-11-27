@@ -53,6 +53,12 @@ public sealed class ResultScopeNode
     public string IndexState { get; init; } = string.Empty;
 
     [JsonIgnore]
+    public bool CanBuildMissingIndexes => Kind is "root" or "group";
+
+    [JsonIgnore]
+    public bool CanRefreshIndex => Kind is "batch" or "odb" && !string.IsNullOrWhiteSpace(TimeDirectory);
+
+    [JsonIgnore]
     public string KindDisplay => Kind switch
     {
         "root" => "结果根目录",
@@ -326,6 +332,9 @@ public sealed class ResultIndexOperationSnapshot
     [JsonPropertyName("operationId")]
     public string OperationId { get; init; } = string.Empty;
 
+    [JsonPropertyName("batchId")]
+    public string? BatchId { get; init; }
+
     [JsonPropertyName("attemptId")]
     public string AttemptId { get; init; } = string.Empty;
 
@@ -395,4 +404,44 @@ public sealed class ResultIndexOperationListResponse
 
     [JsonPropertyName("eventCursor")]
     public long EventCursor { get; init; }
+}
+
+public sealed class ResultIndexBatchSnapshot
+{
+    public int SchemaVersion { get; init; }
+    public string BatchId { get; init; } = string.Empty;
+    public string Root { get; init; } = string.Empty;
+    public string ScopeDirectory { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public int Total { get; init; }
+    public int Succeeded { get; init; }
+    public int Skipped { get; init; }
+    public int Failed { get; init; }
+    public int Cancelled { get; init; }
+    public int Waiting { get; init; }
+    public int Active { get; init; }
+    public int Processed { get; init; }
+    public string CurrentDirectory { get; init; } = string.Empty;
+    public IReadOnlyList<ResultIndexBatchFailure> Failures { get; init; } = [];
+
+    [JsonIgnore]
+    public bool IsTerminal => Status is "succeeded" or "failed" or "cancelled";
+
+    internal void Validate(string? expectedId)
+    {
+        if (SchemaVersion != 1 || string.IsNullOrWhiteSpace(BatchId)
+            || (expectedId is not null && BatchId != expectedId)
+            || string.IsNullOrWhiteSpace(Root) || string.IsNullOrWhiteSpace(ScopeDirectory)
+            || (!IsTerminal && Status is not ("queued" or "running" or "cancelling"))
+            || Total < 0 || Succeeded < 0 || Skipped < 0 || Failed < 0 || Cancelled < 0 || Active < 0 || Waiting < 0
+            || Processed != (long)Succeeded + Skipped + Failed + Cancelled || Total != (long)Processed + Waiting + Active
+            || (IsTerminal && Total != Processed) || Failures is null || Failures.Count > Failed)
+            throw new InvalidDataException("补建索引任务返回了无效的进度。");
+    }
+}
+
+public sealed class ResultIndexBatchFailure
+{
+    public string TimeDirectory { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
 }

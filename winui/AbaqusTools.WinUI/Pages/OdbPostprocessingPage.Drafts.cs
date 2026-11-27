@@ -34,7 +34,7 @@ public sealed partial class OdbPostprocessingPage
     private static Dictionary<string, string> CaptureInputs(Dictionary<string, Control> fields) => fields.ToDictionary(
         p => p.Key, p => p.Value switch
         {
-            TextBox text => text.Text, NumberBox number => number.Text,
+            TextBox text => text.Text, Controls.WorkbenchNumberBox number => number.EditingText,
             ComboBox combo => ChoiceValue(combo.SelectedItem), CheckBox check => check.IsChecked == true ? "true" : "false",
             _ => throw new InvalidOperationException("未登记的草稿输入类型。"),
         });
@@ -45,7 +45,7 @@ public sealed partial class OdbPostprocessingPage
         foreach (var (key, control) in fields)
         {
             if (!values.TryGetValue(key, out var value)) throw new InvalidDataException($"草稿缺少“{key}”，未套用旧输入。");
-            if (control is ComboBox combo && !combo.Items.Any(item => ChoiceValue(item) == value))
+            if (control is ComboBox combo && value.Length != 0 && !combo.Items.Any(item => ChoiceValue(item) == value))
                 throw new InvalidDataException($"{key}中的“{value}”已不在当前可选项中，草稿副本仍保留。");
             if (control is CheckBox && value is not ("true" or "false")) throw new InvalidDataException($"{key}的选择状态无效。");
         }
@@ -55,13 +55,8 @@ public sealed partial class OdbPostprocessingPage
             switch (control)
             {
                 case TextBox text: text.Text = value; break;
-                case NumberBox number:
-                    number.Text = value;
-                    if (number.Text != value && !(double.TryParse(value, out var expected) && double.IsFinite(expected)
-                        && double.TryParse(number.Text, out var actual) && actual == expected))
-                        throw new InvalidDataException($"“{key}”的原始填写无法直接放回数字框，请查看草稿或副本后重新填写；原文未清除。");
-                    break;
-                case ComboBox combo: combo.SelectedItem = combo.Items.First(item => ChoiceValue(item) == value); break;
+                case Controls.WorkbenchNumberBox number: number.RestoreEditingText(value); break;
+                case ComboBox combo: combo.SelectedItem = combo.Items.FirstOrDefault(item => ChoiceValue(item) == value); break;
                 case CheckBox check: check.IsChecked = value == "true"; break;
             }
         }

@@ -195,6 +195,11 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/result-index-builds":
                 self._handle_list_result_index_builds(target.query, trace_id)
                 return
+            index_batch = re.fullmatch(r"/api/v1/result-index-batches/([0-9a-f]{32})", target.path)
+            if index_batch and not target.query:
+                snapshot = self.context.result_index_manager.get_batch(index_batch[1])
+                self._send_json(HTTPStatus.OK, snapshot, trace_id)
+                return
             if target.path == "/api/v1/odb-merge-operations":
                 self._handle_list_odb_merge_operations(target.query, trace_id)
                 return
@@ -544,6 +549,15 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/result-index-builds" and not target.query:
                 self._handle_create_result_index_build(trace_id)
                 return
+            if target.path == "/api/v1/result-index-batches" and not target.query:
+                snapshot = self.context.result_index_manager.create_batch(self._read_json_object())
+                self._send_json(HTTPStatus.ACCEPTED, snapshot, trace_id)
+                return
+            index_batch = re.fullmatch(r"/api/v1/result-index-batches/([0-9a-f]{32})/cancel", target.path)
+            if index_batch and not target.query:
+                snapshot = self.context.result_index_manager.get_batch(index_batch[1], cancel=True)
+                self._send_json(HTTPStatus.ACCEPTED, snapshot, trace_id)
+                return
             if target.path == "/api/v1/odb-compatibility-checks" and not target.query:
                 self._handle_create_compatibility_check(trace_id)
                 return
@@ -663,7 +677,7 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             "status": "ok",
             "capabilities": ["jobQueue.scanExternalJobs", "job.execution-options-v1", "job.notifications-v1",
                              "odb.resultGraph", "odb.resultBatch.history-v1", "odb.upgrade.safe-v1",
-                             "odb.upgrade.history-v1", "odb.postprocess.group-queue-v1",
+                             "odb.upgrade.history-v1", "odb.postprocess.group-queue-v1", "result.index.batch-v1",
                              "controlPlane.shutdown.all-workers-v1", "controlPlane.shutdown.protocol-v1"],
             "instanceId": self.context.instance_id,
             "pid": os.getpid(),

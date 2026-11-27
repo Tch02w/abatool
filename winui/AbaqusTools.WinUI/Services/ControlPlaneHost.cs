@@ -2807,6 +2807,11 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
     {
         lock (_operationGate)
         {
+            if (!string.IsNullOrWhiteSpace(snapshot.BatchId))
+            {
+                if (!snapshot.IsTerminal && _acceptNewOperations) _activeResultIndexBatches.Add(snapshot.BatchId);
+                return _acceptNewOperations || snapshot.IsTerminal;
+            }
             if (snapshot.IsTerminal)
             {
                 _activeResultIndexOperationIds.Remove(snapshot.OperationId);
@@ -2875,6 +2880,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         await _operationCreationGate.WaitAsync();
         string[] operationIds;
         string[] resultIndexOperationIds;
+        string[] resultIndexBatchIds;
         string[] odbMergeOperationIds;
         string[] resultBatchIds;
         string[] postprocessOperationIds;
@@ -2885,6 +2891,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             {
                 operationIds = [.. _activeOperationIds];
                 resultIndexOperationIds = [.. _activeResultIndexOperationIds];
+                resultIndexBatchIds = [.. _activeResultIndexBatches];
                 odbMergeOperationIds = [.. _activeOdbMergeOperationIds];
                 resultBatchIds = [.. _activeResultBatchIds];
                 postprocessOperationIds = [.. _activePostprocessOperationIds];
@@ -2899,6 +2906,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         var descriptor = _descriptor;
         if ((operationIds.Length == 0
                 && resultIndexOperationIds.Length == 0
+                && resultIndexBatchIds.Length == 0
                 && odbMergeOperationIds.Length == 0
                 && resultBatchIds.Length == 0
                 && postprocessGroupQueues.Length == 0
@@ -2935,6 +2943,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 .Concat(resultBatchIds.Select(id => BestEffortCancelBatchAsync(descriptor, id, timeoutSource.Token)))
                 .Concat(postprocessGroupQueues.Select(id => BestEffortStopGroupQueueAsync(descriptor, id, timeoutSource.Token)))
                 .Concat(resultIndexCancellations)
+                .Concat(resultIndexBatchIds.Select(id => BestEffortCancelIndexBatchAsync(descriptor, id, timeoutSource.Token)))
                 .Concat(odbMergeCancellations)
                 .Concat(postprocessCancellations));
     }

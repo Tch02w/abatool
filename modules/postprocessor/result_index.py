@@ -467,12 +467,16 @@ def build_result_index(
     section_for: Callable[[Any], str],
     cancel_event: threading.Event | None = None,
     progress: Callable[[int, str], None] | None = None,
+    *,
+    only_if_missing: bool = False,
 ) -> dict[str, str]:
     directory = Path(time_directory).resolve()
     cancellation = cancel_event or threading.Event()
     temporary = _temporary_database(directory)
     target = index_path(directory)
     with _DirectoryLock(directory):
+        if only_if_missing and target.is_file():
+            return {"skipped": "existing"}
         remove_orphaned_temporary_indexes(directory)
         try:
             with closing(_connect(temporary)) as connection:

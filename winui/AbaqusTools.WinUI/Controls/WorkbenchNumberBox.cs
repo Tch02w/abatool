@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Windows.Globalization.NumberFormatting;
 
 namespace AbaqusTools.WinUI.Controls;
 
@@ -28,6 +29,25 @@ public sealed class WorkbenchNumberBox : NumberBox
     {
         Source = new Uri("ms-appx:///Controls/WorkbenchNumberBoxResources.xaml")
     };
+
+    // NumberBox.Text reflects the last committed value while the inner editor has focus.
+    internal string EditingText => (GetTemplateChild("InputBox") as TextBox)?.Text ?? Text;
+
+    internal double? ParseEditingValue(string text)
+    {
+        var parsed = (NumberFormatter as INumberParser)?.ParseDouble(text);
+        return parsed is double value && double.IsFinite(value) && value >= Minimum && value <= Maximum
+            ? value : null;
+    }
+
+    internal void RestoreEditingText(string text)
+    {
+        ApplyTemplate();
+        if (GetTemplateChild("InputBox") is not TextBox input)
+            throw new InvalidOperationException("未能打开数字编辑框。");
+        if (ParseEditingValue(text) is double value && Value != value) Value = value;
+        input.Text = text;
+    }
 
     public static readonly DependencyProperty FrameAppearanceProperty = DependencyProperty.Register(
         nameof(FrameAppearance), typeof(NumberBoxFrameAppearance), typeof(WorkbenchNumberBox),

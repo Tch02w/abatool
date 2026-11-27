@@ -1,5 +1,7 @@
 # 任务索引
 
+F021 根目录和对比组补建索引、F022 未确认参数恢复以及旧版 ODB 写入中断的证据见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F011 真实工程的重启动依赖图见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
+
 F001/F004/F005 的后台启动、队列随写入刷新和操作历史创建，以及 F008 的传输切页与重试，见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--队列自动刷新后台启动及传输切页)。
 
 前一版完整运行中的两处超时、独立复测与命令参数测试的回执修正见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--850f753-最终回归与命令参数回执)。

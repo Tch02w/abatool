@@ -1,5 +1,9 @@
 # 功能定位索引
 
+F022 未确认数值的检查点通过 `WorkbenchNumberBox.EditingText` 读取编辑框原文，提取参数窗口保存时用 `ParseEditingValue` 检查。恢复一处合法空选择或拒绝已消失的非空项，见 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` 中的 `RestoreInputs`。[原生验证](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#2026-11-28--提取参数未确认输入的恢复)
+
+F021 的根目录与对比组补索引由 `modules/control_plane/results.py` 的 `index_scope_directories`、`modules/control_plane/result_indexing.py` 的 `ResultIndexOperationManager.create_batch` 和 `modules/postprocessor/result_index.py` 的 `build_result_index` 实现。协议与优先级、取消和原子发布的回归见 `tests/control_plane/test_result_index_batches.py`。[操作说明](../repowiki/postprocessor.md#一次补齐多个批次的结果索引)
+
 F004/F005 的后台观测由 `LocalQueueRuntimeManager.snapshot`、`JobQueueService.snapshot` 和 `ControlPlaneHost` 处理。队列写入期间，WinUI 可延后本轮本机观察。真实 HTTP 和 C# 客户端覆盖在 `tests/winui_host/test_queue_poll_api.py`。[界面行为](UI_INTERACTION.md) · [接口约定](../api-contract.md)
 
 F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/control_plane/server.py` 的 `ControlPlaneRuntime`、`modules/submitter/scheduler_repository.py` 的 `SQLiteSchedulerRepository` 和 `modules/control_plane/operation_journal.py` 的 `_create_database`。故障恢复回归见 `tests/control_plane/test_api.py`、`tests/submitter/test_scheduler_repository.py` 和 `tests/control_plane/test_operation_journal.py`。[记录与复现](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)

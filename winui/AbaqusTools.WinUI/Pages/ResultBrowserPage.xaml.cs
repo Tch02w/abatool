@@ -32,6 +32,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private ResultScopeNode? _selectedScope;
     private string? _activeIndexOperationId;
+    private string? _activeIndexBatchId;
     private readonly ResultBrowserLoadCoordinator _loads = new();
     private readonly ResultBrowserLocation _location = new();
     private ResultDirectLocation? _direct;
@@ -149,13 +150,21 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             }
 
             recoveredIndex = true;
-            _activeIndexOperationId = snapshot.OperationId;
             _loads.BeginIndex();
             _loads.CompleteInitialIndexCheck();
             indexRequest = _loads.IndexRevision;
             var owner = indexRequest.Value;
-            RootTextBox.Text = snapshot.Request.Root;
-            await RefreshScopesAsync(snapshot.Request.TimeDirectory);
+            if (!string.IsNullOrWhiteSpace(snapshot.BatchId))
+            {
+                var batch = await App.Current.ControlPlane.GetResultIndexBatchAsync(snapshot.BatchId);
+                if (string.IsNullOrWhiteSpace(RootTextBox.Text)) RootTextBox.Text = batch.Root;
+                await RefreshScopesAsync(batch.ScopeDirectory, batch.Root);
+                await ObserveIndexBatchAsync(batch, owner);
+                return true;
+            }
+            _activeIndexOperationId = snapshot.OperationId;
+            if (string.IsNullOrWhiteSpace(RootTextBox.Text)) RootTextBox.Text = snapshot.Request.Root;
+            await RefreshScopesAsync(snapshot.Request.TimeDirectory, snapshot.Request.Root);
             _cancelIndexRequested = string.Equals(
                 snapshot.Status,
                 "cancelling",
@@ -752,10 +761,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var root = _location.LoadedRoot;
         if (scope is null
             || root is null
-            || string.IsNullOrWhiteSpace(scope.TimeDirectory)
+            || (!scope.CanBuildMissingIndexes && !scope.CanRefreshIndex)
             || _scopeBusy || _recordsBusy || _indexBusy)
         {
-            ShowWarning("请选择一个时间目录或其中的 ODB。", "无法创建索引");
+            ShowWarning("请选择结果根目录、对比组、时间目录或模型。", "无法创建索引");
             return;
         }
 
@@ -764,12 +773,19 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         ClearResults();
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
+        _activeIndexBatchId = null;
         IndexInfoBar.IsOpen = false;
         IndexProgressBar.Visibility = Visibility.Visible;
-        ResultStatusText.Text = "正在创建结果索引…";
+        ResultStatusText.Text = scope.CanBuildMissingIndexes ? "正在查找缺失索引的时间目录…" : "正在创建结果索引…";
         RefreshInteractionState();
         try
         {
+            if (scope.CanBuildMissingIndexes)
+            {
+                var batch = await App.Current.ControlPlane.StartResultIndexBatchAsync(root, scope.Path, Guid.NewGuid());
+                await ObserveIndexBatchAsync(batch, indexRequest);
+                return;
+            }
             var initial = await App.Current.ControlPlane.StartResultIndexBuildAsync(
                 root,
                 scope.TimeDirectory,
@@ -800,6 +816,44 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             ClearIndexBusyState(indexRequest);
         }
+    }
+
+    private async Task ObserveIndexBatchAsync(ResultIndexBatchSnapshot batch, long indexRequest)
+    {
+        _activeIndexBatchId = batch.BatchId;
+        IndexProgressBar.Visibility = Visibility.Visible;
+        IndexProgressBar.IsIndeterminate = false;
+        while (!batch.IsTerminal)
+        {
+            if (!_loads.IsCurrentIndexRequest(indexRequest)) return;
+            _cancelIndexRequested |= batch.Status == "cancelling";
+            IndexProgressBar.Maximum = Math.Max(1, batch.Total);
+            IndexProgressBar.Value = batch.Processed;
+            var state = _cancelIndexRequested ? "正在取消补建" : "正在补建索引";
+            var progress = $"{state} · {batch.Processed}/{batch.Total} 个目录 · 跳过 {batch.Skipped} · 失败 {batch.Failed}";
+            ResultStatusText.Text = string.IsNullOrWhiteSpace(batch.CurrentDirectory)
+                ? progress : $"{progress} · {batch.CurrentDirectory}";
+            App.Current.MainWindow.ReportPageStatus(progress);
+            RefreshInteractionState();
+            await Task.Delay(400);
+            batch = await App.Current.ControlPlane.GetResultIndexBatchAsync(batch.BatchId);
+        }
+
+        if (!_loads.IsCurrentIndexRequest(indexRequest)) return;
+        _loads.EndIndex();
+        await RefreshScopesAsync(batch.ScopeDirectory, batch.Root);
+        if (!_loads.IsCurrentIndexRequest(indexRequest)) return;
+        var counts = $"共 {batch.Total} 个目录 · 成功 {batch.Succeeded} · 跳过 {batch.Skipped} · 失败 {batch.Failed} · 取消 {batch.Cancelled}";
+        ResultStatusText.Text = counts;
+        if (batch.Failed > 0 || batch.Status == "failed")
+        {
+            var details = string.Join(Environment.NewLine, batch.Failures.Select(f => $"{f.TimeDirectory} · {f.Message}"));
+            ShowError(string.IsNullOrEmpty(details) ? counts : counts + Environment.NewLine + details, "补建索引存在失败");
+        }
+        else if (batch.Status == "cancelled")
+            ShowWarning(counts, "补建索引已取消");
+        else
+            App.Current.MainWindow.ShowFeedback("补建索引完成", counts, InfoBarSeverity.Success);
     }
 
     private void ApplyIndexSnapshot(ResultIndexOperationSnapshot snapshot, long indexRequest)
@@ -849,9 +903,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnCancelIndexClicked(object sender, RoutedEventArgs e)
     {
         var operationId = _activeIndexOperationId;
+        var batchId = _activeIndexBatchId;
         var indexRequest = _loads.IndexRevision;
         if (!_indexBusy
-            || string.IsNullOrWhiteSpace(operationId)
+            || (string.IsNullOrWhiteSpace(operationId) && string.IsNullOrWhiteSpace(batchId))
             || _cancelIndexRequested)
         {
             return;
@@ -862,8 +917,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RefreshInteractionState();
         try
         {
+            if (batchId is not null)
+            {
+                await App.Current.ControlPlane.CancelResultIndexBatchAsync(batchId);
+                return;
+            }
             var snapshot = await App.Current.ControlPlane.CancelResultIndexOperationAsync(
-                operationId);
+                operationId!);
             ApplyIndexSnapshot(snapshot, indexRequest);
         }
         catch (OperationCanceledException)
@@ -1149,7 +1209,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         _loads.EndIndex();
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
+        _activeIndexBatchId = null;
         IndexProgressBar.Visibility = Visibility.Collapsed;
+        IndexProgressBar.IsIndeterminate = true;
         RefreshInteractionState();
     }
 
@@ -1185,12 +1247,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         SectionComboBox.IsEnabled = idle;
         UseCaseComboBox.IsEnabled = idle;
         SearchTextBox.IsEnabled = idle;
-        BuildIndexButton.IsEnabled = idle
-            && _selectedScope is not null
-            && !string.IsNullOrWhiteSpace(_selectedScope.TimeDirectory);
+        BuildIndexButton.Content = _selectedScope?.CanBuildMissingIndexes == true ? "补建缺失索引" : "刷新索引";
+        BuildIndexButton.IsEnabled = idle && _selectedScope is { } scope && (scope.CanBuildMissingIndexes || scope.CanRefreshIndex);
+        CancelIndexButton.Content = _activeIndexBatchId is null ? "取消索引" : "取消补建";
         CancelIndexButton.IsEnabled = _indexBusy
             && !_cancelIndexRequested
-            && !string.IsNullOrWhiteSpace(_activeIndexOperationId);
+            && (_activeIndexOperationId is not null || _activeIndexBatchId is not null);
     }
 
     private void ShowError(string message, string title = "操作失败")

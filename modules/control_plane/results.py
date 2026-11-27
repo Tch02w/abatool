@@ -130,6 +130,26 @@ def _child_directories(path: Path, warnings: list[str]) -> list[Path]:
     return children
 
 
+def is_indexable_group(path: Path) -> bool:
+    return not path.name.startswith(("_", ".")) and path.name.casefold() != SHARED_DATA_ROOT_NAME.casefold()
+
+
+def index_scope_directories(root: Path, scope: Path) -> list[Path]:
+    """Enumerate only ordinary group/time directories, newest time name first."""
+    warnings: list[str] = []
+    groups = _child_directories(root, warnings) if scope == root else [scope]
+    times = [
+        directory
+        for group in groups
+        if is_indexable_group(group)
+        for directory in _child_directories(group, warnings)
+        if not directory.name.startswith(("_", ".")) and not is_incomplete_output(directory)
+    ]
+    if warnings:
+        raise ApiProblem(400, "RESULT_SCOPE_UNREADABLE", "无法完整读取索引范围", details={"warnings": warnings})
+    return sorted(times, key=lambda path: (natural_sort_key(path.name), str(path)), reverse=True)
+
+
 def discover_result_scopes(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return the legacy result hierarchy as a flat, stable path tree."""
 

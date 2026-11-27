@@ -4,6 +4,14 @@
 
 ## 启动与就绪
 
+### 批量补建结果索引（F021）
+
+后台通过 `result.index.batch-v1` 声明支持。向 `POST /api/v1/result-index-batches` 提交 `schemaVersion: 1`、`clientRequestId`、`root` 和 `scopeDirectory`。范围为已读取的结果根目录或其下的普通对比组。返回 202 和 `batchId`。同一个请求编号和范围可重复提交，改变范围返回 409。用 `GET /api/v1/result-index-batches/{batchId}` 查询，用同一路径加 `/cancel` 发送 POST 取消。
+
+快照中 `total` 为范围内的时间目录总数。`succeeded` 为本次建成数，`skipped` 包含已有索引和已有活动任务的目录。`processed` 为建成、跳过、失败及取消的合计。`waiting` 和 `active` 分别表示尚在等待和正在执行的目录数。`failures` 含失败目录及原因。单项目录沿用 `result-index-builds` 协议，属于批次时额外返回 `batchId`。退出保护包含等待与执行中的所有成员。
+
+单独提交的刷新优先于等待中的批量成员。每个索引以独立文件锁保护并原子发布。发布后到达的取消请求保留成功结果。后台进程重启后，重新提交范围会跳过已经发布的索引，原进程中的批次编号随进程结束失效。
+
 ### 结果目录直接翻页（F021）
 
 `POST /api/v1/result-records` 的 `directDirectory` 模式可附 `directAnchor`，例如 `{"name":"curve500.csv","isDirectory":false,"direction":"after"}`。`after` 取该顺序位置之后的一页，`before` 取之前最近的一页，两个方向均按正序返回。名称和类型只用于排序比较，边界文件已删除时仍可定位。只接受单项名称、布尔类型以及这两个方向；将该字段用于索引查询或提供非法边界返回 400 `INVALID_DIRECT_ANCHOR`。

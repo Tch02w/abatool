@@ -62,11 +62,11 @@ def test_postprocess_legend_errors_keep_the_dialog_and_draft() -> None:
 def test_postprocess_invalid_editor_input_keeps_dialog_open() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
     editor = page.split("private async Task<OdbPostprocessJobDraft?> ShowJobConfigurationDialogAsync", 1)[1]
-    handler = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("if (await ShowRecoverableDialogAsync(", 1)[0]
+    handler = editor.split("dialog.PrimaryButtonClick +=", 1)[1].split("var inputControls =", 1)[0]
     assert "string.IsNullOrWhiteSpace(manualFrames.Text)" in handler
-    assert "double.IsFinite(diameter.Value)" in handler
-    assert "double.IsFinite(prefracture.Value)" in handler
-    assert "Math.Truncate(prefracture.Value)" in handler
+    assert "diameter.ParseEditingValue(diameter.EditingText)" in handler
+    assert "prefracture.ParseEditingValue(prefracture.EditingText)" in handler
+    assert "Math.Truncate(frameIndex.Value)" in handler
     assert "args.Cancel = error.Length > 0" in handler
     assert "validationMessage.Text = error" in handler
 

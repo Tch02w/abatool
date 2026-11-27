@@ -127,6 +127,19 @@ public sealed partial class TestApp : Application
         await CheckAppearanceAsync(cpu, input, down, up);
         await CheckTextFieldAppearanceAsync();
         await CheckQueueToolbarAppearanceAsync();
+        input.Text = "-";
+        Check(cpu.EditingText == "-" && cpu.Value == 1,
+            "An unfinished number is available to the recovery checkpoint before native commit");
+        var valueChanges = 0;
+        cpu.ValueChanged += (_, _) => valueChanges++;
+        cpu.RestoreEditingText("1e");
+        Check(input.Text == "1e" && cpu.ParseEditingValue(cpu.EditingText) is null
+            && cpu.Value == 1 && valueChanges == 0,
+            "Restoring an incomplete number preserves its raw text and leaves the numeric value untouched");
+        cpu.RestoreEditingText("2");
+        Check(cpu.Value == 2 && cpu.ParseEditingValue(cpu.EditingText) == 2,
+            "A complete restored number supplies the value for an explicit save");
+        cpu.RestoreEditingText("1");
         await InvokeAsync(up);
         Check(cpu.Value == 2, "Native increment changes the value exactly once");
         await InvokeAsync(down);

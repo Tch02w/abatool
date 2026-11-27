@@ -21,7 +21,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
     public RestartChainPage()
     {
         InitializeComponent();
-        _explorerAdapter = new RestartChainExplorerAdapter(RefreshAsync, SelectExplorerNode);
+        _explorerAdapter = new RestartChainExplorerAdapter(() => RefreshAsync("依赖链已刷新"), SelectExplorerNode);
         App.Current.Session.Register(this, "restart-chain", []);
         Loaded += OnPageLoaded;
     }
@@ -35,10 +35,10 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
 
     private async void OnRefreshClicked(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync();
+        await RefreshAsync("重启动依赖校验完成");
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(string? feedbackTitle = null)
     {
         if (_refreshBusy)
         {
@@ -75,16 +75,12 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             OrderCheckText.Text = snapshot.Checks.CycleCount == 0
                 ? $"已生成 · {snapshot.Checks.ValidCount} 个有效节点"
                 : "循环依赖阻止生成完整顺序";
-            ChainInfoBar.Title = snapshot.NodeCount == 0
-                ? "没有重启动依赖"
-                : snapshot.HasIssues ? "依赖链存在问题" : "依赖链校验通过";
-            ChainInfoBar.Message = snapshot.NodeCount == 0
-                ? "正式队列中尚无包含 oldjob 的真实作业。"
-                : $"循环 {snapshot.Checks.CycleCount} · 缺失 {snapshot.Checks.MissingParentCount} · 路径不兼容 {snapshot.Checks.IncompatiblePathCount}";
-            ChainInfoBar.Severity = snapshot.NodeCount == 0
-                ? InfoBarSeverity.Informational
-                : snapshot.HasIssues ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
-            ChainInfoBar.IsOpen = true;
+            if (feedbackTitle is not null)
+                App.Current.MainWindow.ShowFeedback(feedbackTitle, snapshot.NodeCount == 0
+                    ? "正式队列中尚无重启动作业。"
+                    : $"循环 {snapshot.Checks.CycleCount} · 缺失 {snapshot.Checks.MissingParentCount} · 路径不兼容 {snapshot.Checks.IncompatiblePathCount}",
+                    snapshot.HasIssues ? InfoBarSeverity.Warning :
+                        snapshot.NodeCount == 0 ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
             App.Current.MainWindow.ReportPageStatus(
                 snapshot.HasIssues ? "重启动依赖需要修正" : "重启动依赖校验完成");
         }
@@ -421,7 +417,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
 
             var oldjobPath = oldjobBox.Text.Trim();
             await App.Current.ControlPlane.UpdateRestartDependencyAsync(node.ItemId, oldjobPath);
-            await RefreshAsync();
+            await RefreshAsync("重启动依赖已保存");
         }
         catch (ControlPlaneException exception)
         {
@@ -457,10 +453,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
 
     private void ShowError(string message, string title = "依赖链读取失败")
     {
-        ChainInfoBar.Title = title;
-        ChainInfoBar.Message = message;
-        ChainInfoBar.Severity = InfoBarSeverity.Error;
-        ChainInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Error);
     }
 
     private static string CheckText(int count)

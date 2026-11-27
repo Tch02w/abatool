@@ -65,7 +65,9 @@ public sealed partial class OdbPostprocessingPage
             {
                 var added = updated.Groups.Count - existing.Groups.Count;
                 if (added > 0) ForceRescanCheckBox.IsChecked = false;
-                App.Current.MainWindow.ReportPageStatus($"已追加 {added} 项，共提交 {run.Groups.Count} 项");
+                if (updated.IsActive)
+                    App.Current.MainWindow.ShowFeedback("分组队列已核对", $"共提交 {run.Groups.Count} 项，实际追加 {added} 项。",
+                        added > 0 ? InfoBarSeverity.Success : InfoBarSeverity.Informational);
             }
             return;
         }
@@ -85,6 +87,8 @@ public sealed partial class OdbPostprocessingPage
             PostprocessLogTextBox.Text = "";
             await AttachGroupQueueAsync(initial);
             ForceRescanCheckBox.IsChecked = false;
+            if (initial.IsActive) ShowSuccess($"已受理 {initial.Groups.Count} 个提取任务。", "分组队列已创建");
+            else ShowGroupQueueOutcome(initial);
         }
         catch (Exception error)
         {
@@ -186,7 +190,8 @@ public sealed partial class OdbPostprocessingPage
             if (queue is null)
             {
                 if (_queueBookmark is null && _queueUnconfirmed) { _queueUnconfirmed = false; RefreshInteractionState(); }
-                if (explicitRead) ShowWarning("当前工作区未找到相应的分组队列。", "已查询分组队列");
+                if (explicitRead) App.Current.MainWindow.ShowFeedback("已查询分组队列", "当前工作区未找到相应的分组队列。",
+                    InfoBarSeverity.Informational);
                 return;
             }
             if (_queueBookmark?.OperationId != queue.OperationId) await AttachGroupQueueAsync(queue);
@@ -232,6 +237,7 @@ public sealed partial class OdbPostprocessingPage
         var wasUnconfirmed = _queueUnconfirmed;
         _queueUnconfirmed = false;
         var changed = _groupQueue?.OperationId != queue.OperationId || _groupQueue.Version != queue.Version;
+        var finished = _groupQueue is { IsActive: true } previous && previous.OperationId == queue.OperationId && !queue.IsActive;
         _groupQueue = queue;
         if (!queue.IsActive) _groupQueueTimer.Stop();
         if (!changed)
@@ -249,6 +255,7 @@ public sealed partial class OdbPostprocessingPage
             ?? choices.FirstOrDefault(item => item.Id == queue.CurrentGroupId) ?? choices.FirstOrDefault();
         var waiting = queue.Groups.Count(item => item.Status == "queued");
         GroupQueueSummary.Text = $"{QueueStatus(queue.Status)} · 等待 {waiting} 组 · 已发布 {queue.Result.OutputCount} 个结果目录";
+        if (finished) ShowGroupQueueOutcome(queue);
         if (!_postprocessBusy)
         {
             var current = queue.Groups.FirstOrDefault(item => item.GroupId == queue.CurrentGroupId);
@@ -364,6 +371,19 @@ public sealed partial class OdbPostprocessingPage
             PrimaryButtonText = "停止队列", CloseButtonText = "返回" };
         if (await confirm.ShowAsync() == ContentDialogResult.Primary)
             await ChangeGroupQueueAsync(queue, PostprocessGroupQueueAction.Stop);
+    }
+
+    private static void ShowGroupQueueOutcome(OdbPostprocessGroupQueueSnapshot queue)
+    {
+        var severity = queue.Status switch
+        {
+            "succeeded" when queue.Result.OutputCount > 0 => InfoBarSeverity.Success,
+            "failed" => InfoBarSeverity.Error,
+            "cancelled" => InfoBarSeverity.Informational,
+            _ => InfoBarSeverity.Warning,
+        };
+        App.Current.MainWindow.ShowFeedback($"分组队列{QueueStatus(queue.Status)}",
+            $"{queue.Phase} · 已发布 {queue.Result.OutputCount} 个结果目录", severity);
     }
 
     private static string QueueError(Exception error) => error is ControlPlaneException api ? api.ToDisplayMessage() : error.Message;

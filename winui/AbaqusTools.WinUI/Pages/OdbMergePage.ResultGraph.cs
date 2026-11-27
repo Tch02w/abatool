@@ -133,7 +133,7 @@ public sealed partial class OdbMergePage
         }
     }
 
-    private void ApplyBatchSnapshot(OdbResultBatchSnapshot snapshot)
+    private void ApplyBatchSnapshot(OdbResultBatchSnapshot snapshot, bool notifyTerminal = true)
     {
         _resumableBatchId = snapshot.CanResume ? snapshot.OperationId : null;
         _batchTotalSteps = snapshot.TotalSteps;
@@ -176,7 +176,9 @@ public sealed partial class OdbMergePage
             : snapshot.Status == "failed" ? InfoBarSeverity.Error
             : snapshot.IsActive ? InfoBarSeverity.Informational : InfoBarSeverity.Warning;
         var message = snapshot.Phase + (snapshot.Warnings.Count > 0 ? "；" + string.Join("；", snapshot.Warnings) : string.Empty);
-        ShowPlanState(snapshot.IsActive ? "正在生成完整结果" : snapshot.CanResume ? "批量任务等待继续" : "批量任务已结束", message, severity);
+        MergePlanSummaryText.Text += $" · {message}";
+        if (!snapshot.IsActive && notifyTerminal)
+            ShowPlanState(snapshot.CanResume ? "批量任务等待继续" : "批量任务已结束", message, severity);
         RefreshInteractionState();
         UpdateExplorer();
     }

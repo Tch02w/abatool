@@ -23,6 +23,8 @@
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchExplorerHost.xaml.cs" Link="Controls/WorkbenchExplorerHost.xaml.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/NonEmptyStringToVisibilityConverter.cs" Link="NonEmptyStringToVisibilityConverter.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/InfoBarLayout.cs" Link="InfoBarLayout.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchFeedbackHost.xaml.cs" Link="Controls/WorkbenchFeedbackHost.xaml.cs" />
+    <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchFeedbackHost.xaml" Link="Controls/WorkbenchFeedbackHost.xaml" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/CompactTreeItem.cs" Link="CompactTreeItem.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/ServerDialogLayout.cs" Link="ServerDialogLayout.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs" Link="ParameterHelpButton.cs" />

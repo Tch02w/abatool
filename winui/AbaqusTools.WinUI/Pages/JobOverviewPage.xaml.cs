@@ -23,7 +23,6 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     private bool _logPointerDown;
     private bool _retryingArchive;
     private long _snapshotRequest;
-    private long _controlRequest;
     private long _jobViewRevision;
     private readonly RuntimeLogUpdateState _runtimeLog;
 
@@ -85,7 +84,6 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     {
         _refreshTimer.Stop();
         _snapshotRequest++;
-        _controlRequest++;
         _jobViewRevision++;
         _logPointerDown = false;
     }
@@ -198,7 +196,6 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     {
         if (!string.Equals(_currentEntry?.Key, entry?.Key, StringComparison.Ordinal))
         {
-            _controlRequest++;
             _jobViewRevision++;
         }
         _currentEntry = entry;
@@ -411,23 +408,20 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         {
             var selectedKey = _currentEntry.Key;
             var request = ++_snapshotRequest;
-            var action = ++_controlRequest;
             try
             {
                 var updated = await App.Current.ControlPlane.ControlRemoteJobAsync(
                     remote.OperationId,
                     remote.Paused ? "resume" : "pause");
+                ShowRemoteControlResult(updated, remote.Paused ? "已请求恢复远端作业" : "已请求暂停远端作业");
                 if (IsLoaded && request == _snapshotRequest && _currentEntry?.Key == selectedKey)
                 {
                     ApplyJob(JobOverviewEntry.FromRemote(updated));
                 }
             }
-            catch (ControlPlaneException exception)
+            catch (Exception exception)
             {
-                if (IsLoaded && action == _controlRequest && _currentEntry?.Key == selectedKey)
-                {
-                    OverviewMessageText.Text = exception.ToDisplayMessage();
-                }
+                ShowActionError(remote.Paused ? "恢复远端作业失败" : "暂停远端作业失败", remote.Request.JobName, exception);
             }
             return;
         }
@@ -446,12 +440,13 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
         var localSelectedKey = _currentEntry?.Key;
         var localRequest = ++_snapshotRequest;
-        var localAction = ++_controlRequest;
         try
         {
             var runtime = await App.Current.ControlPlane.SetLocalQueueItemsPausedAsync(
                 [currentJob.ItemId],
                 !operation.Paused);
+            App.Current.MainWindow.ShowFeedback(operation.Paused ? "已请求恢复本机作业" : "已请求暂停本机作业",
+                currentJob.JobName, InfoBarSeverity.Success);
             if (!IsLoaded || localRequest != _snapshotRequest || _currentEntry?.Key != localSelectedKey)
             {
                 return;
@@ -461,12 +456,9 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 item => string.Equals(item.ItemId, currentJob.ItemId, StringComparison.Ordinal));
             ApplyJob(updated is null ? null : JobOverviewEntry.FromLocal(updated));
         }
-        catch (ControlPlaneException exception)
+        catch (Exception exception)
         {
-            if (IsLoaded && localAction == _controlRequest && _currentEntry?.Key == localSelectedKey)
-            {
-                OverviewMessageText.Text = exception.ToDisplayMessage();
-            }
+            ShowActionError(operation.Paused ? "恢复本机作业失败" : "暂停本机作业失败", currentJob.JobName, exception);
         }
     }
 
@@ -481,14 +473,15 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         try
         {
             var updated = await App.Current.ControlPlane.RetryLocalArchiveAsync(item.ItemId);
+            App.Current.MainWindow.ShowFeedback("已请求恢复归档", item.JobName, InfoBarSeverity.Success);
             if (!IsLoaded || request != _snapshotRequest || _currentEntry?.Key != selectedKey) return;
             _runtime = updated;
             var row = updated.Queue.QueueItems.FirstOrDefault(x => x.ItemId == item.ItemId);
             ApplyJob(row is null ? null : JobOverviewEntry.FromLocal(row));
         }
-        catch (ControlPlaneException exception)
+        catch (Exception exception)
         {
-            if (IsLoaded && _currentEntry?.Key == selectedKey) OverviewMessageText.Text = exception.ToDisplayMessage();
+            ShowActionError("恢复归档失败", item.JobName, exception);
         }
         finally
         {
@@ -524,7 +517,6 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
 
         var request = ++_snapshotRequest;
-        var action = ++_controlRequest;
         try
         {
             if (remote is not null)
@@ -532,6 +524,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 var updated = await App.Current.ControlPlane.ControlRemoteJobAsync(
                     remote.OperationId,
                     "cancel");
+                ShowRemoteControlResult(updated, "已请求终止远端作业");
                 if (IsLoaded && request == _snapshotRequest && _currentEntry?.Key == selectedKey)
                 {
                     ApplyJob(JobOverviewEntry.FromRemote(updated));
@@ -544,6 +537,8 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             }
             var runtime = await App.Current.ControlPlane.TerminateLocalQueueItemsAsync(
                 [currentJob.ItemId]);
+            App.Current.MainWindow.ShowFeedback(archiving ? "已请求取消归档" : "已请求终止本机作业",
+                jobName, InfoBarSeverity.Informational);
             if (!IsLoaded || request != _snapshotRequest || _currentEntry?.Key != selectedKey)
             {
                 return;
@@ -553,13 +548,23 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 item => string.Equals(item.ItemId, currentJob.ItemId, StringComparison.Ordinal));
             ApplyJob(updatedLocal is null ? null : JobOverviewEntry.FromLocal(updatedLocal));
         }
-        catch (ControlPlaneException exception)
+        catch (Exception exception)
         {
-            if (IsLoaded && action == _controlRequest && _currentEntry?.Key == selectedKey)
-            {
-                OverviewMessageText.Text = exception.ToDisplayMessage();
-            }
+            ShowActionError(archiving ? "取消归档失败" : "终止作业失败", jobName, exception);
         }
+    }
+
+    private static void ShowRemoteControlResult(RemoteJobOperationSnapshot updated, string requested)
+    {
+        App.Current.MainWindow.ShowFeedback(updated.IsTerminal ? "远端作业已结束" : requested,
+            $"{updated.Request.JobName} · {updated.Error?.Message ?? updated.StatusDisplay}",
+            updated.Status == "failed" ? InfoBarSeverity.Error : InfoBarSeverity.Informational);
+    }
+
+    private static void ShowActionError(string title, string subject, Exception exception)
+    {
+        var message = exception is ControlPlaneException problem ? problem.ToDisplayMessage() : exception.Message;
+        App.Current.MainWindow.ShowFeedback(title, $"{subject} · {message}", InfoBarSeverity.Error);
     }
 
     private static string BuildRuntimeLog(
@@ -616,40 +621,44 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenDirectoryClicked(object sender, RoutedEventArgs e)
     {
-        var view = _jobViewRevision;
         if (_currentEntry?.RemoteOperation is { } remote)
         {
-            var browser = new RemoteFileBrowserDialog(
-                XamlRoot,
-                RemoteSelectionMode.Browse,
-                $"{remote.Request.JobName} · 服务器工作目录",
-                remote.OperationId);
-            await browser.ShowAsync(remote.WorkDirectory);
+            try
+            {
+                var browser = new RemoteFileBrowserDialog(
+                    XamlRoot, RemoteSelectionMode.Browse,
+                    $"{remote.Request.JobName} · 服务器工作目录", remote.OperationId);
+                await browser.ShowAsync(remote.WorkDirectory);
+            }
+            catch (Exception exception)
+            {
+                ShowActionError("打开服务器工作目录失败", remote.Request.JobName, exception);
+            }
             return;
         }
         var currentJob = _currentEntry?.LocalItem;
         var workDirectory = currentJob is null ? null : ResolveWorkDirectory(currentJob);
+        if (currentJob is null) return;
         if (workDirectory is null || !Directory.Exists(workDirectory))
         {
+            App.Current.MainWindow.ShowFeedback("作业目录不可用", workDirectory ?? currentJob.JobName, InfoBarSeverity.Warning);
             return;
         }
 
         try
         {
-            await Launcher.LaunchFolderAsync(await StorageFolder.GetFolderFromPathAsync(workDirectory));
+            var opened = await Launcher.LaunchFolderAsync(await StorageFolder.GetFolderFromPathAsync(workDirectory));
+            App.Current.MainWindow.ShowFeedback(opened ? "已打开作业目录" : "Windows 未能打开作业目录", workDirectory,
+                opened ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception exception)
         {
-            if (IsLoaded && view == _jobViewRevision)
-            {
-                OverviewMessageText.Text = exception.Message;
-            }
+            ShowActionError("打开作业目录失败", workDirectory, exception);
         }
     }
 
     private async void OnOpenOutputFileClicked(object sender, RoutedEventArgs e)
     {
-        var view = _jobViewRevision;
         if (sender is not Button { Tag: string extension })
         {
             return;
@@ -661,6 +670,10 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             if (remote.Files.TryGetValue(key, out var remotePath))
             {
                 await DownloadRemoteOutputAsync(remote.OperationId, remotePath);
+            }
+            else
+            {
+                App.Current.MainWindow.ShowFeedback("远端输出文件不可用", remote.Request.JobName + extension, InfoBarSeverity.Warning);
             }
             return;
         }
@@ -674,44 +687,42 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         var path = OutputFilePath(currentJob, extension);
         if (path is null || !File.Exists(path))
         {
+            App.Current.MainWindow.ShowFeedback("输出文件不可用", path ?? currentJob.JobName + extension, InfoBarSeverity.Warning);
             return;
         }
 
         try
         {
-            await Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(path));
+            var opened = await Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(path));
+            App.Current.MainWindow.ShowFeedback(opened ? "已打开作业输出" : "Windows 未能打开作业输出", path,
+                opened ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception exception)
         {
-            if (IsLoaded && view == _jobViewRevision)
-            {
-                OverviewMessageText.Text = exception.Message;
-            }
+            ShowActionError("打开作业输出失败", path, exception);
         }
     }
 
     private async Task DownloadRemoteOutputAsync(string sourceOperationId, string remotePath)
     {
         var view = _jobViewRevision;
-        var extension = Path.GetExtension(remotePath);
-        var picker = new FileSavePicker
-        {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = Path.GetFileName(remotePath),
-            CommitButtonText = "下载并打开",
-        };
-        picker.FileTypeChoices.Add(
-            string.IsNullOrWhiteSpace(extension) ? "数据文件" : $"{extension} 文件",
-            [string.IsNullOrWhiteSpace(extension) ? ".dat" : extension]);
-        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-        var destination = await picker.PickSaveFileAsync();
-        if (destination is null)
-        {
-            return;
-        }
+        string? downloadedPath = null;
         try
         {
+            var extension = Path.GetExtension(remotePath);
+            var picker = new FileSavePicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                SuggestedFileName = Path.GetFileName(remotePath),
+                CommitButtonText = "下载并打开",
+            };
+            picker.FileTypeChoices.Add(
+                string.IsNullOrWhiteSpace(extension) ? "数据文件" : $"{extension} 文件",
+                [string.IsNullOrWhiteSpace(extension) ? ".dat" : extension]);
+            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
+            var destination = await picker.PickSaveFileAsync();
+            if (destination is null) return;
             var operation = await App.Current.ControlPlane.StartRemoteTransferAsync(
                 "download",
                 remotePath,
@@ -730,25 +741,22 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
                 });
             if (terminal.Status != "succeeded")
             {
-                if (IsLoaded && view == _jobViewRevision)
-                {
-                    OverviewMessageText.Text = terminal.Error?.Message ?? "远端输出下载失败";
-                }
+                var cancelled = terminal.Status == "cancelled";
+                App.Current.MainWindow.ShowFeedback(cancelled ? "已取消下载远端输出" : "远端输出下载失败",
+                    terminal.Error is null ? remotePath : $"{remotePath} · {terminal.Error.Message}",
+                    cancelled ? InfoBarSeverity.Informational : InfoBarSeverity.Error);
                 return;
             }
-            if (IsLoaded && view == _jobViewRevision)
-            {
-                OverviewMessageText.Text = "远端输出已下载";
-            }
-            await Launcher.LaunchFileAsync(
-                await StorageFile.GetFileFromPathAsync(destination.Path));
+            downloadedPath = destination.Path;
+            var opened = await Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(downloadedPath));
+            App.Current.MainWindow.ShowFeedback(opened ? "远端输出已下载并打开" : "远端输出已下载，Windows 未能打开文件",
+                downloadedPath, opened ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception exception)
         {
-            if (IsLoaded && view == _jobViewRevision)
-            {
-                OverviewMessageText.Text = exception.Message;
-            }
+            if (downloadedPath is null) ShowActionError("远端输出下载失败", remotePath, exception);
+            else App.Current.MainWindow.ShowFeedback("远端输出已下载，打开失败",
+                $"{downloadedPath} · {exception.Message}", InfoBarSeverity.Warning);
         }
     }
 

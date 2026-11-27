@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs" Link="WorkbenchNumberBox.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs" Link="ParameterHelpButton.cs" />
+    <Compile Include="../../winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs" Link="ParameterHelpText.cs" />
     <Compile Include="../../winui/AbaqusTools.WinUI/Controls/PlainDecimalFormatter.cs" Link="PlainDecimalFormatter.cs" />
     <Page Include="../../winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml" Link="Controls/WorkbenchNumberBoxResources.xaml" />
   </ItemGroup>

@@ -45,6 +45,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     {
         _localSnapshot = snapshot;
         LocalStatusText.Text = $"在线 · {snapshot.CapturedAt.ToLocalTime():HH:mm:ss}";
+        ToolTipService.SetToolTip(LocalStatusText, null);
         CpuSummaryText.Text = snapshot.CpuDisplay;
         CpuProgress.Value = snapshot.CpuPercent;
         QueueSummaryText.Text = $"队列作业：{snapshot.TotalJobs}";
@@ -55,7 +56,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     {
         UpdateButtons();
         LocalStatusText.Text = "资源读取失败";
-        ShowError(message);
+        ToolTipService.SetToolTip(LocalStatusText, message);
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -134,7 +135,6 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             if (revision == App.Current.Commands.RemoteRevision && !_busy)
             {
                 ApplyRemoteSnapshot(snapshot);
-                if (!observing) App.Current.MainWindow.ReportPageStatus("远端资源已刷新");
             }
         }
         catch (OperationCanceledException)
@@ -144,7 +144,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         catch (Exception exception)
         {
             if (revision == App.Current.Commands.RemoteRevision && !_busy)
-                await ShowRemoteActionErrorAsync(exception);
+                await ShowRemoteActionErrorAsync(exception, notify: false);
         }
         finally
         {
@@ -172,7 +172,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             return;
         }
         if (!commands.CanRefreshLocal) return;
-        await App.Current.MainWindow.RefreshLocalResourceNowAsync();
+        await App.Current.MainWindow.RefreshLocalResourceNowAsync(notify: true);
         await LoadRemoteSnapshotAsync();
     }
 
@@ -396,7 +396,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             // A lost creation reply or a failed read does not establish the
             // transfer's terminal state. Recover by GET, never re-submit it.
             _transferRecoveryPending = true;
-            ShowTransferObservationWarning(exception.Message);
+            ShowTransferObservationWarning(exception.Message, userInitiated: true);
             return null;
         }
         finally
@@ -504,11 +504,13 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private void ShowTransferObservationWarning(string message)
+    private void ShowTransferObservationWarning(string message, bool userInitiated = false)
     {
         TransferStatusText.Text = "传输状态暂未确认";
-        ShowInfo("暂时未能读取最新状态，将自动重试查询；不会重新提交或取消传输。\n" + message,
-            InfoBarSeverity.Warning, "正在核对传输状态");
+        ToolTipService.SetToolTip(TransferStatusText, message);
+        if (!_transferObservationWarning && (userInitiated || !string.IsNullOrEmpty(_activeTransferId)))
+            ShowInfo("暂时未能读取最新状态，将自动重试查询。\n" + message,
+                InfoBarSeverity.Warning, "正在核对传输状态");
         _transferObservationWarning = true;
         CancelTransferButton.IsEnabled = !string.IsNullOrEmpty(_activeTransferId);
     }
@@ -516,7 +518,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private void ClearTransferObservationWarning()
     {
         if (!_transferObservationWarning) return;
-        ResourceInfoBar.IsOpen = false;
+        ToolTipService.SetToolTip(TransferStatusText, null);
         _transferObservationWarning = false;
     }
 
@@ -577,7 +579,6 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             return;
         }
         _busy = true;
-        ResourceInfoBar.IsOpen = false;
         UpdateButtons();
         try
         {
@@ -603,7 +604,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async Task ShowRemoteActionErrorAsync(Exception original)
+    private async Task ShowRemoteActionErrorAsync(Exception original, bool notify = true)
     {
         var message = original.Message;
         try
@@ -623,7 +624,12 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
                 Connection = new RemoteServerConnection { Status = "error", LastError = message },
             });
         }
-        ShowError(message);
+        if (notify) ShowError(message);
+        else
+        {
+            RemoteConnectionText.Text = "远端资源刷新失败";
+            ToolTipService.SetToolTip(RemoteConnectionText, message);
+        }
     }
 
     private async Task ApplyServerDialogResultAsync(ServerDialogResult result)
@@ -697,7 +703,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         };
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
         {
-            App.Current.MainWindow.ReportPageStatus("已取消首次服务器连接");
+            ShowInfo("服务器主机指纹尚未确认。", InfoBarSeverity.Informational, "已取消首次服务器连接");
             return;
         }
 
@@ -902,10 +908,12 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         _remoteSnapshot = snapshot;
         RemoteSummaryText.Text = $"{snapshot.Profiles.Count} 个配置";
         RemoteConnectionText.Text = snapshot.Connection.DisplayText;
+        ToolTipService.SetToolTip(RemoteConnectionText, null);
         if (!string.IsNullOrWhiteSpace(snapshot.ProfilesError))
         {
-            ShowError("服务器配置读取失败：" + snapshot.ProfilesError);
+            RemoteSummaryText.Text = "服务器配置读取失败";
         }
+        ToolTipService.SetToolTip(RemoteSummaryText, snapshot.ProfilesError);
         App.Current.MainWindow.ApplyRemoteServerSnapshot(snapshot);
         RebuildRows();
     }
@@ -1046,11 +1054,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         InfoBarSeverity severity,
         string title = "计算资源")
     {
-        _transferObservationWarning = false;
-        ResourceInfoBar.Title = title;
-        ResourceInfoBar.Message = message;
-        ResourceInfoBar.Severity = severity;
-        ResourceInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, severity);
     }
 
     private sealed record ServerDialogResult(

@@ -80,7 +80,8 @@ public sealed partial class JobQueuePage
                 oldjob.Text, fortran.Text, executionOptions: execution.ReadValue(),
                 calculationRootDir: ChangedPath(root.Text, initialRoot),
                 archiveDir: ChangedPath(archive.Text, initialArchive),
-                cleanupAfterArchive: cleanup.IsChecked == initialCleanup ? null : cleanup.IsChecked));
+                cleanupAfterArchive: cleanup.IsChecked == initialCleanup ? null : cleanup.IsChecked),
+            keepCollapsedViewport: true);
     }
 
     private static Expander OptionsSection(string header, FrameworkElement content) => new()
@@ -153,18 +154,30 @@ public sealed partial class JobQueuePage
         };
     }
 
-    private async Task ShowQueueEditorAsync(string title, StackPanel panel, Func<Task<JobQueueCommandResponse>> save)
+    private async Task ShowQueueEditorAsync(string title, StackPanel panel, Func<Task<JobQueueCommandResponse>> save,
+        bool keepCollapsedViewport = false)
     {
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
         var content = new Grid { RowSpacing = 6 };
         content.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         content.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        content.Children.Add(Controls.ServerDialogLayout.Content(panel));
+        var viewport = Controls.ServerDialogLayout.Content(panel);
+        content.Children.Add(viewport);
         Grid.SetRow(error, 1);
         content.Children.Add(error);
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = title, Content = content,
             PrimaryButtonText = "保存", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
         Controls.ServerDialogLayout.KeepExistingWidth(dialog);
+        if (keepCollapsedViewport)
+        {
+            // ContentDialog centers itself when its desired size changes. Let the first
+            // (collapsed) layout choose the cap, then scroll any expanded content inside it.
+            dialog.Opened += (_, _) =>
+            {
+                if (viewport.ActualHeight > 0)
+                    viewport.MaxHeight = Math.Min(viewport.MaxHeight, viewport.ActualHeight);
+            };
+        }
         dialog.PrimaryButtonClick += async (_, args) =>
         {
             var deferral = args.GetDeferral();

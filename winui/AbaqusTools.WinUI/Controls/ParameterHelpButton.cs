@@ -2,7 +2,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using AbaqusTools.WinUI.Services;
@@ -74,21 +73,9 @@ public sealed class ParameterHelpButton : Button
                 Flyout?.Hide();
             }
         };
-        var helpGlyph = new Border
-        {
-            Width = 14,
-            Height = 14,
-            CornerRadius = new CornerRadius(7),
-            BorderThickness = new Thickness(1),
-            Opacity = 0.75,
-            Child = new FontIcon { Glyph = ((char)Symbol.Help).ToString(), FontSize = 10 },
-        };
-        helpGlyph.SetBinding(Border.BorderBrushProperty, new Binding
-        {
-            Source = this,
-            Path = new PropertyPath(nameof(Foreground)),
-        });
-        Content = helpGlyph;
+        var appearance = WorkbenchNumberBox.CreateAppearanceResources();
+        Resources.MergedDictionaries.Add(appearance);
+        Content = ((DataTemplate)appearance["WorkbenchParameterHelpIcon"]).LoadContent();
         Padding = new Thickness(3);
         MinWidth = 28;
         MinHeight = 28;

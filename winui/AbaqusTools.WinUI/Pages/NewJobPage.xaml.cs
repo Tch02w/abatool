@@ -47,7 +47,6 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         FortranPathTextBox.Text = string.Empty;
         CommandPreviewTextBox.Text = string.Empty;
         CommandPreviewExpander.IsExpanded = false;
-        DraftInfoBar.IsOpen = false;
         ApplyExecutionMode();
     }
 
@@ -134,19 +133,14 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnChooseInputClicked(object sender, RoutedEventArgs e)
     {
-        var path = UsesRemoteExistingFiles
-            ? (await new RemoteFileBrowserDialog(
-                XamlRoot,
-                RemoteSelectionMode.File,
-                "选择服务器上的 Abaqus 输入文件").ShowAsync())?.Path
-            : await PickFileAsync([".inp"], "选择 Abaqus 输入文件");
+        var path = await ChooseJobFileAsync([".inp"], "选择 Abaqus 输入文件", "选择服务器上的 Abaqus 输入文件");
         if (path is null)
         {
             return;
         }
         if (!string.Equals(Path.GetExtension(path), ".inp", StringComparison.OrdinalIgnoreCase))
         {
-            ShowPreviewError("请选择 .inp 输入文件。");
+            App.Current.MainWindow.ShowFeedback("输入文件格式不符", "请选择 .inp 输入文件。", InfoBarSeverity.Warning);
             return;
         }
 
@@ -155,12 +149,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnChooseOldjobClicked(object sender, RoutedEventArgs e)
     {
-        var path = UsesRemoteExistingFiles
-            ? (await new RemoteFileBrowserDialog(
-                XamlRoot,
-                RemoteSelectionMode.File,
-                "选择服务器上的重启动依赖 ODB").ShowAsync())?.Path
-            : await PickFileAsync([".odb"], "选择重启动依赖 ODB");
+        var path = await ChooseJobFileAsync([".odb"], "选择重启动依赖 ODB", "选择服务器上的重启动依赖 ODB");
         if (path is not null)
         {
             OldjobPathTextBox.Text = path;
@@ -169,14 +158,8 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnChooseFortranClicked(object sender, RoutedEventArgs e)
     {
-        var path = UsesRemoteExistingFiles
-            ? (await new RemoteFileBrowserDialog(
-                XamlRoot,
-                RemoteSelectionMode.File,
-                "选择服务器上的用户子程序").ShowAsync())?.Path
-            : await PickFileAsync(
-                [".for", ".f", ".f90", ".obj"],
-                "选择 Fortran 用户子程序");
+        var path = await ChooseJobFileAsync([".for", ".f", ".f90", ".obj"],
+            "选择 Fortran 用户子程序", "选择服务器上的用户子程序");
         if (path is not null)
         {
             FortranPathTextBox.Text = path;
@@ -251,7 +234,6 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
         _previewBusy = true;
         PreviewButton.IsEnabled = false;
-        DraftInfoBar.IsOpen = false;
         App.Current.MainWindow.ReportPageStatus("正在校验作业草稿…");
         try
         {
@@ -263,11 +245,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
                     $"服务器：{remotePreview.ProfileName}　计算根目录：{remotePreview.ComputeRoot}";
                 CommandPreviewTextBox.Text = remotePreview.Command;
                 CommandPreviewExpander.IsExpanded = true;
-                DraftInfoBar.Title = "远端命令预览已生成";
-                DraftInfoBar.Message = remotePreview.Command;
-                DraftInfoBar.Severity = InfoBarSeverity.Success;
-                DraftInfoBar.IsOpen = true;
-                App.Current.MainWindow.ReportPageStatus("远端作业草稿校验通过");
+                App.Current.MainWindow.ShowFeedback("远端命令预览已生成", remotePreview.ProfileName, InfoBarSeverity.Success);
                 return;
             }
             var preview = await App.Current.ControlPlane.PreviewLocalJobDraftAsync(
@@ -300,27 +278,19 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
                 ? preview.Command
                 : "草稿未通过校验，未生成命令。";
             CommandPreviewExpander.IsExpanded = true;
-            DraftInfoBar.Title = preview.Valid ? "命令预览已生成" : "草稿校验未通过";
-            DraftInfoBar.Message = preview.Valid ? preview.Command : preview.ValidationMessage;
-            DraftInfoBar.Severity = preview.Valid
-                ? InfoBarSeverity.Success
-                : InfoBarSeverity.Warning;
-            DraftInfoBar.IsOpen = true;
-            App.Current.MainWindow.ReportPageStatus(
-                preview.Valid ? "作业草稿校验通过" : "作业草稿需要修正");
-        }
-        catch (ControlPlaneException exception)
-        {
-            ShowPreviewError(exception.ToDisplayMessage());
+            App.Current.MainWindow.ShowFeedback(preview.Valid ? "命令预览已生成" : "草稿校验未通过",
+                preview.Valid ? preview.EffectiveJobName : preview.ValidationMessage,
+                preview.Valid ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception exception)
         {
-            ShowPreviewError(exception.Message);
+            ShowActionError("命令预览失败", exception);
         }
         finally
         {
             _previewBusy = false;
             PreviewButton.IsEnabled = true;
+            if (IsLoaded) App.Current.MainWindow.ReportPageStatus("新建作业");
         }
     }
 
@@ -334,21 +304,22 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         _submitBusy = true;
         SubmitButton.IsEnabled = false;
         PreviewButton.IsEnabled = false;
-        DraftInfoBar.IsOpen = false;
-        App.Current.MainWindow.ReportPageStatus("正在加入本机正式队列…");
+        App.Current.MainWindow.ReportPageStatus(IsRemote ? "正在提交远端作业…" : "正在加入本机正式队列…");
         try
         {
             if (IsRemote)
             {
-                App.Current.MainWindow.ReportPageStatus("正在提交远端作业…");
                 var operation = await App.Current.ControlPlane.StartRemoteJobAsync(
                     BuildRemoteJobRequest());
-                DraftInfoBar.Title = "远端作业已提交";
-                DraftInfoBar.Message = $"{operation.Request.JobName} · {operation.Phase}";
-                DraftInfoBar.Severity = InfoBarSeverity.Success;
-                DraftInfoBar.IsOpen = true;
-                App.Current.MainWindow.ReportPageStatus(
-                    $"远端作业已提交 · {operation.Request.JobName}");
+                var title = operation.Status switch
+                {
+                    "failed" => "远端作业失败", "cancelled" => "远端作业已取消",
+                    "succeeded" => "远端作业已完成", _ => "远端作业已提交",
+                };
+                App.Current.MainWindow.ShowFeedback(title,
+                    $"{operation.Request.JobName} · {operation.Error?.Message ?? operation.Phase}",
+                    operation.Status == "failed" ? InfoBarSeverity.Error
+                    : operation.Status == "cancelled" ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
                 App.Current.MainWindow.NavigateToRoute("job-overview");
                 return;
             }
@@ -369,36 +340,27 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
                 UseSsdCheckBox.IsChecked is true,
                 CalculationRootTextBox.Text,
                 ArchiveRootTextBox.Text, executionOptions: ExecutionOptionsPanel.ReadValue());
-            DraftInfoBar.Title = "已加入正式队列";
-            DraftInfoBar.Message = result.Message;
-            DraftInfoBar.Severity = InfoBarSeverity.Success;
-            DraftInfoBar.IsOpen = true;
-            App.Current.MainWindow.ReportPageStatus(result.Message);
+            App.Current.MainWindow.ShowFeedback("已加入正式队列", result.Message, InfoBarSeverity.Success);
             App.Current.MainWindow.NavigateToRoute("job-queue");
-        }
-        catch (ControlPlaneException exception)
-        {
-            ShowPreviewError(exception.ToDisplayMessage());
         }
         catch (Exception exception)
         {
-            ShowPreviewError(exception.Message);
+            ShowActionError("作业提交失败", exception);
         }
         finally
         {
             _submitBusy = false;
             SubmitButton.IsEnabled = true;
             PreviewButton.IsEnabled = true;
+            if (IsLoaded) App.Current.MainWindow.ReportPageStatus("新建作业");
         }
     }
 
-    private void ShowPreviewError(string message)
+    private static void ShowActionError(string title, Exception exception)
     {
-        DraftInfoBar.Title = "命令预览失败";
-        DraftInfoBar.Message = message;
-        DraftInfoBar.Severity = InfoBarSeverity.Error;
-        DraftInfoBar.IsOpen = true;
-        App.Current.MainWindow.ReportPageStatus("命令预览失败");
+        App.Current.MainWindow.ShowFeedback(title,
+            exception is ControlPlaneException problem ? problem.ToDisplayMessage() : exception.Message,
+            InfoBarSeverity.Error);
     }
 
     private void ApplyInputPath(string path)
@@ -545,35 +507,48 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         return (comboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? fallback;
     }
 
-    private static async Task<string?> PickFileAsync(
-        IReadOnlyList<string> extensions,
-        string commitButtonText)
+    private async Task<string?> ChooseJobFileAsync(IReadOnlyList<string> extensions, string localTitle, string remoteTitle)
     {
-        var picker = new FileOpenPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            CommitButtonText = commitButtonText,
-        };
-        foreach (var extension in extensions)
-        {
-            picker.FileTypeFilter.Add(extension);
+            if (UsesRemoteExistingFiles)
+                return (await new RemoteFileBrowserDialog(XamlRoot, RemoteSelectionMode.File, remoteTitle).ShowAsync())?.Path;
+            var picker = new FileOpenPicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                CommitButtonText = localTitle,
+            };
+            foreach (var extension in extensions)
+                picker.FileTypeFilter.Add(extension);
+            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
+            return (await picker.PickSingleFileAsync())?.Path;
         }
-
-        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-        return (await picker.PickSingleFileAsync())?.Path;
+        catch (Exception exception)
+        {
+            ShowActionError("文件选择失败", exception);
+            return null;
+        }
     }
 
     private static async Task<string?> PickFolderAsync(string commitButtonText)
     {
-        var picker = new FolderPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            CommitButtonText = commitButtonText,
-        };
-        picker.FileTypeFilter.Add("*");
-        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-        return (await picker.PickSingleFolderAsync())?.Path;
+            var picker = new FolderPicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                CommitButtonText = commitButtonText,
+            };
+            picker.FileTypeFilter.Add("*");
+            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
+            return (await picker.PickSingleFolderAsync())?.Path;
+        }
+        catch (Exception exception)
+        {
+            ShowActionError("目录选择失败", exception);
+            return null;
+        }
     }
 }

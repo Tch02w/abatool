@@ -51,7 +51,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     public ResultBrowserPage()
     {
         InitializeComponent();
-        Controls.InfoBarLayout.Track(StatusMessagesPanel, ErrorInfoBar, WarningInfoBar, IndexInfoBar);
+        Controls.InfoBarLayout.Track(StatusMessagesPanel, IndexInfoBar);
         _explorerAdapter = new ResultExplorerAdapter(
             () => !_loads.InitialIndexChecked || FileOperationBusy || _scopeBusy || _indexBusy
                 || (_location.LoadedRoot is null && string.IsNullOrWhiteSpace(RootTextBox.Text))
@@ -197,7 +197,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnBrowseClicked(object sender, RoutedEventArgs e)
     {
-        ErrorInfoBar.IsOpen = false;
         try
         {
             var picker = new FolderPicker
@@ -212,7 +211,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             if (folder is not null)
             {
                 RootTextBox.Text = folder.Path;
-                await RefreshScopesAsync();
+                await RefreshScopesAsync(notify: true);
             }
         }
         catch (Exception exception)
@@ -223,7 +222,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnRefreshScopesClicked(object sender, RoutedEventArgs e)
     {
-        await RefreshScopesAsync(_selectedScope?.Path);
+        await RefreshScopesAsync(_selectedScope?.Path, notify: true);
     }
 
     private async void OnRootTextBoxKeyDown(object sender, KeyRoutedEventArgs e)
@@ -231,7 +230,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         if (e.Key == Windows.System.VirtualKey.Enter && !_scopeBusy)
         {
             e.Handled = true;
-            await RefreshScopesAsync();
+            await RefreshScopesAsync(notify: true);
         }
     }
 
@@ -258,14 +257,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     }
 
     private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null,
-        ResultDirectLocation? restoreDirect = null)
+        ResultDirectLocation? restoreDirect = null, bool notify = false)
     {
         _location.DraftRoot = RootTextBox.Text;
         var locationRead = _location.BeginRead(explicitRoot);
         var root = locationRead.Root;
         var previousDirect = restoreDirect ?? _direct;
-        ErrorInfoBar.IsOpen = false;
-        WarningInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
         ScopeStatusText.Text = "正在读取目录结构…";
         App.Current.MainWindow.ReportPageStatus("正在读取结果目录结构…");
@@ -290,6 +287,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 {
                     ShowWarning(string.Join(Environment.NewLine, response.Warnings), "目录读取有警告");
                 }
+                else if (notify)
+                    App.Current.MainWindow.ShowFeedback("结果目录已读取", $"{response.Count} 个范围节点", InfoBarSeverity.Success);
 
                 var targetPath = string.IsNullOrWhiteSpace(selectPath)
                     ? response.Root
@@ -309,9 +308,17 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             exception =>
             {
                 ScopeStatusText.Text = "目录读取失败";
-                ShowError(exception is ControlPlaneException controlPlaneException
+                var detail = exception is ControlPlaneException controlPlaneException
                     ? controlPlaneException.ToDisplayMessage()
-                    : exception.Message, "结果目录读取失败");
+                    : exception.Message;
+                if (locationRead.UsesDraft && _location.DraftRoot == locationRead.DraftAtStart
+                    && (exception is ArgumentException || exception is ControlPlaneException rootError
+                    && rootError.Code?.StartsWith("RESULT_ROOT_", StringComparison.Ordinal) == true))
+                {
+                    RootContextHint.Text = detail;
+                    RootContextHint.Visibility = Visibility.Visible;
+                }
+                else ShowError(detail, "结果目录读取失败");
             },
             () =>
             {
@@ -616,7 +623,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         if (query is null) return;
         var request = _loads.InvalidateRecords();
         _recordsBusy = true;
-        ErrorInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
         ResultStatusText.Text = "正在读取结果记录…";
         RefreshInteractionState();
@@ -756,7 +762,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         IndexInfoBar.IsOpen = false;
-        ErrorInfoBar.IsOpen = false;
         IndexProgressBar.Visibility = Visibility.Visible;
         ResultStatusText.Text = "正在创建结果索引…";
         RefreshInteractionState();
@@ -824,7 +829,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         switch (snapshot.Status)
         {
             case "succeeded":
-                // The refresh owns its record count or error; do not overwrite it here.
+                App.Current.MainWindow.ShowFeedback("结果索引已建立", snapshot.Request.TimeDirectory, InfoBarSeverity.Success);
                 break;
             case "cancelled":
                 ResultStatusText.Text = "结果索引已取消，旧索引保持不变";
@@ -1031,10 +1036,14 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        var package = new DataPackage();
-        package.SetText(string.Join(Environment.NewLine, records.Select(record => record.Path)));
-        Clipboard.SetContent(package);
-        ResultStatusText.Text = $"已复制 {records.Count} 个路径";
+        try
+        {
+            var package = new DataPackage();
+            package.SetText(string.Join(Environment.NewLine, records.Select(record => record.Path)));
+            Clipboard.SetContent(package);
+            App.Current.MainWindow.ShowFeedback("路径已复制", $"{records.Count} 个文件路径已复制到剪贴板。", InfoBarSeverity.Success);
+        }
+        catch (Exception error) { ShowError(error.Message, "未能复制路径"); }
     }
 
     private async void OnRecycleClicked(object sender, RoutedEventArgs e)
@@ -1103,6 +1112,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
         ResultStatusText.Text = $"已清理 {completed}/{records.Length} 个文件";
         if (failure is not null) ShowWarning(failure, $"已清理 {completed} 个，剩余 {records.Length - completed} 个");
+        else App.Current.MainWindow.ShowFeedback("结果已移到回收站", $"{completed} 个文件", InfoBarSeverity.Success);
     }
 
     private IReadOnlyList<ResultRecordItem> SelectedRecords()
@@ -1182,17 +1192,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void ShowError(string message, string title = "操作失败")
     {
-        ErrorInfoBar.Title = title;
-        ErrorInfoBar.Message = message;
-        ErrorInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Error);
         App.Current.MainWindow.ReportPageStatus(title);
     }
 
     private void ShowWarning(string message, string title)
     {
-        WarningInfoBar.Title = title;
-        WarningInfoBar.Message = message;
-        WarningInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Warning);
     }
 
     private static string SourceDisplay(string source) => source switch

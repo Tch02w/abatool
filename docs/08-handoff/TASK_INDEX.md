@@ -1,5 +1,7 @@
 # 任务索引
 
+F029 八页右下角通知、F004 编辑弹窗折叠时的位置以及 F025 最终数字键和说明图标归入 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+
 F021 缺少有效索引时的直接浏览、导出和目录恢复见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
 F004/F025 的候选和正式作业编辑、批量目录设置、编辑框和工具栏外观归入 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md)。[操作手册](../repowiki/user-guide.md#作业队列)说明单行选中与批量勾选的区别。

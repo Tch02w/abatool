@@ -4,6 +4,8 @@
 
 2026-11-24新增56项生产QueueTableView/QueueTableRow检查，总计110项：深浅主题、两表、900/1600/2300 DIP下列边界、数值居中、选中不偏移、长文本约束、浅色行列线、表头/表体同步横向滚动，以及正式勾选与ListView选择双向同步。直接编译生产控件，不复制表格模板；实际工作台候选页的鼠标与截图证据另见TASK-004。
 
+浮动操作提示直接加载工作台的 `WorkbenchFeedbackHost`。22 项检查覆盖深浅主题的实际渲染颜色与右下角位置、页面位置保持、重复合并、多条错误保留、原生关闭按钮、键盘焦点暂停与续时、消息和警告的自动关闭、模态窗口期间暂存，以及宿主退出后的清理。真实队列页的鼠标悬停与截图另见 TASK-004。
+
 在项目根目录执行（TEMP/TMP与产物均放GPTWork）：
 
 ```powershell
@@ -12,9 +14,9 @@ $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
 dotnet build tests/winui_explorer/Explorer.Tests.csproj -c Release -o GPTWork/explorer-control-checks
 $check = Start-Process -FilePath "$PWD/GPTWork/explorer-control-checks/WorkbenchExplorer.ControlChecks.exe" -ArgumentList "$PWD/GPTWork/explorer-control-checks/verification.json" -WindowStyle Hidden -PassThru
-if (-not $check.WaitForExit(40000)) { throw "检查未结束，先核对原进程 $($check.Id)，不要重复启动" }
+if (-not $check.WaitForExit(90000)) { throw "检查未结束，先核对原进程 $($check.Id)，不要重复启动" }
 if ($check.ExitCode -ne 0) { throw "原生检查失败：$($check.ExitCode)" }
 Get-Content GPTWork/explorer-control-checks/verification.json
 ```
 
-项目路径有空格时应将传入程序的完整回执路径作为一个带引号的参数。只在进程退出0、回执status为passed且110项齐全时算通过。受限环境可使用已经验证的NuGet缓存；当前工作站缓存为GPTWork/nuget-release-packages，构建时可同时传RestorePackagesPath/RestoreSources指向它。构建或无新回执的异常退出均不得写成通过，保留原失败产物。
+项目路径有空格时应将传入程序的完整回执路径作为一个带引号的参数。检查进程应正常退出，退出码为 0，本次回执的 status 为 passed，并列出当前测试版本的所有检查。受限环境可使用已经验证的 NuGet 缓存；当前工作站缓存为 GPTWork/nuget-release-packages，构建时可同时传 RestorePackagesPath/RestoreSources 指向它。构建或无新回执的异常退出均不得写成通过，保留原失败产物。

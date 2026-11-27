@@ -6,12 +6,6 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="{StaticResource WorkbenchPagePadding}" Spacing="{StaticResource WorkbenchSectionSpacing}">
-            <InfoBar
-                x:Name="DraftInfoBar"
-                IsClosable="False"
-                IsOpen="False"
-                Severity="Informational" />
-
             <Border Style="{StaticResource WorkbenchCardStyle}">
                 <StackPanel Spacing="12">
                     <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="作业输入" />

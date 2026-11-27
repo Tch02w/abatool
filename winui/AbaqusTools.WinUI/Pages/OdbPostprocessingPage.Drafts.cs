@@ -155,7 +155,7 @@ public sealed partial class OdbPostprocessingPage
             _dialogDrafts = draft.Dialogs.ToDictionary();
             _pendingDraft = null;
             UpdateExplorer();
-            ShowWarning("已恢复工作区编辑；请重新读取结构。打开原参数、图例或分组弹窗可恢复尚未确认的填写。", "恢复草稿已载入");
+            ShowSuccess("已恢复工作区编辑；请重新读取结构。打开原参数、图例或分组弹窗可恢复尚未确认的填写。", "恢复草稿已载入");
         }
         catch (Exception error) { ShowWarning(error.Message, "未完成草稿恢复，原件和副本保留"); }
         finally { _draftActionBusy = false; RefreshInteractionState(); }
@@ -190,7 +190,7 @@ public sealed partial class OdbPostprocessingPage
         {
             var archive = await _draftFile.ArchiveAndClearAsync();
             _pendingDraft = null; _draftError = null;
-            ShowWarning("继续使用当前配置。草稿副本：" + archive, "草稿已保留");
+            ShowSuccess("继续使用当前配置。草稿副本：" + archive, "草稿已保留");
         }
         catch (Exception error) { ShowWarning(error.Message, "未能保留副本，原件未清除"); }
         finally { _draftActionBusy = false; RefreshInteractionState(); }

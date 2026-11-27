@@ -1,5 +1,6 @@
 using AbaqusTools.WinUI.Pages;
 using AbaqusTools.WinUI.Services;
+using Microsoft.UI.Xaml.Controls;
 
 namespace AbaqusTools.WinUI;
 
@@ -74,9 +75,9 @@ public sealed partial class MainWindow
             if (ContentFrame.Content is not JobQueuePage page) return;
             await page.WaitForMenuReadyAsync();
             if (ReferenceEquals(ContentFrame.Content, page) && canExecute()) await execute(page);
-            else ReportPageStatus("队列状态已变化，本次菜单操作未执行");
+            else ShowFeedback("队列状态已变化", "请核对所选作业后重试。", InfoBarSeverity.Warning);
         }
-        catch (Exception error) { ReportPageStatus("队列菜单操作未完成：" + error.Message); }
+        catch (Exception error) { ShowFeedback("队列菜单操作未完成", error.Message, InfoBarSeverity.Error); }
         finally { _menuCommandBusy = false; UpdateCommandMenus(); }
     }
 
@@ -94,18 +95,18 @@ public sealed partial class MainWindow
             await page.WaitForMenuReadyAsync();
             if (!ReferenceEquals(ContentFrame.Content, page) || !commands.CanUseSelectedRemote(profile))
             {
-                ReportPageStatus("连接状态已变化，本次菜单操作未执行");
+                ShowFeedback("连接状态已变化", "请核对服务器连接后重试。", InfoBarSeverity.Warning);
                 return;
             }
             if (!page.SelectConnectedServer(profile))
             {
-                ReportPageStatus("未找到已连接服务器的配置，本次菜单操作未执行");
+                ShowFeedback("未找到已连接服务器的配置", "请在计算资源页核对当前连接。", InfoBarSeverity.Warning);
                 return;
             }
             if (disconnect) await page.DisconnectAsync(expected);
             else await page.RefreshConnectedServerAsync(expected);
         }
-        catch (Exception error) { ReportPageStatus("服务器菜单操作未完成：" + error.Message); }
+        catch (Exception error) { ShowFeedback("服务器菜单操作未完成", error.Message, InfoBarSeverity.Error); }
         finally { _menuCommandBusy = false; UpdateCommandMenus(); }
     }
 }

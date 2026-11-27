@@ -137,7 +137,6 @@ public sealed partial class OdbResultGraphEditor : UserControl
         try
         {
             ApplySnapshot(await App.Current.ControlPlane.GetOdbResultGraphAsync());
-            ShowState("结果合并图已读取", "选择节点编辑文件，保存后可生成完整结果。", InfoBarSeverity.Informational);
         }
         catch (Exception exception)
         {
@@ -369,7 +368,6 @@ public sealed partial class OdbResultGraphEditor : UserControl
         var changed = _savedSnapshot is not null && _savedSnapshot.HasEdits(OutputDirectoryTextBox.Text, _nodes);
         if (!changed && !HasUnsavedChanges) return;
         HasUnsavedChanges = changed;
-        GraphInfoBar.IsOpen = false;
         RefreshInteractionState();
         GraphChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -539,9 +537,6 @@ public sealed partial class OdbResultGraphEditor : UserControl
             }
 
             readyPlan = plan;
-            ShowState("结果生成计划已检查",
-                $"共 {plan.Plans.Count} 个目标；每个目标分别使用自己的祖先路径。",
-                InfoBarSeverity.Success);
         }
         catch (Exception exception)
         {
@@ -789,10 +784,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
 
     private void ShowState(string title, string message, InfoBarSeverity severity)
     {
-        GraphInfoBar.Title = title;
-        GraphInfoBar.Message = message;
-        GraphInfoBar.Severity = severity;
-        GraphInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, severity);
     }
 
     private static void InitializePicker(object picker)

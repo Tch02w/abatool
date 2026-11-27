@@ -82,6 +82,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
 
         _recoveryAttempted = true;
+        var explicitRead = ReferenceEquals(sender, RefreshBatchButton);
         _previewBusy = true;
         RefreshInteractionState();
         try
@@ -90,7 +91,8 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             var batch = batches.Operations.FirstOrDefault(b => b.IsActive || b.CanResume);
             if (batch is not null)
             {
-                await ObserveBatchAsync(batch);
+                if (batch.IsActive) await ObserveBatchAsync(batch);
+                else ApplyBatchSnapshot(batch, notifyTerminal: explicitRead);
                 return;
             }
             var active = await App.Current.ControlPlane.ListOdbMergeOperationsAsync(
@@ -111,7 +113,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             if (latestBatch is not null && _materializationPlan is null && _batchPlan is null
                 && (latest is null || latestBatch.CreatedAt >= latest.CreatedAt))
             {
-                ApplyBatchSnapshot(latestBatch);
+                ApplyBatchSnapshot(latestBatch, notifyTerminal: explicitRead);
                 return;
             }
             if (latest is not null && _materializationPlan is null && _batchPlan is null)
@@ -126,9 +128,11 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
                     return;
                 }
                 ApplyOperationSnapshot(latest);
-                ApplyCompletedOperation(latest);
+                ApplyCompletedOperation(latest, notify: explicitRead);
                 _activeOperationId = null;
             }
+            else if (explicitRead && latest is null && latestBatch is null)
+                ShowPlanState("已查询后台任务", "当前没有 ODB 合并任务记录。", InfoBarSeverity.Informational);
         }
         catch (OperationCanceledException)
         {
@@ -211,13 +215,12 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
         _previewBusy = true;
         RefreshInteractionState();
-        MergePlanInfoBar.IsOpen = false;
         MergeProgressBar.IsIndeterminate = true;
         App.Current.MainWindow.ReportPageStatus("正在检查 ODB 安全合并计划…");
         try
         {
             var preview = await PreviewDraftAsync();
-            ApplyDraftPreview(preview);
+            ApplyDraftPreview(preview, notifySuccess: true);
         }
         catch (ControlPlaneException exception)
         {
@@ -261,7 +264,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
             if (preview.WillOverwrite && !await ConfirmOverwriteAsync(preview.NormalizedOutputOdb))
             {
-                App.Current.MainWindow.ReportPageStatus("已取消覆盖现有 ODB");
+                ShowPlanState("已取消覆盖现有 ODB", preview.NormalizedOutputOdb, InfoBarSeverity.Informational);
                 return;
             }
 
@@ -269,7 +272,6 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             SetOperationBusy(true);
             MergeOperationLogTextBox.Text = string.Empty;
             MergeLogExpander.IsExpanded = true;
-            MergePlanInfoBar.IsOpen = false;
             App.Current.MainWindow.ReportPageStatus("正在创建 ODB 合并操作…");
             var initial = await App.Current.ControlPlane.StartOdbMergeAsync(
                 OriginalOdbTextBox.Text,
@@ -509,7 +511,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             : snapshot.Progress.Phase;
         MergeOperationLogTextBox.Text = string.Join(Environment.NewLine, snapshot.Logs);
         if (!string.IsNullOrWhiteSpace(snapshot.PersistenceWarning))
-            ShowPlanState("任务记录保存失败", snapshot.PersistenceWarning, InfoBarSeverity.Warning);
+            MergePlanSummaryText.Text += "\n" + snapshot.PersistenceWarning;
         if (snapshot.Logs.Count > 0)
         {
             MergeLogExpander.IsExpanded = true;
@@ -518,9 +520,10 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             $"ODB 合并 {snapshot.Progress.Percent}% · {MergePlanSummaryText.Text}");
     }
 
-    private void ApplyCompletedOperation(OdbMergeOperationSnapshot snapshot)
+    private void ApplyCompletedOperation(OdbMergeOperationSnapshot snapshot, bool notify = true)
     {
         MergeProgressBar.IsIndeterminate = false;
+        MergePlanSummaryText.Text = snapshot.CompletionMessage;
         if (snapshot.IsSuccessful && snapshot.Result is not null)
         {
             _lastResultPath = snapshot.Result.OutputOdb;
@@ -533,7 +536,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             OpenResultButton.IsEnabled = File.Exists(_lastResultPath);
             RevealResultButton.IsEnabled = Directory.Exists(Path.GetDirectoryName(_lastResultPath));
             UpdateExplorer();
-            ShowPlanState(
+            if (notify) ShowPlanState(
                 string.IsNullOrWhiteSpace(snapshot.PersistenceWarning) ? "ODB 合并完成" : "结果已保存，任务记录待核对",
                 snapshot.CompletionMessage,
                 string.IsNullOrWhiteSpace(snapshot.PersistenceWarning) ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
@@ -549,7 +552,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
         if (string.Equals(snapshot.Status, "cancelled", StringComparison.Ordinal))
         {
-            ShowPlanState(
+            if (notify) ShowPlanState(
                 "ODB 合并已停止",
                 snapshot.CompletionMessage,
                 InfoBarSeverity.Warning);
@@ -558,7 +561,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         }
 
         var title = snapshot.IsInterrupted ? "合并中断，待核对" : "ODB 合并失败";
-        ShowPlanState(title, snapshot.CompletionMessage,
+        if (notify) ShowPlanState(title, snapshot.CompletionMessage,
             snapshot.IsInterrupted ? InfoBarSeverity.Warning : InfoBarSeverity.Error);
         App.Current.MainWindow.ReportPageStatus(title);
     }
@@ -611,7 +614,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
             cancellationToken);
     }
 
-    private void ApplyDraftPreview(OdbMergeDraftPreviewResponse preview)
+    private void ApplyDraftPreview(OdbMergeDraftPreviewResponse preview, bool notifySuccess = false)
     {
         _planReady = preview.Valid;
         if (!preview.Valid)
@@ -643,7 +646,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
         {
             MergeProgressBar.Value = 25;
         }
-        ShowPlanState("安全合并计划已生成", preview.ValidationMessage, InfoBarSeverity.Success);
+        if (notifySuccess) ShowPlanState("安全合并计划已生成", preview.ValidationMessage, InfoBarSeverity.Success);
         App.Current.MainWindow.ReportPageStatus("ODB 合并计划检查通过");
         RefreshInteractionState();
     }
@@ -733,7 +736,6 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
     private void InvalidatePlan()
     {
         _planReady = false;
-        MergePlanInfoBar.IsOpen = false;
         MergePlanSummaryText.Text = "参数已更改，请重新检查合并计划。";
         RefreshInteractionState();
     }
@@ -782,10 +784,7 @@ public sealed partial class OdbMergePage : Page, IWorkbenchExplorerPage
 
     private void ShowPlanState(string title, string message, InfoBarSeverity severity)
     {
-        MergePlanInfoBar.Title = title;
-        MergePlanInfoBar.Message = message;
-        MergePlanInfoBar.Severity = severity;
-        MergePlanInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, severity);
     }
 
     private static string FormatBytes(long bytes)

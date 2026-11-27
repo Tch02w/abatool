@@ -41,7 +41,6 @@ public sealed partial class MainWindow : Window
     public MainWindow(ControlPlaneHost controlPlane)
     {
         InitializeComponent();
-        Controls.InfoBarLayout.Track(null, StartupInfoBar, DraftSaveInfoBar, JobNotificationBar);
         App.Current.Commands.Changed += UpdateCommandMenus;
         _controlPlane = controlPlane;
         _fallbackExplorerAdapter = new ProjectExplorerAdapter(
@@ -75,6 +74,16 @@ public sealed partial class MainWindow : Window
         InitializeSessionSaving();
     }
 
+    public void ShowFeedback(string title, string message, InfoBarSeverity severity = InfoBarSeverity.Informational)
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            DispatcherQueue.TryEnqueue(() => ShowFeedback(title, message, severity));
+            return;
+        }
+        if (!_windowClosed) FeedbackHost.Show(title, message, severity);
+    }
+
     public void ReportPageStatus(string message)
     {
         var status = string.IsNullOrWhiteSpace(message) ? "就绪" : message;
@@ -103,7 +112,7 @@ public sealed partial class MainWindow : Window
         await page.SetResultRootAsync(root);
     }
 
-    public async Task RefreshLocalResourceNowAsync()
+    public async Task RefreshLocalResourceNowAsync(bool notify = false)
     {
         if (_resourceRefreshBusy || _shutdownStarted)
         {
@@ -117,6 +126,7 @@ public sealed partial class MainWindow : Window
             var snapshot = await _controlPlane.GetLocalResourceAsync();
             LatestLocalResource = snapshot;
             ApplyLocalResourceSnapshot(snapshot);
+            if (notify) ShowFeedback("本机资源已刷新", LocalResourceStatusText.Text, InfoBarSeverity.Success);
         }
         catch (OperationCanceledException)
         {
@@ -125,6 +135,7 @@ public sealed partial class MainWindow : Window
         catch (Exception exception)
         {
             LocalResourceStatusText.Text = "本机资源不可用";
+            if (notify) ShowFeedback("本机资源刷新失败", exception.Message, InfoBarSeverity.Error);
             if (ContentFrame.Content is ComputeResourcesPage page)
             {
                 page.ShowResourceError(exception.Message);
@@ -191,10 +202,7 @@ public sealed partial class MainWindow : Window
         }
         catch (ControlPlaneException exception)
         {
-            StartupInfoBar.Severity = InfoBarSeverity.Error;
-            StartupInfoBar.Title = "本地控制面不可用";
-            StartupInfoBar.Message = exception.ToDisplayMessage();
-            StartupInfoBar.IsOpen = true;
+            ShowFeedback("本地控制面不可用", exception.ToDisplayMessage(), InfoBarSeverity.Error);
         }
         catch (OperationCanceledException)
         {
@@ -599,14 +607,7 @@ public sealed partial class MainWindow : Window
 
             if (args.State == ControlPlaneState.Error)
             {
-                StartupInfoBar.Severity = InfoBarSeverity.Error;
-                StartupInfoBar.Title = "本地控制面不可用";
-                StartupInfoBar.Message = args.Message;
-                StartupInfoBar.IsOpen = true;
-            }
-            else if (args.State == ControlPlaneState.Ready)
-            {
-                StartupInfoBar.IsOpen = false;
+                ShowFeedback("本地控制面不可用", args.Message, InfoBarSeverity.Error);
             }
         });
     }
@@ -614,6 +615,7 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _windowClosed = true;
+        FeedbackHost.Stop();
         App.Current.Commands.Changed -= UpdateCommandMenus;
         DisposeSessionSaving();
         AppWindow.Changed -= OnAppWindowChanged;
@@ -666,10 +668,7 @@ public sealed partial class MainWindow : Window
         catch (Exception exception)
         {
             if (_sessionEnd.IsEnding) return;
-            StartupInfoBar.Severity = InfoBarSeverity.Error;
-            StartupInfoBar.Title = "无法安全关闭";
-            StartupInfoBar.Message = exception.Message;
-            StartupInfoBar.IsOpen = true;
+            ShowFeedback("无法安全关闭", exception.Message, InfoBarSeverity.Error);
             ReportPageStatus("关闭已取消 · 请处理错误后重试");
         }
         finally

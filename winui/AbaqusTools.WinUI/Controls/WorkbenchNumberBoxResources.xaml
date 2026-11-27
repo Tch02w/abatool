@@ -7,26 +7,49 @@
             <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="#202020" />
             <SolidColorBrush x:Key="WorkbenchNumberLine" Color="#D2D2D2" />
             <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="#626262" />
-            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#EEEEEE" />
-            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#E3E3E3" />
+            <SolidColorBrush x:Key="WorkbenchNumberKey" Color="#EEEEEE" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#EAF3FB" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#D5E7F5" />
+            <SolidColorBrush x:Key="WorkbenchNumberActiveGlyph" Color="#005A9E" />
+            <SolidColorBrush x:Key="WorkbenchHelpFill" Color="#555555" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="WorkbenchNumberBackground" Color="#323232" />
             <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="#F3F3F3" />
             <SolidColorBrush x:Key="WorkbenchNumberLine" Color="#595959" />
             <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="#BDBDBD" />
-            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#454545" />
-            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#505050" />
+            <SolidColorBrush x:Key="WorkbenchNumberKey" Color="#434343" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="#263F50" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="#335468" />
+            <SolidColorBrush x:Key="WorkbenchNumberActiveGlyph" Color="#9FD9FF" />
+            <SolidColorBrush x:Key="WorkbenchHelpFill" Color="#D0D0D0" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="WorkbenchNumberBackground" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="WorkbenchNumberForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="WorkbenchNumberLine" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="WorkbenchNumberBottomLine" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="{ThemeResource SystemColorButtonFaceColor}" />
-            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberKey" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberHover" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="WorkbenchNumberActiveGlyph" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="WorkbenchHelpFill" Color="{ThemeResource SystemColorWindowTextColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
+
+    <DataTemplate x:Key="WorkbenchParameterHelpIcon">
+        <!-- The dot and stem are cut out of a single disc so the i always shows the surface behind it. -->
+        <Path Width="16" Height="16" Fill="{ThemeResource WorkbenchHelpFill}" IsHitTestVisible="False"
+              AutomationProperties.AccessibilityView="Raw">
+            <Path.Data>
+                <GeometryGroup FillRule="EvenOdd">
+                    <EllipseGeometry Center="8,8" RadiusX="8" RadiusY="8" />
+                    <EllipseGeometry Center="8,4.75" RadiusX="1" RadiusY="1" />
+                    <RectangleGeometry Rect="7.1,7,1.8,5.2" />
+                </GeometryGroup>
+            </Path.Data>
+        </Path>
+    </DataTemplate>
 
     <!-- InputBox remains a native TextBox. Its single text column has no delete-button
          or popup reservation, so changing focus never shifts the centered value. -->
@@ -111,38 +134,39 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RepeatButton">
-                    <Border x:Name="ButtonChrome" Background="{TemplateBinding Background}"
-                        BorderBrush="{ThemeResource WorkbenchNumberLine}" BorderThickness="1,0,0,0"
-                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid x:Name="ButtonChrome" Background="{TemplateBinding Background}">
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="HoverFill.Opacity" Value="1" />
+                                        <Setter Target="KeyFace.Background" Value="{ThemeResource WorkbenchNumberHover}" />
+                                        <Setter Target="StepSign.Stroke" Value="{ThemeResource WorkbenchNumberActiveGlyph}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <VisualState.Setters>
-                                        <Setter Target="PressedFill.Opacity" Value="1" />
+                                        <Setter Target="KeyFace.Background" Value="{ThemeResource WorkbenchNumberPressed}" />
+                                        <Setter Target="StepSign.Stroke" Value="{ThemeResource WorkbenchNumberActiveGlyph}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <VisualState.Setters>
-                                        <Setter Target="GlyphContent.Opacity" Value="0.35" />
+                                        <Setter Target="KeyFace.Opacity" Value="0.45" />
+                                        <Setter Target="StepSign.Opacity" Value="0.35" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <Grid>
-                            <Border x:Name="HoverFill" Background="{ThemeResource WorkbenchNumberHover}"
-                                CornerRadius="{TemplateBinding CornerRadius}" Opacity="0" />
-                            <Border x:Name="PressedFill" Background="{ThemeResource WorkbenchNumberPressed}"
-                                CornerRadius="{TemplateBinding CornerRadius}" Opacity="0" />
-                            <ContentPresenter x:Name="GlyphContent" Content="{TemplateBinding Content}"
-                                HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Grid>
-                    </Border>
+                        <Viewbox x:Name="KeyInset" Margin="3" Stretch="Uniform" IsHitTestVisible="False">
+                            <Border x:Name="KeyFace" Width="32" Height="32" CornerRadius="3"
+                                Background="{ThemeResource WorkbenchNumberKey}" />
+                        </Viewbox>
+                        <Path x:Name="StepSign" Width="16" Height="16" StrokeThickness="1.55"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                            Stroke="{ThemeResource WorkbenchNumberForeground}" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                            Data="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -193,11 +217,11 @@
                 Visibility="Collapsed" />
             <Grid x:Name="NumberFrame" Grid.Row="1" Style="{StaticResource WorkbenchNumberFrameStyle}">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="InputBox" Style="{StaticResource WorkbenchNumberInputStyle}"
+                <TextBox x:Name="InputBox" Grid.Column="1" Style="{StaticResource WorkbenchNumberInputStyle}"
                     InputScope="{TemplateBinding InputScope}" PlaceholderText="{TemplateBinding PlaceholderText}"
                     SelectionFlyout="{TemplateBinding SelectionFlyout}"
                     SelectionHighlightColor="{TemplateBinding SelectionHighlightColor}"
@@ -205,19 +229,18 @@
                     PreventKeyboardDisplayOnProgrammaticFocus="{TemplateBinding PreventKeyboardDisplayOnProgrammaticFocus}"
                     FontSize="{TemplateBinding FontSize}" FontFamily="{TemplateBinding FontFamily}"
                     FontWeight="{TemplateBinding FontWeight}" />
-                <RepeatButton x:Name="DownSpinButton" Grid.Column="1" CornerRadius="0"
+                <RepeatButton x:Name="DownSpinButton" Grid.Column="0"
                     Style="{StaticResource WorkbenchNumberSpinStyle}" AutomationProperties.Name="减少"
                     ToolTipService.ToolTip="减少">
-                    <Polyline x:Name="DownChevron" Points="1,1 7,7 13,1" Width="14" Height="8"
-                        Stroke="{ThemeResource WorkbenchNumberForeground}" StrokeThickness="1.5"
-                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    <LineGeometry StartPoint="2,8" EndPoint="14,8" />
                 </RepeatButton>
-                <RepeatButton x:Name="UpSpinButton" Grid.Column="2" CornerRadius="0,4,4,0"
+                <RepeatButton x:Name="UpSpinButton" Grid.Column="2"
                     Style="{StaticResource WorkbenchNumberSpinStyle}" AutomationProperties.Name="增加"
                     ToolTipService.ToolTip="增加">
-                    <Polyline x:Name="UpChevron" Points="1,7 7,1 13,7" Width="14" Height="8"
-                        Stroke="{ThemeResource WorkbenchNumberForeground}" StrokeThickness="1.5"
-                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    <GeometryGroup>
+                        <LineGeometry StartPoint="2,8" EndPoint="14,8" />
+                        <LineGeometry StartPoint="8,2" EndPoint="8,14" />
+                    </GeometryGroup>
                 </RepeatButton>
             </Grid>
             <Border x:Name="BottomOutline" Grid.Row="1" BorderBrush="{ThemeResource WorkbenchNumberBottomLine}"

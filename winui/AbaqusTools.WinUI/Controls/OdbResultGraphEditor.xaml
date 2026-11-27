@@ -35,7 +35,6 @@
                         <Button x:Name="PreserveGraphDraftButton" Content="保留副本并忽略" Click="OnPreserveGraphDraftClicked" />
                     </StackPanel>
                 </InfoBar>
-                <InfoBar x:Name="GraphInfoBar" IsOpen="False" IsClosable="True" />
             </StackPanel>
             <Grid Grid.Row="2" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>

@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using ShapePath = Microsoft.UI.Xaml.Shapes.Path;
 
 namespace NumberBoxControlChecks;
 
@@ -113,10 +114,14 @@ public sealed partial class TestApp : Application
         Check(cpu.SpinButtonPlacementMode == NumberBoxSpinButtonPlacementMode.Inline
             && down.Visibility == Visibility.Visible && up.Visibility == Visibility.Visible,
             "Both native step buttons remain visible without focus or a popup");
-        Check(Grid.GetColumn(down) < Grid.GetColumn(up), "Decrement is left of increment");
-        Check(down.Content is Polyline downGlyph && downGlyph.Points[1].Y > downGlyph.Points[0].Y
-            && up.Content is Polyline upGlyph && upGlyph.Points[1].Y < upGlyph.Points[0].Y,
-            "Buttons use down/up chevrons in decrement/increment order");
+        Check(Grid.GetColumn(down) < Grid.GetColumn(input) && Grid.GetColumn(input) < Grid.GetColumn(up),
+            "Decrement and increment flank the native editable text");
+        Check(Part<ShapePath>(down, "StepSign").Data is LineGeometry minus && minus.StartPoint.Y == minus.EndPoint.Y
+            && minus.EndPoint.X > minus.StartPoint.X && Part<ShapePath>(up, "StepSign").Data is GeometryGroup plus
+            && plus.Children.Count == 2 && plus.Children[0] is LineGeometry horizontal && plus.Children[1] is LineGeometry vertical
+            && horizontal.StartPoint == minus.StartPoint && horizontal.EndPoint == minus.EndPoint
+            && vertical.StartPoint.X == vertical.EndPoint.X && vertical.EndPoint.Y > vertical.StartPoint.Y,
+            "Native buttons render horizontal minus and crossed plus strokes");
         Check(input.TextAlignment == TextAlignment.Center && up.ActualHeight >= 32 && down.ActualWidth >= 32,
             "Numbers are centered and buttons have usable hit areas");
         await CheckAppearanceAsync(cpu, input, down, up);
@@ -137,8 +142,8 @@ public sealed partial class TestApp : Application
         cpu.IsEnabled = false;
         Check(!up.IsEnabled && !down.IsEnabled, "Busy-state disabling reaches both native buttons");
         await DispatchAsync();
-        Check(Math.Abs(Part<ContentPresenter>(up, "GlyphContent").Opacity - 0.35) < 0.001,
-            "A disabled step button visibly dims its chevron");
+        Check(Math.Abs(Part<ShapePath>(up, "StepSign").Opacity - 0.35) < 0.001,
+            "A disabled step button visibly dims its sign");
 
         var frame = new WorkbenchNumberBox { Minimum = -1, Maximum = 1_000_000, Value = -1 };
         Attach(frame);
@@ -178,11 +183,27 @@ public sealed partial class TestApp : Application
         helpHeader.ColumnDefinitions.Add(new ColumnDefinition());
         helpHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         helpHeader.Children.Add(new TextBlock { Text = "CPU 核数" });
-        var helpButton = new Button { Content = "?", Width = 28, Height = 28 };
+        var helpButton = new ParameterHelpButton { Title = "CPU 核数", Topic = "cpu" };
         Grid.SetColumn(helpButton, 1);
         helpHeader.Children.Add(helpButton);
         cpu.Header = helpHeader;
         _fields.UpdateLayout();
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            helpButton.RequestedTheme = theme;
+            await DispatchAsync();
+            var icon = (ShapePath)helpButton.Content;
+            Check(helpButton.ActualWidth == 28 && helpButton.ActualHeight == 28
+                && icon.ActualWidth == 16 && icon.ActualHeight == 16 && icon.Opacity == 1,
+                $"{theme}: a solid sixteen DIP icon sits inside the original 28 DIP help target");
+            Check(icon.Data is GeometryGroup { FillRule: FillRule.EvenOdd } info && info.Children.Count == 3
+                && info.Children[0] is EllipseGeometry { RadiusX: 8, RadiusY: 8 }
+                && info.Children[1] is EllipseGeometry && info.Children[2] is RectangleGeometry
+                && ColorOf(icon.Fill) == (theme == ElementTheme.Light ? "#FF555555" : "#FFD0D0D0"),
+                $"{theme}: the neutral help disc cuts out the dot and stem of a lowercase i");
+        }
+        Check(AutomationProperties.GetName(helpButton).Contains("CPU 核数") && helpButton.Flyout is Flyout,
+            "The help control retains its accessible name and explanatory flyout");
         Check(Part<ContentPresenter>(cpu, "HeaderContentPresenter").Visibility == Visibility.Visible
             && helpHeader.ActualHeight >= 28 && Part<Grid>(cpu, "NumberFrame").ActualHeight == 40,
             "A composite help header stays visible above the unchanged 40 DIP input row");
@@ -210,30 +231,55 @@ public sealed partial class TestApp : Application
         var upLeft = up.TransformToVisual(frame).TransformPoint(new Windows.Foundation.Point());
         Check(frame.ActualHeight == 40 && frame.CornerRadius == new CornerRadius(5),
             "The approved shared frame is 40 DIPs high with a 5 DIP corner radius");
-        Check(down.ActualWidth == 40 && up.ActualWidth == 40
-            && Math.Abs(downLeft.X + down.ActualWidth - upLeft.X) < 0.01
-            && Math.Abs(frame.ActualWidth - upLeft.X - up.ActualWidth - 1) < 0.01,
-            "Two 40 DIP buttons meet without a gap and end at the shared outer border");
-        Check(Part<Border>(down, "ButtonChrome").BorderThickness == new Thickness(1, 0, 0, 0)
-            && Part<Border>(up, "ButtonChrome").BorderThickness == new Thickness(1, 0, 0, 0),
-            "Both buttons use only a one DIP vertical separator inside the shared frame");
-        Check(Math.Abs(input.ActualWidth - downLeft.X + 1) < 0.01
+        Check(down.ActualWidth == 40 && up.ActualWidth == 40 && Math.Abs(downLeft.X - 1) < .01
+            && Math.Abs(frame.ActualWidth - upLeft.X - up.ActualWidth - 1) < .01,
+            "Both full-width hit targets start at the opposite outer frame edges");
+        Check(Part<Grid>(down, "ButtonChrome").BorderThickness == new Thickness(0)
+            && Part<Grid>(up, "ButtonChrome").BorderThickness == new Thickness(0),
+            "The edge buttons have no internal hard separator");
+        var inputLeft = input.TransformToVisual(frame).TransformPoint(default).X;
+        Check(Math.Abs(inputLeft + input.ActualWidth / 2 - frame.ActualWidth / 2) < .01
             && Math.Abs(Part<ScrollViewer>(input, "ContentElement").ActualWidth - input.ActualWidth) < 0.01,
-            "The centered text uses exactly the space before the buttons with no hidden popup gutter");
-        field.RequestedTheme = ElementTheme.Light;
-        await DispatchAsync();
-        Check(ColorOf(frame.Background) == "#FFFFFFFF" && ColorOf(frame.BorderBrush) == "#FFD2D2D2",
-            "Light appearance uses the approved white frame and light gray border");
-        VisualStateManager.GoToState(up, "PointerOver", false);
-        Check(Part<Border>(up, "HoverFill").Opacity == 1
-            && ColorOf(Part<Border>(up, "HoverFill").Background) == "#FFEEEEEE",
-            "Light hover highlights the full increment button");
-        field.RequestedTheme = ElementTheme.Dark;
-        await DispatchAsync();
-        Check(ColorOf(frame.Background) == "#FF323232" && ColorOf(frame.BorderBrush) == "#FF595959"
-            && ColorOf(Part<Border>(up, "HoverFill").Background) == "#FF454545",
-            "Changing to dark theme updates the frame, border and active hover state");
-        VisualStateManager.GoToState(up, "Normal", false);
+            "The editable text is centered on the complete frame without a hidden popup gutter");
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            field.RequestedTheme = theme;
+            await DispatchAsync();
+            bool light = theme == ElementTheme.Light;
+            Check(ColorOf(frame.Background) == (light ? "#FFFFFFFF" : "#FF323232")
+                && ColorOf(frame.BorderBrush) == (light ? "#FFD2D2D2" : "#FF595959"),
+                $"{theme}: the outer fill and border match the existing frame");
+            foreach (var key in new[] { down, up })
+            {
+                var face = Part<Border>(key, "KeyFace");
+                var sign = Part<ShapePath>(key, "StepSign");
+                var bounds = face.TransformToVisual(key).TransformBounds(new Windows.Foundation.Rect(0, 0, face.ActualWidth, face.ActualHeight));
+                Check(Math.Abs(bounds.Width - bounds.Height) < .01 && Math.Abs(bounds.Top - 3) < .01
+                    && bounds.Left >= 3 && face.CornerRadius == new CornerRadius(3) && sign.StrokeThickness >= 1.5,
+                    $"{theme}: the rounded key is inset in both directions inside its full hit area");
+                Check(ColorOf(face.Background) == (light ? "#FFEEEEEE" : "#FF434343") && face.Opacity == 1,
+                    $"{theme}: an enabled resting key has its own neutral fill");
+                VisualStateManager.GoToState(key, "PointerOver", false);
+                Check(ColorOf(face.Background) == (light ? "#FFEAF3FB" : "#FF263F50")
+                    && ColorOf(sign.Stroke) == (light ? "#FF005A9E" : "#FF9FD9FF"),
+                    $"{theme}: hovering tints the whole key face and its sign");
+                VisualStateManager.GoToState(key, "Pressed", false);
+                Check(ColorOf(face.Background) == (light ? "#FFD5E7F5" : "#FF335468"),
+                    $"{theme}: pressing has a distinct key fill");
+                VisualStateManager.GoToState(key, "Normal", false);
+            }
+            field.Value = field.Minimum;
+            await DispatchAsync();
+            Check(!down.IsEnabled && up.IsEnabled && Math.Abs(Part<ShapePath>(down, "StepSign").Opacity - .35) < .001
+                && Math.Abs(Part<Border>(down, "KeyFace").Opacity - .45) < .001 && Part<Border>(up, "KeyFace").Opacity == 1,
+                $"{theme}: the minimum dims just the decrement target");
+            field.Value = field.Maximum;
+            await DispatchAsync();
+            Check(!up.IsEnabled && down.IsEnabled && Math.Abs(Part<ShapePath>(up, "StepSign").Opacity - .35) < .001
+                && Math.Abs(Part<Border>(up, "KeyFace").Opacity - .45) < .001 && Part<Border>(down, "KeyFace").Opacity == 1,
+                $"{theme}: the maximum dims just the increment target");
+            field.Value = 1;
+        }
         field.RequestedTheme = ElementTheme.Light;
         await DispatchAsync();
         field.Width = 160;
@@ -273,7 +319,7 @@ public sealed partial class TestApp : Application
         var right = up.TransformToVisual(frame).TransformPoint(new Windows.Foundation.Point()).X + up.ActualWidth;
         Check(down.ActualWidth == 32 && up.ActualWidth == 32 && Math.Abs(right + frame.BorderThickness.Right - frame.ActualWidth) < 0.01
             && Part<TextBox>(number, "InputBox").TextAlignment == TextAlignment.Center,
-            "The form field centers its value and fits both visible 32 DIP chevron buttons inside its right edge");
+            "The form field centers its value and keeps both full 32 DIP edge hit targets");
         await InvokeAsync(down);
         Check(number.Value == -1, "The form field decrements a signed queue priority");
         await InvokeAsync(up);

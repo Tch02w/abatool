@@ -42,9 +42,9 @@ public sealed partial class ResultPreviewTable : UserControl
             var data = new DataPackage();
             data.SetText(_table.ToClipboardText());
             Clipboard.SetContent(data);
-            Summary.Text = $"已复制预览（{_table.RowCount} 行数据，{_table.ColumnCount} 列）";
+            App.Current.MainWindow.ShowFeedback("预览已复制", $"{_table.RowCount} 行数据，{_table.ColumnCount} 列", InfoBarSeverity.Success);
         }
-        catch (Exception) { Summary.Text = "无法写入剪贴板，请重试。"; }
+        catch (Exception error) { App.Current.MainWindow.ShowFeedback("无法写入剪贴板", error.Message, InfoBarSeverity.Error); }
     }
 
     private void Draw(bool resetRows)

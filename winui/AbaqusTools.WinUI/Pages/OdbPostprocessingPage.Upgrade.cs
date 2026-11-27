@@ -188,6 +188,9 @@ public sealed partial class OdbPostprocessingPage
         }
         UpdateExplorer();
         if (final.Status == "failed") ShowError(final.Error?.Message ?? "部分文件未升级成功，请查看逐文件结果。", "升级失败");
+        else if (!initial.IsTerminal && final.Status == "succeeded") ShowSuccess(UpgradeStatusText.Text, "ODB 升级完成");
+        else if (!initial.IsTerminal && final.Status == "cancelled")
+            App.Current.MainWindow.ShowFeedback("ODB 升级已取消", UpgradeStatusText.Text, InfoBarSeverity.Informational);
         App.Current.MainWindow.ReportPageStatus(UpgradeStatusText.Text);
         // Other queued upgrades may still own files. Do not unlock editing merely
         // because the one currently displayed has finished.

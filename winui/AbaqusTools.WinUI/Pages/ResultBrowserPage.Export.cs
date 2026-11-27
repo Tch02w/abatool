@@ -1,5 +1,6 @@
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 
 namespace AbaqusTools.WinUI.Pages;
@@ -32,7 +33,6 @@ public sealed partial class ResultBrowserPage
                 WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow));
             var destination = await picker.PickSingleFolderAsync();
             if (destination is null || App.Current.Session.IsClosing) return;
-            ErrorInfoBar.IsOpen = WarningInfoBar.IsOpen = false;
             ExportDetailsExpander.Visibility = Visibility.Collapsed;
             using var cancellation = new CancellationTokenSource();
             _exportCancellation = cancellation;
@@ -59,7 +59,9 @@ public sealed partial class ResultBrowserPage
             ExportDetailsText.Text = detail;
             ExportDetailsExpander.Visibility = Visibility.Visible;
             ExportDetailsExpander.IsExpanded = !outcome.Succeeded;
-            if (!outcome.Succeeded) ShowWarning("已完成的文件保留；未完成文件未发布。详细路径见导出记录。", summary);
+            if (outcome.Succeeded) App.Current.MainWindow.ShowFeedback(summary, destination.Path, InfoBarSeverity.Success);
+            else if (outcome.Cancelled) ShowWarning("已完成的文件保留，详细路径见导出记录。", summary);
+            else ShowError(outcome.Error ?? "详细路径见导出记录。", summary);
         }
         catch (Exception error) { ShowError(error.Message, "结果导出未完成"); }
         finally

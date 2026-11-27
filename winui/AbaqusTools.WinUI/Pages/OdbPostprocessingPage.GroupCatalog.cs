@@ -50,9 +50,8 @@ public sealed partial class OdbPostprocessingPage
                 if (!TrySaveWorkspaceChange(next =>
                     {
                         foreach (var name in plan.NewNames) next.GroupMemberOrder.Add(name, []);
-                    }))
+                    }, message => detail.Text = message))
                 {
-                    detail.Text = "工作区未能保存，请检查当前目录和配置文件后重试。";
                     return;
                 }
                 added = plan.NewNames;
@@ -66,7 +65,7 @@ public sealed partial class OdbPostprocessingPage
         GroupNameTextBox.Text = added[0];
         UpdateExplorer();
         RefreshInteractionState();
-        await CompleteDialogDraftAsync("新建对比组", "当前目录");
-        ShowWarning($"已创建 {added.Length} 个组。", "对比组已保存");
+        if (!await CompleteDialogDraftAsync("新建对比组", "当前目录")) return;
+        ShowSuccess($"已创建 {added.Length} 个组。", "对比组已保存");
     }
 }

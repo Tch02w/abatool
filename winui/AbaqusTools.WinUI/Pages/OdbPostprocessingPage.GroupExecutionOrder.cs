@@ -85,13 +85,12 @@ public sealed partial class OdbPostprocessingPage
             else
             {
                 List<string> nextOrder = customized ? [.. draft] : [];
-                if (TrySaveWorkspaceChange(next => next.GroupExecutionOrder = nextOrder))
+                if (TrySaveWorkspaceChange(next => next.GroupExecutionOrder = nextOrder, message => error.Text = message))
                 {
                     _groupExecutionOrder = nextOrder;
                     click.Cancel = false;
                     return;
                 }
-                error.Text = "工作区未能保存。请检查配置文件后再次点击“保存顺序”。";
             }
             error.Visibility = Visibility.Visible;
         };
@@ -130,7 +129,8 @@ public sealed partial class OdbPostprocessingPage
         if (await ShowRecoverableDialogAsync(dialog, panel, title, "当前目录", basis, new(), Capture, Restore)
             != ContentDialogResult.Primary) return;
         RefreshInteractionState();
-        await CompleteDialogDraftAsync(title, "当前目录");
+        if (await CompleteDialogDraftAsync(title, "当前目录"))
+            ShowSuccess("下次创建和追加队列将使用已保存的顺序。", "对比组执行顺序已保存");
     }
 
     private async void OnRunOrderPreviewClicked(object sender, RoutedEventArgs args)

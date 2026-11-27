@@ -120,10 +120,10 @@ public sealed partial class OdbPostprocessingPage
         return result;
     }
 
-    private async Task CompleteDialogDraftAsync(string kind, string target)
+    private async Task<bool> CompleteDialogDraftAsync(string kind, string target)
     {
         _dialogDrafts.Remove(DialogDraftKey(kind, target));
-        try { await SavePostprocessDraftAsync(); }
-        catch (Exception error) { ShowWarning(error.Message, "配置已应用，但恢复草稿未能更新"); }
+        try { await SavePostprocessDraftAsync(); return true; }
+        catch (Exception error) { ShowWarning(error.Message, "配置已应用，但恢复草稿未能更新"); return false; }
     }
 }

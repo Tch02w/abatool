@@ -12,10 +12,8 @@
 
         <Border Style="{StaticResource WorkbenchCardStyle}">
             <Grid RowSpacing="10">
-                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                <InfoBar x:Name="QueueInfoBar" IsClosable="False" IsOpen="True" Message="候选区、正式队列以及外部运行作业的扫描和持续状态监控已接入。" Severity="Informational" />
-                <InfoBar x:Name="SchedulerInfoBar" IsClosable="False" IsOpen="False" Title="调度与恢复" Severity="Warning" />
-                <Grid Grid.Row="1" ColumnSpacing="6">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <Grid ColumnSpacing="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
@@ -34,7 +32,7 @@
                         <Button x:Name="RefreshQueueButton" Click="OnRefreshClicked" Content="刷新" />
                     </StackPanel>
                 </Grid>
-                <Grid Grid.Row="2" ColumnSpacing="14">
+                <Grid Grid.Row="1" ColumnSpacing="14">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <CheckBox x:Name="RecursiveScanCheckBox" Content="扫描子文件夹" />
                     <CheckBox x:Name="SkipRestartNamesCheckBox" Grid.Column="1" Content="跳过 Restart 文件" />
@@ -46,7 +44,7 @@
                                 ToolTipService.ToolTip="设置已勾选候选作业的计算与归档目录" />
                     </StackPanel>
                 </Grid>
-                <Grid Grid.Row="3">
+                <Grid Grid.Row="2">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <controls:QueueTableView x:Name="CandidateTable" Grid.RowSpan="2" Kind="Candidate"
                                              CandidateCheckClicked="OnCandidateCheckClicked" />

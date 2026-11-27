@@ -19,13 +19,15 @@ public sealed class WorkbenchNumberBox : NumberBox
         DefaultStyleKey = typeof(NumberBox);
         SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
         MinWidth = 160;
-        var appearance = new ResourceDictionary
-        {
-            Source = new Uri("ms-appx:///Controls/WorkbenchNumberBoxResources.xaml")
-        };
+        var appearance = CreateAppearanceResources();
         Resources.MergedDictionaries.Add(appearance);
         Template = (ControlTemplate)appearance["WorkbenchNumberBoxTemplate"];
     }
+
+    internal static ResourceDictionary CreateAppearanceResources() => new()
+    {
+        Source = new Uri("ms-appx:///Controls/WorkbenchNumberBoxResources.xaml")
+    };
 
     public static readonly DependencyProperty FrameAppearanceProperty = DependencyProperty.Register(
         nameof(FrameAppearance), typeof(NumberBoxFrameAppearance), typeof(WorkbenchNumberBox),

@@ -121,7 +121,6 @@
                         <Button x:Name="RefreshBatchButton" Click="OnRefreshBatchClicked" Content="读取后台任务" />
                         <Button x:Name="ResumeBatchButton" Click="OnResumeBatchClicked" Content="检查并继续批量任务" Visibility="Collapsed" />
                     </StackPanel>
-                    <InfoBar x:Name="MergePlanInfoBar" IsClosable="False" IsOpen="False" />
                     <Expander x:Name="MergePlanExpander" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Header="安全合并计划" IsExpanded="False">
                         <StackPanel Spacing="8">
                             <TextBlock x:Name="MergePlanDetailsText" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="Wrap" />

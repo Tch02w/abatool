@@ -10,7 +10,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="3*" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
             <Border Style="{StaticResource WorkbenchCardStyle}">
                 <Grid RowSpacing="10">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center" Spacing="2">
@@ -22,8 +22,7 @@
                         <Button x:Name="RefreshButton" Grid.Column="3" Margin="8,0,0,0" Click="OnRefreshClicked" Content="刷新依赖" />
                         <Button Grid.Column="4" Margin="8,0,0,0" Click="OnRefreshClicked" Content="校验全部" Style="{StaticResource AccentButtonStyle}" />
                     </Grid>
-                    <InfoBar x:Name="ChainInfoBar" Grid.Row="1" IsClosable="False" IsOpen="True" Message="正式队列中尚无包含 oldjob 的真实作业。" Severity="Informational" Title="没有重启动依赖" />
-                    <Grid Grid.Row="2" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                    <Grid Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
                         <ScrollViewer x:Name="RestartGraphScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ZoomMode="Disabled">
                             <Canvas x:Name="RestartGraphCanvas" MinWidth="860" MinHeight="520" Background="Transparent" />
                         </ScrollViewer>

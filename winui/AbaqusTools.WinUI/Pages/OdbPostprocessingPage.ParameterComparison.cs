@@ -60,9 +60,8 @@ public sealed partial class OdbPostprocessingPage
                     {
                         foreach (var saved in workspace.Rows)
                             if (changes.TryGetValue(saved.Path, out var value)) saved.Draft = value;
-                    }))
+                    }, editor.ShowError))
                     {
-                        editor.ShowError("工作区未能保存。修改仍在此窗口，可查看工作区状态后重试。");
                         return;
                     }
                     foreach (var row in rows)
@@ -83,9 +82,9 @@ public sealed partial class OdbPostprocessingPage
             if (await ShowRecoverableDialogAsync(dialog, panel, OdbPostprocessDraftRecovery.ComparisonDialogKind, target, basis, [],
                     editor.CaptureDraft, editor.RestoreDraft) == ContentDialogResult.Primary)
             {
-                await CompleteDialogDraftAsync(OdbPostprocessDraftRecovery.ComparisonDialogKind, target);
+                var draftSaved = await CompleteDialogDraftAsync(OdbPostprocessDraftRecovery.ComparisonDialogKind, target);
                 RefreshInteractionState();
-                if (changedCount > 0) App.Current.MainWindow.ReportPageStatus($"已保存 {changedCount} 个模型的提取参数");
+                if (changedCount > 0 && draftSaved) ShowSuccess($"已保存 {changedCount} 个模型的提取参数。", "提取参数已保存");
             }
         }
         finally { dialogRoot.Changed -= OnRootChanged; }

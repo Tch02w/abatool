@@ -83,8 +83,6 @@
         </Border>
 
         <StackPanel Grid.Row="1" Spacing="8">
-            <InfoBar x:Name="ErrorInfoBar" IsClosable="True" IsOpen="False" Severity="Error" Title="操作失败" />
-            <InfoBar x:Name="WarningInfoBar" IsClosable="True" IsOpen="False" Severity="Warning" Title="操作提示" />
             <InfoBar x:Name="WorkspaceRecoveryInfoBar" IsClosable="False" IsOpen="False" Severity="Warning" Title="发现后处理恢复草稿">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <Button x:Name="RestoreWorkspaceDraftButton" Content="恢复编辑" Click="OnRestoreWorkspaceDraftClicked" />

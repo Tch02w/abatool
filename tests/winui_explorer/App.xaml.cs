@@ -42,6 +42,7 @@ public sealed partial class TestApp : Application
             _window.Activate();
             await loaded.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await CheckInfoBarLayoutAsync();
+            await CheckFeedbackHostAsync();
             await CheckHeaderAlignmentAsync();
             await CheckCompactTreeAsync();
             await CheckSelectionsAsync();

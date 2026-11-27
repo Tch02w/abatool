@@ -325,8 +325,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void RestoreRowsFromOperationRequest(OdbCompatibilityOperationRequest request)
     {
-        ErrorInfoBar.IsOpen = false;
-        WarningInfoBar.IsOpen = false;
         OdbList.SelectedItems.Clear();
         _odbItems.Clear();
         _odbByPath.Clear();
@@ -383,7 +381,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private async void OnBrowseClicked(object sender, RoutedEventArgs e)
     {
         if (GroupQueueBlocksOtherOperations) return;
-        ErrorInfoBar.IsOpen = false;
         try
         {
             var picker = new FolderPicker
@@ -443,8 +440,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         try { draftSave = SavePostprocessDraftAsync(); }
         catch (Exception error) { ShowWarning(error.Message, "草稿未能保存，未切换目录"); return false; }
         SetDiscoveryBusy(true);
-        ErrorInfoBar.IsOpen = false;
-        WarningInfoBar.IsOpen = false;
         var previousRows = _odbItems.ToArray();
         var selectedPaths = OdbList.SelectedItems.OfType<OdbFileRow>().Select(row => row.Path).ToArray();
         DiscoveryMetadataText.Text = "正在扫描";
@@ -537,6 +532,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                     string.Join(Environment.NewLine, result.Warnings),
                     "扫描完成，但有警告");
             }
+            else if (requestedRoot is null)
+                App.Current.MainWindow.ShowFeedback("ODB 扫描完成", $"发现 {result.Count} 个 ODB。",
+                    result.Count > 0 ? InfoBarSeverity.Success : InfoBarSeverity.Informational);
 
             App.Current.MainWindow.ReportPageStatus(
                 result.Count == 0 ? "扫描完成 · 未发现 ODB" : $"扫描完成 · 发现 {result.Count} 个 ODB");
@@ -641,7 +639,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private bool TrySaveWorkspaceChange(Action<OdbPostprocessWorkspace> change)
+    private bool TrySaveWorkspaceChange(Action<OdbPostprocessWorkspace> change, Action<string>? inlineError = null)
     {
         try
         {
@@ -657,7 +655,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception error)
         {
-            ShowWarning(error.Message, "工作区修改未能保存");
+            if (inlineError is null) ShowWarning(error.Message, "工作区修改未能保存");
+            else inlineError("工作区修改未能保存：" + error.Message);
             return false;
         }
     }
@@ -863,7 +862,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             })) return;
         foreach (var name in retainedNames) _groupMemberOrder.TryAdd(name, []);
         foreach (var (row, value) in memberships) row.ComparisonGroup = value;
-        SelectedPlanText.Text = $"已更新 {selected.Length} 个 ODB 的分组；原始文件未修改。";
+        ShowSuccess($"已更新 {selected.Length} 个 ODB 的分组。", "成员关系已保存");
         UpdateExplorer();
         RefreshInteractionState();
     }
@@ -974,8 +973,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                     next.GroupMemberOrder.TryAdd(groupName, []);
                     if (reset) next.Legends.Remove(groupName);
                     else next.Legends[groupName] = values;
-                })) return true;
-            validation.Text = "未能保存该组的图例设置。请检查工作区后重试。";
+                }, message => validation.Text = message)) return true;
             validation.Visibility = Visibility.Visible;
             return false;
         }
@@ -1018,8 +1016,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         else _legendOverridesByGroup[groupName] = values;
         UpdateExplorer();
         RefreshInteractionState();
-        await CompleteDialogDraftAsync("图例范围", groupName);
-        ShowWarning(result == ContentDialogResult.Secondary
+        if (!await CompleteDialogDraftAsync("图例范围", groupName)) return;
+        ShowSuccess(result == ContentDialogResult.Secondary
             ? $"“{groupName}”已恢复为自动图例范围。"
             : $"已保存“{groupName}”的 {values.Count} 个手动图例范围。", "图例设置已更新");
     }
@@ -1063,7 +1061,8 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             GroupNameTextBox.Text = result == ContentDialogResult.Secondary ? "" : nameBox.Text.Trim();
             UpdateExplorer();
             RefreshInteractionState();
-            await CompleteDialogDraftAsync("管理分组", "当前目录");
+            if (await CompleteDialogDraftAsync("管理分组", "当前目录"))
+                ShowSuccess(replacement is null ? $"已移除“{oldName}”的分组关系。" : $"“{oldName}”已改名为“{replacement.Trim()}”。", "对比组已更新");
         }
         catch (ArgumentException exception) { ShowWarning(exception.Message, "无法更新对比组"); }
     }
@@ -1127,9 +1126,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         }
         if (await ShowRecoverableDialogAsync(dialog, panel, "组内顺序", "当前目录", initialOrders,
             new() { ["对比组"] = selector }, CaptureOrders, RestoreOrders) != ContentDialogResult.Primary) return;
-        foreach (var pair in drafts) _groupMemberOrder[pair.Key] = pair.Value.Select(row => row.Path).ToList();
-        SaveWorkspace();
-        await CompleteDialogDraftAsync("组内顺序", "当前目录");
+        var orders = drafts.ToDictionary(pair => pair.Key, pair => pair.Value.Select(row => row.Path).ToList());
+        if (!TrySaveWorkspaceChange(next =>
+            {
+                foreach (var pair in orders) next.GroupMemberOrder[pair.Key] = pair.Value;
+            })) return;
+        foreach (var pair in orders) _groupMemberOrder[pair.Key] = pair.Value;
+        if (await CompleteDialogDraftAsync("组内顺序", "当前目录"))
+            ShowSuccess("下次执行将沿用此顺序。", "组内顺序已保存");
     }
 
     private async void OnConfigureClicked(object sender, RoutedEventArgs e)
@@ -1156,9 +1160,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         var draft = await ShowJobConfigurationDialogAsync(row);
         if (draft is not null)
         {
+            if (!TrySaveWorkspaceChange(next =>
+                next.Rows.Single(saved => string.Equals(saved.Path, row.Path, StringComparison.OrdinalIgnoreCase)).Draft = draft)) return;
             row.UpdatePostprocessJob(draft);
-            SaveWorkspace();
-            await CompleteDialogDraftAsync("提取参数", PathKey(row.Path));
+            if (await CompleteDialogDraftAsync("提取参数", PathKey(row.Path)))
+                ShowSuccess(row.Name, "提取参数已保存");
             SelectedPlanText.Text = $"已更新 {row.Name} 的提取参数";
             RefreshInteractionState();
         }
@@ -1485,7 +1491,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return;
         }
         _postprocessTracking.Observe(snapshot, recovered);
-        if (snapshot.IsTerminal) WarningInfoBar.IsOpen = false;
         _activePostprocessOperationId ??= snapshot.OperationId;
         _activePostprocessKind ??= snapshot.Kind;
         _lastPostprocessVersion = snapshot.Version;
@@ -1530,8 +1535,12 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 {
                     FindRow(item.Path)?.ApplyPostprocessScan(item);
                 }
-                MarkPostprocessRowsWithoutConfiguration("没有返回 ODB 结构结果。", result.Items.Select(item => item.Path));
+                var missing = MarkPostprocessRowsWithoutConfiguration("没有返回 ODB 结构结果。", result.Items.Select(item => item.Path));
                 PostprocessPhaseText.Text = $"结构读取完成 · {result.Count} 个 ODB · 缓存命中 {result.CacheHits}";
+                var issues = result.Items.Count(item => !string.IsNullOrWhiteSpace(item.Error));
+                App.Current.MainWindow.ShowFeedback("ODB 结构读取完成", PostprocessPhaseText.Text
+                    + (issues + missing > 0 ? $" · {issues} 项错误 · {missing} 项未返回" : ""),
+                    issues + missing > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
             }
             else if (!OdbPostprocessResultLocations.HasPublishedOutputs(result))
             {
@@ -1551,12 +1560,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 }
                 PostprocessPhaseText.Text = $"后处理完成 · {result.OutputCount} 个结果";
                 AppendPostprocessLog($"结果根目录：{string.Join("；", result.ResultRoots)}");
+                ShowSuccess(PostprocessPhaseText.Text, "ODB 后处理完成");
             }
         }
         else if (snapshot.Status == "cancelled")
         {
             MarkPostprocessRowsIncomplete("已取消", "操作已取消，已完成的缓存与结果会保留。 ");
             PostprocessPhaseText.Text = "ODB 后处理操作已取消";
+            App.Current.MainWindow.ShowFeedback(PostprocessPhaseText.Text, "已完成的缓存与结果已保留。", InfoBarSeverity.Informational);
         }
         else if (snapshot.Status == "failed")
         {
@@ -1567,16 +1578,19 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         RefreshInteractionState();
     }
 
-    private void MarkPostprocessRowsWithoutConfiguration(string message, IEnumerable<string> returnedPaths)
+    private int MarkPostprocessRowsWithoutConfiguration(string message, IEnumerable<string> returnedPaths)
     {
         var returned = returnedPaths.Select(PathKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = 0;
         foreach (var pathKey in _activePathKeys)
         {
             if (!returned.Contains(pathKey) && _odbByPath.TryGetValue(pathKey, out var row))
             {
                 row.MarkStructureAnalysisIncomplete(message);
+                missing++;
             }
         }
+        return missing;
     }
 
     private void MarkPostprocessRowsIncomplete(string status, string message)
@@ -1678,8 +1692,6 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        ErrorInfoBar.IsOpen = false;
-        WarningInfoBar.IsOpen = false;
         _activeOperationId = null;
         _activeAttemptId = null;
         _lastOperationVersion = -1;
@@ -1852,8 +1864,11 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 MarkUnfinishedRows("无结果", "控制面未返回此 ODB 的兼容性结果。");
                 CompatibilityStatusText.Text =
                     $"兼容性检查完成 · {snapshot.Results.Count} 个结果 · {FormatOperationId(snapshot.OperationId)}";
-                App.Current.MainWindow.ReportPageStatus(
-                    $"兼容性检查完成 · {snapshot.Progress.Completed} / {snapshot.Progress.Total}");
+                var needsReview = snapshot.Results.Count(result => result.Status != "valid");
+                App.Current.MainWindow.ShowFeedback("兼容性检查完成",
+                    $"已返回 {snapshot.Results.Count} / {snapshot.Progress.Total} 项，{needsReview} 项需核对。",
+                    needsReview > 0 || snapshot.Results.Count != snapshot.Progress.Total
+                        ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
                 break;
             case "cancelled":
                 MarkUnfinishedRows("未完成", "兼容性检查已取消。");
@@ -2037,18 +2052,16 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void ShowError(string message, string title = "操作失败")
     {
-        ErrorInfoBar.Title = title;
-        ErrorInfoBar.Message = message;
-        ErrorInfoBar.IsOpen = true;
-        App.Current.MainWindow.ReportPageStatus(title);
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Error);
     }
 
     private void ShowWarning(string message, string title)
     {
-        WarningInfoBar.Title = title;
-        WarningInfoBar.Message = message;
-        WarningInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Warning);
     }
+
+    private void ShowSuccess(string message, string title) =>
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Success);
 
     private static string PathKey(string path)
     {

@@ -18,6 +18,8 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private readonly QueueExplorerAdapter _queueExplorerAdapter;
     private bool _busy;
     private bool _runtimeRefreshBusy;
+    private bool _hasReadQueue;
+    private string? _lastSchedulerMessage;
     private bool _applyingSnapshot;
     private int? _lastRuntimeParallel;
     private string? _lastRuntimePolicy;
@@ -87,10 +89,10 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private async void OnRefreshClicked(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync();
+        await RefreshAsync(userRequested: true);
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(bool userRequested = false)
     {
         if (_busy)
         {
@@ -102,10 +104,12 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         {
             var snapshot = await App.Current.ControlPlane.GetJobQueuesAsync();
             ApplySnapshot(snapshot);
-            ShowSuccess(
-                "队列已恢复",
-                $"读取 {snapshot.CandidateCount} 个候选和 {snapshot.QueueCount} 个正式作业。",
-                $"队列已读取 · {snapshot.QueueCount} 个正式作业");
+            var status = $"队列已读取 · {snapshot.QueueCount} 个正式作业";
+            if (userRequested || !_hasReadQueue)
+                ShowSuccess(userRequested ? "队列已刷新" : "队列已恢复",
+                    $"读取 {snapshot.CandidateCount} 个候选和 {snapshot.QueueCount} 个正式作业。", status);
+            else App.Current.MainWindow.ReportPageStatus(status);
+            _hasReadQueue = true;
         }
         catch (ControlPlaneException exception)
         {
@@ -495,7 +499,6 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         }
 
         SetBusy(true, busyStatus);
-        QueueInfoBar.IsOpen = false;
         try
         {
             var result = await operation();
@@ -559,10 +562,12 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     {
         App.Current.Commands.ApplyQueue(runtime);
         ApplySnapshot(runtime.Queue);
-        if (SchedulerInfoBar.Message != runtime.SchedulerMessage)
-            SchedulerInfoBar.Message = runtime.SchedulerMessage;
-        var showSchedulerMessage = !string.IsNullOrWhiteSpace(runtime.SchedulerMessage);
-        if (SchedulerInfoBar.IsOpen != showSchedulerMessage) SchedulerInfoBar.IsOpen = showSchedulerMessage;
+        if (_lastSchedulerMessage != runtime.SchedulerMessage)
+        {
+            _lastSchedulerMessage = runtime.SchedulerMessage;
+            if (!string.IsNullOrWhiteSpace(_lastSchedulerMessage))
+                App.Current.MainWindow.ShowFeedback("调度与恢复", _lastSchedulerMessage, InfoBarSeverity.Warning);
+        }
         var drafts = App.Current.Session.State.Pages.GetValueOrDefault("job-queue");
         // Runtime polling must not replace a setting the user is still editing.
         if (ParallelLimitNumberBox.Value != runtime.MaxParallel && (runtime.Active || (_lastRuntimeParallel is { } previousParallel
@@ -751,27 +756,18 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private void ShowSuccess(string title, string message, string status)
     {
-        QueueInfoBar.Title = title;
-        QueueInfoBar.Message = message;
-        QueueInfoBar.Severity = InfoBarSeverity.Success;
-        QueueInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Success);
         App.Current.MainWindow.ReportPageStatus(status);
     }
 
     private void ShowNotice(string title, string message)
     {
-        QueueInfoBar.Title = title;
-        QueueInfoBar.Message = message;
-        QueueInfoBar.Severity = InfoBarSeverity.Informational;
-        QueueInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Informational);
     }
 
     private void ShowError(string message)
     {
-        QueueInfoBar.Title = "队列操作失败";
-        QueueInfoBar.Message = message;
-        QueueInfoBar.Severity = InfoBarSeverity.Error;
-        QueueInfoBar.IsOpen = true;
+        App.Current.MainWindow.ShowFeedback("队列操作失败", message, InfoBarSeverity.Error);
         App.Current.MainWindow.ReportPageStatus("队列操作失败");
     }
 

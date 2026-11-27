@@ -66,8 +66,6 @@
         </Border>
 
         <StackPanel x:Name="StatusMessagesPanel" Grid.Row="1" Spacing="4" Margin="0,10,0,0" Visibility="Collapsed">
-            <InfoBar x:Name="ErrorInfoBar" IsClosable="True" Severity="Error" />
-            <InfoBar x:Name="WarningInfoBar" IsClosable="True" Severity="Warning" />
             <InfoBar
                 x:Name="IndexInfoBar"
                 IsClosable="False"

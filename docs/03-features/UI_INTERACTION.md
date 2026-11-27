@@ -1,5 +1,13 @@
 # 工作台布局、运行日志与数字输入
 
+## 操作通知（F029）
+
+八个页面通过 `MainWindow.ShowFeedback` 在工作台右下角显示原生 InfoBar，悬浮于状态栏上方。普通消息和成功提示累计显示 4 秒，警告显示 8 秒，错误留到点击关闭。鼠标悬停、键盘焦点在卡片内或打开模态对话框时暂停计时，离开后用剩余时间继续。每次只展示一条，相同的待显示消息合并，排队的错误优先。通知卡片以外的区域可继续操作。
+
+后台状态采样更新各自的数值和日志。输入字段错误、进度、需要操作的确认和恢复入口留在对应的控件旁。结束提醒的未读记录通过「作业 → 结束提醒」查看。通知关闭与标记已读分别生效。[作业结束提醒](JOB_NOTIFICATIONS.md)
+
+队列单条编辑弹窗打开时，按收起状态的实际可用高度设置内容滚动区域的上限。展开计算与归档目录、GPU 与精度之后，可以滚动到新增字段；标题、保存和取消按钮保持原位。
+
 ## 队列表格对齐与分隔线（F004，2026-11-24）
 
 候选区与正式队列共用 QueueTableView / QueueTableRow。原来的表头和 ListView 行各自定义列，默认多选容器还额外预留选择区域，造成表体右移。现在每类表格的标题、绑定字段、列宽和对齐只在一处定义；容器外边距和内边距归零，不再插入隐式多选区域。
@@ -134,7 +142,7 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 
 ## 数字步进与参数说明（F025）
 
-用户最终选择右侧并排的下/上折线箭头、数字居中。原有16处中的SSH端口已按用户要求改为直接输入；其余15处及GPU编辑区两个入口使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
+共用数字框在左、右两端提供带浅底色的小圆角减键和加键，数值在整个框内居中。原有16处中的SSH端口已按用户要求改为直接输入；其余15处及GPU编辑区两个入口使用 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBox.cs`，常驻 Inline，不使用 Compact 或 Hidden。修复前为 8 Hidden、5 Compact、2 Inline；后续发现只改原生模板图标仍与预览不同，现已通过 `winui/AbaqusTools.WinUI/Controls/WorkbenchNumberBoxResources.xaml` 统一完整外观。模板保留原生命名部件和状态，数值逻辑不重写。
 
 | 文件 | 控件 | 修复前模式 |
 |---|---|---|
@@ -146,13 +154,13 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` | 钢筋直径、断裂前帧 | Compact × 2 |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.StructureBrowser.cs` | 统一参考截面积 | Hidden |
 
-NumberBox 负责解析、验证、步进、自动化和上下限，保留 0/−1 的自动值语义、参考截面积空值（NaN，使用 ODB 面积）、容差 0.0001 步长与 `winui/AbaqusTools.WinUI/Controls/PlainDecimalFormatter.cs`、运行期 CPU 上限及毫米/像素范围切换。输入最小宽度为 160 DIP，数字在输入区居中，右侧依次为减少、增加。默认框高 40 DIP，按钮各宽 40 DIP，圆角 5 DIP。按钮之间有竖线，点击先提交手工输入的数值。
+NumberBox 负责解析、验证、步进、自动化和上下限，保留 0/−1 的自动值语义、参考截面积空值（NaN，使用 ODB 面积）、容差 0.0001 步长与 `winui/AbaqusTools.WinUI/Controls/PlainDecimalFormatter.cs`、运行期 CPU 上限及毫米/像素范围切换。输入最小宽度为 160 DIP，左右点击区等宽，中央区域支持键盘输入。默认框高 40 DIP，按钮各宽 40 DIP，圆角 5 DIP。键面向内留白，点击先提交手工输入的数值。
 
 队列编辑表单的 Core、优先级从单行文本框主题读取框高、背景、圆角和外框，与同表单的内存框同高（32 DIP）。固定宽度的对话框在右侧为滚动条留出空间。正式队列工具栏的「同名结果」和「并行上限」保留 40 DIP 高度，共用下拉框的主题边线、圆角和填充。深浅主题切换时，两者的底边同步换色。
 
 `tests/winui/test_shell_contract.py` 已移除旧 Hidden/Compact 契约。`tests/winui_numberbox/NumberBox.Tests.csproj` 在自身离屏 WinUI 窗口加载实际生产控件，检查原生步进、未提交文字、动态 CPU 限制、0/−1、空值、分数面积和 0.0001 小数；实际检查数和最新外观验证见任务记录。图例范围、内存和切面表达式仍是 TextBox，不自动改为普通步进数值。
 
-`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs` 在参数标签旁提供 14 DIP 问号，保留最小 28 DIP 悬停/点击区域。`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs` 原有数字输入提供 13 类说明，新增 GPU/计算精度/场输出精度三类说明。悬停 180 ms 打开；停留在按钮或整个提示区（含内边距）时保持；离开两者 240 ms 后关闭，避免跨越间隙时闪退。不显示“知道了”按钮。点击和 Enter 仍可打开，Escape 可关闭；键盘打开时不因鼠标不在附近而立即消失。提示正文可选取；无重复原生 ToolTip。卸载页面清理计时器，修改说明时重置旧弹层状态，自动关闭动画中重新进入可恢复，显式 Escape 不自动重开。
+`winui/AbaqusTools.WinUI/Controls/ParameterHelpButton.cs` 在参数标签旁提供 16 DIP 实心圆形信息图标，保留最小 28 DIP 悬停/点击区域。`winui/AbaqusTools.WinUI/Services/ParameterHelpText.cs` 原有数字输入提供 13 类说明，新增 GPU/计算精度/场输出精度三类说明。悬停 180 ms 打开；停留在按钮或整个提示区（含内边距）时保持；离开两者 240 ms 后关闭，避免跨越间隙时闪退。不显示“知道了”按钮。点击和 Enter 仍可打开，Escape 可关闭；键盘打开时不因鼠标不在附近而立即消失。提示正文可选取；无重复原生 ToolTip。卸载页面清理计时器，修改说明时重置旧弹层状态，自动关闭动画中重新进入可恢复，显式 Escape 不自动重开。
 
 参数语义与当前源码保持一致：CPU=0 是不传 cpus 参数（Abaqus 默认值），不是全部 CPU；预期纵筋数只作核对；纵筋切面容差判断穿越/端点归属，不是切片厚度或实体积分精度；参考面积留空按单元读 ODB，手动填值覆盖选中桁架面积；钢筋直径只在缺少面积时回退；断裂前帧手动值为跨分析步拼接的总序号；毫米图片尺寸不保证固定印刷 DPI；队列优先级标记不等于当前本机调度自动按数值排序。
 
@@ -162,7 +170,7 @@ NumberBox 负责解析、验证、步进、自动化和上下限，保留 0/−1
 
 主窗口 `winui/AbaqusTools.WinUI/MainWindow.xaml` 的 ShellNavigation 设置 KeyboardAcceleratorPlacementMode=Hidden。Ctrl+7/Ctrl+8 仍绑定后处理与结果浏览；仅关闭附着在整个导航容器的自动快捷键提示，防止在其子页面表格或空白区域冒出裸 Ctrl+7。该设置由本机 SDK API 文档确认，不删除快捷键或其他业务 ToolTip。
 
-队列工具栏的文字、问号、同名结果下拉框与并行输入统一垂直居中，下拉框与数字框同为 40 DIP 高。
+队列工具栏的文字、信息图标、同名结果下拉框与并行输入统一垂直居中，下拉框与数字框同为 40 DIP 高。
 
 结果浏览“读取目录”按钮（F021）的加载圆环只在读取过程中显示；空闲时使用 Collapsed 释放占位，文字在按钮中水平、垂直居中。加载圆环跟随按钮 Foreground，避免浅色主题强调按钮上颜色不清楚。失败、取消或读取结束均通过既有状态刷新回到空闲布局。
 
@@ -178,4 +186,4 @@ NumberBox 负责解析、验证、步进、自动化和上下限，保留 0/−1
 
 ## GPU 与精度编辑区（F028）
 
-新建作业与正式队列编辑共用 `winui/AbaqusTools.WinUI/Controls/ExecutionOptionsEditor.cs`，位于可展开区域。标签、问号与右侧输入按固定标签列对齐；GPU 采用相同 WorkbenchNumberBox 模板。队列长表单增加滚动容器，保存前校验失败保留对话框及当前输入。新建作业的原始数字文本与选项由 WorkbenchSession 登记保存；无效自定义草稿保留原字符串，只有明确恢复默认后才允许替换。语义和实际证据见 [提交选项说明](EXECUTION_OPTIONS.md)，原有 35 项控件自身原生证据不覆盖新增业务编辑区。
+新建作业与正式队列编辑共用 `winui/AbaqusTools.WinUI/Controls/ExecutionOptionsEditor.cs`，位于可展开区域。标签、信息图标与右侧输入按固定标签列对齐；GPU 采用相同 WorkbenchNumberBox 模板。队列长表单增加滚动容器，保存前校验失败保留对话框及当前输入。新建作业的原始数字文本与选项由 WorkbenchSession 登记保存；无效自定义草稿保留原字符串，只有明确恢复默认后才允许替换。语义和实际证据见 [提交选项说明](EXECUTION_OPTIONS.md)，原有 35 项控件自身原生证据不覆盖新增业务编辑区。

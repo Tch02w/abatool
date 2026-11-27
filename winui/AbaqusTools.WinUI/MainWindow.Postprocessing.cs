@@ -36,7 +36,6 @@ public sealed partial class MainWindow
                 ReportPageStatus("当前选择已变化，本次未切换后处理文件");
                 return;
             }
-            if (StartupInfoBar.Title == "当前作业未送入后处理") StartupInfoBar.IsOpen = false;
             NavigateToRoute("odb-postprocessing");
             if (ContentFrame.Content is OdbPostprocessingPage page
                 && await page.LoadOdbPathAsync(route.Path,
@@ -47,11 +46,9 @@ public sealed partial class MainWindow
         {
             if (!_windowClosed && !App.Current.Commands.Locked && ReferenceEquals(origin, ContentFrame.Content))
             {
-                StartupInfoBar.Severity = InfoBarSeverity.Warning;
-                StartupInfoBar.Title = "当前作业未送入后处理";
-                StartupInfoBar.Message = error is ControlPlaneException problem ? problem.ToDisplayMessage() : error.Message;
-                StartupInfoBar.IsOpen = true;
-                ReportPageStatus(StartupInfoBar.Message);
+                var message = error is ControlPlaneException problem ? problem.ToDisplayMessage() : error.Message;
+                ShowFeedback("当前作业未送入后处理", message, InfoBarSeverity.Warning);
+                ReportPageStatus(message);
             }
         }
         finally { _menuCommandBusy = false; UpdateCommandMenus(); }

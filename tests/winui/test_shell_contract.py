@@ -522,7 +522,7 @@ def test_subpages_use_compact_headers_and_consistent_picker_buttons() -> None:
             )
 
     for page_name, required_actions in {
-        "JobQueuePage.xaml": ("QueueInfoBar",),
+        "JobQueuePage.xaml": ("RefreshQueueButton", "EditCandidateButton"),
         "JobOverviewPage.xaml": ("JobSelector", "OverviewMessageText"),
         "ComputeResourcesPage.xaml": ("RefreshButton", "AddServerButton"),
         "RestartChainPage.xaml": ("RefreshButton",),
@@ -722,6 +722,19 @@ def test_queue_numbers_use_the_frame_of_their_neighboring_fields() -> None:
     assert _named_element(page, "ParallelLimitNumberBox").get("FrameAppearance") == "ComboBox"
     editor = (WINUI_ROOT / "Pages" / "JobQueuePage.Edit.cs").read_text(encoding="utf-8")
     assert editor.count("FrameAppearance = Controls.NumberBoxFrameAppearance.TextField") == 2
+
+
+def test_feedback_overlay_and_unread_job_menu_do_not_reserve_page_rows() -> None:
+    shell = ET.parse(WINUI_ROOT / "MainWindow.xaml").getroot()
+    overlay = _named_element(shell, "FeedbackHost")
+    navigation = _named_element(shell, "ShellNavigation")
+    parent = next(node for node in shell.iter() if overlay in node)
+    assert navigation in parent and overlay.get("Grid.Row") == navigation.get("Grid.Row")
+    assert (overlay.get("HorizontalAlignment"), overlay.get("VerticalAlignment")) == ("Right", "Bottom")
+    menu = _named_element(shell, "WindowMenuBar")
+    assert _named_element(menu, "JobNotificationFlyout").tag.endswith("}Flyout")
+    queue = ET.parse(WINUI_ROOT / "Pages" / "JobQueuePage.xaml")
+    assert not any(child.tag.endswith("}InfoBar") for child in queue.iter())
 
 
 def test_adjustable_numeric_fields_use_the_same_permanent_button_control() -> None:

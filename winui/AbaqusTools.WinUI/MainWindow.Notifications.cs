@@ -14,7 +14,7 @@ public sealed partial class MainWindow
     private bool _notificationOpenBusy;
     private long _notificationRevision;
     private bool _notificationPollError;
-    private bool _notificationDismissed;
+    private string? _previousPersistenceWarning;
     private bool _notificationFlyoutOpen;
     private IReadOnlyList<JobNotification> _notificationsInView = [];
     private string _notificationListSignature = "";
@@ -33,11 +33,8 @@ public sealed partial class MainWindow
         catch (Exception error) when (error is ControlPlaneException or OperationCanceledException)
         {
             if (_shutdownStarted || _windowClosed || revision != _notificationRevision) return;
-            if (!_notificationPollError) _notificationDismissed = false;
-            JobNotificationBar.IsOpen = !_notificationDismissed;
-            JobNotificationBar.Severity = InfoBarSeverity.Warning;
-            JobNotificationBar.Title = "结束提醒暂不可用";
-            JobNotificationBar.Message = "已有作业仍继续运行。请查看作业概览，稍后将自动重试。";
+            if (!_notificationPollError)
+                ShowFeedback("结束提醒暂不可用", "已有作业仍继续运行，稍后将自动重试。", InfoBarSeverity.Warning);
             NotificationMessageText.Text = error.Message;
             _notificationPollError = true;
             JobNotificationsMenuItem.Text = "结束提醒（暂不可用）";
@@ -48,18 +45,20 @@ public sealed partial class MainWindow
     private void ApplyJobNotifications(JobNotificationSnapshot snapshot, bool refreshList = false)
     {
         var newItems = _notificationState.Apply(snapshot);
-        if (newItems) _notificationDismissed = false;
         if (_notificationPollError)
         {
             NotificationMessageText.Text = "";
             _notificationPollError = false;
         }
-        JobNotificationBar.IsOpen = !_notificationDismissed && (snapshot.UnreadCount > 0 || !string.IsNullOrWhiteSpace(snapshot.PersistenceWarning));
         JobNotificationsMenuItem.Text = $"结束提醒（{snapshot.UnreadCount} 条未读）";
-        JobNotificationBar.Title = $"作业结束提醒 · {snapshot.UnreadCount} 条未读";
-        JobNotificationBar.Message = snapshot.PersistenceWarning ?? snapshot.Items.FirstOrDefault()?.Heading ?? "";
-        JobNotificationBar.Severity = snapshot.PersistenceWarning is not null || snapshot.Items.Any(item => item.Status != "succeeded")
-            ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
+        if (newItems && snapshot.Items.FirstOrDefault() is { } latest)
+        {
+            var severity = snapshot.Items.Any(item => item.Status != "succeeded") ? InfoBarSeverity.Warning : InfoBarSeverity.Success;
+            ShowFeedback($"作业结束提醒 · {snapshot.UnreadCount} 条未读", latest.Heading + "。可在「作业 → 结束提醒」查看。", severity);
+        }
+        if (_previousPersistenceWarning != snapshot.PersistenceWarning && !string.IsNullOrWhiteSpace(snapshot.PersistenceWarning))
+            ShowFeedback("结束提醒保存异常", snapshot.PersistenceWarning, InfoBarSeverity.Error);
+        _previousPersistenceWarning = snapshot.PersistenceWarning;
         var signature = string.Join("|", snapshot.Items.Select(item => item.Id));
         // Identical polls must not rebuild the list and discard selection or scroll.
         if (signature != _notificationListSignature && (!_notificationFlyoutOpen || refreshList))
@@ -109,8 +108,6 @@ public sealed partial class MainWindow
     {
         if (sender is Button { Tag: JobNotification item }) await AcknowledgeNotificationsAsync([item.Id]);
     }
-
-    private void OnNotificationBarClosed(InfoBar sender, InfoBarClosedEventArgs args) => _notificationDismissed = true;
 
     private void OnNotificationFlyoutOpened(object? sender, object args)
     {

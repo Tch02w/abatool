@@ -10,6 +10,7 @@ public sealed partial class MainWindow
     private SystemSessionEndHook? _sessionEndHook;
     private bool _draftSaveBusy;
     private string? _sessionHookError;
+    private string? _lastDraftError;
 
     public bool IsSystemSessionEnding => _sessionEnd.IsEnding;
 
@@ -36,7 +37,7 @@ public sealed partial class MainWindow
         {
             await App.Current.Session.SaveDraftAsync(CaptureWindowState());
             if (!_windowClosed && !_sessionEnd.IsEnding && _sessionHookError is null)
-                DraftSaveInfoBar.IsOpen = false;
+                _lastDraftError = null;
         }
         catch (Exception error)
         {
@@ -47,8 +48,10 @@ public sealed partial class MainWindow
 
     private void ShowDraftSaveError(string message)
     {
-        DraftSaveInfoBar.Message = message + " 当前输入仍保留在窗口中，请处理后再关闭。";
-        DraftSaveInfoBar.IsOpen = true;
+        if (message == _lastDraftError) return;
+        _lastDraftError = message;
+        ShowFeedback("工作台草稿未能保存", message + " 当前输入仍保留在窗口中，请处理后再关闭。",
+            Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
     }
 
     private Task SaveForSystemSessionEnd()

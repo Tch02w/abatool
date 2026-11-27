@@ -1,5 +1,15 @@
 # TASK-002：后续迁移、完善与整理
 
+## 2026-11-27 · 组间执行顺序、远端文件修复的发布与升级验收
+
+Windows x64 目录包、正式标识安装候选和专用测试安装器均来自干净提交 `98d1bc734884adb630bcc24b998de590dec96b08`。1692 个负载文件已逐项校验，15 个编译界面文件与原生验收资源一致。客户端从冻结包读取资源、队列与部分完成及取消的历史，并正常关闭后台。构建回执为 `GPTWork/release-group-order-98d1bc7-20261127/verification.json`。可执行入口、两个安装器的身份和 SHA256 见[发布说明](../../05-development/RELEASE.md)及[安装说明](../../05-development/INSTALLATION.md)。
+
+11 月 25 日的全量 Python 测试执行 `pytest tests`，单独排除原生 Qt 窗口启动用例。1131 个常规用例与 9 个子测试通过，用时 666.34 秒。原生 Qt 的主窗口构造另行通过 1 项，两份 JUnit 均无失败、错误或跳过。命令、日志和回执为 `GPTWork/scoped-postprocess-20261124/regression-20261125-003422/{identity.json,tests.log,results.xml}` 与 `GPTWork/job-output-origin-20261125/native-qt.xml`。
+
+本机在独立测试标识下从 `1fc22fd` 实际升级至 `98d1bc7`，8 项生命周期检查通过。升级后 1 个、正常卸载后 16 个应用数据文件逐项 SHA256 一致，用户文件保留，测试登记、快捷方式、安装版本均已移除。强制清理列表及剩余自有进程列表均为空。验收回执为 `GPTWork/installer-lifecycle-329183fe8a13/verification.json`。首轮夹具额外指定了工作台配置目录，调度数据库进入另一个 G 盘隔离目录，标准脚本在核对卸载前数据时停止。经确认专用标识及安装路径后正常卸载，13 个标准位置数据文件与 3 个额外目录文件摘要一致。首次过程及收尾回执为 `GPTWork/installer-lifecycle-0e30d8a96ed6/verification.json` 与 `GPTWork/lifecycle-group-order-98d1bc7-20261127/close-first.json`。之后由客户端自行设置隔离数据库目录，在新目录中完整执行标准脚本。
+
+下一步仍需在独立无开发环境 Windows 机验收正式标识、可见的安装向导及原生业务窗口。当前安装候选未签名。此次安装验收使用 G 盘测试数据，未访问工程 ODB 或启动求解。
+
 ## 2026-11-25 · 历史远端作业的目录与文件归属
 
 原生文件浏览弹窗曾给子面板指定 720 DIP 宽，实际内容区仅有 498 DIP，列表和重试按钮右侧被裁切。改为填满可用宽度后，同一窗口中面板与内容区均为 407 DIP，重试按钮右缘位于可见区。使用正式概览页、弹窗和回环 HTTP，共通过 31 项离屏交互与尺寸检查。9 次目录请求核对了首次错误、重试、进入与返回、单文件与目录选择。工作目录模式只需关闭，已禁用文件确认。原始及最终测量见 `GPTWork/native-remote-browser-20261125/v3/ui-proof.json`、`v4/ui-proof.json` 和 `v4/verification.json`。

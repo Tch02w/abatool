@@ -1,12 +1,16 @@
 # Windows 安装、升级与卸载（F026）
 
-Windows x64 安装候选为 `GPTWork/installer-win-x64-166c12194af4/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `1fc22fdc27ad056fda402d8452521ac301dab4ef`。文件大小为 126314965 字节，SHA256 为 `c3f8bb975c7c60b8fdbe389ca8bc1ff36bf7799c9d831877d4060e20a8ac588f`。安装器未签名，正式标识安装与无开发环境目标机仍待实测。[目录包与校验回执](RELEASE.md)
+Windows x64 安装候选为 `GPTWork/installer-win-x64-d7cfe7a56959/AbaqusTools-0.1.0-win-x64-setup.exe`，版本 `0.1.0`，应用标识 `AbaqusTools.Workbench.WinUI3`。构建脚本和完整负载均取自干净提交 `98d1bc734884adb630bcc24b998de590dec96b08`。文件大小为 126326868 字节，SHA256 为 `49a5d903c341e8a1f14806bd9c0641c7b86d8f482aebe2fde030ee1712de4dcf`。签名状态为 `NotSigned`，正式标识安装与无开发环境目标机仍待实测。[目录包与校验回执](RELEASE.md)
 
-历史构建中，`b85c24b` 的安装候选位于 `GPTWork/installer-win-x64-69f4b496676b`，`ee1f79f` 的安装候选位于 `GPTWork/installer-win-x64-7f9e23f7bf10`。
+专用测试安装器位于 `GPTWork/installer-win-x64-ad162f541557/AbaqusTools-0.1.0-win-x64-setup.exe`，SHA256 为 `a4929796d9bf5dfcb93179e05a4f78979bf7ef0fb84b9100a038082251d122f7`。其标识 `AbaqusTools.Workbench.WinUI3.Test.fa0dbad4b19e` 用于隔离验收。两份安装器使用同一份 1692 文件负载及相同清单。
+
+历史正式候选中，`1fc22fd` 位于 `GPTWork/installer-win-x64-166c12194af4`，`b85c24b` 位于 `GPTWork/installer-win-x64-69f4b496676b`，`ee1f79f` 位于 `GPTWork/installer-win-x64-7f9e23f7bf10`。
 
 上一目录包 `51cc69f` 的测试标识安装验收回执为 `GPTWork/installer-lifecycle-f59eb537070a/verification.json`。运行中的后台能阻止升级和卸载，空闲后正常升级和卸载，用户数据摘要保持一致。
 
 ## 旧版升级实测
+
+11 月 27 日在本机 G 盘新建的中文路径，使用专用标识从 `1fc22fd` 升级至 `98d1bc7`。8 项检查全部通过。安装器拒绝陌生目录和目录联接，首次安装后逐文件校验。后台运行时升级与卸载均被阻止，后台正常退出后升级成功，客户端从新安装目录读取资源及队列并正常关闭。升级前的 1 个、卸载前的 16 个应用数据文件逐项 SHA256 一致。正常卸载后用户文件保留，两个程序版本、测试登记及菜单快捷方式已移除，自有测试进程全部退出。原始回执为 `GPTWork/installer-lifecycle-329183fe8a13/verification.json`，独立复核为 `GPTWork/lifecycle-group-order-98d1bc7-20261127/retry/complete.json`。本次采用静默安装，交互式安装向导仍待验证。
 
 11 月 25 日在本机 G 盘以专用测试标识从 `ee1f79f` 升级至 `1fc22fd`。测试安装器使用与上述候选相同的 1692 个负载文件。8 项检查通过，覆盖拒绝占用目录和目录联接、全文件校验、后台运行时保护升级与卸载、退出后升级、安装后的客户端访问和正常卸载。升级前的 1 个、卸载前的 16 个应用数据文件均逐项核对 SHA256。用户文件保留，程序版本、测试登记和快捷方式已移除，自有测试进程均已结束。回执为 `GPTWork/installer-lifecycle-94df87bd0361/verification.json`。
 

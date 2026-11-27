@@ -1,5 +1,11 @@
 # TASK-001：数据提取与后处理应用交付
 
+## 2026-11-27 · 组间顺序与独立色标的工程核对
+
+使用 `GJA-1-R_U100D.odb` 的 G 盘隔离副本，只选 `Load-U`。原生页面的计划把默认 A、B 调整为 B、A，正式 HTTP 队列依次启动两组。B 完成 199 毫秒后 A 启动。两个真实 CAE 视口的混凝土 Mises 上下限分别为 B 的 1–31 和 A 的 0–63，静态图和动画均与各自的设定一致。每组产出 11 张静态云图、1111 张动画帧图和 11 份 GIF。两个 Mises GIF 都实际解码出 101 帧，480 × 320，时长 4.04 秒。两组共用的数值资产有 101 行，最后一行 U3 为 100 mm、RF3 为 595754 N。原始 ODB 和隔离副本的 SHA256 一致，未启动求解。
+
+运行及逐文件核对见 `GPTWork/group-order-load-20261125/verification.json`、`figure-sha256.json`。此前两帧的 `Pile_Gra` 任务在损伤变量的预扫描中失败。独立检查见 `GPTWork/damage-availability-20261127/engineering-fields.json`，两帧的混凝土区域分别有 14316 个应力积分点值，均缺少 DAMAGET、DAMAGEC。
+
 ## 2026-11-25 · 对比组之间的执行顺序
 
 旧 PySide 页签支持拖动多个组并按该顺序入队。新版补上「对比组执行顺序」与「查看完整执行顺序」，并分别处理命名组、独立模型及已在运行或等待的组。28 项新增域检查、38 项运行范围回归、40 项草稿恢复检查通过。旧工作区未设置该项时保留原 JSON 形式及恢复指纹。域回执为 `GPTWork/group-order-core-20261125/postprocess-regression.log` 和同目录的 `draft-compatibility.log`。

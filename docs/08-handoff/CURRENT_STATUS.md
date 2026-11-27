@@ -6,7 +6,7 @@ F004 候选区和正式队列的表头及内容采用同一套列宽，明暗主
 
 F022 的运行范围已经接入工作台。GJA 属于 A、B，GJB 只属于 A 的实页数据验证了只选 B 时只提交 GJA，独立模型使用自身色标，批量则按各组的顺序和图例出图。空工作区的组名、图例、持久化与确认删除已在离屏页面通过。[开发及验收记录](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
-当前 Windows x64 目录包为 `GPTWork/release-win-x64-9f04c1da2255/AbaqusTools`，可直接启动其中的 `AbaqusTools.WinUI.exe`。安装候选为 `GPTWork/installer-win-x64-166c12194af4/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装脚本来源为已推送 GitHub 的同一干净提交 `1fc22fd`。11 月 25 日的手工合并受理、取消、范围追加、真实 B 组出图和次页筛选导出分项实测见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md) 及 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。正式标识安装和无开发环境 Windows 仍待实测。[发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
+11 月 27 日的 Windows x64 目录包为 `GPTWork/release-win-x64-1fcb773bec3c/AbaqusTools`，打开其中的 `AbaqusTools.WinUI.exe` 即可使用。安装候选为 `GPTWork/installer-win-x64-d7cfe7a56959/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装脚本均取自 `98d1bc7`，1692 个负载文件逐项核对通过。真实 GJA 加载步按 B、A 顺序出图，两个 Mises 动画均为 101 帧，分别使用各自手动色标。正式标识安装和无开发环境 Windows 仍待实测。[工程运行记录](ACTIVE_TASKS/TASK-001-postprocessing.md) · [发布校验](../05-development/RELEASE.md) · [安装说明](../05-development/INSTALLATION.md)
 
 11 月 24 日，F022 已接入多模型参数对照和预建空组。多选已读取结构的 ODB 后可以逐个修改，也可以只复制勾选的字段。148 项原生控件回归包含真实 GJA/GJB 扫描和 64 模型分页。另在实际后处理页离屏触发控件，10 项检查覆盖两模型取消、重开、文件写入失败和重试，只保存指定字段。桌面仍锁定，可见窗口内的参数对照和空组操作待实点。[准确续接点](ACTIVE_TASKS/TASK-001-postprocessing.md)
 

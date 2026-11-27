@@ -1,10 +1,14 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 目录包来自干净提交 `1fc22fdc27ad056fda402d8452521ac301dab4ef`。在项目目录打开 `GPTWork/release-win-x64-9f04c1da2255/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。包括作业队列的浅色行列线、多模型提取参数对照、预建分组、精确出图范围及手工合并受理后的停止按钮。[Windows 安装候选](INSTALLATION.md)
+当前 Windows x64 目录包来自干净提交 `98d1bc734884adb630bcc24b998de590dec96b08`。在项目目录打开 `GPTWork/release-win-x64-1fcb773bec3c/AbaqusTools/AbaqusTools.WinUI.exe` 即可启动。后处理页支持调整对比组的执行顺序并查看本次实际派发顺序。作业概览按原作业的服务器身份浏览和下载历史文件，目录读取失败后可在弹窗内重试。作业队列保留已验收的表头对齐和浅色行列分隔线。[Windows 安装候选](INSTALLATION.md)
 
-清单包含 1692 个文件，清单自身的 SHA256 为 `c08a79f0e55731e60da09a05b50456d2c0f30988fcaf809512f7fd4e7e2276dd`。逐文件校验通过。15 个编译界面文件与原生验收的资源一致，123 份生产源码输入与手工合并最终验收版本相符。包内后台检查覆盖 7 项依赖、19 个 worker 脚本、客户端读取历史记录和正常关闭。完整检查记录位于 `GPTWork/release-scoped-1fc22fd-20261125/verification.json`。同负载测试标识的 8 项安装检查见[安装实测](INSTALLATION.md)。
+清单内 1692 个文件均已逐项校验，清单自身 SHA256 为 `de052ed24a863127fb44316e8d3233422d9c3612684e914340514ad66c4b090d`。15 个编译界面文件与原生验收资源一致。124 个界面源文件中，远端目录弹窗与其单独复测的源码一致，其余与对比组排序验收源码一致。包内后台通过 7 项依赖检查并核对 19 个 worker 脚本。客户端实际读取了资源以及部分完成、已取消的分组队列历史，随后正常关闭后台。完整回执为 `GPTWork/release-group-order-98d1bc7-20261127/verification.json`。
+
+11 月 25 日运行项目 Python 测试集，1131 个常规用例和 9 个子测试通过。单独运行的 Windows 原生 Qt 主窗口启动用例也通过，两份报告均为零失败、零错误、零跳过。JUnit 回执分别为 `GPTWork/scoped-postprocess-20261124/regression-20261125-003422/results.xml` 与 `GPTWork/job-output-origin-20261125/native-qt.xml`。专用测试标识的升级和数据保留结果见[安装实测](INSTALLATION.md)。
 
 ### 历史候选
+
+`1fc22fd` 的目录包为 `GPTWork/release-win-x64-9f04c1da2255/AbaqusTools`，对应回执为 `GPTWork/release-scoped-1fc22fd-20261125/verification.json`。该版包含多模型提取参数对照、预建分组、精确出图范围及手工合并受理后的停止按钮。
 
 `4d55265` 首次包含多模型对照及空组，目录 `GPTWork/release-win-x64-397d70dbcf93/AbaqusTools`。其独立回执位于 `GPTWork/release-parameter-comparison-4d55265-20261124/verification.json`。`39564cd` 增加确切运行范围，目录 `GPTWork/release-win-x64-b92a31121560/AbaqusTools`，回执为 `GPTWork/release-scoped-39564cd-20261124/verification.json`。
 

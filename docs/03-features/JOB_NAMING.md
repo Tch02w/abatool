@@ -12,6 +12,6 @@
 
 `modules/submitter/command.py` / `validate_job_name` 为共享校验，候选、新建、Qt对照与远端请求及oldjob依赖名复用。`constants.py` 中保存长度与禁用字符及来源。允许的百分号、插入号等不能被 Windows 命令解释器改写；本机与远端传参保持字面值，命令预览仍显示原名。命名校验不等于实际求解成功。
 
-测试为 `tests/submitter/test_job_names.py`：文档规则边界、用户两个名称、候选及依赖名、实际 Windows 本机和远端启动脚本的参数记录器；记录器不调用Abaqus。`tests/control_plane/test_job_queue_commands_api.py` 和 `test_remote_jobs_api.py` 覆盖既有提交约定。取消和失败规则不变。
+测试 `tests/submitter/test_job_names.py` 覆盖文档规则边界、用户的两个名称、候选及依赖名，以及 Windows 原生命令行、Qt 和远端启动脚本的实际传参。使用独立命令记录器代替求解器，参数全部写完后才发布 JSON 回执。`tests/control_plane/test_job_queue_commands_api.py` 和 `test_remote_jobs_api.py` 覆盖既有提交约定。
 
 Qt对照入口调用cmd时使用[QProcess官方建议的setNativeArguments](https://doc.qt.io/qt-6/qprocess.html#setNativeArguments)，避免把带空格的命令路径错误转义。51项命名/实际传参检查通过（job-names-fixed-20261119.xml），包含本机、远端启动及控制脚本、Qt分离进程；不以此声称任意作业已真实求解。

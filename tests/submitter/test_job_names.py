@@ -57,7 +57,14 @@ def test_allowed_punctuation_reaches_command_as_literal_arguments(tmp_path, laun
     name = "GJA-8+2_%PATH%^@#=test"
     assert validate_job_name(name)[0]
     recorder = tmp_path / "record.py"
-    recorder.write_text("import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    recorder.write_text(
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "pending = Path('args.pending')\n"
+        "pending.write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        "pending.replace('args.json')\n",
+        encoding="utf-8",
+    )
     launcher = tmp_path / "fake abaqus.cmd"
     launcher.write_text(f'@"{sys.executable}" "{recorder}" %*\n', encoding="utf-8")
     if launcher_mode == "remote":

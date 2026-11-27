@@ -1,5 +1,7 @@
 # 任务索引
 
+本次完整运行、独立复测与命令参数测试的回执修正见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--850f753-最终回归与命令参数回执)；整套运行中的超时仍在跟踪。
+
 F014/F015 用官方 2021 样例在 WinUI 完成兼容性检查、预览、取消、确认升级及数值对照。[样例与检查记录](ACTIVE_TASKS/TASK-001-postprocessing.md#2026-11-28--官方-2021-odb-的原生升级)
 
 F008 断线资源清除和已保存服务器换钥复核的实现、隔离 SSH 实测及 WinUI 操作见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。

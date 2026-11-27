@@ -6,7 +6,7 @@ F021 的根目录与对比组补索引由 `modules/control_plane/results.py` 的
 
 F004/F005 的后台观测由 `LocalQueueRuntimeManager.snapshot`、`JobQueueService.snapshot` 和 `ControlPlaneHost` 处理。队列写入期间，WinUI 可延后本轮本机观察。真实 HTTP 和 C# 客户端覆盖在 `tests/winui_host/test_queue_poll_api.py`。[界面行为](UI_INTERACTION.md) · [接口约定](../api-contract.md)
 
-F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/control_plane/server.py` 的 `ControlPlaneRuntime`、`modules/submitter/scheduler_repository.py` 的 `SQLiteSchedulerRepository` 和 `modules/control_plane/operation_journal.py` 的 `_create_database`。故障恢复回归见 `tests/control_plane/test_api.py`、`tests/submitter/test_scheduler_repository.py` 和 `tests/control_plane/test_operation_journal.py`。[记录与复现](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
+F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/control_plane/server.py` 的 `ControlPlaneRuntime`、`modules/submitter/scheduler_repository.py` 的 `SQLiteSchedulerRepository` 和 `modules/control_plane/operation_journal.py` 的 `OperationJournal._create_database`。`tests/control_plane/test_operation_journal.py` 核对首次建表的临时日志模式、正式库重开与写入、初始化失败重试。调度和启动失败的恢复见 `tests/submitter/test_scheduler_repository.py`、`tests/control_plane/test_api.py`。[首次建库与实际冷启动测量](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--空操作历史库的首次启动)
 
 F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的 `HostKeyChanged` 提供观察值，`modules/control_plane/remote_servers.py` 的 `_connect` 在同一配置二次认证后更新信任记录。`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` 的连接窗口核对用户独立取得的指纹，并在断线时清空旧资源。控制面回归见 `tests/control_plane/test_remote_servers_api.py`。[连接与换钥](REMOTE_JOBS.md)
 

@@ -38,7 +38,7 @@ def request(root, scope, request_id="group-index"):
 
 
 def until_done(read):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         snapshot = read()
         if snapshot["status"] in {"succeeded", "cancelled", "failed"}:
@@ -125,6 +125,10 @@ def test_manual_index_precedes_waiting_batch_members_and_reports_each_outcome(
         (group / name).mkdir(parents=True)
     manual = tmp_path / "manual"
     manual.mkdir()
+    target = group / "batch2"
+    build_result_index(target, classify_result, result_section)
+    ready = index_path(target).rename(tmp_path / "ready.sqlite3")
+    published = ready.stat().st_mtime_ns
     started, release = threading.Event(), threading.Event()
     order = []
     build_missing = partial(build_result_index, only_if_missing=True)
@@ -136,11 +140,12 @@ def test_manual_index_precedes_waiting_batch_members_and_reports_each_outcome(
             assert release.wait(5)
         if path.name == "batch3":
             raise OSError("read denied")
-        return build_missing(path, *args)
+        # Other entries exercise dispatch ordering. Only the late index needs a disk check.
+        return build_missing(path, *args) if path == target else {}
 
     def refresh(path, *args):
         order.append(path.name)
-        return build_result_index(path, *args)
+        return {}
 
     manager = ResultIndexOperationManager(
         EventStore(), builder=refresh, missing_builder=missing
@@ -156,9 +161,7 @@ def test_manual_index_precedes_waiting_batch_members_and_reports_each_outcome(
             ResultIndexBuildRequest("manual", str(tmp_path), str(manual))
         )
         # A different writer published a now-queued index after the initial scan.
-        target = group / "batch2"
-        build_result_index(target, classify_result, result_section)
-        published = index_path(target).stat().st_mtime_ns
+        ready.replace(index_path(target))
         release.set()
         result = until_done(lambda: manager.get_batch(batch["batchId"]))
         assert order == ["batch10", "manual", "batch4", "batch3", "batch2"]

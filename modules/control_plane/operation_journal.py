@@ -59,6 +59,8 @@ class OperationJournal:
         pending = Path(filename)
         try:
             with closing(sqlite3.connect(pending, timeout=0)) as database, database:
+                # Only the unpublished empty database uses an in-memory rollback journal.
+                database.execute("PRAGMA journal_mode=MEMORY")
                 database.execute("PRAGMA synchronous=FULL")
                 database.execute("BEGIN IMMEDIATE")
                 database.execute(

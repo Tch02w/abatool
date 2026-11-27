@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-3f6c82f499dd/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `a20e35de0e4b21d395f1f2e97bcf3aaffef538c8`。本版含队列自动刷新及历史库启动修复。1697 个文件逐项校验，发布清单 SHA256 为 `6d294fc66fd9acfb93d13d68ea1646a0b94cecd99287ad54f29c28178fc38dc5`。正式 C# 客户端与包内后台完成读写及空闲关闭检查，默认读取、无等待读取在空闲时返回相同的两条正式作业。完整回执为 `GPTWork/release-queue-portable-a20e35d-20261128-024839/verification.json`。[安装程序](INSTALLATION.md)
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-af10c900a70a/AbaqusTools/AbaqusTools.WinUI.exe`。应用和随包后台来自干净提交 `c847e05206b7e906b99062eeda3fe9ac9edb0070`，包含整组结果补索引及未确认提取参数恢复。1697 个文件逐一校验，清单 SHA256 为 `6014f76273b8cc50d9921483844dbaf0279b66ae8933dde25f7012996083c13b`。数字框样式资源与前一版相同，SHA256 为 `58592d0a249a20113f5b31ed152a8778b4fceebdc9a8c46e768374b169732cd1`。包内资源、冻结后台、正式客户端队列读写和安全关闭回执在 `GPTWork/release-queue-portable-c847e05-20261128-032628/verification.json`。[用户操作](../repowiki/postprocessor.md) · [安装说明](INSTALLATION.md)
+
+### 前一版 a20e35d
+
+`a20e35d` 的免安装入口为 `GPTWork/release-win-x64-3f6c82f499dd/AbaqusTools/AbaqusTools.WinUI.exe`。本版含队列自动刷新及历史库启动修复。1697 个文件逐项校验，发布清单 SHA256 为 `6d294fc66fd9acfb93d13d68ea1646a0b94cecd99287ad54f29c28178fc38dc5`。正式 C# 客户端与包内后台完成读写及空闲关闭检查，默认读取、无等待读取在空闲时返回相同的两条正式作业。完整回执为 `GPTWork/release-queue-portable-a20e35d-20261128-024839/verification.json`。
 
 ### 前一版 850f753
 

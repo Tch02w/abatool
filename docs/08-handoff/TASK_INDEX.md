@@ -1,5 +1,7 @@
 # 任务索引
 
+新配置首次建库的启动计时、慢写期间的超时及隔离复测，见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。结果浏览中途切页与重连后取消，以及旧版 ODB 从写入临时文件到新版就位的中断核对，见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 F021 根目录和对比组补建索引、F022 未确认参数恢复以及旧版 ODB 写入中断的证据见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。F011 真实工程的重启动依赖图见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md)。
 
 F001/F004/F005 的后台启动、队列随写入刷新和操作历史创建，以及 F008 的传输切页与重试，见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--队列自动刷新后台启动及传输切页)。

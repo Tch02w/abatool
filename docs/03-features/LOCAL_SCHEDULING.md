@@ -14,6 +14,8 @@ WinUI 的正式队列由 Qt-free Python 控制面调度。`LocalQueueScheduling`
 
 合并、批量完整结果、远端作业、作业通知和后处理分组队列使用独立的操作历史库。首次建立其中一个库时，后台取得该库的所有权锁，在同目录临时文件中完成建表并写入版本，关闭连接后才发布到正式路径。建库过程中抛错会清除临时文件，下一次启动可以重新建库。如果正式路径上原已有无效文件，后台报告错误并保留原件。
 
+空库首次建表使用 `journal_mode=MEMORY`，把这次事务的回滚日志放在内存中，临时数据库文件按 `synchronous=FULL` 提交。SQLite 指出，进程在这种事务中崩溃可能损坏数据库。因此该设置只用于尚未发布且可重新创建的空库。正式文件发布后，后台另开连接，使用磁盘回滚日志和 `synchronous=FULL` 保存业务记录。[SQLite 日志模式说明](https://www.sqlite.org/pragma.html#pragma_journal_mode) · [冷启动与中断验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--空操作历史库的首次启动)
+
 后台启动中途失败时，按创建顺序反向关闭本次已经打开的服务、数据库和监听端口。已验证本机调度器初始化失败和发布连接信息失败两种情形。两种情况下旧连接信息都保留，重新启动后作业通知接口恢复可用。代码入口为 `SQLiteSchedulerRepository._initialize`、`OperationJournal._create_database` 和 `ControlPlaneRuntime.__init__`。[测试条件与回执](../06-testing/COMPLETION_AUDIT.md#历史库与后台启动失败)
 
 ## 候选与正式作业的目录设置（F004）

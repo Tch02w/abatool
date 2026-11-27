@@ -24,6 +24,13 @@ internal static class ResultIndexBatchChecks
         var request = Guid.NewGuid();
         var hold = Path.Combine(root, "Hold");
         var running = await host.StartResultIndexBatchAsync(root, hold, request, deadline.Token);
+        while (!running.IsTerminal && running.Active == 0)
+        {
+            await Task.Delay(20, deadline.Token);
+            running = await host.GetResultIndexBatchAsync(running.BatchId, deadline.Token);
+        }
+        if (running.Active != 1 || running.Waiting != 1)
+            throw new Exception("Expected one running and one waiting directory before cancellation");
         var members = await host.ListResultIndexOperationsAsync(activeOnly: true, deadline.Token);
         if (members.Operations.Count != 2 || !members.Operations.All(child => child.BatchId == running.BatchId))
             throw new Exception("Cannot recover the batch through its active members");

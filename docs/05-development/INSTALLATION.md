@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-current-a20e35d-20261128/source/GPTWork/installer-win-x64-49d5f499d912/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-3f6c82f499dd/AbaqusTools/AbaqusTools.WinUI.exe`。安装构建器与应用负载均来自干净提交 `a20e35d`。安装程序版本为 `0.1.0`，大小为 126508806 字节，SHA-256 为 `3a7a84787ce1cf99262175b9695234199180a05210e3c360fdefab32f28be79e`，签名状态为 NotSigned。[免安装包校验](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-current-c847e05-20261128/source/GPTWork/installer-win-x64-b126d3e5d7af/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-af10c900a70a/AbaqusTools/AbaqusTools.WinUI.exe`。安装构建器与应用负载均来自干净提交 `c847e05`。安装程序版本为 `0.1.0`，大小为 126526172 字节，SHA-256 为 `c99641885bcba69db3c938ecc57a73dbec7ee40dc4ade8441bc45f8d14c76f97`，签名状态为 NotSigned。[免安装包校验](RELEASE.md)
+
+在 G 盘独立测试标识下，从 `a20e35d` 升级至 `c847e05` 的 8 项验收通过，覆盖运行中拒绝升级和卸载、正常退出后升级、从安装目录读取资源和队列、卸载后保留数据。普通中文向导另验选择目录、返回上一步、安装与完成。安装后的 1697 项负载及发布清单逐文件匹配。升级前 1 个、卸载前 16 个应用数据文件的 SHA-256 均保留，用户文件仍在，测试登记及快捷方式均已清除。旧安装、新升级、新向导三份日志均记录成功，异常与受抑制弹框均为 0。完整回执在 `GPTWork/installer-current-c847e05-20261128/verified.json`。正式标识安装与独立无 Python/.NET SDK 的 Windows 环境仍待验收。
+
+同一负载在整套回归运行期间曾出现两次后台启动超时。首次从已安装目录启动和在原配置重试都未能及时取得连接信息，日志从创建至最后一次写入分别为 28.12 秒与 55.04 秒。测试标识最终正常卸载，失败回执及重试记录在 `GPTWork/installer-current-c847e05-20261128/source/GPTWork/installer-lifecycle-1294727b3979`。整套运行结束并静置两分钟后，在全新 G 盘配置中以相同宿主默认时限启动免安装包，1.837 秒取得已认证的健康响应，2.213 秒完成正常退出。随后在另一个空目录执行上述 8 项检查。从安装目录启动、查询资源与队列并退出，日志跨度为 5.34 秒。冷启动记录在 `GPTWork/installer-current-c847e05-20261128/cold-f38b95c6/verification.json`。并发负载下的启动稳定性仍需跟踪。
+
+## 历史版本 a20e35d
+
+`a20e35d` 的 Windows x64 安装程序为 `GPTWork/installer-current-a20e35d-20261128/source/GPTWork/installer-win-x64-49d5f499d912/AbaqusTools-0.1.0-win-x64-setup.exe`。免安装入口为 `GPTWork/release-win-x64-3f6c82f499dd/AbaqusTools/AbaqusTools.WinUI.exe`。安装程序版本为 `0.1.0`，大小为 126508806 字节，SHA-256 为 `3a7a84787ce1cf99262175b9695234199180a05210e3c360fdefab32f28be79e`，签名状态为 NotSigned。
 
 11 月 28 日使用相同负载及独立测试标识，在中文向导中选择 G 盘中文目录、返回上一步，再完成安装。安装后的 1697 个文件和发布清单均与源包一致。另从 `850f753` 升级到 `a20e35d`，8 项检查通过。后台运行中会拒绝升级和卸载，正常退出后升级成功。从新安装目录启动后，正式客户端可读取资源和队列并安全退出。
 

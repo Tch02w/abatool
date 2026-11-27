@@ -30,6 +30,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         CandidateList.ItemsSource = _candidates;
         FormalQueueList.ItemsSource = _queueItems;
         FormalQueueList.DoubleTapped += OnFormalQueueDoubleTapped;
+        CandidateList.SelectionChanged += (_, _) => UpdateEditorButtons();
         FormalQueueList.SelectionChanged += (_, _) =>
         {
             if (!_applyingSnapshot) App.Current.Commands.SelectQueueItems(
@@ -267,7 +268,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
 
     private async void OnEditQueueItemClicked(object sender, RoutedEventArgs e)
     {
-        await EditSelectedFormalItemAsync();
+        await EditSelectedItemAsync(candidate: false);
     }
 
     private async void OnStartQueueClicked(object sender, RoutedEventArgs e)
@@ -384,100 +385,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         object sender,
         DoubleTappedRoutedEventArgs e)
     {
-        await EditSelectedFormalItemAsync();
-    }
-
-    private async Task EditSelectedFormalItemAsync()
-    {
-        var selected = SelectedFormalItems();
-        if (selected.Length != 1)
-        {
-            ShowNotice("请选择一个作业", "编辑操作一次只支持一个正式队列作业。");
-            return;
-        }
-
-        var item = selected[0];
-        var jobNameBox = new TextBox { Header = "作业名称", Text = item.JobName };
-        var coresBox = new Controls.WorkbenchNumberBox
-        {
-            Header = "Core（0 表示未指定）",
-            Minimum = 0,
-            Maximum = 999,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            Value = item.Cores,
-        };
-        var memoryBox = new TextBox
-        {
-            Header = "内存（例如 80%、4096MB、8GB）",
-            Text = item.Memory,
-        };
-        var priorityBox = new Controls.WorkbenchNumberBox
-        {
-            Header = "优先级",
-            Minimum = -10000,
-            Maximum = 10000,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            Value = item.Priority,
-        };
-        Controls.ParameterHelpButton.AddToHeader(coresBox, "cpu");
-        Controls.ParameterHelpButton.AddToHeader(priorityBox, "queue-priority");
-        var oldjobBox = new TextBox
-        {
-            Header = "Restart 前置 ODB",
-            Text = item.OldjobPath,
-            PlaceholderText = "普通作业留空",
-        };
-        var fortranBox = new TextBox
-        {
-            Header = "Fortran 用户子程序",
-            Text = item.FortranPath,
-            PlaceholderText = "可选",
-        };
-        var executionEditor = new Controls.ExecutionOptionsEditor();
-        try { executionEditor.SetValue(new ExecutionOptionsValues { GpuCount = item.GpuCount,
-            ExplicitPrecision = item.ExplicitPrecision, OutputPrecision = item.OutputPrecision }); }
-        catch (ControlPlaneException error) { ShowNotice("作业参数无效", error.Message); return; }
-        ExecutionOptionsValues? executionOptions = null;
-        var validationText = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        var panel = new StackPanel { Spacing = 10, Width = 520 };
-        panel.Children.Add(jobNameBox);
-        panel.Children.Add(coresBox);
-        panel.Children.Add(memoryBox);
-        panel.Children.Add(priorityBox);
-        panel.Children.Add(oldjobBox);
-        panel.Children.Add(fortranBox);
-        panel.Children.Add(new Expander { Header = "GPU 与精度（可选）", Content = executionEditor,
-            HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
-        panel.Children.Add(validationText);
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = $"编辑 {item.JobName}",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 540, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
-            PrimaryButtonText = "保存",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        dialog.PrimaryButtonClick += (_, args) => {
-            try { executionOptions = executionEditor.ReadValue(); }
-            catch (Exception error) { args.Cancel = true; validationText.Text = error.Message; }
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        await RunMutationAsync(
-            () => App.Current.ControlPlane.UpdateJobQueueItemAsync(
-                item.ItemId,
-                candidate: false,
-                jobNameBox.Text,
-                NumberValue(coresBox),
-                memoryBox.Text,
-                NumberValue(priorityBox),
-                oldjobBox.Text,
-                fortranBox.Text, executionOptions: executionOptions),
-            "正在保存作业设置…");
+        await EditSelectedItemAsync(candidate: false);
     }
 
     private async void OnHoldQueueItemsClicked(object sender, RoutedEventArgs e)
@@ -702,6 +610,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         finally { _applyingSnapshot = false; }
         App.Current.Commands.SelectQueueItems(SelectedFormalItems().Select(item => item.ItemId));
         SelectPendingFormalItem();
+        UpdateEditorButtons();
         var candidateSummary =
             $"候选：{snapshot.CandidateCount} · 已选 {snapshot.SelectedCandidateCount} · 异常 {snapshot.InvalidCandidateCount}";
         if (CandidateSummaryText.Text != candidateSummary) CandidateSummaryText.Text = candidateSummary;
@@ -788,6 +697,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         _busy = busy;
         App.Current.Commands.SetQueueBusy(busy);
         UpdateCommandButtons();
+        UpdateEditorButtons();
         RefreshQueueButton.IsEnabled = !busy;
         AddCurrentInputButton.IsEnabled = !busy;
         AddCandidateFilesButton.IsEnabled = !busy;

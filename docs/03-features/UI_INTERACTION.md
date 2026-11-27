@@ -140,13 +140,15 @@ F027 在八页共用的顶部显示非阻塞作业提醒，未读可恢复；点
 |---|---|---|
 | `winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml` | CPU；最大并行 | Hidden；Compact |
 | `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml` | 队列并行上限 | Compact |
-| `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` | 编辑作业 Core、优先级 | Inline × 2 |
+| `winui/AbaqusTools.WinUI/Pages/JobQueuePage.Edit.cs` | 编辑候选或正式作业的 Core、优先级 | Inline × 2 |
 | `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` | SSH 端口（现为直接输入，无增减按钮） | 原Compact |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml` | 后处理并行、预期纵筋数、帧率、GIF 单轮时长、宽、高、容差 | Hidden × 6，单轮时长为新增 |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` | 钢筋直径、断裂前帧 | Compact × 2 |
 | `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.StructureBrowser.cs` | 统一参考截面积 | Hidden |
 
-NumberBox 继续负责解析、验证、步进、自动化和上下限，保留 0/−1 的自动值语义、参考截面积空值（NaN，使用 ODB 面积）、容差 0.0001 步长与 `winui/AbaqusTools.WinUI/Controls/PlainDecimalFormatter.cs`、运行期 CPU 上限及毫米/像素范围切换。输入最小宽度 160 DIP，数字居中，减少在左、增加在右；输入框高度 40 DIP、两个按钮各 40 DIP，共用 5 DIP 圆角边框，按钮间有竖分隔线。按钮同步禁用状态和上下限，点击前提交正在编辑的文字。
+NumberBox 负责解析、验证、步进、自动化和上下限，保留 0/−1 的自动值语义、参考截面积空值（NaN，使用 ODB 面积）、容差 0.0001 步长与 `winui/AbaqusTools.WinUI/Controls/PlainDecimalFormatter.cs`、运行期 CPU 上限及毫米/像素范围切换。输入最小宽度为 160 DIP，数字在输入区居中，右侧依次为减少、增加。默认框高 40 DIP，按钮各宽 40 DIP，圆角 5 DIP。按钮之间有竖线，点击先提交手工输入的数值。
+
+队列编辑表单的 Core、优先级从单行文本框主题读取框高、背景、圆角和外框，与同表单的内存框同高（32 DIP）。固定宽度的对话框在右侧为滚动条留出空间。正式队列工具栏的「同名结果」和「并行上限」保留 40 DIP 高度，共用下拉框的主题边线、圆角和填充。深浅主题切换时，两者的底边同步换色。
 
 `tests/winui/test_shell_contract.py` 已移除旧 Hidden/Compact 契约。`tests/winui_numberbox/NumberBox.Tests.csproj` 在自身离屏 WinUI 窗口加载实际生产控件，检查原生步进、未提交文字、动态 CPU 限制、0/−1、空值、分数面积和 0.0001 小数；实际检查数和最新外观验证见任务记录。图例范围、内存和切面表达式仍是 TextBox，不自动改为普通步进数值。
 

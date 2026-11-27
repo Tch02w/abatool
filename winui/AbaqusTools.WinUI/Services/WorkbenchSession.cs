@@ -6,7 +6,8 @@ namespace AbaqusTools.WinUI.Services;
 
 public sealed class WorkbenchSession
 {
-    private sealed record Entry(Page Page, string[] Fields, Func<Task>? Save, Action? Pause, Action? Resume)
+    private sealed record Entry(Page Page, string[] Fields, Func<Task>? Save, Action? Pause, Action? Resume,
+        Action<Dictionary<string, string>>? CaptureContext)
     {
         public bool Restored { get; set; }
     }
@@ -40,10 +41,10 @@ public sealed class WorkbenchSession
     }
 
     public void Register(Page page, string route, string[] fields, Func<Task>? save = null,
-        Action? pause = null, Action? resume = null)
+        Action? pause = null, Action? resume = null, Action<Dictionary<string, string>>? captureContext = null)
     {
         page.NavigationCacheMode = NavigationCacheMode.Required;
-        var entry = new Entry(page, fields, save, pause, resume);
+        var entry = new Entry(page, fields, save, pause, resume, captureContext);
         _pages[route] = entry;
         page.Loaded += (_, _) =>
         {
@@ -120,6 +121,7 @@ public sealed class WorkbenchSession
                     _ => throw new InvalidOperationException($"草稿字段不存在：{route}/{name}"),
                 };
             }
+            entry.CaptureContext?.Invoke(values);
             State.Pages[route] = values;
         }
         State.Window = window;

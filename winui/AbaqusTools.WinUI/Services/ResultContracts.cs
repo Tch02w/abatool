@@ -92,6 +92,10 @@ internal sealed class ResultRecordsRequest
     [JsonPropertyName("timeDirectory")]
     public string TimeDirectory { get; init; } = string.Empty;
 
+    [JsonPropertyName("directDirectory")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DirectDirectory { get; init; }
+
     [JsonPropertyName("section")]
     public string Section { get; init; } = "all";
 
@@ -124,6 +128,9 @@ public sealed class ResultRecordsResponse
 
     [JsonPropertyName("source")]
     public string Source { get; init; } = string.Empty;
+
+    [JsonPropertyName("directDirectory")]
+    public string? DirectDirectory { get; init; }
 
     [JsonPropertyName("records")]
     public IReadOnlyList<ResultRecordItem> Records { get; init; } = [];
@@ -200,7 +207,7 @@ public sealed class ResultRecordItem
     public string RecommendedDisplay => Recommended ? "★" : string.Empty;
 
     [JsonIgnore]
-    public string SizeDisplay => FormatFileSize(SizeBytes);
+    public string SizeDisplay => IsDirectory ? string.Empty : FormatFileSize(SizeBytes);
 
     [JsonIgnore]
     public string ModifiedDisplay => ModifiedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";

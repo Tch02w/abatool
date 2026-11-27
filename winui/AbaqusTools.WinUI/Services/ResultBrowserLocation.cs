@@ -38,3 +38,55 @@ internal sealed class ResultBrowserLocation
 }
 
 internal sealed record ResultRootRead(string Root, string DraftAtStart, bool UsesDraft);
+
+internal sealed record ResultDirectLocation(string Root, string Scope, string DirectoryPath)
+{
+    private static readonly StringComparer Paths = StringComparer.OrdinalIgnoreCase;
+
+    public bool Matches(string? root, string? scope) => Paths.Equals(Root, root) && Paths.Equals(Scope, scope);
+    public bool AtScope => Paths.Equals(DirectoryPath, Scope);
+    public ResultDirectLocation? Parent() => AtScope ? null : this with { DirectoryPath = Path.GetDirectoryName(DirectoryPath)! };
+    public ResultDirectLocation? Child(string path) => Paths.Equals(Path.GetDirectoryName(path), DirectoryPath)
+        ? this with { DirectoryPath = path } : null;
+
+    public void Capture(Dictionary<string, string> values)
+    {
+        values["DirectRoot"] = Root;
+        values["DirectScope"] = Scope;
+        values["DirectDirectory"] = DirectoryPath;
+    }
+
+    public static ResultDirectLocation? Restore(IReadOnlyDictionary<string, string> values)
+    {
+        if (!values.TryGetValue("DirectRoot", out var root) || !values.TryGetValue("DirectScope", out var scope)
+            || !values.TryGetValue("DirectDirectory", out var directory)) return null;
+        try
+        {
+            if (!new[] { root, scope, directory }.All(path => Path.IsPathFullyQualified(path)
+                && Paths.Equals(Path.GetFullPath(path), path))) return null;
+            var rootPrefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
+            if (!scope.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) || !(Paths.Equals(scope, directory)
+                || directory.StartsWith(scope + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))) return null;
+            return new(root, scope, directory);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException) { return null; }
+    }
+
+    public void ValidateFile(string path)
+    {
+        if (Child(path) is null) throw new IOException("文件已不属于当前直接浏览目录。");
+        for (var current = path; current is not null; current = Path.GetDirectoryName(current))
+        {
+            var attributes = File.GetAttributes(current);
+            if (Paths.Equals(current, path) && (attributes & FileAttributes.Directory) != 0)
+                throw new IOException("所选结果已变为目录，请刷新目录。");
+            if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Hidden)) != 0)
+                throw new IOException("文件路径已变更为链接或隐藏项，请刷新目录。");
+            if ((attributes & FileAttributes.Directory) != 0
+                && File.Exists(Path.Combine(current, "_postprocess_incomplete.json")))
+                throw new IOException("结果尚未完成发布，请稍后刷新目录。");
+            if (Paths.Equals(current, Root)) return;
+        }
+        throw new IOException("文件已不属于当前结果范围。");
+    }
+}

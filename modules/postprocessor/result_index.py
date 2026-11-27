@@ -303,7 +303,7 @@ class _DirectoryLock:
             pass
 
 
-def _excluded(path: Path) -> bool:
+def is_result_index_artifact(path: Path) -> bool:
     name = path.name
     casefolded = name.casefold()
     if casefolded in {
@@ -342,7 +342,7 @@ def _iter_files(
             if cancel_event.is_set():
                 raise ResultIndexCancelled("索引任务已取消")
             path = Path(entry.path)
-            if _excluded(path):
+            if is_result_index_artifact(path):
                 continue
             try:
                 if entry.is_dir(follow_symlinks=False):

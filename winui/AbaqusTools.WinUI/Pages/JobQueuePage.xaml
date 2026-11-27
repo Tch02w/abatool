@@ -39,7 +39,12 @@
                     <CheckBox x:Name="RecursiveScanCheckBox" Content="扫描子文件夹" />
                     <CheckBox x:Name="SkipRestartNamesCheckBox" Grid.Column="1" Content="跳过 Restart 文件" />
                     <CheckBox x:Name="SkipExistingResultsCheckBox" Grid.Column="2" Content="跳过已有结果的作业" />
-                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="SSD 与归档目录可在编辑作业时设置" />
+                    <StackPanel Grid.Column="3" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                        <Button x:Name="EditCandidateButton" Content="编辑候选" Click="OnEditCandidateClicked"
+                                ToolTipService.ToolTip="编辑当前选中的一行候选作业" />
+                        <Button x:Name="CandidateDirectoriesButton" Content="批量设置目录…" Click="OnCandidateDirectoriesClicked"
+                                ToolTipService.ToolTip="设置已勾选候选作业的计算与归档目录" />
+                    </StackPanel>
                 </Grid>
                 <Grid Grid.Row="3">
                     <Grid.RowDefinitions><RowDefinition Height="34" /><RowDefinition Height="*" /></Grid.RowDefinitions>
@@ -71,7 +76,7 @@
                         </ComboBox>
                         <TextBlock VerticalAlignment="Center" Text="并行上限" />
                         <controls:ParameterHelpButton Title="队列并行上限" Topic="queue-parallel" VerticalAlignment="Center" />
-                        <controls:WorkbenchNumberBox x:Name="ParallelLimitNumberBox" Width="160" VerticalAlignment="Center" Minimum="1" Maximum="999" SpinButtonPlacementMode="Inline" Value="1" />
+                        <controls:WorkbenchNumberBox x:Name="ParallelLimitNumberBox" FrameAppearance="ComboBox" Width="160" VerticalAlignment="Center" Minimum="1" Maximum="999" SpinButtonPlacementMode="Inline" Value="1" />
                     </StackPanel>
                 </Grid>
                 <StackPanel x:Name="FormalQueueActionBar" Grid.Row="1" Orientation="Horizontal" Spacing="6">

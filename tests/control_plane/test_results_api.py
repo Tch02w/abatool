@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+import pytest
 from openpyxl import Workbook
 
 from modules.postprocessor.result_catalog import classify_result, result_section
@@ -147,6 +149,106 @@ def test_result_api_rejects_missing_indexes_and_paths_outside_root(
         assert json_response(outside_preview)["error"]["code"] == (
             "PATH_OUTSIDE_RESULT_ROOT"
         )
+
+
+def test_direct_result_browse_lists_one_level_and_never_builds_an_index(tmp_path):
+    from modules.postprocessor.file_attributes import ensure_windows_hidden
+    from modules.postprocessor.result_assets import INCOMPLETE_OUTPUT_MARKER
+    from modules.postprocessor.result_index import index_path
+
+    root = tmp_path / "结果"
+    batch = root / "分组" / "提取批次"
+    model = batch / "模型"
+    data = model / "data"
+    data.mkdir(parents=True)
+    sibling = batch / "另一个模型"
+    sibling.mkdir()
+    pending = model / "未发布"
+    pending.mkdir()
+    (pending / INCOMPLETE_OUTPUT_MARKER).touch()
+    for name in ("_internal.log", ".隐藏", "临时.part", "~$workbook.xlsx", "summary.xlsx"):
+        (model / name).touch()
+    if os.name == "nt":
+        hidden = model / "attribute-only.txt"
+        hidden.touch()
+        ensure_windows_hidden(hidden)
+    for number in (10, 2, 1):
+        (data / f"load{number}.csv").write_text(f"time,force\n0,{number}\n", encoding="utf-8")
+    queries = {"root": str(root), "scope": str(model), "timeDirectory": str(batch)}
+    with running_control_plane(tmp_path) as runtime:
+        def records(directory, **extra):
+            return _post(runtime, "/api/v1/result-records", {**queries, "directDirectory": str(directory), **extra})
+
+        assert _post(runtime, "/api/v1/result-records", queries)[0] == 409
+        response = json_response(records(model, includeInternal=True))
+        assert response["source"] == "direct" and response["directDirectory"] == str(model)
+        assert [(entry["name"], entry["isDirectory"]) for entry in response["records"]] == [
+            ("data", True), ("summary.xlsx", False),
+        ]
+        page = json_response(records(data, offset=1, limit=1))
+        assert page["filteredCount"] == 3 and page["hasMore"]
+        file = page["records"][0]
+        assert (file["name"], Path(file["relativePath"])) == ("load2.csv", Path("data/load2.csv"))
+        preview = json_response(_post(runtime, "/api/v1/result-previews", {"root": str(root), "path": file["path"]}))
+        assert preview["rows"] == [["0", "2"]]
+        for directory, extra in [
+            (pending, {}), (sibling, {}), (model / ".." / model.name, {}),
+            (root, {"scope": str(root)}), (data, {"scope": str(data)}),
+            (data, {"timeDirectory": str(root)}),
+        ]:
+            assert records(directory, **extra)[0] in (400, 409)
+        (data / INCOMPLETE_OUTPUT_MARKER).touch()
+        assert records(data)[0] == 409
+        assert [r["name"] for r in json_response(records(model))["records"]] == ["summary.xlsx"]
+        assert not index_path(batch).exists()
+        build_result_index(batch, classify_result, result_section)
+        assert json_response(_post(runtime, "/api/v1/result-records", queries))["source"] == "index"
+
+
+def test_direct_result_browse_skips_and_rejects_directory_links(tmp_path):
+    from modules.control_plane.contracts import ApiProblem
+    from modules.control_plane.results import list_result_records
+
+    root = tmp_path / "results"
+    batch = root / "group" / "batch"
+    model = batch / "model"
+    real = model / "real"
+    real.mkdir(parents=True)
+    link = model / "alias"
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(real), str(link))
+    else:
+        link.symlink_to(real, target_is_directory=True)
+    params = {"schemaVersion": 1, "root": str(root), "scope": str(model), "timeDirectory": str(batch)}
+    assert [r["name"] for r in list_result_records(params | {"directDirectory": str(model)})["records"]] == ["real"]
+    with pytest.raises(ApiProblem, match="目录不可浏览"):
+        list_result_records(params | {"directDirectory": str(link)})
+
+
+def test_direct_browse_pages_a_large_directory_with_a_damaged_index(tmp_path):
+    from modules.control_plane.contracts import ApiProblem
+    from modules.control_plane.results import list_result_records
+    from modules.postprocessor.result_index import index_path
+
+    root = tmp_path / "results"
+    batch = root / "group" / "batch"
+    model = batch / "model"
+    model.mkdir(parents=True)
+    for number in range(501):
+        (model / f"curve{number}.csv").touch()
+    index_path(batch).write_bytes(b"damaged index")
+    params = {"schemaVersion": 1, "root": str(root), "scope": str(batch), "timeDirectory": str(batch)}
+    with pytest.raises(ApiProblem) as raised:
+        list_result_records(params)
+    assert raised.value.code == "RESULT_INDEX_INVALID"
+    direct = params | {"directDirectory": str(model), "limit": 500}
+    first = list_result_records(direct)
+    last = list_result_records(direct | {"offset": 500})
+    assert first["hasMore"] and len(first["records"]) == 500 and first["records"][-1]["name"] == "curve499.csv"
+    assert not last["hasMore"] and last["filteredCount"] == 501 and last["records"][0]["name"] == "curve500.csv"
+    assert index_path(batch).read_bytes() == b"damaged index"
 
 
 def test_xlsx_preview_returns_real_workbook_values_and_rejects_bad_shared_references(tmp_path):

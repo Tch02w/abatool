@@ -64,6 +64,7 @@ LOGGER = logging.getLogger(__name__)
 ExternalJobScanner = Callable[[str, list[dict]], tuple[list[dict], list[int]]]
 
 RESULT_EXTENSIONS = (".odb", ".sta", ".msg", ".dat", ".log")
+DIRECTORY_FIELDS = {"calculationRootDir", "archiveDir", "cleanupAfterArchive"}
 EDITABLE_STATUSES = frozenset({STATUS_PENDING_RUN, STATUS_WAITING_DEPENDENCY})
 REQUEUEABLE_STATUSES = frozenset(
     {
@@ -81,6 +82,7 @@ SUPPORTED_ACTIONS = frozenset(
         "scanCandidates",
         "scanExternalJobs",
         "setCandidateSelection",
+        "setCandidateDirectories",
         "invertCandidateSelection",
         "removeCandidates",
         "updateCandidate",
@@ -182,6 +184,24 @@ def _require_fields(payload: Mapping[str, Any], allowed: set[str]) -> None:
             "队列命令包含 v1 协议不支持的字段",
             details={"fields": unknown},
         )
+
+
+def _directory_edits(payload: Mapping[str, Any]) -> tuple[str | None, str | None, bool | None]:
+    def read_folder(key: str, label: str) -> str | None:
+        if key not in payload:
+            return None
+        value = _text(payload, key)
+        try:
+            valid = not value or (Path(value).is_absolute() and Path(value).is_dir())
+        except (ValueError, OSError):
+            valid = False
+        if not valid:
+            raise ApiProblem(400, "INVALID_QUEUE_DIRECTORY", f"{label}须为已存在的文件夹绝对路径",
+                             details={"field": key})
+        return value
+
+    return (read_folder("calculationRootDir", "计算根目录"), read_folder("archiveDir", "归档根目录"),
+            _flag(payload, "cleanupAfterArchive") if "cleanupAfterArchive" in payload else None)
 
 
 class JobQueueService:
@@ -320,6 +340,8 @@ class JobQueueService:
         if action == "setCandidateSelection":
             _require_fields(payload, {"itemIds", "selected"})
             return self._set_candidate_selection(payload, candidates)
+        if action == "setCandidateDirectories":
+            return self._set_candidate_directories(payload, candidates, queue_items)
         if action == "invertCandidateSelection":
             _require_fields(payload, set())
             for item in candidates:
@@ -615,6 +637,40 @@ class JobQueueService:
         changed = previous - len(candidates)
         return changed, f"已移除 {changed} 个候选作业", {}
 
+    def _set_candidate_directories(
+        self, payload: Mapping[str, Any], candidates: list[QueueItem], queue_items: list[QueueItem],
+    ) -> tuple[int, str, dict[str, Any]]:
+        _require_fields(payload, {"itemIds"} | DIRECTORY_FIELDS)
+        item_ids = set(_string_list(payload, "itemIds"))
+        if any(not value.strip() for value in payload["itemIds"]):
+            raise ApiProblem(400, "INVALID_QUEUE_COMMAND_FIELD", "所选候选作业标识不能为空")
+        if not DIRECTORY_FIELDS.intersection(payload):
+            raise ApiProblem(400, "EMPTY_DIRECTORY_EDIT", "请选择需要修改的目录或清理设置")
+        selected = [item for item in candidates if item.item_id in item_ids]
+        missing = sorted(item_ids.difference(item.item_id for item in selected))
+        if missing:
+            raise ApiProblem(404, "QUEUE_ITEM_NOT_FOUND", "部分候选作业已不存在，请刷新后重新选择",
+                             details={"itemIds": missing})
+        edits = _directory_edits(payload)
+        changed = []
+        for item in selected:
+            if self._apply_directory_edits(item, *edits):
+                changed.append(item)
+        # Check final paths together, including collisions between two items in this very edit.
+        by_location: dict[tuple[str, str], QueueItem] = {}
+        for item in [*candidates, *(job for job in queue_items if job.status not in TERMINAL_STATUSES)]:
+            key = queue_item_conflict_key(item)
+            if not all(key):
+                continue
+            other = by_location.get(key)
+            if other is not None and (item.item_id in item_ids or other.item_id in item_ids):
+                raise ApiProblem(409, "QUEUE_DIRECTORY_CONFLICT", f"同一计算目录中存在同名作业：{item.job_name}",
+                                 details={"itemIds": [other.item_id, item.item_id], "workDir": key[0]})
+            by_location[key] = item
+        for item in changed:
+            self._validate_item(item, candidates, queue_items, check_conflicts=False)
+        return len(changed), f"已更新 {len(changed)} 个候选作业的目录设置", {}
+
     def _update_candidate(
         self,
         payload: Mapping[str, Any],
@@ -629,12 +685,12 @@ class JobQueueService:
             "priority",
             "oldjobPath",
             "fortranPath",
-            "calculationRootDir",
-            "archiveDir",
-        }
+        } | DIRECTORY_FIELDS
         _require_fields(payload, allowed)
         item = self._find_item(candidates, _text(payload, "itemId"), "候选作业")
         self._apply_edits(item, payload)
+        if "calculationRootDir" in payload and self._conflicting_item(item, candidates, queue_items):
+            raise ApiProblem(409, "QUEUE_DIRECTORY_CONFLICT", f"同一计算目录中存在同名作业：{item.job_name}")
         self._validate_item(item, candidates, queue_items)
         return 1, "候选作业设置已更新", {}
 
@@ -756,9 +812,7 @@ class JobQueueService:
             "priority",
             "oldjobPath",
             "fortranPath",
-            "calculationRootDir",
-            "archiveDir",
-        }
+        } | DIRECTORY_FIELDS
         _require_fields(payload, allowed)
         item = self._find_item(queue_items, _text(payload, "itemId"), "正式队列作业")
         before = asdict(item)
@@ -781,7 +835,8 @@ class JobQueueService:
         if repair and ("oldjobPath" not in payload or item.oldjob_path == before["oldjob_path"]
                        or any(getattr(item, key) != before[key] for key in (
                            "job_name", "cores", "gpu_count", "explicit_precision", "output_precision",
-                           "memory", "priority", "fortran_path", "calculation_root_dir", "archive_dir"))):
+                           "memory", "priority", "fortran_path", "calculation_root_dir", "archive_dir",
+                           "archive_after_complete", "cleanup_after_archive"))):
             raise ApiProblem(409, "QUEUE_ITEM_NOT_EDITABLE", "该历史记录仅允许纠正前置作业 ODB")
         if dependency_changed or repair or dependency_only:
             topology = RestartTopology(queue_items)
@@ -933,6 +988,7 @@ class JobQueueService:
             raise ApiProblem(409, "INVALID_RESTART_DEPENDENCY", issue, details={"itemId": item.item_id})
 
     def _apply_edits(self, item: QueueItem, payload: Mapping[str, Any]) -> None:
+        previous_name = item.job_name
         try:
             execution = parse_execution_options({"gpuCount": item.gpu_count,
                 "explicitPrecision": item.explicit_precision, "outputPrecision": item.output_precision, **payload})
@@ -972,21 +1028,57 @@ class JobQueueService:
             )
         if "fortranPath" in payload:
             item.fortran_path = _text(payload, "fortranPath")
-        if "calculationRootDir" in payload:
-            item.calculation_root_dir = _text(payload, "calculationRootDir")
-        if "archiveDir" in payload:
-            item.archive_dir = _text(payload, "archiveDir")
-        item.archive_after_complete = bool(item.archive_dir)
-        item.cleanup_after_archive = bool(
-            item.calculation_root_dir and item.archive_dir
-        )
-        item.effective_work_dir = effective_queue_item_work_dir(item)
+        self._apply_directory_edits(item, *_directory_edits(payload), renamed=item.job_name != previous_name)
+        if not item.effective_work_dir:
+            item.effective_work_dir = effective_queue_item_work_dir(item)
+
+    @staticmethod
+    def _apply_directory_edits(item: QueueItem, root: str | None, archive: str | None, cleanup: bool | None,
+                               *, renamed: bool = False) -> bool:
+        previous_archive_enabled = item.archive_after_complete
+        previous_cleanup = item.cleanup_after_archive
+        moved = root is not None and root != item.calculation_root_dir
+        archive_changed = archive is not None and archive != item.archive_dir
+        if root is not None:
+            item.calculation_root_dir = root
+        if archive is not None:
+            item.archive_dir = archive
+            if archive_changed or not archive:
+                item.archive_after_complete = bool(archive)
+        if moved or renamed:
+            item.effective_work_dir = ""
+            item.effective_work_dir = effective_queue_item_work_dir(item)
+        if cleanup is not None:
+            item.cleanup_after_archive = cleanup
+        elif root == "" or archive == "":
+            item.cleanup_after_archive = False
+        check_cleanup = item.cleanup_after_archive and (cleanup is not None or moved or renamed or archive_changed)
+        if check_cleanup and not (item.calculation_root_dir and item.archive_dir and item.archive_after_complete):
+            raise ApiProblem(400, "INVALID_QUEUE_CLEANUP", f"{item.job_name}：清理须同时设置独立计算目录并启用归档")
+        if item.archive_dir and (moved or renamed or archive_changed or check_cleanup):
+            try:
+                if check_cleanup and not (Path(item.calculation_root_dir).is_dir() and Path(item.archive_dir).is_dir()):
+                    raise ApiProblem(400, "INVALID_QUEUE_DIRECTORY", f"{item.job_name}：清理需要已存在的计算和归档根目录")
+                work = Path(effective_queue_item_work_dir(item)).resolve()
+                if Path(item.archive_dir).resolve().is_relative_to(work):
+                    raise ApiProblem(400, "INVALID_QUEUE_DIRECTORY", f"{item.job_name}：归档根目录不能位于作业计算目录内")
+                if check_cleanup and (work != Path(item.calculation_root_dir).resolve() / item.job_name or
+                                      Path(item.source_inp_path or item.inp_path).resolve().is_relative_to(work)):
+                    raise ApiProblem(400, "INVALID_QUEUE_CLEANUP", f"{item.job_name}：仅可清理独立作业目录，原始 INP 所在目录须保留")
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise ApiProblem(400, "INVALID_QUEUE_DIRECTORY", "无法解析计算或归档目录") from exc
+        changed = (moved or archive_changed or item.cleanup_after_archive != previous_cleanup
+                   or item.archive_after_complete != previous_archive_enabled)
+        if changed and not item.effective_work_dir:
+            item.effective_work_dir = effective_queue_item_work_dir(item)
+        return changed
 
     def _validate_item(
         self,
         item: QueueItem,
         candidates: list[QueueItem],
         queue_items: list[QueueItem],
+        *, check_conflicts: bool = True,
     ) -> None:
         item.run_mode = (
             "restart"
@@ -1030,7 +1122,7 @@ class JobQueueService:
                 item.valid = False
                 item.message = "Restart 依赖作业名无效"
                 return
-        conflict = self._conflicting_item(item, candidates, queue_items)
+        conflict = self._conflicting_item(item, candidates, queue_items) if check_conflicts else None
         if conflict is not None:
             item.valid = False
             item.message = f"同一计算目录中已存在同名作业：{conflict.job_name}"

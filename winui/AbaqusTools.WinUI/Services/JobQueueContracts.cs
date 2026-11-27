@@ -176,6 +176,18 @@ public sealed class JobQueueItem : INotifyPropertyChanged
     [JsonPropertyName("effectiveWorkDir")]
     public string EffectiveWorkDir { get; set; } = string.Empty;
 
+    [JsonPropertyName("calculationRootDir")]
+    public string CalculationRootDir { get; set; } = string.Empty;
+
+    [JsonPropertyName("archiveDir")]
+    public string ArchiveDir { get; set; } = string.Empty;
+
+    [JsonPropertyName("archiveAfterComplete")]
+    public bool ArchiveAfterComplete { get; set; }
+
+    [JsonPropertyName("cleanupAfterArchive")]
+    public bool CleanupAfterArchive { get; set; }
+
     [JsonPropertyName("archiveDestination")]
     public string ArchiveDestination { get; set; } = string.Empty;
 
@@ -346,6 +358,10 @@ internal sealed class JobQueueCommandRequest
     [JsonPropertyName("archiveDir")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ArchiveDir { get; init; }
+
+    [JsonPropertyName("cleanupAfterArchive")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CleanupAfterArchive { get; init; }
 
     [JsonPropertyName("draft")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

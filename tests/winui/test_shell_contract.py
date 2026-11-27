@@ -717,6 +717,13 @@ def test_parallel_limit_inputs_have_space_for_permanent_buttons() -> None:
         assert float(control.get("Width", "0")) >= 160
 
 
+def test_queue_numbers_use_the_frame_of_their_neighboring_fields() -> None:
+    page = ET.parse(WINUI_ROOT / "Pages" / "JobQueuePage.xaml").getroot()
+    assert _named_element(page, "ParallelLimitNumberBox").get("FrameAppearance") == "ComboBox"
+    editor = (WINUI_ROOT / "Pages" / "JobQueuePage.Edit.cs").read_text(encoding="utf-8")
+    assert editor.count("FrameAppearance = Controls.NumberBoxFrameAppearance.TextField") == 2
+
+
 def test_adjustable_numeric_fields_use_the_same_permanent_button_control() -> None:
     import re
     xaml_fields = []

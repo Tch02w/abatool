@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import csv
+import os
+import stat
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,11 +17,14 @@ from zipfile import BadZipFile
 from modules.postprocessor.naming import natural_sort_key
 from modules.postprocessor.result_assets import (
     ASSET_MANIFEST_NAME,
+    INCOMPLETE_OUTPUT_MARKER,
     SHARED_DATA_ROOT_NAME,
+    is_incomplete_output,
 )
 from modules.postprocessor.result_catalog import (
     SECTION_TABS,
     ResultRecord,
+    classify_result,
     collect_result_records,
     collect_shared_asset_records,
     preview_row_limit,
@@ -30,6 +36,7 @@ from modules.postprocessor.result_catalog import (
 from modules.postprocessor.result_index import (
     ResultIndexInvalid,
     index_path,
+    is_result_index_artifact,
     load_result_index,
 )
 
@@ -245,6 +252,69 @@ def _record_payload(record: ResultRecord, scope: Path) -> dict[str, Any]:
     }
 
 
+def _direct_entry_visible(path: Path, info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    return not (
+        path.name.startswith((".", "_", "~$"))
+        or is_result_index_artifact(path)
+        or stat.S_ISLNK(info.st_mode)
+        or attributes & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_REPARSE_POINT)
+    )
+
+
+def _direct_directory(payload: Mapping[str, Any], root: Path) -> Path:
+    batch, scope, directory = (
+        Path(_required_path(payload, key)) for key in ("timeDirectory", "scope", "directDirectory")
+    )
+    if not all(path.is_absolute() and ".." not in path.parts for path in (batch, scope, directory)):
+        raise ApiProblem(400, "INVALID_DIRECT_DIRECTORY", "直接浏览需要无回退段的完整目录路径")
+    if (
+        not batch.is_relative_to(root)
+        or len(batch.relative_to(root).parts) != 2
+        or batch.parent.name.casefold() == SHARED_DATA_ROOT_NAME.casefold()
+        or (scope != batch and scope.parent != batch)
+    ):
+        raise ApiProblem(400, "INVALID_DIRECT_SCOPE", "请选择当前结果根目录内的时间目录或模型结果目录")
+    _require_below(directory, scope, field="directDirectory")
+    current = root
+    try:
+        for part in directory.relative_to(root).parts:
+            current /= part
+            info = current.lstat()
+            if not stat.S_ISDIR(info.st_mode) or not _direct_entry_visible(current, info):
+                raise ApiProblem(400, "INVALID_DIRECT_DIRECTORY", "目录不可浏览或包含内部目录、链接")
+        if is_incomplete_output(directory):
+            raise ApiProblem(409, "RESULT_OUTPUT_INCOMPLETE", "该结果尚未完成发布，请等待提取结束")
+    except OSError as exc:
+        raise ApiProblem(400, "DIRECT_DIRECTORY_UNAVAILABLE", f"无法访问当前目录：{exc}") from exc
+    return directory
+
+
+def _direct_records(directory: Path) -> list[ResultRecord]:
+    records: list[ResultRecord] = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                path = Path(entry.path)
+                try:
+                    info = entry.stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue  # The writer removed the entry between enumeration and stat.
+                if not _direct_entry_visible(path, info):
+                    continue
+                if stat.S_ISDIR(info.st_mode):
+                    if not (path / INCOMPLETE_OUTPUT_MARKER).is_file():
+                        records.append(
+                            ResultRecord(path, "文件夹", "进入此目录", section="other",
+                                         mtime_ns=info.st_mtime_ns, is_directory=True)
+                        )
+                elif stat.S_ISREG(info.st_mode):
+                    records.append(replace(classify_result(path), size=info.st_size, mtime_ns=info.st_mtime_ns))
+    except OSError as exc:
+        raise ApiProblem(400, "DIRECT_DIRECTORY_UNAVAILABLE", f"无法读取当前目录：{exc}") from exc
+    return records
+
+
 def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Load an indexed time scope or a shared asset, then filter and page it."""
 
@@ -253,6 +323,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "root",
         "scope",
         "timeDirectory",
+        "directDirectory",
         "section",
         "query",
         "useCase",
@@ -271,7 +342,11 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
 
     metadata: dict[str, str] = {}
     source = "shared_asset"
-    if raw_time_directory.strip():
+    if "directDirectory" in payload:
+        directory = _direct_directory(payload, root)
+        records = _direct_records(directory)
+        source = "direct"
+    elif raw_time_directory.strip():
         time_directory = _resolve_directory(
             raw_time_directory.strip(),
             code_prefix="TIME_DIRECTORY",
@@ -343,14 +418,17 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         return query_text in haystack
 
     filtered = [record for record in records if matches(record)]
-    filtered.sort(
-        key=lambda record: (
-            not record.recommended,
-            record.use_case.casefold(),
-            natural_sort_key(record.path.name),
-            str(record.path).casefold(),
+    if source == "direct":
+        filtered.sort(key=lambda record: (not record.is_directory, natural_sort_key(record.path.name)))
+    else:
+        filtered.sort(
+            key=lambda record: (
+                not record.recommended,
+                record.use_case.casefold(),
+                natural_sort_key(record.path.name),
+                str(record.path).casefold(),
+            )
         )
-    )
 
     offset = payload.get("offset", 0)
     limit = payload.get("limit", 200)
@@ -378,6 +456,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
         "root": str(root),
         "scope": str(scope),
         "source": source,
+        **({"directDirectory": str(directory)} if source == "direct" else {}),
         "records": [_record_payload(record, scope) for record in page],
         "totalCount": len(records),
         "filteredCount": len(filtered),

@@ -19,6 +19,7 @@ public sealed partial class ResultBrowserPage
         if (records.Length == 0) return;
         var root = _location.LoadedRoot;
         if (root is null) return;
+        Action<string>? validateSource = _direct is { } position ? position.ValidateFile : null;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         App.Current.PendingResultFileOperation = completion.Task; // Includes the destination picker.
         _exportBusy = true;
@@ -44,7 +45,7 @@ public sealed partial class ResultBrowserPage
                 ExportProgressBar.Value = value.Length > 0 ? 100.0 * value.Bytes / value.Length : 0;
                 ResultStatusText.Text = $"已导出 {value.Completed}/{value.Total} · {value.Name}";
             });
-            var outcome = await ResultFileExport.CopyAsync(root, destination.Path, records, progress, cancellation.Token);
+            var outcome = await ResultFileExport.CopyAsync(root, destination.Path, records, progress, cancellation.Token, validateSource);
             _exportCancellation = null; // Ignore progress callbacks already queued on the UI thread.
             var summary = outcome.Succeeded ? $"导出完成 · {outcome.Completed.Count} 个文件"
                 : $"导出{(outcome.Cancelled ? "已取消" : "未完成")} · 已完成 {outcome.Completed.Count}/{records.Length}";

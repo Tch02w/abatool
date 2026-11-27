@@ -78,9 +78,30 @@
         </Setter>
     </Style>
 
+    <Style x:Key="WorkbenchNumberFrameStyle" TargetType="Grid">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Background" Value="{ThemeResource WorkbenchNumberBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource WorkbenchNumberLine}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style x:Key="WorkbenchNumberFormFrameStyle" TargetType="Grid">
+        <Setter Property="Height" Value="{ThemeResource TextControlThemeMinHeight}" />
+        <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource TextControlBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource TextControlBorderThemeThickness}" />
+        <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+    </Style>
+    <Style x:Key="WorkbenchNumberComboFrameStyle" TargetType="Grid" BasedOn="{StaticResource WorkbenchNumberFrameStyle}">
+        <Setter Property="Background" Value="{ThemeResource ComboBoxBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ComboBoxBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource ComboBoxBorderThemeThickness}" />
+        <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+    </Style>
+
     <Style x:Key="WorkbenchNumberSpinStyle" TargetType="RepeatButton">
         <Setter Property="Width" Value="40" />
-        <Setter Property="MinWidth" Value="40" />
+        <Setter Property="MinWidth" Value="0" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Margin" Value="0" />
         <Setter Property="Padding" Value="0" />
@@ -133,7 +154,7 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="40" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <VisualStateManager.VisualStateGroups>
@@ -170,12 +191,11 @@
                 Margin="0,0,0,7" FontWeight="Normal" FontSize="{TemplateBinding FontSize}"
                 Foreground="{ThemeResource TextControlHeaderForeground}" TextWrapping="Wrap"
                 Visibility="Collapsed" />
-            <Grid x:Name="NumberFrame" Grid.Row="1" Background="{ThemeResource WorkbenchNumberBackground}"
-                BorderBrush="{ThemeResource WorkbenchNumberLine}" BorderThickness="1" CornerRadius="5">
+            <Grid x:Name="NumberFrame" Grid.Row="1" Style="{StaticResource WorkbenchNumberFrameStyle}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="40" />
-                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="InputBox" Style="{StaticResource WorkbenchNumberInputStyle}"
                     InputScope="{TemplateBinding InputScope}" PlaceholderText="{TemplateBinding PlaceholderText}"
@@ -200,7 +220,7 @@
                         StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
                 </RepeatButton>
             </Grid>
-            <Border Grid.Row="1" BorderBrush="{ThemeResource WorkbenchNumberBottomLine}"
+            <Border x:Name="BottomOutline" Grid.Row="1" BorderBrush="{ThemeResource WorkbenchNumberBottomLine}"
                 BorderThickness="0,0,0,1" CornerRadius="5" IsHitTestVisible="False" />
             <ContentPresenter x:Name="DescriptionPresenter" Grid.Row="2"
                 Content="{TemplateBinding Description}"

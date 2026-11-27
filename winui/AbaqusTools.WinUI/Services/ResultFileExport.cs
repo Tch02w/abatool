@@ -13,14 +13,15 @@ public sealed record ResultExportOutcome(IReadOnlyList<ResultExportedFile> Compl
 public static class ResultFileExport
 {
     public static Task<ResultExportOutcome> CopyAsync(string root, string destination,
-        IReadOnlyList<ResultExportFile> files, IProgress<ResultExportProgress>? progress, CancellationToken cancellationToken)
+        IReadOnlyList<ResultExportFile> files, IProgress<ResultExportProgress>? progress, CancellationToken cancellationToken,
+        Action<string>? validateSource = null)
     {
         var captured = files.ToArray();
-        return Task.Run(() => CopyCoreAsync(root, destination, captured, progress, cancellationToken));
+        return Task.Run(() => CopyCoreAsync(root, destination, captured, progress, cancellationToken, validateSource));
     }
 
     private static async Task<ResultExportOutcome> CopyCoreAsync(string root, string destination,
-        ResultExportFile[] files, IProgress<ResultExportProgress>? progress, CancellationToken token)
+        ResultExportFile[] files, IProgress<ResultExportProgress>? progress, CancellationToken token, Action<string>? validateSource)
     {
         var completed = new List<ResultExportedFile>();
         string? partial = null;
@@ -40,6 +41,7 @@ public static class ResultFileExport
                 var relative = Path.GetRelativePath(root, source);
                 if (Escapes(relative)) throw new IOException("所选文件已不属于当前结果目录：" + source);
                 RejectLinks(source);
+                validateSource?.Invoke(source);
                 // Keep the existing export layout; invalid display paths fall back to the basename.
                 var folderPart = Escapes(file.RelativePath) ? "" : Path.GetDirectoryName(file.RelativePath) ?? "";
                 var folder = Path.GetFullPath(Path.Combine(destination, folderPart));
@@ -79,6 +81,7 @@ public static class ResultFileExport
                     }
                 }
                 token.ThrowIfCancellationRequested();
+                validateSource?.Invoke(source);
                 RejectLinks(folder);
                 File.SetLastWriteTimeUtc(partial!, timestamp);
                 var target = PublishUnique(partial!, folder, name, token);

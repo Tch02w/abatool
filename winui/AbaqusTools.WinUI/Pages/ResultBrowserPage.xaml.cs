@@ -34,6 +34,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private string? _activeIndexOperationId;
     private readonly ResultBrowserLoadCoordinator _loads = new();
     private readonly ResultBrowserLocation _location = new();
+    private ResultDirectLocation? _direct;
     private bool _scopeBusy => _loads.IsRefreshingScopes;
     private bool _recordsBusy;
     private bool _recycleBusy;
@@ -64,7 +65,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         UseCaseComboBox.ItemsSource = new[] { "全部用途" };
         UseCaseComboBox.SelectedIndex = 0;
         App.Current.Session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
-            async () => { ++_previewRequest; await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); });
+            async () => { ++_previewRequest; await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); },
+            captureContext: values => _direct?.Capture(values));
         _location.DraftRoot = RootTextBox.Text;
         Loaded += OnPageLoaded;
         RefreshInteractionState();
@@ -95,10 +97,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
 
         var recoveredIndex = await RecoverActiveIndexOperationAsync();
-        if (!recoveredIndex && _loads.CanAutoReadRoot && !_scopeBusy && IsLoaded
-            && Directory.Exists(RootTextBox.Text) && ScopeTree.RootNodes.Count == 0)
+        if (!recoveredIndex && _loads.CanAutoReadRoot && !_scopeBusy && IsLoaded && ScopeTree.RootNodes.Count == 0)
         {
-            await RefreshScopesAsync();
+            var saved = App.Current.Session.State.Pages.TryGetValue("result-browser", out var values)
+                ? ResultDirectLocation.Restore(values) : null;
+            if (saved is not null) await RefreshScopesAsync(saved.Scope, saved.Root, saved);
+            else if (Directory.Exists(RootTextBox.Text)) await RefreshScopesAsync();
         }
     }
 
@@ -253,11 +257,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RootContextHint.Visibility = _location.HasPendingRoot ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null)
+    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null,
+        ResultDirectLocation? restoreDirect = null)
     {
         _location.DraftRoot = RootTextBox.Text;
         var locationRead = _location.BeginRead(explicitRoot);
         var root = locationRead.Root;
+        var previousDirect = restoreDirect ?? _direct;
         ErrorInfoBar.IsOpen = false;
         WarningInfoBar.IsOpen = false;
         IndexInfoBar.IsOpen = false;
@@ -292,6 +298,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                     || _treeNodes.TryGetValue(response.Root, out targetNode))
                 {
                     _selectedScope = targetNode.Content as ResultScopeNode;
+                    if (previousDirect?.Matches(response.Root, _selectedScope?.Path) == true)
+                        _direct = previousDirect;
                     ScopeTree.SelectedNode = targetNode;
                     ExpandAncestors(targetNode);
                 }
@@ -315,6 +323,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void ClearScopesAndResults()
     {
+        _direct = null;
         _location.ClearLoadedRoot();
         UpdateRootContextHint();
         _selectedScope = null;
@@ -467,10 +476,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 candidate.Path,
                 item.Path,
                 StringComparison.OrdinalIgnoreCase)) is { } record
-            && !record.Internal
-            && !record.IsDirectory)
+            && !record.Internal)
         {
-            await LoadPreviewAsync(record);
+            if (record.IsDirectory) await EnterDirectFolderAsync(record);
+            else await LoadPreviewAsync(record);
         }
     }
 
@@ -494,6 +503,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
         var scope = sender.SelectedNode?.Content as ResultScopeNode;
         if (ReferenceEquals(_selectedScope, scope)) return;
+        _direct = null;
         _selectedScope = scope;
         await RefreshSelectedScopeAsync();
     }
@@ -518,19 +528,58 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             return;
         }
 
-        if (_selectedScope.IndexState == "missing"
+        if (_direct is null && _selectedScope.IndexState == "missing"
             && !string.IsNullOrWhiteSpace(_selectedScope.TimeDirectory))
         {
             EmptyResultsPanel.Visibility = Visibility.Visible;
             EmptyResultsText.Text = "当前时间目录尚未建立索引";
             IndexInfoBar.Message = _selectedScope.TimeDirectory;
             IndexInfoBar.IsOpen = true;
-            ResultStatusText.Text = "创建索引后即可完整筛选和预览";
+            ResultStatusText.Text = "直接浏览可逐层查看文件，创建索引后可跨目录筛选。";
             RefreshInteractionState();
             return;
         }
 
         await LoadRecordsAsync();
+    }
+
+    private async void OnDirectBrowseClicked(object sender, RoutedEventArgs e)
+    {
+        if (_scopeBusy || _recordsBusy || _indexBusy || FileOperationBusy || !IndexInfoBar.IsOpen
+            || _location.LoadedRoot is not { } root || _selectedScope is not { Kind: "batch" or "odb" } scope) return;
+        _direct = new(root, scope.Path, scope.Path);
+        await RefreshSelectedScopeAsync();
+    }
+
+    private async Task EnterDirectFolderAsync(ResultRecordItem record)
+    {
+        if (_recordsBusy || FileOperationBusy || !record.IsDirectory || !_records.Contains(record)
+            || _direct?.Child(record.Path) is not { } child) return;
+        _direct = child;
+        await RefreshSelectedScopeAsync();
+    }
+
+    private async void OnResultRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_direct is null || sender is not FrameworkElement { DataContext: ResultRecordItem { IsDirectory: true } record }) return;
+        e.Handled = true;
+        await EnterDirectFolderAsync(record);
+    }
+
+    private async void OnDirectUpClicked(object sender, RoutedEventArgs e)
+    {
+        if (_direct?.Parent() is not { } parent) return;
+        _direct = parent;
+        await RefreshSelectedScopeAsync();
+    }
+
+    private async void OnDirectRefreshClicked(object sender, RoutedEventArgs e) => await RefreshSelectedScopeAsync();
+
+    private async void OnDirectExitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_direct is not { } position) return;
+        _direct = null;
+        await RefreshScopesAsync(position.Scope, position.Root);
     }
 
     private async void OnPreviousPageClicked(object sender, RoutedEventArgs e)
@@ -558,9 +607,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             Root = _location.RequireLoadedRoot(),
             Scope = scope.Path, TimeDirectory = scope.TimeDirectory,
-            Section = (SectionComboBox.SelectedItem as SectionOption)?.Key ?? "all",
-            Query = SearchTextBox.Text,
-            UseCase = UseCaseComboBox.SelectedIndex <= 0 ? "" : UseCaseComboBox.SelectedItem?.ToString() ?? "",
+            DirectDirectory = _direct?.DirectoryPath,
+            Section = _direct is null ? (SectionComboBox.SelectedItem as SectionOption)?.Key ?? "all" : "all",
+            Query = _direct is null ? SearchTextBox.Text : "",
+            UseCase = _direct is not null || UseCaseComboBox.SelectedIndex <= 0 ? "" : UseCaseComboBox.SelectedItem?.ToString() ?? "",
             IncludeInternal = ShowInternalCheckBox.IsChecked is true,
         };
         if (query is null) return;
@@ -574,7 +624,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         {
             var response = await App.Current.ControlPlane.GetResultRecordsAsync(
                 query.Root, query.Scope, query.TimeDirectory, query.Section, query.Query,
-                query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0);
+                query.UseCase, query.IncludeInternal, offset: pageOffset ?? 0, directDirectory: query.DirectDirectory);
             if (!_loads.IsCurrentRecordRequest(request))
             {
                 return;
@@ -591,12 +641,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             }
             UpdateExplorer();
 
-            UpdateUseCases(response.UseCases, query.UseCase);
+            if (_direct is null) UpdateUseCases(response.UseCases, query.UseCase);
             EmptyResultsPanel.Visibility = _records.Count == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             EmptyResultsText.Text = response.FilteredCount == 0
-                ? "当前筛选条件没有结果"
+                ? (_direct is null ? "当前筛选条件没有结果" : "此目录没有可浏览的文件或文件夹")
                 : "请选择结果";
             if (response.Offset > 0 && _records.Count == 0)
                 EmptyResultsText.Text = "当前页已无结果，请返回上一页或重新筛选。";
@@ -826,18 +876,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnResultSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (FileOperationBusy) return;
-        var selected = SelectedRecords();
-        var hasFiles = selected.Any(record => !record.Internal && !record.IsDirectory);
-        var primary = selected.FirstOrDefault();
-        var primaryIsFile = primary is { Internal: false, IsDirectory: false };
-        OpenFileButton.IsEnabled = primaryIsFile;
-        RevealFileButton.IsEnabled = selected.Count > 0;
-        CopyPathButton.IsEnabled = selected.Count > 0;
-        ExportButton.IsEnabled = hasFiles;
-        RecycleButton.IsEnabled = hasFiles && selected.All(record =>
-            !record.Internal && !record.IsDirectory && ResultFileRecycle.IsExport(record.Path));
-        if (primaryIsFile && primary is not null)
+        var primary = SelectedRecords().FirstOrDefault();
+        if (primary is { Internal: false, IsDirectory: false })
         {
+            RefreshInteractionState();
             await LoadPreviewAsync(primary);
         }
         else
@@ -847,6 +889,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             {
                 PreviewTextBox.Text = "内部索引文件仅用于诊断，不支持打开或预览。";
             }
+            if (_direct is not null && primary is { IsDirectory: true }) PreviewTextBox.Text = "双击文件夹或点击“进入文件夹”继续浏览。";
+            RefreshInteractionState();
         }
     }
 
@@ -861,6 +905,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         PreviewTextBox.Text = "正在读取预览…";
         try
         {
+            _direct?.ValidateFile(record.Path);
             var preview = await App.Current.ControlPlane.GetResultPreviewAsync(
                 _appliedQuery?.Root ?? _location.RequireLoadedRoot(),
                 record.Path);
@@ -929,14 +974,16 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenFileClicked(object sender, RoutedEventArgs e)
     {
-        if (ResultList.SelectedItem is not ResultRecordItem
-            { Internal: false, IsDirectory: false } record)
+        if (ResultList.SelectedItem is not ResultRecordItem { Internal: false } record) return;
+        if (record.IsDirectory)
         {
+            await EnterDirectFolderAsync(record);
             return;
         }
 
         try
         {
+            _direct?.ValidateFile(record.Path);
             var file = await StorageFile.GetFileFromPathAsync(record.Path);
             if (!await Launcher.LaunchFileAsync(file))
             {
@@ -958,6 +1005,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
         try
         {
+            _direct?.ValidateFile(record.Path);
             var file = await StorageFile.GetFileFromPathAsync(record.Path);
             var folderPath = Path.GetDirectoryName(record.Path)
                 ?? throw new InvalidOperationException("文件没有可定位的父目录。");
@@ -991,7 +1039,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private async void OnRecycleClicked(object sender, RoutedEventArgs e)
     {
-        if (FileOperationBusy || _recordsBusy || _scopeBusy || _indexBusy || App.Current.Session.IsClosing
+        if (_direct is not null || FileOperationBusy || _recordsBusy || _scopeBusy || _indexBusy || App.Current.Session.IsClosing
             || !App.Current.PendingResultFileOperation.IsCompleted) return;
         var records = SelectedRecords().ToArray();
         if (records.Length == 0 || records.Any(record => record.Internal || record.IsDirectory
@@ -1097,12 +1145,23 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !FileOperationBusy;
         ResultList.IsEnabled = idle;
         var selected = SelectedRecords();
-        OpenFileButton.IsEnabled = idle && selected.FirstOrDefault() is { Internal: false, IsDirectory: false };
-        RevealFileButton.IsEnabled = idle && selected.Count > 0;
+        var first = selected.FirstOrDefault();
+        var enterFolder = _direct is not null && first is { IsDirectory: true } && selected.Count == 1;
+        OpenFileButton.Content = enterFolder ? "进入文件夹" : "打开文件";
+        OpenFileButton.IsEnabled = idle && (enterFolder || first is { Internal: false, IsDirectory: false });
+        RevealFileButton.IsEnabled = idle && first is { IsDirectory: false };
         CopyPathButton.IsEnabled = idle && selected.Count > 0;
         ExportButton.IsEnabled = idle && selected.Any(record => !record.Internal && !record.IsDirectory);
-        RecycleButton.IsEnabled = idle && selected.Count > 0 && selected.All(record =>
+        RecycleButton.IsEnabled = idle && _direct is null && selected.Count > 0 && selected.All(record =>
             !record.Internal && !record.IsDirectory && ResultFileRecycle.IsExport(record.Path));
+        DirectBrowseButton.IsEnabled = idle && _selectedScope?.Kind is "batch" or "odb";
+        DirectToolbar.Visibility = _direct is null ? Visibility.Collapsed : Visibility.Visible;
+        FilterPanel.Visibility = _direct is null ? Visibility.Visible : Visibility.Collapsed;
+        DirectRefreshButton.IsEnabled = DirectExitButton.IsEnabled = idle;
+        DirectUpButton.IsEnabled = idle && _direct is { AtScope: false };
+        DirectPathText.Text = _direct is null ? "" : "直接浏览 · "
+            + (_direct.AtScope ? _selectedScope?.Name : Path.GetRelativePath(_direct.Scope, _direct.DirectoryPath));
+        ToolTipService.SetToolTip(DirectPathText, _direct?.DirectoryPath);
         PreviousPageButton.IsEnabled = idle && _displayedPage is { Offset: > 0 };
         NextPageButton.IsEnabled = idle && _displayedPage is { HasMore: true };
         RootTextBox.IsEnabled = idle;
@@ -1138,6 +1197,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private static string SourceDisplay(string source) => source switch
     {
+        "direct" => "直接浏览",
         "index" => "正式索引",
         "shared_asset" => "ODB 公共数据",
         _ => source,

@@ -120,6 +120,8 @@ public sealed partial class TestApp : Application
         Check(input.TextAlignment == TextAlignment.Center && up.ActualHeight >= 32 && down.ActualWidth >= 32,
             "Numbers are centered and buttons have usable hit areas");
         await CheckAppearanceAsync(cpu, input, down, up);
+        await CheckTextFieldAppearanceAsync();
+        await CheckQueueToolbarAppearanceAsync();
         await InvokeAsync(up);
         Check(cpu.Value == 2, "Native increment changes the value exactly once");
         await InvokeAsync(down);
@@ -243,6 +245,74 @@ public sealed partial class TestApp : Application
     }
 
     private static string ColorOf(Brush brush) => ((SolidColorBrush)brush).Color.ToString();
+
+    private async Task CheckTextFieldAppearanceAsync()
+    {
+        var text = new TextBox { Header = "内存", Text = "80%" };
+        var number = new WorkbenchNumberBox { FrameAppearance = NumberBoxFrameAppearance.TextField, Header = "优先级", Value = 0 };
+        _fields.Children.Add(text);
+        Attach(number);
+        var border = Part<Border>(text, "BorderElement");
+        var frame = Part<Grid>(number, "NumberFrame");
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            text.RequestedTheme = number.RequestedTheme = theme;
+            await DispatchAsync();
+            _fields.UpdateLayout();
+            Check(frame.ActualHeight == 32 && frame.ActualHeight == border.ActualHeight
+                && frame.ActualWidth == border.ActualWidth && frame.CornerRadius == border.CornerRadius
+                && frame.BorderThickness == border.BorderThickness,
+                $"{theme}: the form number field matches the native text field height, width, corners and border thickness");
+            Check(ColorOf(frame.Background) == ColorOf(border.Background)
+                && frame.BorderBrush == border.BorderBrush
+                && Part<Border>(number, "BottomOutline").Visibility == Visibility.Collapsed,
+                $"{theme}: form fields share the native fill and border brush with a single bottom edge");
+        }
+        var down = Part<RepeatButton>(number, "DownSpinButton");
+        var up = Part<RepeatButton>(number, "UpSpinButton");
+        var right = up.TransformToVisual(frame).TransformPoint(new Windows.Foundation.Point()).X + up.ActualWidth;
+        Check(down.ActualWidth == 32 && up.ActualWidth == 32 && Math.Abs(right + frame.BorderThickness.Right - frame.ActualWidth) < 0.01
+            && Part<TextBox>(number, "InputBox").TextAlignment == TextAlignment.Center,
+            "The form field centers its value and fits both visible 32 DIP chevron buttons inside its right edge");
+        await InvokeAsync(down);
+        Check(number.Value == -1, "The form field decrements a signed queue priority");
+        await InvokeAsync(up);
+        Check(number.Value == 0, "The form field increments back to zero");
+        _fields.Children.Remove(number);
+        _fields.Children.Remove(text);
+    }
+
+    private async Task CheckQueueToolbarAppearanceAsync()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var policy = new ComboBox { Width = 126, Height = 40, VerticalAlignment = VerticalAlignment.Center };
+        policy.Items.Add("备份旧结果");
+        policy.SelectedIndex = 0;
+        var limit = new WorkbenchNumberBox { FrameAppearance = NumberBoxFrameAppearance.ComboBox,
+            Width = 160, VerticalAlignment = VerticalAlignment.Center, Minimum = 1, Value = 1 };
+        row.Children.Add(policy);
+        row.Children.Add(limit);
+        _fields.Children.Add(row);
+        foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+        {
+            row.RequestedTheme = theme;
+            await DispatchAsync();
+            _fields.UpdateLayout();
+            var frame = Part<Grid>(limit, "NumberFrame");
+            var border = Part<Border>(policy, "Background");
+            var origin = new Windows.Foundation.Point();
+            Check(frame.ActualHeight == 40 && frame.ActualHeight == border.ActualHeight
+                && frame.TransformToVisual(row).TransformPoint(origin).Y == border.TransformToVisual(row).TransformPoint(origin).Y,
+                $"{theme}: the queue dropdown and stepper have identical top and bottom edges");
+            Check(frame.Background == border.Background && frame.BorderBrush == border.BorderBrush
+                && frame.CornerRadius == border.CornerRadius && frame.BorderThickness == border.BorderThickness
+                && Part<Border>(limit, "BottomOutline").Visibility == Visibility.Collapsed,
+                $"{theme}: both toolbar controls draw the same fill, corners and single outer border");
+        }
+        await InvokeAsync(Part<RepeatButton>(limit, "UpSpinButton"));
+        Check(limit.Value == 2, "The toolbar still steps the parallel limit with its permanent increment button");
+        _fields.Children.Remove(row);
+    }
 
     private static async Task DispatchAsync()
     {

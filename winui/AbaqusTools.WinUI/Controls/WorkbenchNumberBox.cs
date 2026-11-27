@@ -1,7 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace AbaqusTools.WinUI.Controls;
+
+public enum NumberBoxFrameAppearance { Standard, TextField, ComboBox }
 
 /// <summary>
 /// Native NumberBox with always-visible decrement/increment buttons, in that order.
@@ -22,5 +25,40 @@ public sealed class WorkbenchNumberBox : NumberBox
         };
         Resources.MergedDictionaries.Add(appearance);
         Template = (ControlTemplate)appearance["WorkbenchNumberBoxTemplate"];
+    }
+
+    public static readonly DependencyProperty FrameAppearanceProperty = DependencyProperty.Register(
+        nameof(FrameAppearance), typeof(NumberBoxFrameAppearance), typeof(WorkbenchNumberBox),
+        new PropertyMetadata(NumberBoxFrameAppearance.Standard,
+            (sender, _) => ((WorkbenchNumberBox)sender).ApplyFrameAppearance()));
+
+    public NumberBoxFrameAppearance FrameAppearance
+    {
+        get => (NumberBoxFrameAppearance)GetValue(FrameAppearanceProperty);
+        set => SetValue(FrameAppearanceProperty, value);
+    }
+
+    protected override void OnApplyTemplate()
+    {
+        base.OnApplyTemplate();
+        ApplyFrameAppearance();
+    }
+
+    private void ApplyFrameAppearance()
+    {
+        if (GetTemplateChild("NumberFrame") is not Grid frame) return;
+
+        var styleKey = FrameAppearance switch
+        {
+            NumberBoxFrameAppearance.TextField => "WorkbenchNumberFormFrameStyle",
+            NumberBoxFrameAppearance.ComboBox => "WorkbenchNumberComboFrameStyle",
+            _ => "WorkbenchNumberFrameStyle",
+        };
+        frame.Style = (Style)Resources[styleKey];
+        if (GetTemplateChild("BottomOutline") is Border outline)
+            outline.Visibility = FrameAppearance == NumberBoxFrameAppearance.Standard ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var name in new[] { "DownSpinButton", "UpSpinButton" })
+            if (GetTemplateChild(name) is RepeatButton button)
+                button.Width = frame.Height;
     }
 }

@@ -8,6 +8,14 @@
 
 `POST /api/v1/remote-file-listings` 和下载方向的 `POST /api/v1/remote-transfers` 接受可选 `sourceOperationId`，为远端作业的 32 位小写十六进制编号。普通资源页省略此字段。提供编号时从持久作业记录解析对应的服务器身份，作业下载还要匹配已登记的输出路径。目录请求遇到不同连接返回 409 `REMOTE_CONNECTION_CHANGED`。已受理的下载在执行文件操作前核对连接，错服时状态为 failed，保留目标文件。编号加入传输幂等签名并随该任务的 request 返回。未知作业返回 404，错误编号、未登记的输出和以作业身份上传均返回 400。
 
+### 候选及正式队列的目录编辑（F004）
+
+`POST /api/v1/job-queue-commands` 的 `setCandidateDirectories` 要求非空 `itemIds`，并接收一个或多个可选字段 `calculationRootDir`、`archiveDir`、`cleanupAfterArchive`。前两个字段是已存在的文件夹绝对路径，空字符串表示清除。清理字段接受 JSON 布尔值。省略字段表示保留每个目标各自的值，JSON null 不作为清除。清空任一目录会关掉清理，同时请求开启清理会报错。只有明确请求开启清理才可从关闭转为开启。`updateCandidate` 与 `updateQueueItem` 也接收上述三个可选字段。
+
+批量命令根据最终工作目录与作业名检查所选项之间及其与其他候选、未终结正式作业的冲突。全部通过后一次保存，`changed` 为实际修改的候选数。选中标识失效返回 404 `QUEUE_ITEM_NOT_FOUND`，目录无效返回 400 `INVALID_QUEUE_DIRECTORY`，清理条件不满足返回 400 `INVALID_QUEUE_CLEANUP`，同名冲突返回 409 `QUEUE_DIRECTORY_CONFLICT`。失败均保留整批原值。
+
+队列快照的 `calculationRootDir`、`archiveDir`、`archiveAfterComplete`、`cleanupAfterArchive` 表示原始保存配置，缺失目录默认空串，缺失布尔值默认 false。`effectiveWorkDir` 和 `archiveDestination` 仍分别表示作业工作目录和实际发布的归档位置。旧归档标记与路径不一致时的执行约定见[本机调度](03-features/LOCAL_SCHEDULING.md)。
+
 ### 外部扫描响应补充（2026-11-18，F004/F005）
 
 队列快照新增 `externalScanActive` 布尔字段，旧后台缺省 false。包括 `GET /api/v1/job-queues`、`GET /api/v1/local-queue-runtime` 的 queue 及队列命令响应的 snapshot；扫描期间读取最近保存状态。`scanExternalJobs` 命令保持同步返回最终结果，同一后台重复手动扫描返回 409 `EXTERNAL_SCAN_BUSY`；关闭后拒绝开始/合并，返回 503 `CONTROL_PLANE_SHUTTING_DOWN`。

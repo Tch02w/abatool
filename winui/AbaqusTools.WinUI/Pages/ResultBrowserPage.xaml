@@ -73,10 +73,11 @@
                 IsClosable="False"
                 IsOpen="False"
                 Severity="Informational"
-                Title="当前时间目录尚未建立索引">
-                <InfoBar.ActionButton>
+                Title="结果索引不可用">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="DirectBrowseButton" Click="OnDirectBrowseClicked" Content="直接浏览当前目录" />
                     <Button Click="OnBuildIndexClicked" Content="创建索引" />
-                </InfoBar.ActionButton>
+                </StackPanel>
             </InfoBar>
         </StackPanel>
 
@@ -133,7 +134,20 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <Grid x:Name="DirectToolbar" Visibility="Collapsed" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="DirectUpButton" VerticalAlignment="Center" Content="上一级" Click="OnDirectUpClicked" />
+                    <TextBlock x:Name="DirectPathText" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <Button x:Name="DirectRefreshButton" Grid.Column="2" VerticalAlignment="Center" Content="刷新目录" Click="OnDirectRefreshClicked" />
+                    <Button x:Name="DirectExitButton" Grid.Column="3" VerticalAlignment="Center" Content="返回索引视图" Click="OnDirectExitClicked" />
+                </Grid>
                 <Border
+                    x:Name="FilterPanel"
                     Padding="12"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -210,7 +224,7 @@
                             SelectionMode="Extended">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8" ColumnSpacing="10">
+                                    <Grid Padding="8" ColumnSpacing="10" DoubleTapped="OnResultRowDoubleTapped">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="42" />
                                             <ColumnDefinition Width="180" />

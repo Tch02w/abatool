@@ -162,6 +162,16 @@ try
         await ArchivePresentationChecks.RunApi(host, args[2]);
         return 0;
     }
+    if (args.Length == 3 && args[0] == "--queue-directories-api")
+    {
+        var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        await using var host = new ControlPlaneHost();
+        SetField(host, "_descriptor", descriptor);
+        SetField(host, "_descriptorPath", args[1]);
+        await QueueDirectoryChecks.RunApi(host, args[2]);
+        return 0;
+    }
     if (args.Length is 3 or 4 && args[0] == "--execution-options-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),

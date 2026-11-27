@@ -1397,7 +1397,10 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string oldjobPath,
         string fortranPath,
         CancellationToken cancellationToken = default,
-        ExecutionOptionsValues? executionOptions = null) =>
+        ExecutionOptionsValues? executionOptions = null,
+        string? calculationRootDir = null,
+        string? archiveDir = null,
+        bool? cleanupAfterArchive = null) =>
         ExecuteJobQueueCommandAsync(
             new JobQueueCommandRequest
             {
@@ -1412,8 +1415,26 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 Priority = priority,
                 OldjobPath = oldjobPath.Trim(),
                 FortranPath = fortranPath.Trim(),
+                CalculationRootDir = calculationRootDir?.Trim(),
+                ArchiveDir = archiveDir?.Trim(),
+                CleanupAfterArchive = cleanupAfterArchive,
             },
             cancellationToken);
+
+    public Task<JobQueueCommandResponse> SetCandidateDirectoriesAsync(
+        IReadOnlyList<string> itemIds,
+        string? calculationRootDir = null,
+        string? archiveDir = null,
+        bool? cleanupAfterArchive = null,
+        CancellationToken cancellationToken = default) =>
+        ExecuteJobQueueCommandAsync(new JobQueueCommandRequest
+        {
+            Action = "setCandidateDirectories",
+            ItemIds = itemIds,
+            CalculationRootDir = calculationRootDir?.Trim(),
+            ArchiveDir = archiveDir?.Trim(),
+            CleanupAfterArchive = cleanupAfterArchive,
+        }, cancellationToken);
 
     public Task<JobQueueCommandResponse> UpdateRestartDependencyAsync(
         string itemId, string oldjobPath, CancellationToken cancellationToken = default) =>
@@ -1759,7 +1780,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string useCase,
         bool includeInternal,
         CancellationToken cancellationToken = default,
-        int offset = 0)
+        int offset = 0,
+        string? directDirectory = null)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(scope))
         {
@@ -1780,6 +1802,7 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 Root = root.Trim(),
                 Scope = scope.Trim(),
                 TimeDirectory = timeDirectory?.Trim() ?? string.Empty,
+                DirectDirectory = directDirectory,
                 Section = string.IsNullOrWhiteSpace(section) ? "all" : section.Trim(),
                 Query = query?.Trim() ?? string.Empty,
                 UseCase = useCase?.Trim() ?? string.Empty,
@@ -1789,6 +1812,13 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             "结果记录",
             effectiveSource.Token);
         ValidateResultRecordsResponse(response);
+        if (directDirectory is not null && (response.Source != "direct"
+            || !StringComparer.OrdinalIgnoreCase.Equals(response.DirectDirectory, directDirectory)
+            || !StringComparer.OrdinalIgnoreCase.Equals(response.Scope, scope)
+            || !StringComparer.OrdinalIgnoreCase.Equals(response.Root, root)
+            || response.Records.Any(record => !StringComparer.OrdinalIgnoreCase.Equals(
+                Path.GetDirectoryName(record.Path), directDirectory))))
+            throw new ControlPlaneException("结果记录不属于请求的直接浏览目录，请重新读取目录。");
         if (response.Offset != offset || response.Records.Count > response.Limit ||
             (response.Records.Count > 0 && (long)offset + response.Records.Count > response.FilteredCount) ||
             response.HasMore != ((long)offset + response.Records.Count < response.FilteredCount) ||

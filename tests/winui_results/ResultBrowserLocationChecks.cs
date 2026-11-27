@@ -65,6 +65,28 @@ internal static class ResultBrowserLocationChecks
                 "Failed or cleared discovery must not silently fall back to editor text for file actions");
             Check(await File.ReadAllTextAsync(other) == "time,force\n0,999\n"
                 && await File.ReadAllTextAsync(source) == "time,force\n0,123\n", "Both result sources must remain unchanged");
+            var scope = Path.Combine(first, "分组", "批次", "模型");
+            var current = new ResultDirectLocation(first, scope, scope);
+            var nested = current.Child(Path.Combine(scope, "data"))!;
+            var nestedFile = Path.Combine(nested.DirectoryPath, "原始值.csv");
+            Directory.CreateDirectory(nested.DirectoryPath);
+            await File.WriteAllTextAsync(nestedFile, "force\n123\n");
+            Check(current.AtScope && current.Parent() is null && nested.Parent() == current,
+                "Moving up stops at the selected model");
+            Check(nested.Child(other) is null && !nested.Matches(second, scope), "A stale selection cannot retarget the cursor");
+            var state = new Dictionary<string, string>();
+            nested.Capture(state);
+            Check(ResultDirectLocation.Restore(state) == nested, "Direct scope and nested directory survive session restore");
+            state["DirectDirectory"] = second;
+            Check(ResultDirectLocation.Restore(state) is null, "Restore rejects an unrelated directory");
+            var candidate = new ResultExportFile(nestedFile, Path.GetRelativePath(scope, nestedFile));
+            var exported = await ResultFileExport.CopyAsync(first, destination, [candidate], null, CancellationToken.None, nested.ValidateFile);
+            Check(exported.Succeeded && await File.ReadAllTextAsync(Path.Combine(destination, "data", "原始值.csv")) == "force\n123\n",
+                "Direct export preserves the selected model's relative layout and real content");
+            await File.WriteAllTextAsync(Path.Combine(scope, "_postprocess_incomplete.json"), "{}");
+            var unpublished = await ResultFileExport.CopyAsync(first, destination, [candidate], null, CancellationToken.None, nested.ValidateFile);
+            Check(!unpublished.Succeeded && unpublished.Completed.Count == 0 && unpublished.Remaining.Count == 1,
+                "A formerly visible direct result must not publish a copy after the scope becomes incomplete");
             Console.WriteLine($"{count} result directory context and actual export checks passed");
         }
         finally { Directory.Delete(work, recursive: true); }

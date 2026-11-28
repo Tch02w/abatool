@@ -18,9 +18,12 @@ public sealed class WorkbenchCommandState
     public RemoteServerProfile? ConnectedProfile { get; private set; }
     private HashSet<string> _activeIds = [];
     private HashSet<string> _selectedIds = [];
+    private bool _hasPendingTerminationTargets;
     public bool CanStartQueue => !Locked && !QueueBusy && QueueKnown && !QueueActive;
     public bool CanStopQueue => !Locked && !QueueBusy && QueueKnown && QueueActive;
     public bool CanTerminateSelected => !Locked && !QueueBusy && QueueKnown && _activeIds.Overlaps(_selectedIds);
+    public bool CanTerminateEntireQueue => !Locked && !QueueBusy && QueueKnown
+        && (QueueActive || _activeIds.Count > 0 || _hasPendingTerminationTargets);
     public bool CanEditQueueOptions => !Locked && !QueueBusy && QueueKnown && !QueueActive;
     public bool CanUseRemote => !Locked && !ResourceBusy && !RemoteRefreshBusy && RemoteKnown
         && Connection.Status == "connected" && !Connection.IsBusy && ConnectedProfile is not null;
@@ -34,7 +37,10 @@ public sealed class WorkbenchCommandState
     public void ApplyQueue(LocalQueueRuntimeSnapshot value)
     {
         var activeIds = value.ActiveItemIds.ToHashSet(StringComparer.Ordinal);
-        var changed = !QueueKnown || QueueActive != value.Active || !_activeIds.SetEquals(activeIds);
+        var hasPending = value.Queue.QueueItems.Any(item => !item.IsExternal && item.Status is "待运行" or "等待前置");
+        var changed = !QueueKnown || QueueActive != value.Active || !_activeIds.SetEquals(activeIds)
+            || hasPending != _hasPendingTerminationTargets;
+        _hasPendingTerminationTargets = hasPending;
         QueueKnown = true; QueueActive = value.Active; _activeIds = activeIds;
         // Every accepted observation fences older responses, even if no command changed.
         QueueRevision++;

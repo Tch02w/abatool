@@ -45,7 +45,8 @@ def interrupted_fixture(tmp_path, monkeypatch, phase="prepared"):
     return source, item, store, joblist
 
 
-def test_http_archive_recovery_cancel_close_and_edit_guards_without_resolving(tmp_path, monkeypatch):
+@pytest.mark.parametrize("whole_queue", [False, True])
+def test_http_archive_recovery_cancel_close_and_edit_guards_without_resolving(tmp_path, monkeypatch, whole_queue):
     source, item, store, joblist = interrupted_fixture(tmp_path, monkeypatch)
     before = source_bytes(source)
     entered, release = threading.Event(), threading.Event()
@@ -84,7 +85,16 @@ def test_http_archive_recovery_cancel_close_and_edit_guards_without_resolving(tm
                 assert result[0] == 409
             closing = api_request(runtime, "/api/v1/odb-upgrade-shutdown-check", method="POST", payload={})
             assert not json_response(closing)["safeToStop"]
-            assert runtime_control(runtime, "terminate", itemIds=[item.item_id])[0] == 202
+            if whole_queue:
+                preview = json_response(runtime_control(runtime, "previewTerminateAll"))
+                assert preview["pending"] == [] and len(preview["running"]) == 1
+                assert preview["running"][0] == {"itemId": item.item_id, "attemptId": item.attempt_id,
+                                                 "jobName": item.job_name, "inpPath": item.inp_path, "archiveOnly": True}
+                receipt = json_response(runtime_control(runtime, "terminateAll", confirmationId=preview["confirmationId"]))
+                assert (receipt["pendingCancelled"], receipt["terminationRequested"]) == (0, 1)
+                assert runtime_snapshot(runtime)["queue"]["queueItems"][0]["status"] == STATUS_COMPLETED
+            else:
+                assert runtime_control(runtime, "terminate", itemIds=[item.item_id])[0] == 202
         finally:
             release.set()
         wait_until(lambda: not any(o["active"] for o in runtime_snapshot(runtime)["operations"]), timeout=10)

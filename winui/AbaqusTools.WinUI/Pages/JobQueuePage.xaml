@@ -63,7 +63,11 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource WorkbenchSectionTitleStyle}" Text="正式队列" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Style="{StaticResource WorkbenchSectionTitleStyle}" Text="正式队列" />
+                        <Button x:Name="TerminateEntireQueueButton" IsEnabled="False" VerticalAlignment="Center"
+                                Click="OnTerminateEntireQueueClicked" Content="终止整个队列…" />
+                    </StackPanel>
                     <TextBlock x:Name="FormalQueueSummaryText" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="正在读取队列…" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock VerticalAlignment="Center" Text="同名结果" />
@@ -80,7 +84,7 @@
                 <StackPanel x:Name="FormalQueueActionBar" Grid.Row="1" Orientation="Horizontal" Spacing="6">
                     <Button x:Name="StartQueueButton" Click="OnStartQueueClicked" Content="开始队列" Style="{StaticResource AccentButtonStyle}" />
                     <Button x:Name="StopQueueButton" Click="OnStopQueueClicked" Content="停止调度" />
-                    <Button x:Name="TerminateQueueItemsButton" Click="OnTerminateQueueItemsClicked" Content="终止运行中" />
+                    <Button x:Name="TerminateQueueItemsButton" Click="OnTerminateQueueItemsClicked" Content="终止所选…" />
                     <Button Click="OnEditQueueItemClicked" Content="编辑" />
                     <Button Click="OnHoldQueueItemsClicked" Content="暂停调度" />
                     <Button Click="OnResumeQueueItemsClicked" Content="恢复调度" />

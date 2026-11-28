@@ -96,6 +96,8 @@ CSV 和文本预览按 Unicode 字节顺序标记读取 UTF-8、UTF-16 或 UTF-3
 
 ### 本机调度补充（2026-11-18，F004/F005）
 
+`POST /api/v1/local-queue-controls` 增加两种版本 1 的操作。使用 `previewTerminateAll` 获取 `confirmationId`、`schedulingActive`、`pending[]`、`running[]` 和 `untouchedCount`。每项目标包含正式队列的 `itemId`、`attemptId`、`jobName`、`inpPath`；活动项以 `archiveOnly` 区分归档。使用 `terminateAll` 回传原确认编号，由后台复查同一批作业、执行尝试和调度会话。返回 `status: accepted`、`pendingCancelled`、`terminationRequested` 和 `untouchedCount`。已受理的编号可在原队列读取相同回执。预览过期或范围变化返回 `LOCAL_QUEUE_TERMINATION_SCOPE_CHANGED`，记录中断返回 `LOCAL_QUEUE_TERMINATION_INTERRUPTED`。客户端应显示相应提示。[范围与用户流程](03-features/LOCAL_SCHEDULING.md#终止整个本机队列)
+
 `GET /api/v1/local-queue-runtime` 保留现有结构并增加可选兼容字段 `schedulerMessage`（空字符串表示无调度提示）；`operations[]` 增加 `attemptId`，每次真正分配执行生成新的身份，后台重启观察原作业时保留身份、不重放操作。
 
 从 2026-11-28 起，自动刷新可在此 GET 请求中发送 `Prefer: wait=0`。调度器和队列均可读取时，服务器返回原有完整快照。任一队列锁正被其他线程占用时，服务器立即返回 HTTP 200 和 `{"schemaVersion":1,"refreshPending":true}`。这次响应只表示需要重试。界面保留上次确认的作业、选区与日志，在下一次轮询重新读取。首次读取期间显示「正在读取」，取得完整快照后再显示队列数量。作业概览可独立更新已取得的远端作业。

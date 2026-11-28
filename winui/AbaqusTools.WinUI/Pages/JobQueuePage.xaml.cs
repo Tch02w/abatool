@@ -343,6 +343,63 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
     private async void OnTerminateQueueItemsClicked(object sender, RoutedEventArgs e)
         => await TerminateSelectedAsync();
 
+    private async void OnTerminateEntireQueueClicked(object sender, RoutedEventArgs e)
+        => await TerminateEntireQueueAsync();
+
+    public async Task TerminateEntireQueueAsync()
+    {
+        if (!App.Current.Commands.CanTerminateEntireQueue) return;
+        SetBusy(true, "正在核对整队终止范围…");
+        var confirmationSent = false;
+        try
+        {
+            var preview = await App.Current.ControlPlane.PreviewQueueTerminationAsync();
+            if (!IsLoaded || App.Current.Session.IsClosing || App.Current.Commands.Locked) return;
+            if (!preview.HasWork)
+            {
+                App.Current.MainWindow.ReportPageStatus("无需终止队列");
+                ShowNotice("无需终止", "调度已停止，当前正式队列没有可取消或终止的作业。");
+                return;
+            }
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "终止整个正式队列？",
+                Content = new ScrollViewer { MaxHeight = 360, Content = new TextBlock
+                    { Text = preview.Describe(), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true } },
+                PrimaryButtonText = "终止整个队列",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                App.Current.MainWindow.ReportPageStatus("已取消整队终止操作");
+                return;
+            }
+            if (!IsLoaded || App.Current.Session.IsClosing || App.Current.Commands.Locked) return;
+            confirmationSent = true;
+            var receipt = await App.Current.ControlPlane.ConfirmQueueTerminationAsync(preview);
+            ShowSuccess("整队终止请求已受理",
+                $"已取消 {receipt.PendingCancelled} 个待运行作业，已对 {receipt.TerminationRequested} 个活动作业请求停止。",
+                "已受理整队终止请求");
+        }
+        catch (ControlPlaneException error) when (error.Code == "LOCAL_QUEUE_TERMINATION_SCOPE_CHANGED")
+        {
+            App.Current.MainWindow.ReportPageStatus("终止范围已变化");
+            App.Current.MainWindow.ShowFeedback("终止范围已变化", "请重新点击“终止整个队列…”并核对最新清单。", InfoBarSeverity.Warning);
+        }
+        catch (Exception error) when (confirmationSent && (error is OperationCanceledException
+            || error is ControlPlaneException { Code: "CONTROL_PLANE_DISCONNECTED" or "LOCAL_QUEUE_TERMINATION_INTERRUPTED" }))
+        {
+            App.Current.MainWindow.ReportPageStatus("整队终止结果待核对");
+            App.Current.MainWindow.ShowFeedback("整队终止结果待核对", "请查看正式队列与作业状态，确认前一次操作的结果。", InfoBarSeverity.Warning);
+        }
+        catch (ControlPlaneException error) { ShowError(error.ToDisplayMessage()); }
+        catch (Exception error) { ShowError(error.Message); }
+        finally { SetBusy(false); }
+        if (IsLoaded && !App.Current.Session.IsClosing) await RefreshRuntimeAsync(showError: false);
+    }
+
     public async Task TerminateSelectedAsync()
     {
         if (!App.Current.Commands.CanTerminateSelected) return;
@@ -738,6 +795,7 @@ public sealed partial class JobQueuePage : Page, IWorkbenchExplorerPage
         SetEnabledIfChanged(StartQueueButton, commands.CanStartQueue);
         SetEnabledIfChanged(StopQueueButton, commands.CanStopQueue);
         SetEnabledIfChanged(TerminateQueueItemsButton, commands.CanTerminateSelected);
+        SetEnabledIfChanged(TerminateEntireQueueButton, commands.CanTerminateEntireQueue);
         SetEnabledIfChanged(ParallelLimitNumberBox, commands.CanEditQueueOptions);
         SetEnabledIfChanged(ExistingResultPolicyComboBox, commands.CanEditQueueOptions);
     }

@@ -97,6 +97,43 @@ internal static class WorkbenchCommandChecks
         state.ApplyQueue(new() { Active = true, ActiveItemIds = ["running-2"] });
         Check(notifications == 4 && state.CanStopQueue,
             "Recovery to the same runtime state did not restore queue controls");
+        var entire = new WorkbenchCommandState();
+        Check(!entire.CanTerminateEntireQueue, "Unknown queue enabled whole-queue termination");
+        entire.ApplyQueue(new() { Queue = new() { QueueItems = [new() { IsExternal = true, Status = "待运行" },
+            new() { Status = "待确认" }, new() { Status = "已完成" }] } });
+        Check(!entire.CanTerminateEntireQueue, "External and protected rows enabled whole-queue termination");
+        entire.ApplyQueue(new() { Queue = new() { QueueItems = [new() { Status = "等待前置" }] } });
+        Check(entire.CanTerminateEntireQueue && !entire.CanTerminateSelected,
+            "Pending jobs must allow a scope preview without an active selection");
+        entire.ApplyQueue(new() { Active = true });
+        Check(entire.CanTerminateEntireQueue, "Active scheduling alone must allow stop confirmation");
+        entire.ApplyQueue(new() { ActiveItemIds = ["live"] });
+        Check(entire.CanTerminateEntireQueue, "Stopped dispatch still has a running attempt");
+        entire.SetQueueBusy(true);
+        Check(!entire.CanTerminateEntireQueue, "Concurrent queue mutation enabled destructive confirmation");
+        entire.SetQueueBusy(false); entire.SetLocked(true);
+        Check(!entire.CanTerminateEntireQueue, "Closing workspace enabled destructive confirmation");
+
+        QueueTerminationTarget Target(string id, string name, string attempt, string path, bool archive = false) =>
+            new() { ItemId = id, JobName = name, AttemptId = attempt, InpPath = path, ArchiveOnly = archive };
+        var preview = new QueueTerminationPreview { SchemaVersion = 1, ConfirmationId = "confirmed-scope",
+            SchedulingActive = true, Pending = [Target("pending-a", "同名", "", @"G:\方案甲\同名.inp"),
+                Target("pending-d", "同名", "", "G:/方案甲/同名.inp")],
+            Running = [Target("running-b", "同名", "try-b", @"G:\方案乙\同名.inp"),
+                Target("archive-c", "归档作业", "try-c", @"G:\归档作业.inp", true)],
+            UntouchedCount = 3 };
+        preview.Validate();
+        var details = preview.Describe();
+        Check(preview.HasWork && details.Contains(@"同名 · G:\方案乙\同名.inp") && !details.Contains("running-b"),
+            "Distinct INP paths must disambiguate jobs with matching names");
+        Check(details.Contains(@"G:\方案甲\同名.inp · 作业标识 pending-a") && details.Contains("G:/方案甲/同名.inp · 作业标识 pending-d"),
+            "Same INP path in multiple formal rows requires the item IDs as well");
+        Check(details.Contains("请求取消正在进行的归档（1）") && details.Contains("其余 3 个") && !details.Contains("archive-c"),
+            "Confirmation summary lost archive or protected counts");
+        var missingAttempt = new QueueTerminationPreview { SchemaVersion = 1, ConfirmationId = "bad",
+            SchedulingActive = false, Pending = [], Running = [Target("id", "运行", "", "")], UntouchedCount = 0 };
+        try { missingAttempt.Validate(); throw new Exception("Unbound active attempt accepted"); }
+        catch (ControlPlaneException) { count++; }
         Console.WriteLine($"{count} shared command-state checks passed.");
     }
 

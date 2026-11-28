@@ -1658,6 +1658,27 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             new LocalQueueControlRequest { Action = "stop" },
             cancellationToken);
 
+    public async Task<QueueTerminationPreview> PreviewQueueTerminationAsync(CancellationToken cancellationToken = default)
+    {
+        var preview = await SendLocalQueueCommandAsync<QueueTerminationPreview>(
+            new LocalQueueControlRequest { Action = "previewTerminateAll" }, cancellationToken);
+        preview.Validate();
+        return preview;
+    }
+
+    public async Task<QueueTerminationReceipt> ConfirmQueueTerminationAsync(
+        QueueTerminationPreview preview, CancellationToken cancellationToken = default)
+    {
+        preview.Validate();
+        var receipt = await SendLocalQueueCommandAsync<QueueTerminationReceipt>(
+            new LocalQueueControlRequest { Action = "terminateAll", ConfirmationId = preview.ConfirmationId }, cancellationToken);
+        if (receipt.SchemaVersion != 1 || receipt.ConfirmationId != preview.ConfirmationId || receipt.Status != "accepted"
+            || receipt.PendingCancelled != preview.Pending.Count || receipt.TerminationRequested != preview.Running.Count
+            || receipt.UntouchedCount < 0)
+            throw new ControlPlaneException("整队终止回执与确认范围不符，请刷新队列核对作业状态。");
+        return receipt;
+    }
+
     public Task<LocalQueueRuntimeSnapshot> TerminateLocalQueueItemsAsync(
         IReadOnlyList<string> itemIds,
         CancellationToken cancellationToken = default) =>
@@ -1689,20 +1710,26 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         LocalQueueControlRequest request,
         CancellationToken cancellationToken)
     {
+        var response = await SendLocalQueueCommandAsync<LocalQueueRuntimeSnapshot>(request, cancellationToken);
+        ValidateLocalQueueRuntime(response);
+        return response;
+    }
+
+    private async Task<T> SendLocalQueueCommandAsync<T>(LocalQueueControlRequest request, CancellationToken cancellationToken)
+        where T : class
+    {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             _shutdownSource.Token);
         effectiveSource.CancelAfter(TimeSpan.FromSeconds(30));
         var descriptor = await EnsureReadyAsync(effectiveSource.Token);
-        var response = await SendJsonRequestAsync<LocalQueueRuntimeSnapshot>(
+        return await SendJsonRequestAsync<T>(
             descriptor,
             HttpMethod.Post,
             "/api/v1/local-queue-controls",
             request,
             "本机队列控制",
             effectiveSource.Token);
-        ValidateLocalQueueRuntime(response);
-        return response;
     }
 
     private static void ValidateLocalQueueRuntime(LocalQueueRuntimeSnapshot response)

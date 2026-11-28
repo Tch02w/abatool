@@ -1,5 +1,9 @@
 # 功能定位索引
 
+F004/F005 整队终止入口为 `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` 的 `TerminateEntireQueueAsync`；同页及顶栏菜单使用 `WorkbenchCommandState.CanTerminateEntireQueue`。预览、确认范围和回执在 `modules/control_plane/local_queue_termination.py`，实际停止及终态判定在 `modules/submitter/local_job_execution.py`。回归见 `tests/control_plane/test_local_queue_termination.py`、`tests/winui_host/WorkbenchCommandChecks.cs` 及[菜单与正式队列实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#从作业菜单或正式队列终止整队)。
+
+F026 安装与卸载在同名进程未提供位置时会按进程号复查。实现为 `packaging/installer.iss.in` 的 `ProcessLocationError`、`LiveProcessError`。Windows 实际查询及未知位置的回归入口为 `packaging/verify_installer_process_check.py`。[进程位置复查](../05-development/INSTALLATION.md#安装或卸载时提示进程位置不明)
+
 F005/F010 概览的作业下拉框由 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs` 的 `RefreshJobChoices` 与 `EntryForChoice` 更新，展开期间保留显示行，操作目标使用最新作业记录。回归为 `tests/winui/test_overview_selector.py`，[实窗及日志验收](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)。F014 单选 ODB 的文件信息由 `winui/AbaqusTools.WinUI/Models/OdbFileRow.cs` 的 `SingleSelectionSummary` 生成，`tests/winui_postprocess/Program.cs` 核对大小、时间及无元数据的显示。
 
 F001/F003/F013 的旧版新建与合并设置由 `winui/AbaqusTools.WinUI/Services/LegacyWorkbenchSettings.cs` 的 `ImportMissingPages` 读取，原生页已保存的草稿优先。回归位于 `tests/winui_host/WorkbenchSessionChecks.cs`，[旧版与新版实窗](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)。F008 的旧服务器读取与修改由 `modules/control_plane/remote_servers.py` 和 `modules/submitter/app_settings.py` 处理，[往返验证](REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)覆盖 `tests/control_plane/test_legacy_server_profile.py`。

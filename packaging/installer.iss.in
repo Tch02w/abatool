@@ -94,27 +94,63 @@ begin
   end;
 end;
 
+const
+  WorkbenchProcesses = 'Name=''AbaqusTools.WinUI.exe'' OR Name=''AbaqusTools.ControlPlane.exe''';
+
+function ProcessPath(Process: Variant): String;
+var
+  Path: Variant;
+begin
+  Path := Process.ExecutablePath;
+  if VarIsNull(Path) or VarIsEmpty(Path) then Result := ''
+  else Result := Path;
+end;
+
+function LiveProcessError(Pid: LongWord; Executable, Root: String): String;
+begin
+  if Executable = '' then
+    Result := Format('仍无法确认进程 %d 的位置。请关闭相应的 Abaqus Workbench 或后台任务后重试。', [Pid])
+  else if Pos(Root, Lowercase(Executable)) = 1 then
+    Result := '此目录的程序或后台任务仍在运行。请在工作台内正常结束任务并退出，再重试。'
+  else
+    Result := '';
+end;
+
+function ProcessLocationError(Services: Variant; Pid: LongWord; Executable, Root: String): String;
+var
+  Current: Variant;
+begin
+  Result := '';
+  if Executable = '' then begin
+    Log(Format('进程 %d 的路径未返回，按进程号重新检查。', [Pid]));
+    Current := Services.ExecQuery(Format(
+      'SELECT ExecutablePath FROM Win32_Process WHERE ProcessId=%d AND (%s)', [Pid, WorkbenchProcesses]));
+    if Current.Count = 0 then begin
+      Log(Format('复查时进程 %d 已不在工作台进程中。', [Pid]));
+      exit;
+    end;
+    Executable := ProcessPath(Current.ItemIndex(0));
+    if Executable <> '' then Log(Format('已重新取得进程 %d 的路径。', [Pid]));
+  end;
+  Result := LiveProcessError(Pid, Executable, Root);
+end;
+
 function RunningError: String;
 var
   Locator, Services, Processes, Process: Variant;
   Index: Integer;
-  Root, Executable: String;
+  Root: String;
 begin
   Result := '';
   Root := Lowercase(AddBackslash(ExpandFileName(ExpandConstant('{app}'))));
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Services := Locator.ConnectServer('', 'root\CIMV2');
-    Processes := Services.ExecQuery('SELECT ExecutablePath FROM Win32_Process WHERE Name=''AbaqusTools.WinUI.exe'' OR Name=''AbaqusTools.ControlPlane.exe''');
+    Processes := Services.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE ' + WorkbenchProcesses);
     for Index := 0 to Processes.Count - 1 do begin
       Process := Processes.ItemIndex(Index);
-      if VarIsNull(Process.ExecutablePath) then begin
-        Result := '无法确认正在运行程序的位置。请关闭 Abaqus Workbench 及其后台任务后重试。'; exit;
-      end;
-      Executable := Lowercase(Process.ExecutablePath);
-      if Pos(Root, Executable) = 1 then begin
-        Result := '此目录的程序或后台任务仍在运行。请在工作台内正常结束任务并退出，再重试。'; exit;
-      end;
+      Result := ProcessLocationError(Services, Process.ProcessId, ProcessPath(Process), Root);
+      if Result <> '' then exit;
     end;
   except
     Result := '无法检查正在运行的程序，安装或卸载已停止。请检查 Windows 管理服务后重试。';

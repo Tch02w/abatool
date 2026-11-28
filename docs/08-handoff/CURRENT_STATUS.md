@@ -1,12 +1,14 @@
 # 当前状态与接续点
 
+整队终止已在源码实窗核对取消、范围变化重新确认、确实停止自有测试进程以及外部作业保留。同批修改还通过了安装器进程号复查的四项独立检查。[本机队列](ACTIVE_TASKS/TASK-002-migration.md#从作业菜单或正式队列终止整队) · [安装器](ACTIVE_TASKS/TASK-002-migration.md#安装器复查同名进程的位置)
+
 `175e683` 的安装版已在开发机隔离标识下完成从 `cf58e9e` 升级的八项安装、运行中保护和卸载检查，核对安装后的 67 份文档及 989 个链接。整套回归通过 1318 项与 9 个子检查，另行检查的 PySide 原生窗口已通过。首次升级的进程位置检查曾中止，重新验收后通过。[安装程序及记录](../05-development/INSTALLATION.md) · [回归](ACTIVE_TASKS/TASK-002-migration.md#175e683-成品与回归)
 
 当前 Windows x64 免安装版来自 `175e683`，已核对 1700 个负载文件。正式队列页的浅底减加键与已选样式逐像素一致。作业概览的三个正式窗口通过 21 项检查，涵盖展开时轮询、同名选择、后台增删与日志选区。后处理已复查两份文件的大小与修改时间。[程序](../05-development/RELEASE.md) · [按钮实图](../repowiki/images/queue-parallel-limit.png) · [作业概览](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [文件详情](ACTIVE_TASKS/TASK-001-postprocessing.md#发现列表中单个-odb-的修改时间)
 
 前版 Windows x64 成品来自干净提交 `cf58e9e`。1700 个负载文件通过核对，在开发机的隔离安装标识下从 `2c06b77` 升级、卸载等八项检查通过。实际安装目录中的程序已读回旧版作业参数，随包后台验证了服务器设置的旧版往返，正式窗口验证了顶栏访问键和模型索引重建。另核对安装后的 67 份文档、967 个本地链接。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md) · [本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
 
-上一版 `2c06b77` 安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立 Windows 仍待实测。整队停止与原版取消待运行作业的行为差异留在[迁移合同](../winui-migration.md)。
+上一版 `2c06b77` 安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立 Windows 仍待实测。其时发现的队列差异和新增操作见[迁移合同](../winui-migration.md)。
 
 通过源码与成品重放已核对 GJB-16 合并在目标替换前和替换后中断的两种状态。公开成功回执只在目标就位后出现；重开可以核对输出和两份备份，再报告实际发布状态。结果浏览在刷新过程中可以继续查看其他已列文件，取消或失败后保留当前预览。单文件索引在本轮 G 盘负载下四组交错测量的中位耗时从 9.08 秒降到 1.22 秒。[合并中断](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出) · [索引操作与计时](ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)
 

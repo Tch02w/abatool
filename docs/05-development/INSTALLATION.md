@@ -6,6 +6,12 @@
 
 首次测试在旧后台退出后，安装器提示无法确定运行程序的位置并停止，旧版保持已安装。事后查询能读到其余四个工作台进程的位置，均位于其他目录。首次日志没有记录进程号，不能确定当时是哪一个进程位置不可读。核对并卸载测试标识的旧版后，在新目录重新完成八项检查。首次记录为 `GPTWork/installer-overview-selector-20261128/source/GPTWork/installer-lifecycle-31f4f0b4da92/upgrade-new.log`。正式身份与独立无开发工具 Windows 设备仍待实测。
 
+## 安装或卸载时提示进程位置不明
+
+当 Windows 没有返回某个工作台或后台程序的位置时，安装器会按该进程号重新查询。若它已退出，或其可执行文件位于另一安装目录，可以继续。若程序在本次安装目录中运行，请先在工作台内结束任务并退出。复查仍读不到位置时，会提示具体进程号，旧版继续保留。安装日志记录发生复查的进程号及结果。
+
+开发时可用项目 Python 运行 `packaging/verify_installer_process_check.py <ISCC.exe>`。该检查在独立目录创建三个同名测试进程，对比目录内运行、目录外运行和已经退出三种情况；持续无法取得位置的分支使用空 WMI 属性检查。验证程序在写入安装文件前退出。[实测记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#安装器复查同名进程的位置)
+
 ## 历史版本 cf58e9e
 
 该版 Windows x64 安装程序为 `GPTWork/installer-legacy-workbench-20261128/source/GPTWork/installer-win-x64-d053fe8ae824/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装程序均从干净提交 `cf58e9e` 构建，版本 0.1.0，大小 126676263 字节，SHA-256 为 `5f1caf673daaa2371c0e2477d76c8eaac4f2d4448e5ca91e046ef630abe0c0f4`，尚未签名。

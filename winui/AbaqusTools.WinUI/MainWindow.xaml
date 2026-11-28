@@ -85,6 +85,7 @@
                         <MenuFlyoutItem x:Name="StartQueueMenuItem" IsEnabled="False" Click="OnStartQueueMenuClicked" Text="开始本机队列" />
                         <MenuFlyoutItem x:Name="StopQueueMenuItem" IsEnabled="False" Click="OnStopQueueMenuClicked" Text="停止后续调度" />
                         <MenuFlyoutItem x:Name="TerminateQueueMenuItem" IsEnabled="False" Click="OnTerminateQueueMenuClicked" Text="终止所选运行中作业…" />
+                        <MenuFlyoutItem x:Name="TerminateEntireQueueMenuItem" IsEnabled="False" Click="OnTerminateEntireQueueMenuClicked" Text="终止整个队列…" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Name="JobNotificationsMenuItem" Click="OnOpenNotificationCenter" Text="结束提醒" />
                     </MenuBarItem>

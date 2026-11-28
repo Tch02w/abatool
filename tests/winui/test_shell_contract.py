@@ -874,6 +874,10 @@ def test_job_queue_page_restores_persisted_candidates_and_formal_jobs() -> None:
     assert "GetJobQueuesAsync" in page
     assert "AddJobQueueCandidatesAsync" in page
     assert "StartLocalQueueAsync" in page
+    assert "PreviewQueueTerminationAsync" in page and "ConfirmQueueTerminationAsync(preview)" in page
+    assert "ContentDialogButton.Close" in page and 'PrimaryButtonText = "终止整个队列"' in page
+    assert "LOCAL_QUEUE_TERMINATION_SCOPE_CHANGED" in page
+    assert _named_element(ET.fromstring(xaml), "TerminateEntireQueueButton").attrib["Click"] == "OnTerminateEntireQueueClicked"
     assert "QueueListUpdates.Apply(CandidateList, _candidates, snapshot.Candidates)" in page
     assert "QueueListUpdates.Apply(FormalQueueList, _queueItems, snapshot.QueueItems)" in page
     updates = (WINUI_ROOT / "Controls" / "QueueListUpdates.cs").read_text(encoding="utf-8")

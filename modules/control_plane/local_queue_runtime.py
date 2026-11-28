@@ -44,6 +44,7 @@ from .contracts import SCHEMA_VERSION, ApiProblem, utc_now_text
 from .events import EventStore
 from .job_queue_commands import JobQueueService
 from .local_archiving import LocalArchiveRecoveryMixin
+from .local_queue_termination import WholeQueueTerminationMixin
 from .local_scheduling import LocalQueueScheduling, read_scheduling_resources
 
 LOGGER = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class _RuntimeRecord:
     progress: int = 0
     started_at: str = field(default_factory=utc_now_text)
     finished_at: str = ""
+    finishing: bool = False
     logs: list[str] = field(default_factory=list)
     paused: bool = False
     archive_only: bool = False
@@ -103,7 +105,7 @@ class _RuntimeRecord:
         }
 
 
-class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
+class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin, WholeQueueTerminationMixin):
     """Dispatch persisted queue items while keeping execution outside the UI."""
 
     def __init__(
@@ -123,6 +125,8 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         self._wake = threading.Event()
         self._closing = False
         self._active = False
+        self._scheduling_generation = 0
+        self._termination_previews = {}
         self._dispatching = False
         self._stop_requested = False
         self._max_parallel = 1
@@ -191,11 +195,16 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         if not isinstance(action, str):
             raise ApiProblem(400, "INVALID_LOCAL_QUEUE_ACTION", "action 必须是字符串")
         if action == "start":
-            self._start(payload)
+            with self._lock:
+                self._start(payload)
         elif action == "stop":
             self._stop(payload)
         elif action == "terminate":
             self._terminate(payload)
+        elif action == "previewTerminateAll":
+            return self._preview_termination(payload)
+        elif action == "terminateAll":
+            return self._confirm_termination(payload)
         elif action == "suspend":
             self._pause_resume(payload, paused=True)
         elif action == "resume":
@@ -254,6 +263,7 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
             self._max_parallel = max_parallel
             self._existing_result_policy = str(policy)
             self._active = True
+            self._scheduling_generation += 1
             self._stop_requested = False
             self._started_at = self._started_at or utc_now_text()
             self._scheduler_error = ""
@@ -272,6 +282,7 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
             raise ApiProblem(400, "UNKNOWN_FIELDS", "本机队列停止请求包含未知字段")
         with self._lock:
             self._active = False
+            self._scheduling_generation += 1
             self._stop_requested = True
         self.event_store.append(
             aggregate_type="localQueue",
@@ -295,30 +306,18 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         if not requested:
             raise ApiProblem(400, "EMPTY_ITEM_IDS", "请选择要终止的运行中作业")
         with self._lock:
-            records = [
-                record
-                for item_id, record in self._runs.items()
-                if item_id in requested and record.active
-            ]
-        if not records:
-            raise ApiProblem(409, "NO_ACTIVE_LOCAL_JOBS", "所选作业当前未在本机运行")
-        for record in records:
-            record.controller.cancel()
-            with self._lock:
-                record.status = STATUS_TERMINATING
-                record.phase = "archive_cancelling" if record.archive_only or record.phase == "archiving" else "terminating"
-                record.message = "已发送终止请求"
-            if record.archive_only:
-                _, items = self.queue_service.runtime_items()
-                item = next((i for i in items if i.item_id == record.item_id), None)
-                if item is not None:
-                    self._set_archive_state(item, "归档中", "正在取消归档，等待当前文件检查结束", "", False)
-                continue
-            self._update_queue_item(
-                record.item_id,
-                status=STATUS_TERMINATING,
-                message="已发送终止请求",
-            )
+            with self._scheduling.core.transaction():
+                def mark(_candidates, items):
+                    records = []
+                    for item in items:
+                        if item.item_id in requested and (record := self._owned_cancellable(item)):
+                            self._mark_running_termination(item, record)
+                            records.append(record)
+                    return records
+                records = self.queue_service.runtime_transaction(mark)
+            if not records:
+                raise ApiProblem(409, "NO_ACTIVE_LOCAL_JOBS", "所选作业当前没有可终止的本机执行")
+            self._signal_terminations(records)
         self._wake.set()
 
     def _pause_resume(self, payload: Mapping[str, Any], *, paused: bool) -> None:
@@ -623,18 +622,12 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
                 record.detail = detail
                 if phase not in {"queued", "preparing", "starting"}:
                     record.status = STATUS_TERMINATING if record.controller.cancel_requested else STATUS_RUNNING
-            if phase not in {"queued", "preparing", "starting"}:
-                try:
-                    self._update_queue_item(
-                        item.item_id,
-                        status=record.status,
-                        message=detail or message,
-                        attempt_id=record.attempt_id,
-                    )
-                except Exception as exc:
-                    # A monitoring callback must not abandon the owned process.
-                    LOGGER.exception("Unable to persist local execution progress")
-                    with self._lock:
+                    try:
+                        self._update_queue_item(
+                            item.item_id, status=record.status, message=detail or message, attempt_id=record.attempt_id)
+                    except Exception as exc:
+                        # A monitoring callback must not abandon the owned process.
+                        LOGGER.exception("Unable to persist local execution progress")
                         self._active = False
                         self._scheduler_error = f"运行状态保存失败：{exc}。仍在监控原作业，已暂停新作业调度。"
 
@@ -655,7 +648,7 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
                 log,
             )
         except Exception as exc:  # noqa: BLE001 - isolate one worker from the dispatcher
-            status = STATUS_TERMINATED if record.controller.cancel_requested else STATUS_FAILED
+            status = STATUS_UNKNOWN if record.controller.cancel_requested else STATUS_FAILED
             result = LocalJobExecutionResult(
                 status=status,
                 message=str(exc) or "本机作业执行失败",
@@ -665,6 +658,9 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
         self._store_result(item, record, result)
 
     def _store_result(self, item, record, result):
+        with self._lock:
+            # The worker has returned. A slow or retried disk write cannot make it cancellable again.
+            record.finishing = True
         try:
             self._flush_observations(force=True)
             self._update_queue_item(

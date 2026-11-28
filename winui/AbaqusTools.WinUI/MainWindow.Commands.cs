@@ -18,6 +18,7 @@ public sealed partial class MainWindow
         StartQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStartQueue;
         StopQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanStopQueue;
         TerminateQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanTerminateSelected;
+        TerminateEntireQueueMenuItem.IsEnabled = !_menuCommandBusy && commands.CanTerminateEntireQueue;
         RefreshRemoteMenuItem.IsEnabled = !_menuCommandBusy && commands.CanUseRemote;
         DisconnectRemoteMenuItem.IsEnabled = !_menuCommandBusy && commands.CanUseRemote;
         CurrentJobPostprocessingMenuItem.IsEnabled = !_menuCommandBusy && !commands.Locked;

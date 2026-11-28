@@ -106,7 +106,7 @@ ODB 升级差距已确认：旧 `runner.upgrade_odb_files` 及 `UpgradeBatchCont
 | 服务器 | 连接/配置、刷新、断开 | 与资源页共享连接状态；未连接时刷新/断开禁用；主机指纹变化必须再次确认。 |
 | 后处理 | 当前作业转到后处理、打开 ODB 后处理、打开结果浏览 | 保留 `Ctrl+7` 和 `Ctrl+8`；“当前作业”须通过路径路由解析候选 ODB，失败时给出可操作原因。 |
 
-四组菜单的 Alt+F/J/S/P 已在成品 `cf58e9e` 实窗验证。「停止后续调度」会保留待运行作业，「终止所选运行中作业」处理明确选中的本机作业。迁移前的「终止队列」还会把待运行及等待依赖的作业转为已取消。整队行为的恢复及对应确认、终态核对仍在阶段 4 清单内。[菜单实测](08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)
+四组菜单的 Alt+F/J/S/P 已在成品 `cf58e9e` 实窗验证。「停止后续调度」会保留待运行作业，「终止所选运行中作业」处理明确选中的本机作业。迁移前的「终止队列」还会把待运行及等待依赖的作业转为已取消。WinUI 已恢复独立的整队终止命令。同一确认保护菜单和页面两个入口，按作业及其本次执行复核范围。[命令范围](03-features/LOCAL_SCHEDULING.md#终止整个本机队列) [菜单实测](08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)
 
 ### 状态栏
 
@@ -150,7 +150,7 @@ WinUI 3 页面只依赖 ViewModel 和带版本的 DTO，不得直接操作 Pytho
 第一片优先验证 WinUI、Python 3.14 控制面和 Abaqus Python 3.10 三层边界，且只读源 ODB，避免在协议尚未稳定时触及求解队列或破坏性文件操作。
 
 - [x] WinUI 3 壳可启动并固定 8 页导航。第 7 页支持选择或输入目录、递归发现 ODB，单选后显示大小与本地修改时间，列表保留路径。[发现顺序与输入](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序) · [文件详情](03-features/POSTPROCESSING.md#在发现列表中查看文件修改时间)
-- [ ] 控制面只绑定 `127.0.0.1`，使用随机端口、实例描述文件和 bearer token；命令使用版本化 JSON，事件带全局单调序号并可断线重放。
+- [x] 控制面只绑定 `127.0.0.1`，默认由系统分配端口，实例描述文件和 bearer token 用于版本化 JSON 请求。同一后台实例的事件带全局递增序号，客户端断开后可从原位置继续接收。[成品并发命令及断线重放](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#本机后台的监听范围与事件重放)
 - [x] 发现规则与 PySide6 一致。排除结果目录、`.git`、`.venv`、`-old` 和升级临时文件，支持中文、空格和自然排序。[旧选择窗口与成品发现接口逐项对照](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序)
 - [ ] 选中 ODB 后可创建异步兼容性检查，调用现有 Abaqus 3.10 worker，逐文件呈现 `valid / upgrade_required / newer_release / invalid / missing / empty`、进度和结构化错误。
 - [ ] 支持取消、UI 重启后重连和重复命令幂等；控制面或 worker 异常退出时不发布半成品，也不修改源 ODB。

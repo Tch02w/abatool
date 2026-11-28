@@ -231,12 +231,12 @@ def run_archive_only(item, controller, progress=None):
                              "计算已完成", controller, progress, recover=True)
 
 
-def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) -> None:
+def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) -> bool:
     command = f'{item.abaqus_command or "abaqus"} terminate job={quote_job_argument(item.job_name)}'
     if log:
         log(f"发送终止命令：{command}")
     launch_command, environment = literal_windows_command(command)
-    subprocess.run(
+    result = subprocess.run(
         launch_command,
         env=environment,
         cwd=str(work_dir),
@@ -245,6 +245,34 @@ def _terminate_abaqus(item: QueueItem, work_dir: Path, log: LogCallback | None) 
         stderr=subprocess.DEVNULL,
         check=False,
     )
+    if result.returncode and log:
+        log(f"终止命令返回 {result.returncode}，继续监控实际求解结果")
+    return result.returncode == 0
+
+
+def _owned_solver_identities(rows_by_pid, solver_pids, launcher_pid):
+    """Capture PID and creation time only for descendants of the live launch handle."""
+    identities = set()
+    for pid in solver_pids:
+        row = rows_by_pid.get(pid)
+        created = float((row or {}).get("CreateTime") or 0)
+        if pid == launcher_pid and created > 0:
+            identities.add((pid, created))
+            continue
+        visited = set()
+        while row and created > 0:
+            parent_pid = int(row.get("ParentProcessId") or 0)
+            parent = rows_by_pid.get(parent_pid)
+            if parent is None or parent_pid in visited:
+                break
+            if not 0 < float(parent.get("CreateTime") or 0) <= float(row.get("CreateTime") or 0):
+                break
+            if parent_pid == launcher_pid:
+                identities.add((pid, created))
+                break
+            visited.add(parent_pid)
+            row = parent
+    return identities
 
 
 def execute_local_job(
@@ -321,7 +349,11 @@ def execute_local_job(
     reader = threading.Thread(target=read_output, daemon=True)
     reader.start()
     terminate_sent = False
+    terminate_attempted = False
+    ownership_wait_logged = False
+    owned_solvers = set()
     terminal_stable = 0
+    previous_terminal = ""
     latest_status = ""
     latest_detail = ""
     try:
@@ -331,12 +363,6 @@ def execute_local_job(
             if exit_code is not None:
                 run["launcher_finished"] = True
                 run.setdefault("launcher_finished_monotonic", time.monotonic())
-            if controller.cancel_requested and not terminate_sent:
-                terminate_sent = True
-                run["terminating"] = True
-                _emit(progress, "terminating", "正在终止 Abaqus 作业", 92)
-                _terminate_abaqus(item, work_dir, log)
-
             snapshot = controller.snapshots.capture()
             rows = snapshot.rows or ()
             run["process_snapshot"] = rows
@@ -346,6 +372,10 @@ def execute_local_job(
             run["process_snapshot_solver_rows"] = rows
             run["process_snapshot_available"] = snapshot.rows is not None
             evidence = collect_runtime_evidence(run)
+            by_pid = run["process_snapshot_by_pid"]
+            solver_pids = evidence.get("solver_pids") or ()
+            if process.poll() is None:
+                owned_solvers.update(_owned_solver_identities(by_pid, solver_pids, process.pid))
             if controller.observer is not None:
                 try:
                     controller.observer(observe_local_job(snapshot, evidence, work_dir=work_dir,
@@ -361,27 +391,24 @@ def execute_local_job(
             update_runtime_phase(run, evidence)
             latest_status = str(evidence.get("diagnostic_status") or latest_status)
             latest_detail = str(evidence.get("diagnostic_detail") or latest_detail)
+            if exit_code is not None and not latest_status and output_parts:
+                latest_status, latest_detail = classify_job_text("\n".join(output_parts))
             phase = str(run.get("runtime_phase") or "running").lower()
             step = evidence.get("sta_last_step")
             increment = evidence.get("sta_last_increment")
             detail = ""
             if step is not None:
                 detail = f"Step {step} · Increment {increment}"
-            _emit(progress, phase, "Abaqus 作业运行中", 50, detail)
-
-            if terminate_sent:
-                if runtime_termination_ready(run, evidence):
-                    return LocalJobExecutionResult(
-                        STATUS_TERMINATED,
-                        latest_detail or "用户手动终止",
-                        str(work_dir),
-                        command,
-                    )
-                continue
+            if controller.cancel_requested:
+                _emit(progress, "terminating", "等待本次执行结束" if terminate_sent else "正在核对终止请求", 92, detail)
+            else:
+                _emit(progress, phase, "Abaqus 作业运行中", 50, detail)
 
             active = bool(evidence.get("lck_exists") or evidence.get("solver_pid_active"))
+            terminal = latest_status if not active else ""
+            terminal_stable = terminal_stable + 1 if terminal and terminal == previous_terminal else int(bool(terminal))
+            previous_terminal = terminal
             if latest_status in {"失败", "终止"} and not active:
-                terminal_stable += 1
                 if terminal_stable >= 3:
                     status = STATUS_FAILED if latest_status == "失败" else STATUS_TERMINATED
                     return LocalJobExecutionResult(
@@ -390,37 +417,52 @@ def execute_local_job(
                         str(work_dir),
                         command,
                     )
-            else:
-                terminal_stable = 0
-
             if item.datacheck_only and exit_code is not None and not active:
                 console_status, console_detail = classify_job_text("\n".join(output_parts))
                 status = latest_status or console_status
-                if status == "失败" or exit_code != 0:
+                if status == "失败" or (exit_code != 0 and not terminate_sent and status != "终止"):
                     return LocalJobExecutionResult(
                         STATUS_DATACHECK_FAILED,
                         latest_detail or console_detail or f"返回码 {exit_code}",
                         str(work_dir),
                         command,
                     )
-                return LocalJobExecutionResult(
-                    STATUS_DATACHECK_COMPLETED,
-                    latest_detail or "Datacheck 已完成",
-                    str(work_dir),
-                    command,
-                )
+                if status == "完成" or (not controller.cancel_requested and status != "终止"):
+                    return LocalJobExecutionResult(
+                        STATUS_DATACHECK_COMPLETED, latest_detail or "Datacheck 已完成", str(work_dir), command)
 
             if latest_status == "完成" and not active:
-                terminal_stable += 1
                 if terminal_stable >= 3 or runtime_completion_ready(run, evidence):
                     return _completed_result(item, work_dir, command, latest_detail or "Abaqus 作业已完成",
                                              controller, progress)
+
+            if controller.cancel_requested and not terminate_attempted and not terminal:
+                verified_solvers = solver_pids and all(
+                    (pid, float(by_pid.get(pid, {}).get("CreateTime") or 0)) in owned_solvers for pid in solver_pids)
+                # An exited launcher or a matching name in the directory does not authorize
+                # a command against a new solver which replaced the original attempt.
+                live_launcher = (snapshot.rows is not None and not solver_pids and not evidence.get("lck_exists")
+                                 and process.poll() is None)
+                if live_launcher or verified_solvers:
+                    terminate_attempted = True
+                    _emit(progress, "terminating", "正在终止 Abaqus 作业", 92)
+                    try:
+                        terminate_sent = _terminate_abaqus(item, work_dir, log)
+                    except OSError as exc:
+                        if log:
+                            log(f"终止命令未执行，继续监控实际结果：{exc}")
+                    run["terminating"] = terminate_sent
+                elif not ownership_wait_logged and log:
+                    ownership_wait_logged = True
+                    log("已收到终止请求，正在核对本次执行的进程归属；暂未发送 Abaqus 命令，将继续监控。")
+            if terminate_sent and exit_code is not None and not terminal and runtime_termination_ready(run, evidence):
+                return LocalJobExecutionResult(STATUS_TERMINATED, "用户手动终止", str(work_dir), command)
 
             launcher_finished_at = run.get("launcher_finished_monotonic")
             if (
                 exit_code is not None
                 and not active
-                and not run.get("activity_seen")
+                and (not run.get("activity_seen") or controller.cancel_requested)
                 and launcher_finished_at is not None
                 and time.monotonic() - float(launcher_finished_at) >= 30.0
             ):

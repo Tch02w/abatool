@@ -435,6 +435,9 @@ public sealed partial class MainWindow : Window
             && selected.SetEquals(App.Current.Commands.SelectedActiveIds), page => page.TerminateSelectedAsync());
     }
 
+    private async void OnTerminateEntireQueueMenuClicked(object sender, RoutedEventArgs args)
+        => await RunQueueMenuAsync(() => App.Current.Commands.CanTerminateEntireQueue, page => page.TerminateEntireQueueAsync());
+
     private void OnComputeResourcesMenuClicked(object sender, RoutedEventArgs args)
     {
         NavigateToRoute("compute-resources");

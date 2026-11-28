@@ -96,6 +96,15 @@ def test_workbench_profile_isolates_paths_and_instance_identity(tmp_path, close_
     assert "14 profile isolation checks passed" in result.stdout
 
 
+def test_native_draft_and_legacy_workbench_settings(tmp_path, close_client):
+    result = subprocess.run(
+        ["dotnet", str(close_client), "--session-checks", str(tmp_path / "checkpoints")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "workbench session persistence checks passed" in result.stdout
+
+
 def test_job_postprocess_route_respects_attempt_archive_and_missing_results(tmp_path, close_client):
     result = subprocess.run(
         ["dotnet", str(close_client), "--job-route-checks", str(tmp_path / "routes")],

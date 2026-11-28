@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import threading
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from modules.common.json_io import json_file_lock
 from modules.submitter.app_paths import APP_DATA_DIR
 from modules.submitter.queue_store import atomic_write_json
 
@@ -26,7 +24,6 @@ _SAVE_FIELDS = {
     "nodes",
 }
 _PLAN_FIELDS = {"schemaVersion", "targetNodeIds"}
-_SAVE_LOCK = threading.RLock()
 
 
 def _text(payload: Mapping[str, Any], field: str) -> str:
@@ -110,35 +107,6 @@ def _name(node: Mapping[str, str]) -> str:
     return node["name"] or node["nodeId"]
 
 
-@contextmanager
-def _save_lock(path: Path) -> Iterator[None]:
-    """Serialize revision checks across threads and separate control-plane processes."""
-    with _SAVE_LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.with_suffix(path.suffix + ".lock").open("a+b") as stream:
-            if stream.tell() == 0:
-                stream.write(b"\0")
-                stream.flush()
-            stream.seek(0)
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
-                try:
-                    yield
-                finally:
-                    stream.seek(0)
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-                try:
-                    yield
-                finally:
-                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-
-
 class OdbResultGraphService:
     """A result-only document; never reads or changes the calculation queue."""
 
@@ -194,7 +162,7 @@ class OdbResultGraphService:
             )
         nodes = _nodes(payload.get("nodes"))
         output_directory = _text(payload, "outputDirectory")
-        with _save_lock(self.path):
+        with json_file_lock(self.path):
             current = self.snapshot()
             if revision != current["revision"]:
                 raise ApiProblem(

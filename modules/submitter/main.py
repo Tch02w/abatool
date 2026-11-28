@@ -60,7 +60,7 @@ from .memory_monitor import MemoryMonitorService, format_memory_size
 from .app_settings import (
     load_app_settings,
     load_settings_section,
-    save_app_settings,
+    update_app_settings,
     save_settings_section,
 )
 from .models import QueueItem
@@ -1785,11 +1785,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.job_configuration.sync_to_wizard()
         try:
             values = self.job_configuration.export_settings()
-            payload = load_app_settings()
-            payload["workbench"] = values
-            payload["qt_ssd_work_dir"] = values["calculation_root_dir"]
-            payload["qt_archive_dir"] = values["archive_dir"]
-            save_app_settings(payload)
+            update_app_settings({
+                "workbench": values,
+                "qt_ssd_work_dir": values["calculation_root_dir"],
+                "qt_archive_dir": values["archive_dir"],
+            })
         except OSError as exc:
             QtWidgets.QMessageBox.warning(
                 self,

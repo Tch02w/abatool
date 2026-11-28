@@ -1,5 +1,9 @@
 # 功能定位索引
 
+F001/F003/F013 的旧版新建与合并设置由 `winui/AbaqusTools.WinUI/Services/LegacyWorkbenchSettings.cs` 的 `ImportMissingPages` 读取，原生页已保存的草稿优先。回归位于 `tests/winui_host/WorkbenchSessionChecks.cs`，[旧版与新版实窗](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)。F008 的旧服务器读取与修改由 `modules/control_plane/remote_servers.py` 和 `modules/submitter/app_settings.py` 处理，[往返验证](REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)覆盖 `tests/control_plane/test_legacy_server_profile.py`。
+
+F001 四组菜单的原生访问键在 `winui/AbaqusTools.WinUI/MainWindow.xaml`，[Windows 测试记录](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)。F021 的 `DirectBuildIndexButton` 与原索引视图共用 `BuildIndexAsync`，`ReloadPublishedIndexAsync` 在首次建索引和重建后恢复发起操作的模型。[两个模型的修复实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
+
 F013 合并的验证回执在目标 ODB 就位后发布。`modules/submitter/odb_merge_execution.py` 调用 `modules/submitter/odb_merge_publication.py` 的 `publish_receipt`，后台重开时由 `modules/control_plane/odb_merge_operations.py` 调用 `recover_publication`。覆盖替换、回滚、输出再编号和最终进度异常见 `tests/submitter/test_odb_merge_execution.py`。[工程中断实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)
 
 F023 结果图在 `OdbResultGraphEditor.xaml.cs` 切换节点时保存原节点输入，在 `OdbResultGraphEditor.Recovery.cs` 的 `SaveDraftCheckpointAsync` 中从当前节点控件捕获未保存文本。F021 的文件选区和预览由 `ResultBrowserPage.xaml.cs` 的 `BuildIndexAsync`、`ReloadPublishedIndexAsync` 与 `LoadRecordsAsync` 恢复。[图编辑器验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#组内顺序与结果图的会话结束恢复) · [索引交互验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)

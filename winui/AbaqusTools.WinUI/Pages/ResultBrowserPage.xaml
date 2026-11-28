@@ -148,11 +148,13 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Button x:Name="DirectUpButton" VerticalAlignment="Center" Content="上一级" Click="OnDirectUpClicked" />
                     <TextBlock x:Name="DirectPathText" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     <Button x:Name="DirectRefreshButton" Grid.Column="2" VerticalAlignment="Center" Content="刷新目录" Click="OnDirectRefreshClicked" />
-                    <Button x:Name="DirectExitButton" Grid.Column="3" VerticalAlignment="Center" Content="返回索引视图" Click="OnDirectExitClicked" />
+                    <Button x:Name="DirectBuildIndexButton" Grid.Column="3" VerticalAlignment="Center" Content="创建索引" Click="OnBuildIndexClicked" />
+                    <Button x:Name="DirectExitButton" Grid.Column="4" VerticalAlignment="Center" Content="返回索引视图" Click="OnDirectExitClicked" />
                 </Grid>
                 <Border
                     x:Name="FilterPanel"

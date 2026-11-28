@@ -10,7 +10,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol
 
+from modules.common.json_io import json_file_lock
 from modules.submitter.app_paths import APP_DATA_DIR
+from modules.submitter.app_settings import SettingsChangedError, update_app_settings
 from modules.submitter.queue_store import atomic_write_json
 from modules.submitter.remote_connection import (
     HostKeyChanged,
@@ -186,6 +188,32 @@ def _profile_payload(profile: ServerProfileDraft) -> dict[str, Any]:
     }
 
 
+def _read_legacy_server(path: Path) -> tuple[dict, ServerProfileDraft | None]:
+    """Read the single server that PySide saved alongside its other settings."""
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}, None
+    if not isinstance(settings, dict):
+        raise ValueError("旧版配置文件格式无效")
+    values = settings.get("remote_server", {})
+    if not isinstance(values, dict):
+        raise ValueError("旧版服务器配置格式无效")
+    if not any(values.get(field) for field in ("profile_name", "host", "username")):
+        return {}, None
+    profile = _profile_from_payload({
+        "profileName": values.get("profile_name") or values.get("host"),
+        "host": values.get("host"), "username": values.get("username"),
+        "authentication": values.get("authentication", "SSH 私钥"),
+        "hostFingerprint": values.get("host_fingerprint", ""),
+        "abaqusCommand": values.get("abaqus_command", "abaqus.bat"),
+        "computeRoot": values.get("compute_root", ""),
+        "allowedRoots": values.get("allowed_roots", []),
+        "port": values.get("port", 22), "privateKeyPath": values.get("private_key_path", ""),
+    })
+    return values, profile
+
+
 class RemoteServerService:
     """Own persisted non-secret profiles and one live verified SSH session."""
 
@@ -197,11 +225,23 @@ class RemoteServerService:
     ) -> None:
         self._event_store = event_store
         self._profiles_path = Path(profiles_path or SERVER_PROFILES_PATH)
+        self._legacy_path = self._profiles_path.with_name("config.json")
         self._manager = manager or RemoteConnectionManager()
         self._lock = threading.RLock()
         self._snapshot_lock = threading.Lock()
         self._activity = ""
-        self._profiles, self._load_error = self._load_profiles()
+        self._native_bytes: bytes | None = None
+        self._hidden_legacy_name = ""
+        self._native_profiles, self._load_error = self._load_profiles()
+        self._legacy_error = ""
+        self._legacy_values: dict = {}
+        self._legacy_profile: ServerProfileDraft | None = None
+        if self._profiles_path.resolve() != self._legacy_path.resolve():
+            try:
+                self._legacy_values, self._legacy_profile = _read_legacy_server(self._legacy_path)
+            except (OSError, ValueError, ApiProblem) as exc:
+                self._legacy_error = f"无法读取旧版服务器配置：{exc}"
+        self._profiles = self._combined_profiles()
         self._connection_status = "disconnected"
         self._connected_profile_name = ""
         self._pending_fingerprint = ""
@@ -428,6 +468,14 @@ class RemoteServerService:
                 self._resource = None
 
     def _check_saved_pin(self, profile: ServerProfileDraft) -> ServerProfileDraft | None:
+        self._check_native_revision()
+        if self._is_legacy_entry(profile.profile_name):
+            try:
+                _, current = _read_legacy_server(self._legacy_path)
+            except (OSError, ValueError, ApiProblem) as exc:
+                raise ApiProblem(409, "REMOTE_PROFILE_CHANGED", "旧版服务器配置无法读取，请检查文件后重开应用。") from exc
+            if current != self._legacy_profile:
+                raise ApiProblem(409, "REMOTE_PROFILE_CHANGED", "设置已被其他窗口更改，请重开应用后再操作。")
         saved = self._profiles.get(profile.profile_name)
         if saved and saved.host_fingerprint and saved.host_fingerprint != profile.host_fingerprint:
             raise ApiProblem(409, "REMOTE_PROFILE_KEY_CONFLICT", "配置中的主机指纹已变更，请重新载入该配置并核对。")
@@ -527,10 +575,12 @@ class RemoteServerService:
         if save_profile:
             try:
                 self._save_profile(verified_profile)
-            except OSError as exc:
+            except (OSError, ApiProblem) as exc:
                 self._manager.disconnect()
                 self._connection_status = "error"
                 self._last_error = f"无法保存已验证的服务器配置：{exc}"
+                if isinstance(exc, ApiProblem):
+                    raise
                 raise ApiProblem(500, "REMOTE_PROFILE_SAVE_FAILED", self._last_error) from exc
         self._connection_status = "connected"
         self._connected_profile_name = verified_profile.profile_name
@@ -580,7 +630,7 @@ class RemoteServerService:
                 "服务器配置文件损坏，已拒绝覆盖原文件",
                 details={"message": self._load_error},
             )
-        self._persist_profiles({**self._profiles, profile.profile_name: profile})
+        self._store_change(profile.profile_name, profile)
         self._rotation = None
         self._pending_fingerprint = ""
 
@@ -596,19 +646,24 @@ class RemoteServerService:
             raise ApiProblem(409, "REMOTE_PROFILE_CONNECTED", "请先断开该服务器")
         if profile_name not in self._profiles:
             raise ApiProblem(404, "REMOTE_PROFILE_NOT_FOUND", "服务器配置不存在")
-        self._persist_profiles({name: profile for name, profile in self._profiles.items() if name != profile_name})
+        self._store_change(profile_name, None)
         self._rotation = None
         self._pending_fingerprint = ""
 
     def _load_profiles(self) -> tuple[dict[str, ServerProfileDraft], str]:
         try:
-            payload = json.loads(self._profiles_path.read_text(encoding="utf-8"))
+            self._native_bytes = self._profiles_path.read_bytes()
+            payload = json.loads(self._native_bytes)
         except FileNotFoundError:
             return {}, ""
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             return {}, str(exc)
-        if not isinstance(payload, dict) or not isinstance(payload.get("profiles", []), list):
+        if not isinstance(payload, dict) or not isinstance(payload.get("profiles"), list):
             return {}, "服务器配置文件格式无效"
+        hidden = payload.get("hiddenLegacyProfileName", "")
+        if not isinstance(hidden, str):
+            return {}, "旧版服务器隐藏标记无效"
+        self._hidden_legacy_name = hidden
         profiles: dict[str, ServerProfileDraft] = {}
         try:
             for item in payload.get("profiles", []):
@@ -618,12 +673,58 @@ class RemoteServerService:
             return {}, exc.message
         return profiles, ""
 
-    def _persist_profiles(self, profiles: dict[str, ServerProfileDraft]) -> None:
-        atomic_write_json(
-            self._profiles_path,
-            {"profiles": [_profile_payload(profile) for profile in profiles.values()]},
-        )
-        self._profiles = profiles
+    def _combined_profiles(self) -> dict[str, ServerProfileDraft]:
+        profiles = self._native_profiles.copy()
+        old = self._legacy_profile
+        if old is not None and old.profile_name != self._hidden_legacy_name:
+            profiles.setdefault(old.profile_name, old)
+        return profiles
+
+    def _is_legacy_entry(self, name: str) -> bool:
+        return (self._legacy_profile is not None and self._legacy_profile.profile_name == name
+                and name not in self._native_profiles and name != self._hidden_legacy_name)
+
+    def _check_native_revision(self) -> None:
+        try:
+            current = self._profiles_path.read_bytes()
+        except FileNotFoundError:
+            current = None
+        if current != self._native_bytes:
+            raise ApiProblem(409, "REMOTE_PROFILE_CHANGED", "服务器配置已变化，请重开应用后再操作。")
+
+    def _store_change(self, name: str, replacement: ServerProfileDraft | None) -> None:
+        # A legacy-only entry has one authoritative location shared with the Qt editor.
+        # Serialize across custom-profile backends too, and reject stale client snapshots.
+        with json_file_lock(self._profiles_path):
+            self._check_native_revision()
+            old = self._legacy_profile
+            legacy_match = old is not None and old.profile_name == name
+            if self._is_legacy_entry(name):
+                values = replacement.persistent_payload() if replacement is not None else {}
+                try:
+                    update_app_settings({"remote_server": values}, path=self._legacy_path,
+                                        expected={"remote_server": self._legacy_values})
+                except SettingsChangedError as exc:
+                    raise ApiProblem(409, "REMOTE_PROFILE_CHANGED", str(exc)) from exc
+                except OSError as exc:
+                    raise ApiProblem(500, "REMOTE_PROFILE_SAVE_FAILED", f"无法更新旧版服务器配置：{exc}") from exc
+                self._legacy_profile, self._legacy_values = replacement, values
+            else:
+                profiles = self._native_profiles.copy()
+                hidden = self._hidden_legacy_name
+                if replacement is None:
+                    profiles.pop(name)
+                    if legacy_match:
+                        hidden = name
+                else:
+                    profiles[name] = replacement
+                payload = {"profiles": [_profile_payload(item) for item in profiles.values()]}
+                if hidden:
+                    payload["hiddenLegacyProfileName"] = hidden
+                atomic_write_json(self._profiles_path, payload)
+                self._native_bytes = self._profiles_path.read_bytes()
+                self._native_profiles, self._hidden_legacy_name = profiles, hidden
+            self._profiles = self._combined_profiles()
 
     def _snapshot_locked(self) -> dict[str, Any]:
         active = self._manager.connected_profile if self._connection_status == "connected" else None
@@ -641,7 +742,7 @@ class RemoteServerService:
                     key=lambda item: item.profile_name.casefold(),
                 )
             ],
-            "profilesError": self._load_error,
+            "profilesError": self._load_error or self._legacy_error,
             "connection": {
                 "status": self._connection_status,
                 "busy": False,

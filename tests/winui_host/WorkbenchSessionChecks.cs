@@ -44,9 +44,40 @@ static class WorkbenchSessionChecks
             File.WriteAllText(blockedDirectory, "keep");
             Reject(() => new WorkbenchSessionStore(Path.Combine(blockedDirectory, "session.json")).Save(new()));
             if (File.ReadAllText(blockedDirectory) != "keep") throw new Exception("Failed save changed blocker");
+            VerifyLegacySettings(directory);
             Console.WriteLine("9 workbench session persistence checks passed.");
         }
         finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private static void VerifyLegacySettings(string directory)
+    {
+        var path = Path.Combine(directory, "config.json");
+        File.WriteAllText(path, """
+            {"workbench":{"cpus":0,"priority":-10,"max_parallel":4,"memory_value":"17","memory_unit":"GB",
+             "notify":false,"archive_dir":"","merge_name_source":"custom","merge_conflict_strategy":"confirm",
+             "merge_compress_result":true,"password":"must-not-import"},
+             "remote_server":{"host":"must-not-import"},"qt_archive_dir":"obsolete","qt_ssd_work_dir":"SSD"}
+            """);
+        var bytes = File.ReadAllBytes(path);
+        var state = new WorkbenchSessionState();
+        LegacyWorkbenchSettings.ImportMissingPages(state, path);
+        var job = state.Pages["new-job"];
+        var merge = state.Pages["odb-merge"];
+        if (job.Count != 8 || job["CpuNumberBox"] != "0" || job["PriorityComboBox"] != "2"
+            || job["MaxParallelNumberBox"] != "4" || job["MemoryValueTextBox"] != "17" || job["MemoryUnitComboBox"] != "2"
+            || job["NotifyCheckBox"] != "false" || job["ArchiveRootTextBox"] != "" || job["CalculationRootTextBox"] != "SSD"
+            || merge.Count != 3 || merge["ResultNamingComboBox"] != "2" || merge["ConflictPolicyComboBox"] != "1"
+            || merge["CompressResultCheckBox"] != "true")
+            throw new Exception("Incorrect mapping of PySide controls");
+        state.Pages["new-job"].Clear();
+        state.Pages.Remove("odb-merge");
+        LegacyWorkbenchSettings.ImportMissingPages(state, path);
+        if (state.Pages["new-job"].Count != 0 || state.Pages["odb-merge"].Count != 3 || !bytes.SequenceEqual(File.ReadAllBytes(path)))
+            throw new Exception("Import changed a cleared native page or the PySide settings");
+        var profile = new WorkbenchProfile(directory, IsCustom: true);
+        if (profile.LegacySubmitterConfigPath() != Path.Combine(directory, "submitter", "config.json"))
+            throw new Exception("Independent profile can read another profile's settings");
     }
 
     private static void Reject(Action action)

@@ -93,6 +93,14 @@ def _named_element(root: ET.Element, name: str) -> ET.Element:
     return next(element for element in root.iter() if element.attrib.get(XAML_NAME) == name)
 
 
+def test_direct_result_toolbar_can_build_the_same_index_as_the_filtered_view():
+    page = ET.parse(WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml").getroot()
+    direct = _named_element(page, "DirectToolbar")
+    assert _named_element(direct, "DirectRefreshButton").get("Click") == "OnDirectRefreshClicked"
+    for panel, name in ((direct, "DirectBuildIndexButton"), (page, "BuildIndexButton")):
+        assert _named_element(panel, name).get("Click") == "OnBuildIndexClicked"
+
+
 def test_result_sort_headers_match_record_columns_and_offer_secondary_orders():
     page = ET.parse(WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml").getroot()
     headers = _named_element(page, "SortHeaders")
@@ -233,6 +241,7 @@ def test_native_shell_exposes_the_four_menu_groups_and_honest_statuses() -> None
         "服务器(S)",
         "后处理(P)",
     ]
+    assert [item.get("AccessKey") for item in menu_items] == ["F", "J", "S", "P"]
     assert "队列 0 · 运行 0 · 等待 0" in text
     assert "远端 ○ 未连接" in text
     assert "Abaqus ○ 待检测" in text

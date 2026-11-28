@@ -35,4 +35,19 @@ public sealed record WorkbenchProfile(string StateDirectory, bool IsCustom)
         Environment.SetEnvironmentVariable("ABAQUS_SUBMITTER_DATA_DIR", Path.Combine(StateDirectory, "submitter"));
         Environment.SetEnvironmentVariable("ABAQUS_POSTPROCESSOR_DATA_DIR", Path.Combine(StateDirectory, "postprocessor"));
     }
+
+    public string LegacySubmitterConfigPath()
+    {
+        if (IsCustom) return Path.Combine(StateDirectory, "submitter", "config.json");
+        var directory = Environment.GetEnvironmentVariable("ABAQUS_SUBMITTER_DATA_DIR")?.Trim();
+        if (string.IsNullOrEmpty(directory))
+        {
+            var local = Environment.GetEnvironmentVariable("LOCALAPPDATA")?.Trim();
+            directory = Path.Combine(string.IsNullOrEmpty(local)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) : local, "AbaqusSubmitter");
+        }
+        else if (directory == "~" || directory.StartsWith(@"~\") || directory.StartsWith("~/"))
+            directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), directory[1..].TrimStart('\\', '/'));
+        return Path.GetFullPath(Path.Combine(directory, "config.json"));
+    }
 }

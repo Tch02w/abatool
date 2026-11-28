@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .app_paths import CONFIG_PATH
+from .app_settings import update_app_settings
 from .command import (
     derive_job_name,
     derive_oldjob_name,
@@ -47,7 +48,6 @@ from .queue_scheduler import (
     queue_item_conflict_key,
     queue_status_counts,
 )
-from .queue_store import atomic_write_json
 from .restart_dependency import RestartDependencyLifecycle
 from .restart_topology import RestartTopology, legacy_restart_edit_failure
 from .ui_components import (
@@ -795,12 +795,12 @@ class QueueManagerDialog(QtWidgets.QDialog):
         return data if isinstance(data, dict) else {}
 
     def save_saved_paths(self) -> None:
-        data = self.load_saved_paths()
-        data["qt_ssd_work_dir"] = self.ssd_dir_edit.text().strip()
-        data["qt_archive_dir"] = self.archive_dir_edit.text().strip()
-        data["qt_oldjob_odb_dir"] = self.last_oldjob_odb_dir
         try:
-            atomic_write_json(str(CONFIG_PATH), data)
+            update_app_settings({
+                "qt_ssd_work_dir": self.ssd_dir_edit.text().strip(),
+                "qt_archive_dir": self.archive_dir_edit.text().strip(),
+                "qt_oldjob_odb_dir": self.last_oldjob_odb_dir,
+            }, path=CONFIG_PATH)
         except OSError as exc:
             QtWidgets.QMessageBox.warning(self, "保存配置失败", f"无法保存目录配置：\n{exc}")
 

@@ -37,7 +37,9 @@ public sealed class WorkbenchSession
     public WorkbenchSession()
     {
         try { State = _store.Load(); }
-        catch (Exception error) { State = new(); LoadError = error.Message; }
+        catch (Exception error) { State = new(); LoadError = error.Message; return; }
+        try { LegacyWorkbenchSettings.ImportMissingPages(State, WorkbenchProfile.Current.LegacySubmitterConfigPath()); }
+        catch (Exception error) { LoadError = "旧版作业设置未能导入。" + error.Message; }
     }
 
     public void Register(Page page, string route, string[] fields, Func<Task>? save = null,

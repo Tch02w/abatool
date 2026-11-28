@@ -75,12 +75,12 @@
                             </StackPanel>
                         </Flyout>
                     </FlyoutBase.AttachedFlyout>
-                    <MenuBarItem Title="文件(F)">
+                    <MenuBarItem Title="文件(F)" AccessKey="F">
                         <MenuFlyoutItem Click="OnNewJobMenuClicked" Text="新建作业" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="OnExitMenuClicked" Text="退出" />
                     </MenuBarItem>
-                    <MenuBarItem Title="作业(J)">
+                    <MenuBarItem Title="作业(J)" AccessKey="J">
                         <MenuFlyoutItem Click="OnQueueMenuClicked" Text="管理队列" />
                         <MenuFlyoutItem x:Name="StartQueueMenuItem" IsEnabled="False" Click="OnStartQueueMenuClicked" Text="开始本机队列" />
                         <MenuFlyoutItem x:Name="StopQueueMenuItem" IsEnabled="False" Click="OnStopQueueMenuClicked" Text="停止后续调度" />
@@ -88,12 +88,12 @@
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Name="JobNotificationsMenuItem" Click="OnOpenNotificationCenter" Text="结束提醒" />
                     </MenuBarItem>
-                    <MenuBarItem Title="服务器(S)">
+                    <MenuBarItem Title="服务器(S)" AccessKey="S">
                         <MenuFlyoutItem Click="OnComputeResourcesMenuClicked" Text="连接 / 配置" />
                         <MenuFlyoutItem x:Name="RefreshRemoteMenuItem" IsEnabled="False" Click="OnRefreshResourcesMenuClicked" Text="刷新远端资源" />
                         <MenuFlyoutItem x:Name="DisconnectRemoteMenuItem" IsEnabled="False" Click="OnDisconnectServerMenuClicked" Text="断开远端连接" />
                     </MenuBarItem>
-                    <MenuBarItem Title="后处理(P)">
+                    <MenuBarItem Title="后处理(P)" AccessKey="P">
                         <MenuFlyoutItem x:Name="CurrentJobPostprocessingMenuItem" Click="OnCurrentJobPostprocessingMenuClicked" Text="当前作业送入后处理" />
                         <MenuFlyoutItem Click="OnPostprocessingMenuClicked" Text="打开 ODB 后处理" />
                         <MenuFlyoutItem Click="OnResultBrowserMenuClicked" Text="打开结果浏览" />

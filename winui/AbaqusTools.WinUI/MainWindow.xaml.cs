@@ -72,6 +72,8 @@ public sealed partial class MainWindow : Window
             NavigateTo("new-job");
         }
         InitializeSessionSaving();
+        if (App.Current.Session.LoadError is { } error)
+            ShowFeedback("工作台配置读取提示", error, InfoBarSeverity.Warning);
     }
 
     public void ShowFeedback(string title, string message, InfoBarSeverity severity = InfoBarSeverity.Informational)

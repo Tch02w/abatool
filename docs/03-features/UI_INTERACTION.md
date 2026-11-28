@@ -98,6 +98,12 @@
 
 源码入口为 `winui/AbaqusTools.WinUI/MainWindow.ExplorerVisibility.cs` 的 `SetExplorerVisibility` / `ApplyExplorerVisibility`，尺寸入口为同项目 `Services/WindowLayoutConstraints.cs` 的 `MinimumClientWidthFor`。54 项相关回归、16 项尺寸检查以及实际新建页 Ctrl+B、CPU=6 保留、正常关闭后同一配置重开恢复通过。鼠标按钮、提示视觉、窗口拖动到最小值和跨屏仍待验，上述旧位置验证来自开发输出 `GPTWork/winui-sidebar-20261118`；当前完整758f1cc已含侧栏及位置调整，新位置的业务视觉仍待。
 
+## 从旧版工作台接续本机设置
+
+PySide 中使用“保存配置”后，WinUI 首次打开时会从同一用户的提交器配置读取新建作业和手工合并选项。新建页读取输入文件、名称、前序作业、用户子程序、Abaqus 命令、CPU、内存及单位、优先级、并行数、检查与通知、SSD 和归档目录；合并页读取包含历史、压缩、原始副本、命名和冲突策略。两个页面分别判断是否已有 WinUI 草稿。原生页即使已清空也保留自己的值。SSD 和归档目录还支持旧配置在顶层保存的两个目录字段。
+
+这些设置在首次导入后进入 WinUI 的工作台草稿。之后修改输入、清空或关闭窗口仅保存原生草稿；切回 PySide 可继续打开原先保存的配置。独立配置只读取该目录下的 `submitter/config.json`，普通用户默认读取 `%LOCALAPPDATA%/AbaqusSubmitter/config.json`，设置 `ABAQUS_SUBMITTER_DATA_DIR` 时读取指定目录。导入不会提交作业；手工合并涉及覆盖时仍需确认。无法解析的旧配置会在启动时提示。
+
 ## 关闭、后台继续与草稿（F001/F003/F004/F009）
 
 普通关闭写入失败时，窗口保持打开，状态栏显示「关闭已取消」。日常保存错误通过右下角通知报告。修复文件占用后可以继续编辑，下一次检查点会保存最新输入；错误通知可点叉关闭。系统会话结束时使用单独的限时保存流程。已在两次启动的成品窗口核对消息响应、上次编辑内容以及后台进程身份。[文件占用与恢复实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#窗口关不掉或系统结束会话时的草稿)

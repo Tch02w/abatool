@@ -988,16 +988,23 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private Task ReloadPublishedIndexAsync(ResultIndexOperationRequest request)
     {
-        if (_displayedPage is not { Source: "index" } page || _appliedQuery is not { } query
-            || !string.Equals(query.Root, request.Root, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(query.TimeDirectory, request.TimeDirectory, StringComparison.OrdinalIgnoreCase))
+        if (_selectedScope is not { } scope
+            || !string.Equals(_location.LoadedRoot, request.Root, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(scope.TimeDirectory, request.TimeDirectory, StringComparison.OrdinalIgnoreCase))
             return RefreshScopesAsync(request.TimeDirectory, request.Root);
 
-        var selectedPaths = SelectedRecords().Select(record => record.Path).ToHashSet(StringComparer.Ordinal);
-        return RefreshScopesAsync(page.Scope, request.Root, loadSelectedScope: () =>
+        // The index covers the batch, but the user may be viewing only one model.
+        var page = _displayedPage;
+        var query = _appliedQuery;
+        var selectedPaths = SelectedRecords().Where(record => !record.IsDirectory)
+            .Select(record => record.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _location.DirectBookmark = null;
+        return RefreshScopesAsync(scope.Path, request.Root, loadSelectedScope: () =>
         {
-            if (!string.Equals(_selectedScope?.Path, query.Scope, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(_selectedScope?.Path, scope.Path, StringComparison.OrdinalIgnoreCase))
                 return RefreshSelectedScopeAsync();
+            if (page is not { Source: "index" } || query is null)
+                return LoadRecordsAsync(selectedPaths: selectedPaths);
             _appliedQuery = query;
             return LoadRecordsAsync(page.Offset, selectedPaths: selectedPaths);
         });
@@ -1421,6 +1428,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         DirectToolbar.Visibility = _direct is null ? Visibility.Collapsed : Visibility.Visible;
         FilterPanel.Visibility = _direct is null ? Visibility.Visible : Visibility.Collapsed;
         DirectRefreshButton.IsEnabled = DirectExitButton.IsEnabled = idle;
+        DirectBuildIndexButton.IsEnabled = idle && _selectedScope?.CanRefreshIndex == true;
+        DirectBuildIndexButton.Content = _selectedScope?.IndexState == "missing" ? "创建索引" : "刷新索引";
         DirectUpButton.IsEnabled = idle && _direct is { AtScope: false };
         DirectPathText.Text = _direct is null ? "" : "直接浏览 · "
             + (_direct.AtScope ? _selectedScope?.Name : Path.GetRelativePath(_direct.Scope, _direct.DirectoryPath));

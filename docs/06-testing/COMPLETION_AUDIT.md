@@ -2,6 +2,8 @@
 
 ## 2026-11-28 核对结论
 
+旧版 PySide 保存的作业参数和合并设置已在 WinUI 实窗读回；服务器配置修改后可由历史 Qt 窗口读回。四组顶栏菜单已用投递至测试窗口的 Windows 组合键核对。结果页在缺少索引和索引损坏时均能从模型范围重建；直接浏览的文件仍在结果页时保留选区和预览。[设置迁移](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器范围](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [菜单](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [索引](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
+
 当前免安装版及安装程序来自 `2c06b77`。成品后台可读取旧版结果索引，写入中断后能恢复索引与合并发布；正式结果图编辑器可在重开时找回最后一次输入。1700 个文件核对和隔离测试身份的八项安装生命周期通过。物理环境与最终切换条件见下表。[当前安装程序](../05-development/INSTALLATION.md) · [当前免安装程序](../05-development/RELEASE.md)
 
 免安装版 `328ad47` 的 1699 个文件已核验。开发机测试标识从 `cbe221e` 升级，安装生命周期八项、中文向导和 67 份文档的 886 个本地链接均已检查。GJB-16 带历史合并、结果浏览的慢启动恢复及中文 CSV 已在该成品上实测。队列页已实测浅底按钮的大小和数值居中。独立无开发工具 Windows、工程 GPU/MPI 与长期并发、混合 DPI 和物理断网仍待实测。[安装记录](../05-development/INSTALLATION.md) · [工程与页面](../05-development/RELEASE.md)

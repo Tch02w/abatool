@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -33,17 +34,26 @@ def _cycle_ids(parent_by_child: dict[str, str]) -> set[str]:
     return cycle_nodes
 
 
-def _stage(job_id: str, parent_by_child: dict[str, str], cycle_ids: set[str]) -> int:
-    if job_id in cycle_ids:
-        return 0
-    depth = 1
-    seen = {job_id}
-    current = parent_by_child.get(job_id, "")
-    while current and current not in seen:
-        depth += 1
-        seen.add(current)
-        current = parent_by_child.get(current, "")
-    return depth
+def _resolve_paths(
+    job_ids: Iterable[str], parents: dict[str, str], cycle_ids: set[str], direct_issues: dict[str, tuple[str, str]],
+) -> dict[str, tuple[int, str]]:
+    """Cache the stage and nearest failing job on each path, including the job itself."""
+    resolved = {job_id: (0, job_id) for job_id in cycle_ids}
+    for job_id in job_ids:
+        path = []
+        current = job_id
+        while current and current not in resolved:
+            path.append(current)
+            current = parents.get(current, "")
+        stage, cause = resolved.get(current, (0, ""))
+        reaches_cycle = bool(current) and stage == 0
+        for child in reversed(path):
+            if not reaches_cycle:
+                stage += 1
+            if child in direct_issues:
+                cause = child
+            resolved[child] = stage, cause
+    return resolved
 
 
 def _output_odb(item: dict[str, Any]) -> str:
@@ -95,21 +105,25 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
             incompatible_children.add(item["jobId"])
 
     cycle_ids = _cycle_ids(parent_by_child)
-    nodes: list[dict[str, Any]] = []
+    direct_issues = {}
     for item in restart_items:
         job_id = item["jobId"]
         if job_id in cycle_ids:
-            validation_status = "cycle"
-            message = "检测到循环依赖"
+            direct_issues[job_id] = ("cycle", "检测到循环依赖")
         elif job_id in missing_children:
-            validation_status = "missing_parent"
-            message = f"未找到前置作业：{parent_name_by_child.get(job_id, '')}"
+            direct_issues[job_id] = ("missing_parent", f"未找到前置作业：{parent_name_by_child.get(job_id) or '尚未指定'}")
         elif job_id in incompatible_children:
-            validation_status = "incompatible_path"
-            message = topology.issues[job_id][1]
+            direct_issues[job_id] = topology.issues[job_id]
+    paths = _resolve_paths(by_id, parent_by_child, cycle_ids, direct_issues)
+    nodes: list[dict[str, Any]] = []
+    for item in restart_items:
+        job_id = item["jobId"]
+        stage, cause = paths[job_id]
+        if cause and cause != job_id:
+            validation_status = "upstream_invalid"
+            message = f"前置链在 {by_id[cause]['jobName']} 处受阻：{direct_issues[cause][1]}"
         else:
-            validation_status = "valid"
-            message = "依赖有效"
+            validation_status, message = direct_issues.get(job_id, ("valid", "依赖有效"))
         nodes.append(
             {
                 "itemId": item["itemId"],
@@ -117,7 +131,7 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
                 "jobName": item["jobName"],
                 "parentJobId": parent_by_child.get(job_id, ""),
                 "parentJobName": parent_name_by_child.get(job_id, ""),
-                "stage": _stage(job_id, parent_by_child, cycle_ids),
+                "stage": stage,
                 "jobStatus": item["status"],
                 "validationStatus": validation_status,
                 "validationMessage": message,
@@ -145,7 +159,7 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
                 "jobName": item["jobName"],
                 "parentJobId": parent_by_child.get(job_id, ""),
                 "parentJobName": parent_name_by_child.get(job_id, ""),
-                "stage": _stage(job_id, parent_by_child, cycle_ids),
+                "stage": paths[job_id][0],
                 "jobStatus": item["status"],
                 "validationStatus": (
                     restart_node["validationStatus"] if restart_node else "valid"
@@ -178,6 +192,7 @@ def read_restart_chains(joblist_path: str | Path | None = None) -> dict[str, Any
             "cycleCount": len(cycle_ids),
             "missingParentCount": len(missing_children),
             "incompatiblePathCount": len(incompatible_children),
+            "upstreamInvalidCount": sum(node["validationStatus"] == "upstream_invalid" for node in nodes),
             "validCount": sum(node["validationStatus"] == "valid" for node in nodes),
         },
         "hasIssues": bool(cycle_ids or missing_children or incompatible_children),

@@ -6,6 +6,7 @@ import csv
 import os
 import posixpath
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
@@ -128,6 +129,21 @@ class ResultRecord:
     error: str = ""
     internal: bool = False
     is_directory: bool = False
+
+
+def index_diagnostic_record(database: Path, metadata: Mapping[str, str]) -> ResultRecord:
+    """Describe an already validated batch index without opening it again."""
+    try:
+        info = database.stat()
+        size, modified = info.st_size, info.st_mtime_ns
+    except OSError:
+        size, modified = -1, 0
+    return ResultRecord(
+        database, "内部索引",
+        f"时间目录结果索引；schema={metadata.get('schema_version', '未知')}，"
+        f"记录={metadata.get('record_count', '未知')}，刷新={metadata.get('updated_at', '未知')}",
+        section="info", size=size, mtime_ns=modified, internal=True,
+    )
 
 
 def _variable_from_path(path: Path) -> str:
@@ -482,6 +498,7 @@ __all__ = [
     "collect_result_records",
     "collect_shared_asset_records",
     "format_file_size",
+    "index_diagnostic_record",
     "preview_row_limit",
     "read_csv_preview",
     "read_xlsx_preview",

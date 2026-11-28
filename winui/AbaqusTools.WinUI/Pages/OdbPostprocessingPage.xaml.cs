@@ -36,6 +36,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     ];
 
     private bool _discoveryBusy;
+    private bool _openingResults;
     private bool _updatingSelection;
     private string? _lastDiscoveryRoot;
     private bool _updatingRunScopes;
@@ -740,6 +741,18 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private async void OnOpenResultsClicked(object sender, RoutedEventArgs e)
     {
+        await OpenResultsAsync();
+    }
+
+    internal async Task OpenResultsAsync()
+    {
+        if (_openingResults || App.Current.Commands.Locked) return;
+        if (_discoveryBusy || _postprocessBusy)
+        {
+            ShowWarning("请等待 ODB 发现或后处理操作结束后再打开工程结果。", "暂时无法打开工程结果");
+            return;
+        }
+        _openingResults = true;
         try
         {
             var roots = _resultLocations.Resolve(RootTextBox.Text, _lastDiscoveryRoot,
@@ -756,11 +769,13 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
                 };
                 choices.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = choices.SelectedIndex >= 0;
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                if (App.Current.Commands.Locked || !ReferenceEquals(Frame?.Content, this)) return;
                 resultRoot = roots[choices.SelectedIndex];
             }
             await App.Current.MainWindow.OpenResultBrowserAsync(resultRoot);
         }
-        catch (Exception error) { ShowWarning(error.Message, "无法打开结果浏览"); }
+        catch (Exception error) { ShowWarning(error.Message + " 可通过顶部“结果浏览”选项卡浏览其他目录。", "无法打开结果浏览"); }
+        finally { _openingResults = false; }
     }
 
     private async void OnAnalyzeClicked(object sender, RoutedEventArgs e)

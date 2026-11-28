@@ -12,6 +12,7 @@ from modules.control_plane.local_scheduling import (
 )
 from modules.submitter.constants import (
     STATUS_COMPLETED,
+    STATUS_FAILED,
     STATUS_PENDING_CONFIRM,
     STATUS_PENDING_RUN,
     STATUS_RUNNING,
@@ -34,6 +35,35 @@ from tests.control_plane.test_local_queue_runtime_api import (
 )
 
 GB = 1024**3
+
+
+def test_failed_restart_child_clears_wait_reason_and_recovers_without_rewriting_history(tmp_path):
+    base, child = queue_item(tmp_path, "base"), queue_item(tmp_path, "child")
+    base.status, base.message = STATUS_FAILED, "failed"
+    child.status, child.pending_reason = STATUS_WAITING_DEPENDENCY, "DEPENDENCY"
+    child.run_mode, child.oldjob_name, child.dependency_job_ids = "restart", base.job_name, [base.job_id]
+    path = tmp_path / "joblist.json"
+    save_joblist_state([], [base, child], path)
+    with running_control_plane(tmp_path, joblist_path=path) as runtime:
+        assert runtime_control(runtime, "start")[0] == 202
+        wait_until(lambda: not runtime_snapshot(runtime)["active"])
+        failed = runtime_snapshot(runtime)["queue"]["queueItems"][1]
+        assert failed["status"] == STATUS_FAILED and failed["pendingReason"] == "" and failed["attemptId"] == ""
+        assert failed["message"] == "前置作业未成功完成：base"
+        repository = runtime.local_queue_runtime._scheduling.repository
+        history = repository.load_events(job_id=child.job_id)
+        assert len([event for event in history if event["state"] == "FAILED"]) == 1
+
+    # Older versions saved DEPENDENCY on the failed JSON row. The journal
+    # already contains the genuine failure and must survive recovery verbatim.
+    candidates, saved, _ = load_joblist_state(path, restore_active_state=False)
+    saved[1].pending_reason = "DEPENDENCY"
+    save_joblist_state(candidates, saved, path)
+    with running_control_plane(tmp_path, joblist_path=path) as runtime:
+        row = runtime_snapshot(runtime)["queue"]["queueItems"][1]
+        assert row["status"] == STATUS_FAILED and row["pendingReason"] == "" and row["attemptId"] == ""
+        assert load_joblist_state(path, restore_active_state=False)[1][1].pending_reason == ""
+        assert runtime.local_queue_runtime._scheduling.repository.load_events(job_id=child.job_id) == history
 
 
 def test_archive_only_work_reserves_overlapping_directory_even_for_another_job_name(tmp_path):

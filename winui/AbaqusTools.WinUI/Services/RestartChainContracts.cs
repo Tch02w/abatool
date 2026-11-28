@@ -40,6 +40,9 @@ public sealed class RestartChainChecks
     [JsonPropertyName("incompatiblePathCount")]
     public int IncompatiblePathCount { get; init; }
 
+    [JsonPropertyName("upstreamInvalidCount")]
+    public int UpstreamInvalidCount { get; init; }
+
     [JsonPropertyName("validCount")]
     public int ValidCount { get; init; }
 }
@@ -98,6 +101,7 @@ public sealed class RestartChainNode
         "cycle" => "循环依赖",
         "missing_parent" => "缺少父作业",
         "incompatible_path" => "路径不兼容",
+        "upstream_invalid" => "上游依赖异常",
         _ => ValidationStatus,
     };
 

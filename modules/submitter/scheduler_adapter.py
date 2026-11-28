@@ -175,14 +175,16 @@ def reconcile_scheduler_from_queue(
             state = scheduler_state_from_queue_status(item.status)
             if state in ACTIVE_JOB_STATES and not item.attempt_id:
                 item.attempt_id = uuid4().hex
-            scheduler.reconcile(
+            snapshot = scheduler.reconcile(
                 specification,
                 state=state,
                 pending_reason=pending_reason_from_queue_item(item),
                 attempt_id=item.attempt_id,
                 message=item.message,
             )
-            item.scheduler_state = scheduler.get(specification.job_id).state.value
+            item.scheduler_state = snapshot.state.value
+            if state != JobState.PENDING:
+                item.pending_reason = snapshot.pending_reason.value
 
 
 def apply_scheduler_snapshot_to_queue_item(

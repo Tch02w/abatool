@@ -6,12 +6,14 @@ import csv
 import heapq
 import json
 import os
+import sqlite3
 import stat
 import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from itertools import chain, islice
 from operator import itemgetter
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,7 @@ from modules.postprocessor.result_catalog import (
     classify_result,
     collect_result_records,
     collect_shared_asset_records,
+    index_diagnostic_record,
     preview_row_limit,
     read_csv_preview,
     read_xlsx_preview,
@@ -40,7 +43,7 @@ from modules.postprocessor.result_index import (
     ResultIndexInvalid,
     index_path,
     is_result_index_artifact,
-    load_result_index,
+    read_result_index,
 )
 
 from .contracts import SCHEMA_VERSION, ApiProblem
@@ -233,17 +236,16 @@ def discover_result_scopes(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _record_from_index(time_directory: Path, row: Mapping[str, Any]) -> ResultRecord:
-    return ResultRecord(
-        path=time_directory / str(row["relative_path"]),
-        use_case=str(row["use_case"]),
-        description=str(row["description"]),
-        recommended=bool(row["recommended"]),
-        section=str(row["section"]),
-        size=int(row["size"]),
-        mtime_ns=int(row["mtime_ns"]),
-        error=str(row.get("error", "")),
-    )
+def _indexed_records(batch: Path, scope: Path, rows: sqlite3.Cursor) -> Iterator[ResultRecord]:
+    whole_batch = scope == batch
+    for row in rows:
+        path = batch / row["relative_path"]
+        if whole_batch or path.is_relative_to(scope):
+            yield ResultRecord(
+                path=path, use_case=str(row["use_case"]), description=str(row["description"]),
+                recommended=bool(row["recommended"]), section=str(row["section"]),
+                size=int(row["size"]), mtime_ns=int(row["mtime_ns"]), error=str(row["error"]),
+            )
 
 
 def _shared_record_metadata(record: ResultRecord) -> ResultRecord:
@@ -586,42 +588,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
     query_text = query.strip().casefold()
     use_case_text = use_case.strip().casefold()
 
-    records: Iterable[ResultRecord]
     metadata: dict[str, str] = {}
-    source = "shared_asset"
-    if "directDirectory" in payload:
-        directory = _direct_directory(payload, root)
-        source = "direct"
-    elif raw_time_directory.strip():
-        time_directory = _resolve_directory(
-            raw_time_directory.strip(),
-            code_prefix="TIME_DIRECTORY",
-        )
-        _require_below(time_directory, root, field="timeDirectory")
-        _require_below(scope, time_directory, field="scope")
-        try:
-            loaded = load_result_index(time_directory)
-        except ResultIndexInvalid as exc:
-            code = "RESULT_INDEX_MISSING" if not index_path(time_directory).is_file() else "RESULT_INDEX_INVALID"
-            raise ApiProblem(
-                409,
-                code,
-                str(exc),
-                retryable=True,
-                details={"timeDirectory": str(time_directory)},
-            ) from exc
-        records = [
-            _record_from_index(time_directory, row)
-            for row in loaded.records
-            if scope == time_directory or (time_directory / str(row["relative_path"])).is_relative_to(scope)
-        ]
-        records.extend(collect_shared_asset_records(scope))
-        metadata = loaded.metadata
-        source = "index"
-    else:
-        records = (_shared_record_metadata(record) for record in collect_result_records(scope)
-                   if record.path.name != ASSET_MANIFEST_NAME)
-
     total_count = filtered_count = recommended_count = 0
     primary_counts: Counter[str] = Counter()
     use_cases: set[str] = set()
@@ -651,12 +618,41 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
                 filtered_count += 1
             yield record
 
-    if source == "direct":
+    if "directDirectory" in payload:
+        source = "direct"
+        directory = _direct_directory(payload, root)
         def scan() -> Iterator[ResultRecord]:
             return matching_records(_direct_records(directory), count=total_count == 0)
 
         page, offset = _direct_page(scan, offset, limit, anchor, sort, directory)
+    elif raw_time_directory.strip():
+        source = "index"
+        batch = _resolve_directory(raw_time_directory.strip(), code_prefix="TIME_DIRECTORY")
+        _require_below(batch, root, field="timeDirectory")
+        _require_below(scope, batch, field="scope")
+        try:
+            with read_result_index(batch) as (metadata, indexed_count, rows):
+                extra = collect_shared_asset_records(scope)
+                if include_internal and scope == batch:
+                    extra.append(index_diagnostic_record(index_path(batch), metadata))
+                matches = matching_records(chain(_indexed_records(batch, scope, rows), extra))
+                tail = indexed_count + len(extra) - offset
+                if tail < offset + limit:
+                    # Count all matches even for a jump beyond the end. The ordinal
+                    # preserves stable ordering of equal keys when reading the tail backwards.
+                    ranked = heapq.nlargest(max(1, tail), enumerate(matches),
+                                            key=lambda pair: (sort.catalog_key(pair[1]), pair[0]))
+                    skip = min(len(ranked), max(0, offset - (filtered_count - len(ranked))))
+                    page = [record for _, record in islice(reversed(ranked), skip, skip + limit)]
+                else:
+                    page = heapq.nsmallest(offset + limit, matches, key=sort.catalog_key)[offset:]
+        except ResultIndexInvalid as exc:
+            code = "RESULT_INDEX_MISSING" if not index_path(batch).is_file() else "RESULT_INDEX_INVALID"
+            raise ApiProblem(409, code, str(exc), retryable=True, details={"timeDirectory": str(batch)}) from exc
     else:
+        source = "shared_asset"
+        records = (_shared_record_metadata(record) for record in collect_result_records(scope)
+                   if record.path.name != ASSET_MANIFEST_NAME)
         ordered = sorted(matching_records(records), key=sort.catalog_key)
         page = ordered[offset : offset + limit]
     page_payload = [_record_payload(record, scope) for record in page]

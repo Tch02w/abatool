@@ -28,6 +28,24 @@ XAML_NAME = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
 XAML_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
 
 
+def test_result_browser_menu_and_ctrl8_share_the_postprocessing_result_command() -> None:
+    shell_xaml = ET.parse(WINUI_ROOT / "MainWindow.xaml")
+    menu = shell_xaml.find(".//xaml:MenuFlyoutItem[@Text='打开结果浏览']", XAML_NAMESPACE)
+    shortcut = shell_xaml.find(".//xaml:KeyboardAccelerator[@Key='Number8']", XAML_NAMESPACE)
+    assert menu is not None and shortcut is not None and shortcut.get("Modifiers") == "Control"
+    shell = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")
+    for name in (menu.attrib["Click"], shortcut.attrib["Invoked"]):
+        handler = shell.split(f"void {name}(", 1)[1].split("\n    }", 1)[0]
+        assert "await OpenResultsFromCurrentPageAsync()" in handler
+    command = shell.split("private Task OpenResultsFromCurrentPageAsync()", 1)[1].split("\n    }", 1)[0]
+    assert "ContentFrame.Content is OdbPostprocessingPage" in command
+    assert "return postprocessing.OpenResultsAsync()" in command
+    assert 'SelectRoute("result-browser")' in command
+    page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(encoding="utf-8")
+    button = page.split("void OnOpenResultsClicked(", 1)[1].split("\n    }", 1)[0]
+    assert "await OpenResultsAsync()" in button
+
+
 def test_postprocess_group_queue_poll_preserves_controls_and_updates_both_progress_indicators() -> None:
     page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.GroupQueue.cs").read_text(encoding="utf-8")
     poll = page.split("private async Task ReadGroupQueueAsync(", 1)[1].split("private void ApplyGroupQueue(", 1)[0]

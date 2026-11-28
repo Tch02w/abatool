@@ -453,9 +453,18 @@ public sealed partial class MainWindow : Window
         SelectRoute("odb-postprocessing");
     }
 
-    private void OnResultBrowserMenuClicked(object sender, RoutedEventArgs args)
+    private async void OnResultBrowserMenuClicked(object sender, RoutedEventArgs args)
     {
+        await OpenResultsFromCurrentPageAsync();
+    }
+
+    private Task OpenResultsFromCurrentPageAsync()
+    {
+        if (_shutdownStarted || App.Current.Commands.Locked) return Task.CompletedTask;
+        if (ContentFrame.Content is OdbPostprocessingPage postprocessing)
+            return postprocessing.OpenResultsAsync();
         SelectRoute("result-browser");
+        return Task.CompletedTask;
     }
 
     private void OnPostprocessingAcceleratorInvoked(
@@ -466,12 +475,12 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
-    private void OnResultBrowserAcceleratorInvoked(
+    private async void OnResultBrowserAcceleratorInvoked(
         KeyboardAccelerator sender,
         KeyboardAcceleratorInvokedEventArgs args)
     {
-        SelectRoute("result-browser");
         args.Handled = true;
+        await OpenResultsFromCurrentPageAsync();
     }
 
     private async void OnExitMenuClicked(object sender, RoutedEventArgs args)

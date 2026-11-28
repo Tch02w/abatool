@@ -7,11 +7,11 @@
 from __future__ import annotations
 
 import time
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Protocol
+from typing import ClassVar, Protocol
 from uuid import uuid4
 
 
@@ -252,7 +252,7 @@ class StateTransitionError(RuntimeError):
 class SchedulerCore:
     """拥有排队顺序、资源预留和作业状态机的 Deep Module。"""
 
-    _TRANSITIONS: dict[JobState, frozenset[JobState]] = {
+    _TRANSITIONS: ClassVar[dict[JobState, frozenset[JobState]]] = {
         JobState.PENDING: frozenset(
             {
                 JobState.DISPATCHED,
@@ -360,6 +360,8 @@ class SchedulerCore:
         message: str = "",
     ) -> SchedulerJobSnapshot:
         specification = specification.normalized()
+        if state != JobState.PENDING:
+            pending_reason = PendingReason.NONE
         existing = self._jobs.get(specification.job_id)
         if (
             existing is not None

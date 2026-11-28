@@ -1039,9 +1039,18 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         else
         {
             ResetPreview();
-            if (primary is { Internal: true })
+            if (primary is { Internal: true } && _displayedPage is { Source: "index" } page)
             {
-                PreviewTextBox.Text = "内部索引文件仅用于诊断，不支持打开或预览。";
+                string Field(string key) => page.IndexMetadata.TryGetValue(key, out var value)
+                    && !string.IsNullOrWhiteSpace(value) ? value : "未记录";
+                PreviewTitleText.Text = "预览 · 内部索引（只读）";
+                PreviewTextBox.Text = string.Join(Environment.NewLine,
+                    $"索引文件：{primary.Path}",
+                    $"索引版本：{Field("schema_version")}",
+                    $"绑定目录：{Field("canonical_path")}",
+                    $"记录数量：{Field("record_count")}",
+                    $"更新时间：{Field("updated_at")}",
+                    $"目录身份摘要：{Field("identity_hash")}");
             }
             if (_direct is not null && primary is { IsDirectory: true }) PreviewTextBox.Text = "双击文件夹或点击“进入文件夹”继续浏览。";
             RefreshInteractionState();

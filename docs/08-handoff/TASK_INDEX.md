@@ -1,5 +1,7 @@
 # 任务索引
 
+本轮队列终态恢复与 GJB-16 三级重启动链见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md)。内部索引只读诊断、万级记录分页与 Windows 发布冲突见[结果浏览任务](ACTIVE_TASKS/TASK-001-postprocessing.md#已建索引的分页内存与只读诊断)。后处理工程菜单与普通标签的返回行为见[原生交互任务](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
+
 F020/F022 在云图像素与毫米之间切换、已有目录尺寸恢复及 GIF 草稿的验收见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
 真实 CAE 对均匀应力 C3D8 的三向斜截面，以及力、弯矩和形心的解析核验见[斜截面记录](ACTIVE_TASKS/TASK-001-postprocessing.md#均匀应力实体的三向斜截面)。

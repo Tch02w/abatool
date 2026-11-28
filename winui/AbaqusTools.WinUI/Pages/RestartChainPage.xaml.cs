@@ -72,13 +72,13 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
             CycleCheckText.Text = CheckText(snapshot.Checks.CycleCount);
             MissingCheckText.Text = CheckText(snapshot.Checks.MissingParentCount);
             PathCheckText.Text = CheckText(snapshot.Checks.IncompatiblePathCount);
-            OrderCheckText.Text = snapshot.Checks.CycleCount == 0
-                ? $"已生成 · {snapshot.Checks.ValidCount} 个有效节点"
-                : "循环依赖阻止生成完整顺序";
+            OrderCheckText.Text = snapshot.HasIssues
+                ? $"{snapshot.NodeCount} 个重启动作业中 {snapshot.Checks.ValidCount} 个依赖有效，{snapshot.Checks.UpstreamInvalidCount} 个受上游影响"
+                : $"依赖有效 · {snapshot.Checks.ValidCount} 个重启动作业";
             if (feedbackTitle is not null)
                 App.Current.MainWindow.ShowFeedback(feedbackTitle, snapshot.NodeCount == 0
                     ? "正式队列中尚无重启动作业。"
-                    : $"循环 {snapshot.Checks.CycleCount} · 缺失 {snapshot.Checks.MissingParentCount} · 路径不兼容 {snapshot.Checks.IncompatiblePathCount}",
+                    : $"循环 {snapshot.Checks.CycleCount} · 缺失 {snapshot.Checks.MissingParentCount} · 路径不兼容 {snapshot.Checks.IncompatiblePathCount} · 受上游影响 {snapshot.Checks.UpstreamInvalidCount}",
                     snapshot.HasIssues ? InfoBarSeverity.Warning :
                         snapshot.NodeCount == 0 ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
             App.Current.MainWindow.ReportPageStatus(
@@ -172,11 +172,11 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
     private void UpdateExplorer(RestartChainSnapshot snapshot)
     {
         var groups = _nodes
-            .GroupBy(node => Math.Max(1, node.Stage))
+            .GroupBy(node => node.Stage)
             .OrderBy(group => group.Key)
             .Select(group => WorkbenchExplorerAdapterBase.Group(
                 $"restart:stage:{group.Key}",
-                $"阶段 {group.Key}",
+                group.Key == 0 ? "阶段未定" : $"阶段 {group.Key}",
                 group.Select(node => new ExplorerItem
                 {
                     StableId = $"restart:job:{node.JobId}",
@@ -222,7 +222,7 @@ public sealed partial class RestartChainPage : Page, IWorkbenchExplorerPage
         });
         panel.Children.Add(new TextBlock
         {
-            Text = node.IsRestart ? $"Restart · 阶段 {node.Stage}" : "基础计算",
+            Text = node.IsRestart ? (node.Stage > 0 ? $"Restart · 阶段 {node.Stage}" : "Restart · 阶段未定") : "基础计算",
             Foreground = ResourceBrush("TextFillColorSecondaryBrush"),
         });
         panel.Children.Add(new TextBlock

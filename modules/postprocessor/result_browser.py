@@ -1182,28 +1182,7 @@ class ResultBrowserDialog(QDialog):
                 self._record_from_index(time_directory, payload)
                 for payload in loaded.records
             ]
-            database = index_path(time_directory)
-            try:
-                stat = database.stat()
-                size = stat.st_size
-                mtime_ns = stat.st_mtime_ns
-            except OSError:
-                size = -1
-                mtime_ns = 0
-            records.append(
-                ResultRecord(
-                    database,
-                    "内部索引",
-                    "时间目录结果索引；"
-                    f"schema={loaded.metadata.get('schema_version', '?')}，"
-                    f"记录={loaded.metadata.get('record_count', len(records))}，"
-                    f"刷新={loaded.metadata.get('updated_at', '未知')}",
-                    section="info",
-                    size=size,
-                    mtime_ns=mtime_ns,
-                    internal=True,
-                )
-            )
+            records.append(_result_catalog.index_diagnostic_record(index_path(time_directory), loaded.metadata))
             self.time_records = records
             self.index_metadata = loaded.metadata
         self.current_scope = scope.resolve()

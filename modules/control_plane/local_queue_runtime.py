@@ -507,6 +507,7 @@ class LocalQueueRuntimeManager(LocalArchiveRecoveryMixin):
                     continue
                 if dependency.status in TERMINAL_STATUSES:
                     item.status = STATUS_FAILED
+                    item.pending_reason = ""
                     item.message = f"前置作业未成功完成：{dependency.job_name}"
 
         self.queue_service.runtime_transaction(mutation)

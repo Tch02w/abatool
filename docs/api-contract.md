@@ -14,6 +14,8 @@
 
 ### 结果记录排序（F021）
 
+当 `scope` 等于已验证的 `timeDirectory` 且 `includeInternal=true` 时，结果中增加一条可按普通规则筛选、排序、分页的索引诊断记录（`internal=true`、`section=info`、`recommended=false`）。其只读展示使用同一响应中的 `indexMetadata`。`totalCount` 和 `sectionCounts` 包含符合显示规则的诊断项，元数据的 `record_count` 是库内普通记录数。直接浏览和模型子目录均不生成该项。
+
 `POST /api/v1/result-records` 在指定范围内先筛选和排序，再分页。可选的 `sortBy` 接受 `default`、`recommended`、`useCase`、`name`、`description`、`path`、`size` 或 `modified`。`sortDescending` 接受布尔值，省略时升序。省略 `sortBy`、传 `null` 或 `default` 都沿用该来源的默认顺序。响应回显实际的 `sortBy` 和 `sortDescending`，默认顺序统一回显 `default` 和 `false`。非法字段值或方向类型返回 400 `INVALID_RESULT_SORT`。
 
 索引和公共数据版本查询的默认顺序为推荐优先、用途、自然文件名、路径。直接浏览默认文件夹优先，同类按自然文件名排序。自选顺序在直接浏览中也保留文件夹优先。名称和路径按自然序比较。路径采用 `relativePath`，范围内是相对路径，引用范围外的公共资产时保留完整路径。大小按字节、修改时间按纳秒数比较。无有效值的记录排在所属类型末尾，同值继续按自然文件名、原名、路径区分。索引及公共数据版本用 `offset` 翻页。
@@ -87,6 +89,18 @@
 `POST /api/v1/local-queue-controls` 的 `start` 在待运行未暂停条目的 Core 未设置时返回 409 `LOCAL_QUEUE_CORE_REQUIRED`，`details.jobNames` 列出作业。队列不足或状态未核对不构成重复提交的许可。资源、依赖和目录等待显示在队列消息与 `pendingReason`；保存/派发异常暂停新派发并设置 `schedulerMessage`。队列文件损坏保留原文件，队列 API 返回 500 `JOB_QUEUE_STATE_UNREADABLE`，不阻止健康检查和其余服务启动。
 
 `POST /api/v1/job-queue-commands` 的 `clearFinished` 保留状态未知条目；删除未知或活动条目返回 409 `ACTIVE_QUEUE_ITEMS_PROTECTED`，重新排队未知条目返回 409 `QUEUE_ITEMS_NOT_REQUEUEABLE`。扫描核对后处于待确认状态的条目允许用户明确重新排队。重启扫描及双文件持久边界见 [本机调度说明](03-features/LOCAL_SCHEDULING.md)。
+
+### 重启动链的上游诊断（F011）
+
+`GET /api/v1/restart-chains` 按正式队列返回 `schemaVersion=1`。列表 `nodes` 包含重启动作业，`graphNodes` 还包含参与连线的基础作业。同一重启动作业在两处的 `validationStatus` 和 `validationMessage` 一致。
+
+| 状态 | 含义 |
+|---|---|
+| `valid` | 从该节点到上游的队列依赖检查通过。生成前还须由 `POST /api/v1/restart-result-plans` 核对选中链的实际 ODB 文件并返回只读计划。 |
+| `cycle`、`missing_parent`、`incompatible_path` | 节点本身处于循环、缺少前置或前置路径不相容。消息给出该节点的直接原因。 |
+| `upstream_invalid` | 节点受到上游错误影响。消息给出最近一个直接出错的上游作业名和原因。循环节点及经父链通往循环的节点均返回 `stage=0`，页面显示「阶段未定」。 |
+
+`checks.validCount` 只统计整条依赖有效的重启动作业。新增的 `checks.upstreamInvalidCount` 统计 `upstream_invalid` 作业，客户端读取旧版响应时该字段默认 0。`cycleCount`、`missingParentCount` 和 `incompatiblePathCount` 各自统计直接检查结果。客户端仅对 `validationStatus=valid` 的重启动节点提供生成入口。[上游路径冲突与两个叶作业的实测](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#三级-gjb-16-工程与上游依赖校验)
 
 ### 本机内存观测补充（2026-11-18，F005/F007）
 

@@ -10,21 +10,22 @@ import sqlite3
 import threading
 import time
 import uuid
-from contextlib import closing
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Self
 
 from .file_attributes import ensure_windows_hidden
 from .result_assets import is_incomplete_output
-
 
 INDEX_FILENAME = "_AbaqusODBPostProcessor_ResultIndex.sqlite3"
 INDEX_LOCK_FILENAME = "_AbaqusODBPostProcessor_ResultIndex.lock"
 INDEX_SCHEMA_VERSION = 1
 _TEMP_PREFIX = f"{INDEX_FILENAME}.tmp-"
 _EXCLUDED_SUFFIXES = {".part", ".download", ".crdownload"}
+_INDEX_PUBLISH_WAIT_SECONDS = 5.0
 
 
 class ResultIndexError(RuntimeError):
@@ -99,7 +100,7 @@ def directory_identity(time_directory: Path | str) -> dict[str, Any]:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
@@ -209,14 +210,19 @@ def _validate_connection(
     return metadata
 
 
-def load_result_index(time_directory: Path | str) -> LoadedResultIndex:
+@contextmanager
+def read_result_index(time_directory: Path | str) -> Iterator[tuple[dict[str, str], int, sqlite3.Cursor]]:
+    """Read validated metadata, an exact upper bound and rows from one SQLite snapshot."""
     directory = Path(time_directory).resolve()
     database = index_path(directory)
     if not database.is_file():
         raise ResultIndexInvalid("索引文件不存在")
     try:
         with closing(_connect(database, read_only=True)) as connection:
+            connection.execute("BEGIN")
             metadata = _validate_connection(connection, directory)
+            count = connection.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+            metadata.setdefault("record_count", str(count))
             rows = connection.execute(
                 """
                 SELECT relative_path, name, suffix, use_case, description,
@@ -225,11 +231,15 @@ def load_result_index(time_directory: Path | str) -> LoadedResultIndex:
                 ORDER BY recommended DESC, use_case COLLATE NOCASE,
                          name COLLATE NOCASE, relative_path COLLATE NOCASE
                 """
-            ).fetchall()
+            )
+            yield metadata, count, rows
     except sqlite3.Error as error:
         raise ResultIndexInvalid(f"无法打开索引：{error}") from error
-    records = [dict(row) for row in rows]
-    return LoadedResultIndex(records=records, metadata=metadata)
+
+
+def load_result_index(time_directory: Path | str) -> LoadedResultIndex:
+    with read_result_index(time_directory) as (metadata, _, rows):
+        return LoadedResultIndex(records=[dict(row) for row in rows], metadata=metadata)
 
 
 def _pid_is_running(pid: int) -> bool:
@@ -250,7 +260,7 @@ class _DirectoryLock:
         self.token = uuid.uuid4().hex
         self._owned = False
 
-    def __enter__(self) -> "_DirectoryLock":
+    def __enter__(self) -> Self:
         payload = {
             "pid": os.getpid(),
             "host": socket.gethostname(),
@@ -445,20 +455,26 @@ def _temporary_database(time_directory: Path) -> Path:
     )
 
 
-def _replace_database(temporary: Path, target: Path) -> None:
+def _replace_database(temporary: Path, target: Path, cancellation: threading.Event) -> None:
+    if cancellation.is_set():
+        raise ResultIndexCancelled("索引任务已取消")
     with closing(_connect(temporary, read_only=True)) as connection:
         result = connection.execute("PRAGMA quick_check").fetchone()
         if not result or str(result[0]).casefold() != "ok":
             raise ResultIndexInvalid("新索引未通过 SQLite 完整性检查")
-    for attempt in range(2):
+    deadline = time.monotonic() + _INDEX_PUBLISH_WAIT_SECONDS
+    while not cancellation.is_set():
         try:
             os.replace(temporary, target)
+        except PermissionError as error:
+            remaining = deadline - time.monotonic()
+            if getattr(error, "winerror", None) not in (5, 32, 33) or remaining <= 0:
+                raise
+            cancellation.wait(min(0.1, remaining))
+        else:
             ensure_windows_hidden(target)
             return
-        except PermissionError:
-            if attempt:
-                raise
-            time.sleep(0.25)
+    raise ResultIndexCancelled("索引任务已取消")
 
 
 def build_result_index(
@@ -494,9 +510,7 @@ def build_result_index(
                     connection, directory, operation="full"
                 )
                 connection.commit()
-            if cancellation.is_set():
-                raise ResultIndexCancelled("索引任务已取消")
-            _replace_database(temporary, target)
+            _replace_database(temporary, target, cancellation)
             return metadata
         finally:
             temporary.unlink(missing_ok=True)
@@ -557,9 +571,7 @@ def update_result_index_scopes(
                     connection, directory, operation="incremental"
                 )
                 connection.commit()
-            if cancellation.is_set():
-                raise ResultIndexCancelled("索引任务已取消")
-            _replace_database(temporary, target)
+            _replace_database(temporary, target, cancellation)
             return metadata
         finally:
             temporary.unlink(missing_ok=True)

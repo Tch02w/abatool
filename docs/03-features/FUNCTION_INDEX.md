@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F021 时间目录索引诊断和分页使用 `modules/control_plane/results.py` 的 `list_result_records`、`modules/postprocessor/result_catalog.py` 的 `index_diagnostic_record`，以及 `modules/postprocessor/result_index.py` 的 `read_result_index`。WinUI 在 `ResultBrowserPage.xaml.cs` 的 `UpdateSelectionPreviewAsync` 显示当前响应的元数据。排序、选择范围与 Windows 读写并发分别见 `tests/control_plane/test_result_record_sort.py`、`tests/control_plane/test_results_api.py` 和 `tests/postprocessor/test_result_index.py`。[只读预览和分页实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#已建索引的分页内存与只读诊断)
+
+F004/F005 失败依赖的终态等待原因由 `modules/control_plane/local_queue_runtime.py`、`modules/submitter/scheduler_adapter.py` 和 `modules/submitter/scheduling.py` 在调度与恢复时规范。F011 的 `modules/control_plane/restart_chains.py` 同时计算节点的阶段和最近的阻塞来源。回归见 `tests/control_plane/test_local_scheduling.py`、`tests/submitter/test_scheduling.py` 和 `tests/control_plane/test_restart_chains_api.py`。[队列和重启动验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
+
+F001/F021 后处理菜单和快捷键共用 `MainWindow.xaml.cs` 的 `OpenResultsFromCurrentPageAsync`，在后处理页调用 `OpenResultsAsync` 选择该工程的结果根目录。[两次原生菜单验收](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#2026-11-28--从后处理菜单和-ctrl8-打开当前工程结果)
+
 F020/F022 图像宽高由 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` 的 `OnImageUnitChanged` 换算，`RestoreOutputOptions` 恢复已保存的单位及数值。允许范围与换算位于 `winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs` 的 `ImageLimits` 和 `ConvertImageDimension`。测试入口为 `tests/winui_postprocess/Program.cs`。[后处理设置与验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
 
 隐藏 GIF 数字框的草稿由 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` 的 `CaptureNumberText` 捕获，回归见 `tests/winui_postprocess/PostprocessDraftChecks.cs`。

@@ -20,6 +20,27 @@ def _edge(page, direction):
             "direction": direction, "sortAnchor": record["sortAnchor"]}
 
 
+def test_index_tail_offsets_follow_the_filtered_scope_and_keep_counts(tmp_path):
+    batch = tmp_path / "group" / "batch"
+    model = batch / "模型"
+    other = batch / "其他"
+    for directory, count in ((model, 11), (other, 3)):
+        directory.mkdir(parents=True)
+        for i in range(count):
+            (directory / f"frame{i}.csv").write_text("data\n", encoding="utf-8")
+    build_result_index(batch, classify_result, result_section)
+    query = {"schemaVersion": 1, "root": str(tmp_path), "timeDirectory": str(batch),
+             "scope": str(model), "sortBy": "name", "limit": 3, "section": "all"}
+    for offset in (0, 5, 8, 9, 11, 14, 10**40):
+        page = results.list_result_records(query | {"offset": offset})
+        assert [r["name"] for r in page["records"]] == [f"frame{i}.csv" for i in range(11)][offset:offset + 3]
+        assert page["totalCount"] == page["filteredCount"] == 11
+        assert page["hasMore"] == (offset + 3 < 11)
+        filtered = results.list_result_records(query | {"offset": offset, "query": "frame1"})
+        assert [r["name"] for r in filtered["records"]] == ["frame1.csv", "frame10.csv"][offset:offset + 3]
+        assert filtered["totalCount"] == 11 and filtered["filteredCount"] == 2
+
+
 def _names(page):
     return [record["name"] for record in page["records"]]
 

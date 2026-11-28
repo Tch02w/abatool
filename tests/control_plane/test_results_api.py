@@ -7,7 +7,7 @@ import pytest
 from openpyxl import Workbook
 
 from modules.postprocessor.result_catalog import classify_result, result_section
-from modules.postprocessor.result_index import build_result_index
+from modules.postprocessor.result_index import build_result_index, index_path
 from tests.control_plane.test_api import (
     api_request,
     json_response,
@@ -39,6 +39,34 @@ def _make_result_tree(root: Path) -> tuple[Path, Path, Path]:
     (odb / "metadata.json").write_text('{"name":"中文"}', encoding="utf-8")
     build_result_index(batch, classify_result, result_section)
     return batch, odb, data
+
+
+def test_internal_index_details_belong_to_the_selected_batch(tmp_path):
+    root = tmp_path / "结果"
+    batch, model, _ = _make_result_tree(root)
+    database = index_path(batch)
+    before = database.read_bytes()
+    with running_control_plane(tmp_path / "profile") as runtime:
+        def listing(scope, **filters):
+            response = _post(runtime, "/api/v1/result-records", {
+                "root": str(root), "scope": str(scope), "timeDirectory": str(batch),
+                "section": "all", **filters,
+            })
+            assert response[0] == 200
+            return json_response(response)
+
+        normal = listing(batch)
+        shown = listing(batch, includeInternal=True, section="info", useCase="内部索引")
+        row, = shown["records"]
+        assert row["path"] == str(database) and row["internal"] and not row["recommended"]
+        assert row["section"] == "info" and row["sizeBytes"] == len(before)
+        assert row["useCase"] not in normal["useCases"]
+        assert shown["totalCount"] == normal["totalCount"] + 1
+        assert shown["indexMetadata"]["record_count"] == str(normal["totalCount"])
+        assert shown["indexMetadata"]["identity_hash"] == normal["indexMetadata"]["identity_hash"]
+        assert listing(model, includeInternal=True, useCase="内部索引")["records"] == []
+        assert listing(batch, directDirectory=str(batch), includeInternal=True, query=database.name)["records"] == []
+    assert database.read_bytes() == before
 
 
 def test_result_scopes_records_filters_and_previews_are_qt_free(tmp_path: Path) -> None:

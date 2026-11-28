@@ -37,6 +37,17 @@ def specification(
 
 
 class SchedulerCoreTests(unittest.TestCase):
+    def test_reconciling_a_terminal_row_with_a_stale_wait_reason_is_idempotent(self):
+        scheduler = SchedulerCore()
+        job = specification("child")
+        scheduler.reconcile(job, state=JobState.PENDING, pending_reason=PendingReason.DEPENDENCY)
+        failed = scheduler.reconcile(job, state=JobState.FAILED, pending_reason=PendingReason.DEPENDENCY)
+        history = list(scheduler.repository.events)
+
+        self.assertEqual(failed.pending_reason, PendingReason.NONE)
+        self.assertEqual(scheduler.reconcile(job, state=JobState.FAILED, pending_reason=PendingReason.DEPENDENCY), failed)
+        self.assertEqual(scheduler.repository.events, history)
+
     def test_orphaned_active_attempt_is_marked_lost_during_recovery(self):
         scheduler = SchedulerCore()
         scheduler.submit(

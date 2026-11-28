@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import stat
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -20,8 +23,53 @@ from modules.postprocessor.result_index import (
     build_result_index,
     index_path,
     load_result_index,
+    read_result_index,
     update_result_index_scopes,
 )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows SQLite readers hold the current filename open")
+@pytest.mark.parametrize("outcome", ["publish", "cancel", "timeout"])
+def test_index_publication_while_a_validated_reader_is_open(tmp_path, monkeypatch, outcome):
+    from modules.postprocessor import result_index
+
+    batch = make_time_directory(tmp_path)
+    build_result_index(batch, classify_result, result_section)
+    target = index_path(batch)
+    original = target.read_bytes()
+    (batch / "new.txt").write_text("new", encoding="utf-8")
+    replacing = threading.Event()
+    cancellation = threading.Event()
+    replace = os.replace
+
+    def observe_replace(source, destination):
+        if destination == target:
+            replacing.set()
+        replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", observe_replace)
+    if outcome == "timeout":
+        monkeypatch.setattr(result_index, "_INDEX_PUBLISH_WAIT_SECONDS", 0.2)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with read_result_index(batch) as (_, count, rows):
+            writer = pool.submit(build_result_index, batch, classify_result, result_section, cancellation)
+            assert replacing.wait(5)
+            if outcome == "cancel":
+                cancellation.set()
+                with pytest.raises(ResultIndexCancelled):
+                    writer.result(timeout=3)
+            elif outcome == "timeout":
+                with pytest.raises(PermissionError):
+                    writer.result(timeout=3)
+            else:
+                with pytest.raises(TimeoutError):
+                    writer.result(timeout=0.4)
+            assert len(list(rows)) == count
+            assert target.read_bytes() == original
+        if outcome == "publish":
+            writer.result(timeout=5)
+        assert len(load_result_index(batch).records) == count + (outcome == "publish")
+    assert not any(p.name.endswith(".lock") or ".tmp-" in p.name for p in batch.iterdir())
 
 
 def make_time_directory(root: Path, name: str = "20260724_120000") -> Path:
@@ -88,6 +136,18 @@ def test_copied_index_is_rejected_until_rebuilt(tmp_path: Path) -> None:
 
     with pytest.raises(ResultIndexInvalid, match="不匹配"):
         load_result_index(copied)
+
+
+def test_older_metadata_without_count_uses_the_same_read_only_snapshot(tmp_path: Path) -> None:
+    batch = make_time_directory(tmp_path)
+    build_result_index(batch, classify_result, result_section)
+    with closing(sqlite3.connect(index_path(batch))) as connection:
+        connection.execute("DELETE FROM metadata WHERE key = 'record_count'")
+        connection.commit()
+    before = index_path(batch).read_bytes()
+    loaded = load_result_index(batch)
+    assert loaded.metadata["record_count"] == str(len(loaded.records)) == "2"
+    assert index_path(batch).read_bytes() == before
 
 
 def test_cancelled_refresh_keeps_the_previous_complete_index(

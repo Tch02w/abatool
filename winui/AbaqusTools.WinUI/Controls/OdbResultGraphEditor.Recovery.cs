@@ -24,7 +24,12 @@ public sealed partial class OdbResultGraphEditor
     {
         // Keep an unresolved/corrupt draft intact, even while loading the formal graph.
         if (_checkpointPaused || RecoveryPending || _savedSnapshot is null) return Task.CompletedTask;
-        if (!HasUnsavedChanges) return _recoveryStore.SaveAsync(null);
+        // A session-end checkpoint can precede the selected node's TextChanged event.
+        var nodes = _nodes.Select(CloneNode).ToArray();
+        if (nodes.FirstOrDefault(n => n.NodeId == _selectedNodeId) is { } selected)
+            ReadInspectorInto(selected);
+        var directory = OutputDirectoryTextBox.Text;
+        if (!_savedSnapshot.HasEdits(directory, nodes)) return _recoveryStore.SaveAsync(null);
         return _recoveryStore.SaveAsync(new OdbResultGraphDraft
         {
             Context = App.Current.ControlPlane.DescriptorPath,
@@ -32,7 +37,7 @@ public sealed partial class OdbResultGraphEditor
             Edited = new OdbResultGraphSnapshot
             {
                 SchemaVersion = _savedSnapshot.SchemaVersion, Revision = _savedSnapshot.Revision,
-                OutputDirectory = OutputDirectoryTextBox.Text, Nodes = _nodes.Select(CloneNode).ToArray(),
+                OutputDirectory = directory, Nodes = nodes,
             },
             SelectedNodeId = _selectedNodeId,
             Targets = _targets.Order(StringComparer.Ordinal).ToList(),

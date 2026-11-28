@@ -12,6 +12,12 @@ from modules.submitter.odb_merge_core import (
     OdbMergeRequest,
 )
 from modules.submitter.odb_merge_execution import execute_odb_merge
+from modules.submitter.odb_merge_publication import (
+    PREPARED_RECEIPT,
+    PREVIOUS_TARGET,
+    file_identity,
+    recover_publication,
+)
 
 
 def write_validation_receipt(arguments, cwd):
@@ -276,3 +282,188 @@ def test_extra_zero_fallback_checks_reopened_result_before_publication(
     assert original.read_bytes() == b"base"
     assert restart.read_bytes() == b"child"
     assert not list(tmp_path.glob(".abasub-odb-merge-*"))
+
+
+@pytest.mark.parametrize(
+    "previous,deny_old_link", [(False, False), (True, False), (True, True)]
+)
+def test_receipt_link_failure_restores_existing_target_or_removes_new_target(
+    tmp_path, monkeypatch, previous, deny_old_link
+):
+    import os
+
+    original, restart, output = [
+        tmp_path / name for name in ("base.odb", "restart.odb", "full_joined.odb")
+    ]
+    original.write_bytes(b"base")
+    restart.write_bytes(b"restart")
+    if previous:
+        output.write_bytes(b"previous")
+    if deny_old_link:
+        real_link = os.link
+
+        def link(source, dest):
+            if dest.name == PREVIOUS_TARGET:
+                raise PermissionError("old target forbids hard links")
+            real_link(source, dest)
+
+        monkeypatch.setattr(os, "link", link)
+    old_receipt = tmp_path / "previous.merge-validation.json"
+    old_receipt.write_text("previous receipt")
+
+    def run(args, cwd, log, controller):
+        if args[1] == "restartjoin":
+            (cwd / "abasub_join_working.odb").write_bytes(b"validated new")
+        else:
+            write_validation_receipt(args, cwd)
+            log("ABASUB_ODB_VALIDATION_OK")
+
+    def fail_receipt(prepared, destination, joined, stamp):
+        assert joined.read_bytes() == b"validated new"
+        assert file_identity(joined) == stamp and not destination.exists()
+        raise OSError("Receipt unavailable")
+
+    monkeypatch.setattr("modules.submitter.odb_merge_execution.run_process", run)
+    monkeypatch.setattr(
+        "modules.submitter.odb_merge_execution.publish_receipt", fail_receipt
+    )
+    with pytest.raises(OSError, match="Receipt unavailable"):
+        execute_odb_merge(
+            OdbMergeRequest(
+                original, restart, output, conflict_policy=MergeConflictPolicy.OVERWRITE
+            )
+        )
+    assert (output.read_bytes() if output.exists() else None) == (
+        b"previous" if previous else None
+    )
+    assert old_receipt.read_text() == "previous receipt"
+    assert not list(tmp_path.glob(".abasub-*")) and not list(
+        tmp_path.glob("*_original.odb")
+    )
+
+
+def test_final_notification_failure_after_overwrite_still_returns_committed_receipt(
+    tmp_path, monkeypatch
+):
+    import errno
+
+    original, restart, output = [
+        tmp_path / name for name in ("base.odb", "restart.odb", "full_joined.odb")
+    ]
+    original.write_bytes(b"base")
+    restart.write_bytes(b"restart")
+    output.write_bytes(b"previous")
+    old_receipt = tmp_path / "previous.merge-validation.json"
+    old_receipt.write_text("old")
+
+    def run(args, cwd, log, controller):
+        if args[1] == "restartjoin":
+            (cwd / "abasub_join_working.odb").write_bytes(b"new")
+        else:
+            write_validation_receipt(args, cwd)
+            log("ABASUB_ODB_VALIDATION_OK")
+
+    def progress(percent, phase):
+        if percent == 100:
+            raise OSError(errno.ENOSPC, "no space for observer")
+
+    monkeypatch.setattr("modules.submitter.odb_merge_execution.run_process", run)
+    result = execute_odb_merge(
+        OdbMergeRequest(
+            original, restart, output, conflict_policy=MergeConflictPolicy.OVERWRITE
+        ),
+        progress,
+    )
+    assert result.output_odb.read_bytes() == b"new"
+    assert json.loads(result.validation_report.read_text())[
+        "validatedFile"
+    ] == file_identity(output)
+    assert old_receipt.read_text() == "old"
+    assert not list(tmp_path.glob(".abasub-*"))
+
+
+@pytest.mark.parametrize(
+    "situation",
+    [
+        "before",
+        "after",
+        "copy",
+        "receipt_exists",
+        "conflict",
+        "legacy",
+        "missing_backup",
+        "swapped_backups",
+        "renumbered",
+    ],
+)
+def test_recovered_receipt_is_only_exposed_for_the_matching_target(tmp_path, situation):
+    import os
+    import shutil
+
+    attempt = "a" * 32
+    request = OdbMergeRequest(
+        tmp_path / "p.odb",
+        tmp_path / "r.odb",
+        tmp_path / "full_joined.odb",
+        attempt_id=attempt,
+    )
+    target = (
+        request.output_odb
+        if situation != "renumbered"
+        else tmp_path / "full_joined_002.odb"
+    )
+    stage = tmp_path / (".abasub-odb-merge-" + attempt)
+    stage.mkdir()
+    candidate = stage / "candidate.odb"
+    candidate.write_bytes(b"new")
+    target.write_bytes(b"old")
+    os.link(target, stage / PREVIOUS_TARGET)
+    identity = file_identity(candidate)
+    assert identity is not None
+    document = {
+        "status": "verified",
+        "attemptId": attempt,
+        "validatedFile": identity,
+        "previousFile": file_identity(target),
+        "includeHistory": True,
+        "originalPath": str(request.original_odb),
+        "restartPath": str(request.restart_odb),
+        "joinedPath": str(target),
+    }
+    receipt = target.with_suffix(f".{attempt}.merge-validation.json")
+    for key, stem in (("original", "p"), ("restart", "r")):
+        backup = tmp_path / (stem + "_original.odb")
+        backup.write_text(stem)
+        document[key + "Backup"] = str(backup)
+        document[key + "BackupFile"] = file_identity(backup)
+    if situation == "missing_backup":
+        backup.unlink()
+    if situation == "swapped_backups":
+        document["originalBackup"] = document["restartBackup"]
+    if situation == "legacy":
+        receipt.write_text(
+            json.dumps({"status": "verified", "joinedPath": str(target)})
+        )
+    else:
+        (stage / PREPARED_RECEIPT).write_text(json.dumps(document))
+        if situation == "copy":
+            shutil.copy2(candidate, target)
+        elif situation != "before":
+            os.replace(candidate, target)
+    if situation == "receipt_exists":
+        receipt.write_text(json.dumps(document))
+    if situation == "conflict":
+        receipt.write_text("unrelated")
+    message = recover_publication(request, attempt)
+    if situation in ("before", "copy", "missing_backup", "swapped_backups"):
+        assert not receipt.exists() and "已确认目标" not in message
+    elif situation in ("after", "receipt_exists", "renumbered"):
+        assert "已确认目标" in message and json.loads(receipt.read_text()) == document
+        assert recover_publication(request, attempt) == message
+    elif situation == "conflict":
+        assert "已确认目标" not in message and receipt.read_text() == "unrelated"
+    else:
+        assert not message and json.loads(receipt.read_text()) == {
+            "status": "verified",
+            "joinedPath": str(target),
+        }

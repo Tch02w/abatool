@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
 
+import psutil
+
 from .file_attributes import ensure_windows_hidden
 from .result_assets import is_incomplete_output
 
@@ -114,10 +116,12 @@ def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
 
 
 def _create_schema(connection: sqlite3.Connection) -> None:
+    # Commit the private database's schema and records together before publication.
     connection.executescript(
         """
         PRAGMA journal_mode=DELETE;
         PRAGMA synchronous=FULL;
+        BEGIN;
         CREATE TABLE IF NOT EXISTS metadata (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -242,16 +246,20 @@ def load_result_index(time_directory: Path | str) -> LoadedResultIndex:
         return LoadedResultIndex(records=[dict(row) for row in rows], metadata=metadata)
 
 
-def _pid_is_running(pid: int) -> bool:
-    if pid <= 0:
+def _local_owner_exited(contents: bytes) -> bool:
+    try:
+        payload = json.loads(contents)
+    except (ValueError, UnicodeError):
+        return False
+    if not isinstance(payload, dict) or payload.get("host") != socket.gethostname():
+        return False
+    pid = payload.get("pid")
+    if type(pid) is not int or pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
-    except PermissionError:
-        return True
-    except OSError:
+        return not psutil.pid_exists(pid)
+    except (psutil.Error, OSError, OverflowError):
         return False
-    return True
 
 
 class _DirectoryLock:
@@ -259,8 +267,21 @@ class _DirectoryLock:
         self.path = lock_path(time_directory)
         self.token = uuid.uuid4().hex
         self._owned = False
+        self._windows_marker = None
 
     def __enter__(self) -> Self:
+        if os.name == "nt":
+            from .windows_index_lock import open_index_writer
+
+            try:
+                self._windows_marker = open_index_writer(self.path, _local_owner_exited)
+            except OSError as error:
+                if isinstance(error, BlockingIOError):
+                    raise ResultIndexLocked("时间目录已有索引写入锁，尚未确认原任务结束。请稍后重试。") from error
+                if getattr(error, "winerror", None) in (32, 33):
+                    raise ResultIndexLocked("另一程序实例正在索引该时间目录") from error
+                raise
+            return self
         payload = {
             "pid": os.getpid(),
             "host": socket.gethostname(),
@@ -285,16 +306,10 @@ class _DirectoryLock:
 
     def _remove_stale_lock(self) -> bool:
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            contents = self.path.read_bytes()
+        except OSError:
             return False
-        if str(payload.get("host", "")) != socket.gethostname():
-            return False
-        try:
-            pid = int(payload.get("pid", -1))
-        except (TypeError, ValueError):
-            return False
-        if _pid_is_running(pid):
+        if not _local_owner_exited(contents):
             return False
         try:
             self.path.unlink()
@@ -303,6 +318,9 @@ class _DirectoryLock:
         return True
 
     def __exit__(self, _exc_type, _exc, _traceback) -> None:
+        if self._windows_marker is not None:
+            self._windows_marker.close()
+            return
         if not self._owned:
             return
         try:

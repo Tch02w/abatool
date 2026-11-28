@@ -12,6 +12,8 @@
 
 单独提交的刷新优先于等待中的批量成员。每个索引以独立文件锁保护并原子发布。发布后到达的取消请求保留成功结果。后台进程重启后，重新提交范围会跳过已经发布的索引，原进程中的批次编号随进程结束失效。
 
+另一实例持有写入锁时，本次刷新记录为失败，错误的 `details.exceptionType` 为 `ResultIndexLocked`，`retryable` 为 `true`。可以继续读取原索引。写入者结束后，以新的 `clientRequestId` 再次提交刷新；重复查询原操作仍会得到当时的失败记录。
+
 ### Excel 工作表预览（F021）
 
 `POST /api/v1/result-previews` 接受已读取结果目录 `root`、所选文件 `path` 和原有的可选行数上限 `maxRows`。XLSX 可附带 `worksheet` 精确选择工作表。省略时读取工作簿顺序中的第一张可见数据表。表格响应保留 `headers`、`rows`、`truncated`，并为 XLSX 附带可见数据表名称数组 `worksheets` 和当前名称 `selectedWorksheet`。旧式仅含单张表 XML 的文件仍可按默认方式读取，返回空名称数组和 `null`。CSV、文本和图像的原有响应字段不变。

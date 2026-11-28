@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import errno
 import json
+import logging
 import os
 import shutil
 from collections.abc import Callable
@@ -22,6 +23,12 @@ from .odb_merge_core import (
     OdbMergeRequest,
     OdbMergeResult,
     build_merge_plan,
+)
+from .odb_merge_publication import (
+    PREPARED_RECEIPT,
+    PREVIOUS_TARGET,
+    file_identity,
+    publish_receipt,
 )
 
 ProgressCallback = Callable[[int, str], None]
@@ -53,6 +60,7 @@ def execute_odb_merge(
 
     effective_controller = controller or ProcessController()
     plan = build_merge_plan(request)
+    keep_staging = False
     published: list[Path] = []
     source_identities = {
         path: _identity(path)
@@ -157,11 +165,12 @@ def execute_odb_merge(
             raise OdbMergeError(f"发布结果时目标文件已存在：{destination}") from exc
         except OSError as exc:
             raise OdbMergeError(f"无法发布文件到 {destination}：{exc}") from exc
-        source.unlink()
         published.append(destination)
+        source.unlink()
 
+    # A pre-existing folder belongs to another attempt or its recovery evidence.
+    plan.staging_dir.mkdir()
     try:
-        plan.staging_dir.mkdir()
         report(5, "正在复制原始 ODB 的安全副本…")
         copy_file(plan.request.original_odb, plan.staged_original_backup)
         report(25, "正在复制重启动 ODB 的安全副本…")
@@ -272,20 +281,58 @@ def execute_odb_merge(
             joinedPath=str(plan.request.output_odb),
             originalBackup=str(plan.original_backup),
             restartBackup=str(plan.restart_backup),
+            attemptId=plan.staging_dir.name.rsplit("-", 1)[-1],
+            validatedFile=file_identity(plan.restartjoin_output_odb),
+            originalBackupFile=file_identity(plan.staged_original_backup),
+            restartBackupFile=file_identity(plan.staged_restart_backup),
         )
-        validation_file.write_text(
+        prepared = plan.staging_dir / PREPARED_RECEIPT
+        previous = plan.staging_dir / PREVIOUS_TARGET
+        if (
+            plan.request.conflict_policy == MergeConflictPolicy.OVERWRITE
+            and plan.request.output_odb.exists()
+        ):
+            validation["previousFile"] = file_identity(plan.request.output_odb)
+            try:
+                os.link(plan.request.output_odb, previous)
+            except PermissionError, NotImplementedError:
+                # File-specific ACLs may allow replacement but forbid linking the old target.
+                copy_file(plan.request.output_odb, previous)
+            validation["previousBackupFile"] = file_identity(previous)
+            if file_identity(plan.request.output_odb) != validation["previousFile"]:
+                raise OdbMergeError("发布准备期间已有目标 ODB 发生变化。")
+        prepared.write_text(
             json.dumps(validation, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        if published_validation.exists():
+            raise OdbMergeError(f"目标目录已有本次编号的回执：{published_validation}")
+        check_cancelled()
+        check_sources()
         report(92, "正在保存安全副本并发布合并结果…")
         publish(plan.staged_original_backup, plan.original_backup)
         publish(plan.staged_restart_backup, plan.restart_backup)
-        publish(validation_file, published_validation)
+        if (
+            previous.exists()
+            and file_identity(plan.request.output_odb) != validation["previousFile"]
+        ):
+            raise OdbMergeError("已有目标在最终替换前发生变化，合并未发布。")
         publish(
             plan.restartjoin_output_odb,
             plan.request.output_odb,
-            overwrite=plan.request.conflict_policy == MergeConflictPolicy.OVERWRITE,
+            overwrite=previous.exists(),
         )
-        report(100, "ODB 合并与只读验证完成。")
+        # Readers must never see a public success receipt before its ODB is in place.
+        publish_receipt(
+            prepared,
+            published_validation,
+            plan.request.output_odb,
+            validation["validatedFile"],
+        )
+        published.append(published_validation)
+        try:
+            report(100, "ODB 合并与只读验证完成。")
+        except Exception:  # Observers cannot undo a committed ODB and receipt.
+            logging.getLogger(__name__).exception("ODB 已发布，但完成进度通知失败")
         return OdbMergeResult(
             output_odb=plan.request.output_odb,
             original_backup=plan.original_backup,
@@ -295,21 +342,54 @@ def execute_odb_merge(
             empty_frame_steps=empty_frame_steps,
         )
     except BaseException as error:
-        # Backups are new files selected by the planner. If publication fails
-        # before the result is committed, remove only files created in this run.
+        # If only the last small receipt failed, restore the old result by its
+        # same-volume link. Do not overwrite a target changed by another writer.
+        if (
+            plan.request.output_odb in published
+            and published_validation not in published
+        ):
+            keep_staging = True
+            try:
+                if (
+                    not validation["validatedFile"]
+                    or file_identity(plan.request.output_odb)
+                    != validation["validatedFile"]
+                ):
+                    raise OdbMergeError("目标文件身份已改变")
+                if "previousFile" in validation:
+                    if (
+                        not validation["previousBackupFile"]
+                        or file_identity(previous) != validation["previousBackupFile"]
+                    ):
+                        raise OdbMergeError("旧目标备份身份已改变")
+                    os.replace(previous, plan.request.output_odb)
+                else:
+                    plan.request.output_odb.unlink()
+            except (OSError, OdbMergeError) as rollback_error:
+                raise OdbMergeError(
+                    f"发布回执失败且暂时无法恢复目标。请保留 {plan.staging_dir} 并核对目标：{rollback_error}"
+                ) from error
+            published.remove(plan.request.output_odb)
+            keep_staging = False
         if plan.request.output_odb not in published:
             for path in reversed(published):
                 try:
                     path.unlink(missing_ok=True)
                 except OSError:
                     pass
-        if isinstance(error, OSError) and (
-            error.errno == errno.ENOSPC or getattr(error, "winerror", None) in (39, 112)
+        if (
+            plan.request.output_odb not in published
+            and isinstance(error, OSError)
+            and (
+                error.errno == errno.ENOSPC
+                or getattr(error, "winerror", None) in (39, 112)
+            )
         ):
             raise OdbMergeError("目标磁盘空间不足，ODB 合并未发布。") from error
         raise
     finally:
-        shutil.rmtree(plan.staging_dir, ignore_errors=True)
+        if not keep_staging:
+            shutil.rmtree(plan.staging_dir, ignore_errors=True)
 
 
 __all__ = [

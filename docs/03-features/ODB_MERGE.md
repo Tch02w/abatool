@@ -45,6 +45,10 @@ Abaqus 有时会给没有父段样本的通道额外写入一个起始零点。�
 
 若后台在确认完成前退出，任务显示“合并中断，待核对”。先检查原任务是否仍在运行，再查看目标目录的 `*.merge-validation.json`、结果、备份及 `.abasub-odb-merge-*` 工作区。不要只凭文件存在认定成功，也不要因没有新日志重复启动。程序保留现场，不自动清理或重跑；外部 Abaqus 的运行状态须另行核实。
 
+公开的 `*.merge-validation.json` 在最终 ODB 就位后发布。验证通过至文件就位期间，准备好的回执存于本次私有工作目录。覆盖时会临时保留旧 ODB 的同卷硬链接。若仅旧文件的访问权限拒绝硬链接，则按需复制并核对文件身份。正常运行时若最终回执发布失败，工作台会恢复旧目标；若其他写入者已改变目标或文件被锁定而无法恢复，会报告原因并保留现场。
+
+重开工作台时，中断记录使用尝试编号找到本次回执。它对照本机文件系统提供的卷号、文件编号、大小和修改时间，核对目标和两份源备份。若目标仍是旧 ODB，界面会提示。若目标已就位且身份、备份和回执均匹配，会补齐缺失的公开回执。两种情况都保留操作的中断记录，同一请求不再执行。无法确认、目标移走或复制、备份缺失或同名回执内容有冲突时，保留现有文件，不补成功回执。成功完成的旧版历史记录仍可查看。此处的快速身份核对用于同卷发布，不对异地副本或事后修改做内容鉴定。[两侧中断的实际复现](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)
+
 记录损坏或被其他后台占用时禁止新合并并保留数据库。运行中保存失败会请求停止未发布操作，界面显示保存失败提示；已发布结果仍显示实际结果。此时保留后台，处理磁盘问题并核对记录和文件。退出检查同时保护升级和合并；高频日志采用检查点节流，异常退出可能丢失最后检查点之后的日志。完整策略见 [ADR 0006](../submitter/adr/0006-durable-merge-history.md)。F012 已增加后台批量计划与阶段恢复，操作和限制见 [完整结果批量任务](ODB_RESULT_BATCH.md)，真实多步骤及原生交互仍待验收。
 
 新增全量内容核对会增加读取时间。界面 82% 阶段显示逐分析步校验，日志按步骤更新；大文件需要等待，不因暂时没有新日志重复启动。
@@ -57,6 +61,7 @@ Abaqus 有时会给没有父段样本的通道额外写入一个起始零点。�
 
 - 计划：`modules/submitter/odb_merge_core.py` / `build_merge_plan`。
 - 隔离执行及发布：`modules/submitter/odb_merge_execution.py` / `execute_odb_merge`。
+- 中断发布的目标身份验证及恢复位于 `modules/submitter/odb_merge_publication.py` 的 `recover_publication`。对目标、两份源备份和原有回执仅做必要的小文件读取和属性查询。
 - Abaqus 校验：`modules/postprocessor/abaqus_scripts/validate_odb_merge.py` / `verify`、`main`。
 - 起始零点的源历史重建与位置校验见 `modules/postprocessor/abaqus_scripts/restore_odb_history.py` 的 `restore` 和 `check_locations`。
 - 控制面：`modules/control_plane/odb_merge_operations.py` / `OdbMergeOperationManager`。并发重复请求核对同一请求标识的参数，关闭后不再准入新操作。

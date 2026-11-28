@@ -17,7 +17,6 @@ from modules.postprocessor.result_assets import is_incomplete_output
 from modules.postprocessor.result_catalog import classify_result, result_section
 from modules.postprocessor.result_index import (
     ResultIndexCancelled,
-    ResultIndexLocked,
     build_result_index,
     index_path,
 )
@@ -519,7 +518,7 @@ class ResultIndexOperationManager(OperationShutdownGuard):
                 operation.error = {
                     "code": "RESULT_INDEX_BUILD_FAILED",
                     "message": (str(exc).strip() or exc.__class__.__name__)[:2000],
-                    "retryable": not isinstance(exc, ResultIndexLocked),
+                    "retryable": True,
                     "details": {"exceptionType": exc.__class__.__name__},
                 }
                 self._transition_locked(operation, FAILED, "result.index.failed")

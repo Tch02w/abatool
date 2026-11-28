@@ -294,7 +294,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RootContextHint.Visibility = _location.HasPendingRoot ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null, bool notify = false)
+    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null, bool notify = false,
+        Func<Task>? loadSelectedScope = null)
     {
         _location.DraftRoot = RootTextBox.Text;
         var locationRead = _location.BeginRead(explicitRoot, selectPath);
@@ -339,7 +340,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 _location.RetainMatchingBookmark(response.Root, _selectedScope?.Path);
                 ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
             },
-            RefreshSelectedScopeAsync,
+            loadSelectedScope ?? RefreshSelectedScopeAsync,
             exception =>
             {
                 ScopeStatusText.Text = "目录读取失败";
@@ -682,7 +683,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     }
 
     private async Task LoadRecordsAsync(int? pageOffset = null, ResultDirectPageAnchor? directAnchor = null,
-        (string Key, bool Descending)? sort = null)
+        (string Key, bool Descending)? sort = null, HashSet<string>? selectedPaths = null)
     {
         var scope = _selectedScope;
         if (scope is null || !_loads.CanLoadRecords || _location.LoadedRoot is null)
@@ -703,7 +704,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         };
         if (query is null) return;
         var requestedSort = sort ?? _sort;
-        var selectedPaths = sort.HasValue ? SelectedRecords().Select(record => record.Path).ToHashSet(StringComparer.Ordinal) : null;
+        if (sort.HasValue) selectedPaths ??= SelectedRecords().Select(record => record.Path).ToHashSet(StringComparer.Ordinal);
         var request = _loads.InvalidateRecords();
         var restorePreview = false;
         _pendingSort = sort;
@@ -856,11 +857,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
         _loads.BeginIndex();
         var indexRequest = _loads.IndexRevision;
-        ClearResults();
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         _activeIndexBatchId = null;
-        IndexInfoBar.IsOpen = false;
         IndexProgressBar.Visibility = Visibility.Visible;
         ResultStatusText.Text = scope.CanBuildMissingIndexes ? "正在查找缺失索引的时间目录…" : "正在创建结果索引…";
         RefreshInteractionState();
@@ -877,6 +876,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 scope.TimeDirectory,
                 Guid.NewGuid());
             _activeIndexOperationId = initial.OperationId;
+            RefreshInteractionState();
             ApplyIndexSnapshot(initial, indexRequest);
             var progress = new Progress<ResultIndexOperationSnapshot>(
                 update => ApplyIndexSnapshot(update, indexRequest));
@@ -968,7 +968,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         await _loads.CompleteIndexAsync(
             snapshot.Status,
-            () => RefreshScopesAsync(snapshot.Request.TimeDirectory, snapshot.Request.Root));
+            () => ReloadPublishedIndexAsync(snapshot.Request));
         switch (snapshot.Status)
         {
             case "succeeded":
@@ -984,6 +984,23 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                 ShowError(message, "结果索引失败");
                 break;
         }
+    }
+
+    private Task ReloadPublishedIndexAsync(ResultIndexOperationRequest request)
+    {
+        if (_displayedPage is not { Source: "index" } page || _appliedQuery is not { } query
+            || !string.Equals(query.Root, request.Root, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(query.TimeDirectory, request.TimeDirectory, StringComparison.OrdinalIgnoreCase))
+            return RefreshScopesAsync(request.TimeDirectory, request.Root);
+
+        var selectedPaths = SelectedRecords().Select(record => record.Path).ToHashSet(StringComparer.Ordinal);
+        return RefreshScopesAsync(page.Scope, request.Root, loadSelectedScope: () =>
+        {
+            if (!string.Equals(_selectedScope?.Path, query.Scope, StringComparison.OrdinalIgnoreCase))
+                return RefreshSelectedScopeAsync();
+            _appliedQuery = query;
+            return LoadRecordsAsync(page.Offset, selectedPaths: selectedPaths);
+        });
     }
 
     private async void OnCancelIndexClicked(object sender, RoutedEventArgs e)
@@ -1388,7 +1405,8 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         foreach (var button in SortHeaders.Children.OfType<Button>()) button.IsEnabled = canSort;
         SortPathMenuItem.IsEnabled = SortDescriptionMenuItem.IsEnabled = canSort;
         ResetSortMenuItem.IsEnabled = canSort && (_pendingSort ?? _sort).Key != "default";
-        ResultList.IsEnabled = idle;
+        ResultList.IsEnabled = idle || (_indexBusy && !_scopeBusy && !_recordsBusy && !FileOperationBusy
+            && _displayedPage?.Source == "index");
         var selected = SelectedRecords();
         var first = selected.FirstOrDefault();
         var enterFolder = _direct is not null && first is { IsDirectory: true } && selected.Count == 1;

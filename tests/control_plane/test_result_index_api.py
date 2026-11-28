@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import json
+import os
+import socket
 import threading
 import time
 from pathlib import Path
 
-from modules.postprocessor.result_index import ResultIndexCancelled, index_path
+from modules.postprocessor.result_index import (
+    ResultIndexCancelled,
+    index_path,
+    lock_path,
+)
 from tests.control_plane.test_api import (
     api_request,
     json_response,
@@ -32,6 +39,31 @@ def _wait(runtime, operation_id: str, statuses: set[str], timeout: float = 5.0):
             return latest
         time.sleep(0.01)
     raise AssertionError(f"result index operation timed out: {latest}")
+
+
+def test_refresh_can_retry_after_a_legacy_writer_releases_its_marker(tmp_path: Path, monkeypatch) -> None:
+    def reject_signal(*_):
+        raise AssertionError("Index contention must not send a Windows process signal")
+
+    if os.name == "nt":
+        monkeypatch.setattr(os, "kill", reject_signal)
+    root = tmp_path / "results"
+    batch = root / "group" / "20260830_120000"
+    (batch / "model").mkdir(parents=True)
+    marker = lock_path(batch)
+    marker.write_text(json.dumps({"pid": os.getpid(), "host": socket.gethostname()}), encoding="utf-8")
+
+    with running_control_plane(tmp_path) as runtime:
+        first = json_response(api_request(runtime, "/api/v1/result-index-builds", method="POST",
+                                          payload=_payload(root, batch)))
+        failure = _wait(runtime, first["operationId"], {"failed"})["error"]
+        assert failure["retryable"] and failure["details"]["exceptionType"] == "ResultIndexLocked"
+        assert marker.is_file() and not index_path(batch).exists()
+        marker.unlink()
+        second = json_response(api_request(runtime, "/api/v1/result-index-builds", method="POST",
+                                           payload=_payload(root, batch, "retry-after-release")))
+        _wait(runtime, second["operationId"], {"succeeded"})
+        assert index_path(batch).is_file()
 
 
 def test_result_index_build_is_async_idempotent_and_loadable(tmp_path: Path) -> None:

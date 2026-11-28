@@ -62,6 +62,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
     public async Task SaveForCloseAsync()
     {
         await WorkbenchSession.WaitForIdleAsync(() => _requestBusy, "结果图读写");
+        ApplyInspectorChanges();
         if (!HasUnsavedChanges) return;
         if (_executionBusy || _savedSnapshot is null)
             throw new InvalidOperationException("结果图仍有未保存内容，请等待任务结束后保存再关闭。");
@@ -93,6 +94,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
+        ApplyInspectorChanges();
         _selectedNodeId = nodeId;
         PopulateInspector();
         RefreshNodeSelection();
@@ -156,6 +158,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
+        ApplyInspectorChanges();
         _requestBusy = true;
         RefreshInteractionState();
         try
@@ -268,6 +271,7 @@ public sealed partial class OdbResultGraphEditor : UserControl
             return;
         }
 
+        ApplyInspectorChanges();
         var node = new OdbResultGraphNode
         {
             NodeId = Guid.NewGuid().ToString("N"),
@@ -337,21 +341,27 @@ public sealed partial class OdbResultGraphEditor : UserControl
         }
     }
 
-    private void OnNodeFieldsChanged(object sender, TextChangedEventArgs e)
+    private void OnNodeFieldsChanged(object sender, TextChangedEventArgs e) => ApplyInspectorChanges();
+
+    private void ApplyInspectorChanges()
     {
-        if (!_initialized || _updatingFields || !CanEdit || SelectedNode is not { } node)
+        if (_updatingFields || !CanEdit || SelectedNode is not { } node || !ReadInspectorInto(node))
         {
             return;
         }
-
-        if (node.Name == NodeNameTextBox.Text && node.OdbPath == NodeOdbTextBox.Text
-            && node.InpPath == NodeInpTextBox.Text) return;
-        node.Name = NodeNameTextBox.Text;
-        node.OdbPath = NodeOdbTextBox.Text;
-        node.InpPath = NodeInpTextBox.Text;
         UpdateNodeLabels(node);
         UpdateNodeValidation(node);
         MarkDraftChanged();
+    }
+
+    private bool ReadInspectorInto(OdbResultGraphNode node)
+    {
+        if (node.Name == NodeNameTextBox.Text && node.OdbPath == NodeOdbTextBox.Text
+            && node.InpPath == NodeInpTextBox.Text) return false;
+        node.Name = NodeNameTextBox.Text;
+        node.OdbPath = NodeOdbTextBox.Text;
+        node.InpPath = NodeInpTextBox.Text;
+        return true;
     }
 
     private void OnOutputDirectoryChanged(object sender, TextChangedEventArgs e)

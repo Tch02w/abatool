@@ -8,7 +8,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -21,6 +21,7 @@ from modules.submitter.odb_merge_core import (
     build_merge_plan,
 )
 from modules.submitter.odb_merge_execution import execute_odb_merge
+from modules.submitter.odb_merge_publication import recover_publication
 
 from .compatibility import (
     CANCELLED,
@@ -241,6 +242,13 @@ class OdbMergeOperationManager:
                             "message": "后台在合并完成确认前中断，未自动重跑。外部进程状态尚未确认；请核查原任务、目标目录及校验回执后再决定是否重试。",
                             "retryable": False,
                         }
+                        publication = recover_publication(
+                            operation.request.request, operation.attempt_id
+                        )
+                        if publication:
+                            operation.error["message"] = (
+                                f"后台在合并完成确认前中断，未自动重跑。{publication}"
+                            )
                         self._transition_locked(
                             operation, FAILED, "odb.merge.recovered"
                         )
@@ -541,7 +549,7 @@ class OdbMergeOperationManager:
                     return
 
             result = self._runner(
-                operation.request.request,
+                replace(operation.request.request, attempt_id=operation.attempt_id),
                 lambda percent, phase: self._on_progress(operation_id, percent, phase),
                 lambda message: self._on_log(operation_id, message),
                 operation.controller,

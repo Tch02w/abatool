@@ -41,3 +41,22 @@ def test_all_eight_page_draft_bindings_resolve_to_supported_inputs():
     assert routes == {"new-job", "job-queue", "job-overview", "compute-resources", "restart-chain",
                       "odb-merge", "odb-postprocessing", "result-browser"}
     assert count >= 30
+
+
+def test_result_graph_checkpoint_captures_selected_inspector_before_change_notifications():
+    controls = ROOT / "Controls"
+    editor = (controls / "OdbResultGraphEditor.xaml.cs").read_text(encoding="utf-8")
+    recovery = (controls / "OdbResultGraphEditor.Recovery.cs").read_text(encoding="utf-8")
+    checkpoint = recovery.split("private Task SaveDraftCheckpointAsync()", 1)[1].split(
+        "private void RefreshDraftRecovery()", 1
+    )[0]
+    assert checkpoint.index("_nodes.Select(CloneNode)") < checkpoint.index("ReadInspectorInto(selected)")
+    assert "n.NodeId == _selectedNodeId" in checkpoint
+    assert checkpoint.index("ReadInspectorInto(selected)") < checkpoint.index("_savedSnapshot.HasEdits")
+    assert "if (!HasUnsavedChanges)" not in checkpoint
+
+    read = editor.split("private bool ReadInspectorInto(", 1)[1].split("private void ", 1)[0]
+    for field, control in (("Name", "NodeNameTextBox"), ("OdbPath", "NodeOdbTextBox"), ("InpPath", "NodeInpTextBox")):
+        assert f"node.{field} = {control}.Text;" in read
+    select = editor.split("public void SelectNode(", 1)[1].split("private async void", 1)[0]
+    assert select.index("ApplyInspectorChanges();") < select.index("_selectedNodeId = nodeId;")

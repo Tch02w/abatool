@@ -6,7 +6,7 @@ import os
 import shlex
 import subprocess
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 
@@ -30,6 +30,7 @@ class OdbMergeRequest:
     compress_result: bool = False
     copy_original: bool = False
     conflict_policy: MergeConflictPolicy = MergeConflictPolicy.AUTO_NUMBER
+    attempt_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,9 @@ class OdbMergePlan:
     validation_arguments: tuple[str, ...]
 
     def command_preview(self) -> str:
-        return format_command((self.request.abaqus_command, *self.restartjoin_arguments))
+        return format_command(
+            (self.request.abaqus_command, *self.restartjoin_arguments)
+        )
 
 
 @dataclass(frozen=True)
@@ -104,7 +107,8 @@ def _numbered_path(path: Path, occupied: set[Path]) -> Path:
     }
     while (
         candidate.exists()
-        or Path(os.path.normcase(os.fspath(_absolute(candidate)))) in normalized_occupied
+        or Path(os.path.normcase(os.fspath(_absolute(candidate))))
+        in normalized_occupied
     ):
         candidate = path.with_name(f"{path.stem}_{index:03d}{path.suffix}")
         index += 1
@@ -133,15 +137,12 @@ def _validate_request(request: OdbMergeRequest) -> OdbMergeRequest:
         raise OdbMergeError("Abaqus 命令不能为空。")
     if any(character in command for character in "\r\n"):
         raise OdbMergeError("Abaqus 命令不能包含换行符。")
-    return OdbMergeRequest(
+    return replace(
+        request,
         original_odb=original,
         restart_odb=restart,
         output_odb=output,
         abaqus_command=command,
-        include_history=request.include_history,
-        compress_result=request.compress_result,
-        copy_original=request.copy_original,
-        conflict_policy=request.conflict_policy,
     )
 
 
@@ -152,16 +153,7 @@ def build_merge_plan(request: OdbMergeRequest) -> OdbMergePlan:
     output = request.output_odb
     if request.conflict_policy == MergeConflictPolicy.AUTO_NUMBER:
         output = _numbered_path(output, set())
-        request = OdbMergeRequest(
-            original_odb=request.original_odb,
-            restart_odb=request.restart_odb,
-            output_odb=output,
-            abaqus_command=request.abaqus_command,
-            include_history=request.include_history,
-            compress_result=request.compress_result,
-            copy_original=request.copy_original,
-            conflict_policy=request.conflict_policy,
-        )
+        request = replace(request, output_odb=output)
 
     occupied = {request.original_odb, request.restart_odb, request.output_odb}
     original_backup = _numbered_path(
@@ -171,11 +163,13 @@ def build_merge_plan(request: OdbMergeRequest) -> OdbMergePlan:
     )
     occupied.add(original_backup)
     restart_backup = _numbered_path(
-        request.output_odb.parent
-        / f"{_source_stem(request.restart_odb)}_original.odb",
+        request.output_odb.parent / f"{_source_stem(request.restart_odb)}_original.odb",
         occupied,
     )
-    staging_dir = request.output_odb.parent / f".abasub-odb-merge-{uuid.uuid4().hex}"
+    attempt_id = request.attempt_id or uuid.uuid4().hex
+    if len(attempt_id) != 32 or any(c not in "0123456789abcdef" for c in attempt_id):
+        raise OdbMergeError("合并尝试编号无效。")
+    staging_dir = request.output_odb.parent / f".abasub-odb-merge-{attempt_id}"
     staged_original = staging_dir / original_backup.name
     staged_restart = staging_dir / restart_backup.name
     working = staging_dir / "abasub_join_working.odb"

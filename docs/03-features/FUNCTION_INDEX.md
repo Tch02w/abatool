@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F013 合并的验证回执在目标 ODB 就位后发布。`modules/submitter/odb_merge_execution.py` 调用 `modules/submitter/odb_merge_publication.py` 的 `publish_receipt`，后台重开时由 `modules/control_plane/odb_merge_operations.py` 调用 `recover_publication`。覆盖替换、回滚、输出再编号和最终进度异常见 `tests/submitter/test_odb_merge_execution.py`。[工程中断实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)
+
+F023 结果图在 `OdbResultGraphEditor.xaml.cs` 切换节点时保存原节点输入，在 `OdbResultGraphEditor.Recovery.cs` 的 `SaveDraftCheckpointAsync` 中从当前节点控件捕获未保存文本。F021 的文件选区和预览由 `ResultBrowserPage.xaml.cs` 的 `BuildIndexAsync`、`ReloadPublishedIndexAsync` 与 `LoadRecordsAsync` 恢复。[图编辑器验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#组内顺序与结果图的会话结束恢复) · [索引交互验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)
+
+F021 的 WinUI 与 PySide 共用 `modules/postprocessor/result_index.py`。Windows 写入所有权由 `modules/postprocessor/windows_index_lock.py` 的 `open_index_writer` 持有，旧锁的本机进程由 `_local_owner_exited` 只读确认。竞争、未发布视图及旧标记的回归见 `tests/postprocessor/test_result_index.py`。[两代读写实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#迁移前结果索引的互读与写入恢复)
+
 F021 直接浏览位置与可见目录的关联由 `winui/AbaqusTools.WinUI/Services/ResultBrowserLocation.cs` 的 `DirectBookmark`、`VisibleDirect`、`RetainMatchingBookmark` 以及 `ResultBrowserPage.xaml.cs` 的首次加载和草稿捕获处理。回归位于 `tests/winui_results/ResultBrowserLocationChecks.cs`。[慢启动实窗验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#结果浏览慢启动期间保留直接浏览目录n08f021)
 
 F013 同一步续算多出起始零点时，`modules/submitter/odb_merge_execution.py` 在私有副本内重试，`modules/postprocessor/abaqus_scripts/restore_odb_history.py` 的 `restore`、`check_locations` 写入源历史并核对采样位置。`tests/postprocessor/test_merge_validation.py` 与 `tests/submitter/test_odb_merge_execution.py` 覆盖触发范围、拒绝发布与取消。[分析步与数据规则](ODB_MERGE.md#分析步与数据规则)

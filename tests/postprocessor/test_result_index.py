@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import socket
 import sqlite3
 import stat
 import threading
@@ -20,12 +22,82 @@ from modules.postprocessor.result_index import (
     INDEX_SCHEMA_VERSION,
     ResultIndexCancelled,
     ResultIndexInvalid,
+    ResultIndexLocked,
     build_result_index,
     index_path,
     load_result_index,
+    lock_path,
     read_result_index,
     update_result_index_scopes,
 )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows writer ownership and legacy marker sharing")
+def test_live_writer_keeps_previous_index_readable_and_excludes_a_second_writer(tmp_path, monkeypatch):
+    batch = make_time_directory(tmp_path)
+    build_result_index(batch, classify_result, result_section)
+    original = index_path(batch).read_bytes()
+    (batch / "added.txt").write_text("new", encoding="utf-8")
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_writer(path):
+        entered.set()
+        assert release.wait(20)
+        return classify_result(path)
+
+    def no_signal(*_):
+        pytest.fail("Checking result-index ownership must not send process signals")
+
+    monkeypatch.setattr(os, "kill", no_signal)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        active = pool.submit(build_result_index, batch, hold_writer, result_section)
+        try:
+            assert entered.wait(15)
+            with pytest.raises(ResultIndexLocked):
+                update_result_index_scopes(batch, [batch], classify_result, result_section)
+            with pytest.raises(PermissionError):
+                lock_path(batch).read_text(encoding="utf-8")  # Legacy marker reader.
+            assert index_path(batch).read_bytes() == original
+            assert "added.txt" not in {row["name"] for row in load_result_index(batch).records}
+        finally:
+            release.set()
+        active.result(timeout=15)
+    assert "added.txt" in {row["name"] for row in load_result_index(batch).records}
+    assert not lock_path(batch).exists()
+
+
+@pytest.mark.parametrize("owner", ["live", "exited", "foreign", "malformed", "invalid_pid"])
+def test_respects_migration_era_index_owner(tmp_path, monkeypatch, owner):
+    import psutil
+
+    batch = make_time_directory(tmp_path)
+    marker = lock_path(batch)
+    saved = {"host": socket.gethostname(), "pid": os.getpid(), "token": "legacy"}
+    if owner == "foreign":
+        saved["host"] += "-other"
+    if owner == "invalid_pid":
+        saved["pid"] = 0
+    contents = json.dumps(saved) if owner != "malformed" else "[]"
+    marker.write_text(contents, encoding="utf-8")
+    observed = []
+
+    def pid_exists(pid):
+        observed.append(pid)
+        return owner != "exited"
+
+    monkeypatch.setattr(psutil, "pid_exists", pid_exists)
+    monkeypatch.setattr(os, "kill", lambda *_: pytest.fail("Expected a read-only PID check"))
+    if owner == "exited":
+        build_result_index(batch, classify_result, result_section)
+        assert not marker.exists()
+        assert len(load_result_index(batch).records) == 2
+    else:
+        with pytest.raises(ResultIndexLocked):
+            build_result_index(batch, classify_result, result_section)
+        assert marker.read_text(encoding="utf-8") == contents
+        assert not index_path(batch).exists()
+    assert observed == ([os.getpid()] if owner in {"live", "exited"} else [])
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows SQLite readers hold the current filename open")
@@ -224,3 +296,24 @@ def test_incremental_scope_treats_underscore_as_a_literal_character(
         record["name"] for record in load_result_index(time_directory).records
     }
     assert names == {"replacement.txt", "must-remain.txt"}
+
+
+def test_private_index_commits_schema_and_rows_together(tmp_path, monkeypatch):
+    from modules.postprocessor import result_index
+
+    batch = tmp_path / "batch"
+    batch.mkdir()
+    (batch / "load_point_raw.csv").write_text("time,load\n0,123\n", encoding="utf-8")
+    insert_rows = result_index._insert_rows
+
+    def check_transaction(connection, *args, **kwargs):
+        assert connection.in_transaction
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2  # FULL
+        database = Path(connection.execute("PRAGMA database_list").fetchone()[2])
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as reader:
+            assert not reader.execute("SELECT name FROM sqlite_master").fetchall()
+        return insert_rows(connection, *args, **kwargs)
+
+    monkeypatch.setattr(result_index, "_insert_rows", check_transaction)
+    build_result_index(batch, classify_result, result_section)
+    assert [row["name"] for row in load_result_index(batch).records] == ["load_point_raw.csv"]

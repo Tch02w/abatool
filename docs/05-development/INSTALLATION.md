@@ -1,6 +1,12 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-overview-selector-20261128/source/GPTWork/installer-win-x64-11e255680e90/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装器均由干净提交 `175e683` 构建，版本 0.1.0，大小 126683467 字节，SHA-256 为 `6e3ef3a7f522e845dc34b17af8b98ec0e9d59a6d258ffc0ec77b753868e2f882`，尚未签名。[免安装程序](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-whole-queue-20261128/source/GPTWork/installer-win-x64-f160f0cb5067/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装器均来自干净提交 `73d4711`。版本 0.1.0，文件 126703224 字节，SHA-256 为 `d888d8c8a654ba7247d9b9267582f813b9a06f3beace867860f577c01c42916a`，尚未签名。[免安装程序](RELEASE.md)
+
+在开发机独立安装标识下，从 `175e683` 升级及卸载等八项检查通过。中文安装向导实测覆盖 G 盘安装目录、1700 个负载文件、67 份文档及 1025 个本地链接。升级前后 1 份、卸载前后 12 份测试数据保持原摘要。程序运行时会阻止升级和卸载，正常退出后可以继续。回执为 `GPTWork/installer-whole-queue-20261128/verified.json`。无开发工具的独立 Windows、正式安装标识及 SmartScreen 尚待实测。
+
+## 历史版本 175e683
+
+该版 Windows x64 安装程序为 `GPTWork/installer-overview-selector-20261128/source/GPTWork/installer-win-x64-11e255680e90/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装器均由干净提交 `175e683` 构建，版本 0.1.0，大小 126683467 字节，SHA-256 为 `6e3ef3a7f522e845dc34b17af8b98ec0e9d59a6d258ffc0ec77b753868e2f882`，尚未签名。
 
 在开发机独立测试标识下，从 `cf58e9e` 升级与卸载的八项检查均通过。运行中的安装目录触发保护，后台退出后完成升级。升级前的 1 份测试数据与卸载前的 12 份测试数据均保持原摘要。中文安装向导复核 1700 个负载文件、67 份文档和 989 个本地链接。安装目录中的 WinUI 读取迁移前保存的作业配置，编辑后重开显示新作业名，旧 PySide 仍能读回原值。测试注册、快捷方式和自有进程已清理。原始回执为 `GPTWork/installer-overview-selector-20261128/verified.json`。
 

@@ -501,6 +501,8 @@ class ResultIndexOperationManager(OperationShutdownGuard):
                 operation.metadata = {
                     str(key): str(value) for key, value in metadata.items()
                 }
+                if "record_count" in operation.metadata:
+                    operation.processed = int(operation.metadata["record_count"])
                 operation.current_item = ""
                 operation.error = None
                 self._transition_locked(operation, SUCCEEDED, "result.index.succeeded")

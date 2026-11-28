@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F021 单目录索引接回由 `ResultBrowserPage.RecoverActiveIndexOperationAsync` 获取活动任务，`RefreshInteractionState` 根据任务类型更新进度条。成功计数来自 `ResultIndexOperationManager._run_operation` 收到的发布记录数。回归位于 `tests/control_plane/test_result_index_api.py` 和 `tests/winui/test_shell_contract.py`。[结果索引与实窗记录](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#单目录索引在关闭前台后继续运行)
+
 F004/F005 整队终止入口为 `winui/AbaqusTools.WinUI/Pages/JobQueuePage.xaml.cs` 的 `TerminateEntireQueueAsync`；同页及顶栏菜单使用 `WorkbenchCommandState.CanTerminateEntireQueue`。预览、确认范围和回执在 `modules/control_plane/local_queue_termination.py`，实际停止及终态判定在 `modules/submitter/local_job_execution.py`。回归见 `tests/control_plane/test_local_queue_termination.py`、`tests/winui_host/WorkbenchCommandChecks.cs` 及[菜单与正式队列实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#从作业菜单或正式队列终止整队)。
 
 F026 安装与卸载在同名进程未提供位置时会按进程号复查。实现为 `packaging/installer.iss.in` 的 `ProcessLocationError`、`LiveProcessError`。Windows 实际查询及未知位置的回归入口为 `packaging/verify_installer_process_check.py`。[进程位置复查](../05-development/INSTALLATION.md#安装或卸载时提示进程位置不明)

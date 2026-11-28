@@ -30,6 +30,8 @@ WinUI 作业概览从没有远端缓存开始，在记录锁仍被持有时，13
 
 ## 队列工具栏的浅底增减按钮
 
+在成品 `73d4711` 的正式队列页分别收起和展开侧栏，窗口缩至允许的最小宽度。两次截取的工具栏都与[下图](../../repowiki/images/queue-parallel-limit.png)逐像素一致。两端是方案 2 的左减右加，按钮使用方案 3 的浅底色，中央保留独立输入区。96 DPI 实测回执为 `GPTWork/queue-layout-whole-20261128/case1/capture.json` 和 `case2/capture.json`。
+
 在相同免安装成品的独立空队列中，点击右加将 3 改为 4，点击左减恢复为 3，再在中央直接输入 7 并移开焦点，最后同法恢复为 3。每一步均核对控件数值和显示文字，退出后独立配置也保存为 3。队列始终为空，未启动调度或求解。回执为 `GPTWork/queue-number-interaction-175e683-20261128/case1/capture.json`。
 
 成品 `175e683` 在 96 DPI 的真实空队列窗口再次截图。516 × 48 像素与下方参考图逐像素相同，数值 3 水平居中，左右键有浅灰底色。截图和测量见 `GPTWork/native-queue-toolbar-175e683-20261128/case1/verification.json`。初次使用 PowerShell 7 时未能载入截图所需的绘图库，在打开应用前退出。改用 Windows PowerShell 后截图通过，测试前后台已退出。

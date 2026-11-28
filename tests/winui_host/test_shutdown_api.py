@@ -216,7 +216,7 @@ def test_shared_command_state_rejects_stale_busy_and_mismatched_targets(close_cl
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "34 shared command-state checks passed" in result.stdout
+    assert "45 shared command-state checks passed" in result.stdout
 
 
 def test_command_state_observation_never_refreshes_or_disconnects_remote(tmp_path, close_client):

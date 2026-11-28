@@ -321,6 +321,17 @@ def test_result_browser_is_native_and_uses_async_index_contracts() -> None:
     assert "CancelResultIndexOperationAsync" in page
 
 
+def test_restored_index_uses_same_progress_indicator_as_new_index() -> None:
+    page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml.cs").read_text(encoding="utf-8")
+    refresh = page.split("private void RefreshInteractionState()", 1)[1].split("\n    }", 1)[0]
+    assert "IndexProgressBar.Visibility = _indexBusy ? Visibility.Visible : Visibility.Collapsed;" in refresh
+    assert "IndexProgressBar.IsIndeterminate = _activeIndexBatchId is null;" in refresh
+    assert page.count("IndexProgressBar.Visibility =") == 1
+    recovery = page.split("private async Task<bool> RecoverActiveIndexOperationAsync()", 1)[1]
+    single = recovery.split("_activeIndexOperationId = snapshot.OperationId;", 1)[1]
+    assert single.index("RefreshInteractionState();") < single.index("PollResultIndexUntilTerminalAsync(")
+
+
 def test_odb_page_routes_its_result_directory_into_the_native_browser() -> None:
     window = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")
     odb_page = (WINUI_ROOT / "Pages" / "OdbPostprocessingPage.xaml.cs").read_text(

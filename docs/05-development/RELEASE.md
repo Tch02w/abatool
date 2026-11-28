@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-730de6c2879b/AbaqusTools/AbaqusTools.WinUI.exe`。应用来自干净提交 `175e683c9e1b18ed8dbdedea428e76994925b7d1`，已逐项核对 1700 个文件。清单 SHA-256 为 `c4a2a0d456d9d7231c5556888c38060d4cfc0872c30f65b54cda219bd9eedb0e`。原始回执为 `GPTWork/release-queue-portable-175e683-20261128-174926/verification.json`。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-1063286508d9/AbaqusTools/AbaqusTools.WinUI.exe`。应用来自干净提交 `73d471176a0605a62c7f593d84ca2f7ace9b0c49`，1700 个负载文件和编译后的前端、后台、界面资源已核对。清单 SHA-256 为 `feabaed1c1e9733b7dbe30ac3a8d1bd31deda463f852e03f18c105e432a7f3bc`，回执为 `GPTWork/release-queue-portable-73d4711-20261128-181555/verification.json`。[整队终止](../03-features/LOCAL_SCHEDULING.md#终止整个本机队列) · [安装与升级](INSTALLATION.md)
+
+### 历史版本 175e683
+
+该版 Windows x64 免安装入口为 `GPTWork/release-win-x64-730de6c2879b/AbaqusTools/AbaqusTools.WinUI.exe`。应用来自干净提交 `175e683c9e1b18ed8dbdedea428e76994925b7d1`，已逐项核对 1700 个文件。清单 SHA-256 为 `c4a2a0d456d9d7231c5556888c38060d4cfc0872c30f65b54cda219bd9eedb0e`。原始回执为 `GPTWork/release-queue-portable-175e683-20261128-174926/verification.json`。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
 
 本版修复作业概览的下拉框被轮询关闭，并在后处理选中单个 ODB 时显示文件大小与本地修改时间。[作业选择](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [文件详情](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#发现列表中单个-odb-的修改时间)
 

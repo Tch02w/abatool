@@ -860,7 +860,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         _activeIndexBatchId = null;
-        IndexProgressBar.Visibility = Visibility.Visible;
         ResultStatusText.Text = scope.CanBuildMissingIndexes ? "正在查找缺失索引的时间目录…" : "正在创建结果索引…";
         RefreshInteractionState();
         try
@@ -907,8 +906,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async Task ObserveIndexBatchAsync(ResultIndexBatchSnapshot batch, long indexRequest)
     {
         _activeIndexBatchId = batch.BatchId;
-        IndexProgressBar.Visibility = Visibility.Visible;
-        IndexProgressBar.IsIndeterminate = false;
         while (!batch.IsTerminal)
         {
             if (!_loads.IsCurrentIndexRequest(indexRequest)) return;
@@ -1400,13 +1397,13 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         _cancelIndexRequested = false;
         _activeIndexOperationId = null;
         _activeIndexBatchId = null;
-        IndexProgressBar.Visibility = Visibility.Collapsed;
-        IndexProgressBar.IsIndeterminate = true;
         RefreshInteractionState();
     }
 
     private void RefreshInteractionState()
     {
+        IndexProgressBar.Visibility = _indexBusy ? Visibility.Visible : Visibility.Collapsed;
+        IndexProgressBar.IsIndeterminate = _activeIndexBatchId is null;
         var idle = !_scopeBusy && !_recordsBusy && !_indexBusy && !FileOperationBusy;
         var canSort = !_scopeBusy && !_indexBusy && !FileOperationBusy && _displayedPage is not null;
         foreach (var button in SortHeaders.Children.OfType<Button>()) button.IsEnabled = canSort;

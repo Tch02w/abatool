@@ -16,6 +16,7 @@ from tests.control_plane.test_api import (
     api_request,
     json_response,
     running_control_plane,
+    sse_data,
 )
 
 
@@ -72,6 +73,7 @@ def test_result_index_build_is_async_idempotent_and_loadable(tmp_path: Path) -> 
     odb = batch / "model"
     odb.mkdir(parents=True)
     (odb / "load_point_raw.csv").write_text("Time,RF3\n0,0\n", encoding="utf-8")
+    (batch / "extra.csv").write_text("Time,RF3\n0,1\n", encoding="utf-8")
 
     with running_control_plane(tmp_path) as runtime:
         first = api_request(
@@ -94,7 +96,11 @@ def test_result_index_build_is_async_idempotent_and_loadable(tmp_path: Path) -> 
         succeeded = _wait(runtime, accepted["operationId"], {"succeeded"})
         assert succeeded["kind"] == "result.index.build"
         assert succeeded["request"]["timeDirectory"] == str(batch.resolve())
-        assert int(succeeded["metadata"]["record_count"]) == 1
+        assert int(succeeded["metadata"]["record_count"]) == 2
+        assert succeeded["progress"] == {"processed": 2, "currentItem": ""}
+        events = sse_data(api_request(runtime, "/api/v1/events?after=0")[2])
+        published = next(event for event in events if event["kind"] == "result.index.succeeded")
+        assert published["payload"]["progress"] == succeeded["progress"]
         assert index_path(batch).is_file()
 
         active = json_response(
@@ -161,3 +167,19 @@ def test_result_index_cancel_is_cooperative_and_terminal(tmp_path: Path) -> None
             method="POST",
         )
         assert json_response(repeated)["version"] == cancelled["version"]
+
+
+def test_failed_index_retains_last_observed_progress(tmp_path: Path) -> None:
+    batch = tmp_path / "group" / "batch"
+    batch.mkdir(parents=True)
+
+    def fail_before_publication(_directory, _classify, _section, cancel_event, progress):
+        progress(17, "model/partial.csv")
+        raise OSError("fixture publication failed")
+
+    with running_control_plane(tmp_path, result_index_builder=fail_before_publication) as runtime:
+        accepted = json_response(api_request(runtime, "/api/v1/result-index-builds", method="POST",
+                                             payload=_payload(tmp_path, batch)))
+        failed = _wait(runtime, accepted["operationId"], {"failed"})
+        assert failed["progress"] == {"processed": 17, "currentItem": ""}
+        assert failed["metadata"] == {} and not index_path(batch).exists()

@@ -1,8 +1,10 @@
 # 任务索引
 
-本机整队终止的预览、确认、终态和外部进程保护见[正式队列实测](ACTIVE_TASKS/TASK-002-migration.md#从作业菜单或正式队列终止整队)。Windows 安装器对同名进程的复查见[安装位置检查](ACTIVE_TASKS/TASK-002-migration.md#安装器复查同名进程的位置)；成品后台断线后补读事件见[事件重放](ACTIVE_TASKS/TASK-002-migration.md#本机后台的监听范围与事件重放)。
+单目录索引后台继续、重开窗口的进度反馈及发布计数见 [F021 验收](ACTIVE_TASKS/TASK-001-postprocessing.md#单目录索引在关闭前台后继续运行)。使用 Abaqus 2025 实测已有五种兼容性状态，详见 [F014 回执](ACTIVE_TASKS/TASK-001-postprocessing.md#真实-abaqus-2025-兼容性状态)。
 
-当前应用提交 `175e683` 的 1318 项回归、9 个子检查及原生 Qt 回滚入口见[本版回归](ACTIVE_TASKS/TASK-002-migration.md#175e683-成品与回归)。正式队列窗口的浅底按钮图见[截图与测量](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。
+成品 `73d4711` 的整队取消、外部进程保留、重启后重复确认见[正式队列实测](ACTIVE_TASKS/TASK-002-migration.md#从作业菜单或正式队列终止整队)。最小窗口和两端浅底按钮见[工具栏测量](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。安装器的同名进程复查及后台断线补读分别见[安装位置检查](ACTIVE_TASKS/TASK-002-migration.md#安装器复查同名进程的位置)和[事件重放](ACTIVE_TASKS/TASK-002-migration.md#本机后台的监听范围与事件重放)。
+
+前版应用提交 `175e683` 的 1318 项回归、9 个子检查及原生 Qt 回滚入口见[本版回归](ACTIVE_TASKS/TASK-002-migration.md#175e683-成品与回归)。正式队列窗口的浅底按钮图见[截图与测量](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。
 
 F005/F010 作业概览的展开菜单、同名选择、后台增删和日志选区见[下拉列表与轮询](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)。F014 单个 ODB 的大小、本地修改时间及路径展示见[后处理说明](../03-features/POSTPROCESSING.md)。
 

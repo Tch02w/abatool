@@ -12,11 +12,17 @@ def test_all_eight_page_draft_bindings_resolve_to_supported_inputs():
     count = 0
     for source in (ROOT / "Pages").glob("*Page.xaml.cs"):
         code = source.read_text(encoding="utf-8")
-        registration = re.search(r'Session.Register\(this, "([^"]+)",\s*\[([^]]*)\]', code)
+        registration = re.search(r'([\w.]+)\.Register\(this, "([^"]+)",\s*\[([^]]*)\]', code)
         if registration is None:
             continue
-        route, fields = registration.groups()
-        ordered_fields = re.findall(r'"([^"]+)"', fields)
+        receiver, route, fields = registration.groups()
+        if receiver != "App.Current.Session":
+            assert re.search(rf'\bvar {re.escape(receiver)}\s*=\s*App\.Current\.Session;', code[:registration.start()]), route
+        ordered_fields = []
+        for expression in filter(None, (item.strip() for item in fields.split(","))):
+            field = re.fullmatch(r'"(\w+)"|nameof\((\w+)\)', expression)
+            assert field, (route, expression)
+            ordered_fields.append(field[1] or field[2])
         if route == "new-job":
             # Switching to server-existing mode clears local paths. Restore that
             # dependency first so the saved remote paths are not subsequently erased.

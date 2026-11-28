@@ -199,7 +199,8 @@ def verify(old_report, new_report, host, *, legacy_old=False):
         keep.write_bytes(b"user content is not an installer payload")
         step("first installation and every payload digest verified")
         descriptor = work / "runtime" / "control-plane.json"
-        environment = dict(os.environ, ABAQUS_SUBMITTER_DATA_DIR=str(work / "data"),
+        environment = dict(os.environ, ABAQUS_TOOLS_PROFILE_DIR=str(work),
+                           ABAQUS_SUBMITTER_DATA_DIR=str(work / "data"),
                            ABAQUS_POSTPROCESSOR_DATA_DIR=str(work / "post-data"))
         executable = target / "versions" / old["payloadId"] / "control-plane" / "AbaqusTools.ControlPlane.exe"
         with (work / "backend.log").open("wb") as stream:
@@ -230,7 +231,12 @@ def verify(old_report, new_report, host, *, legacy_old=False):
         report["userDataBeforeUpgrade"] = before_upgrade
         step("upgrade verifies new payload and preserves previous version and user file")
         payload = target / "versions" / new["payloadId"]
-        assert run([host, "--launch-bundle", payload, work / "installed-host"], work / "installed-host.log", owners) == 0
+        profile = work / "installed-host"
+        environment = dict(os.environ, ABAQUS_TOOLS_PROFILE_DIR=str(profile),
+                           ABAQUS_SUBMITTER_DATA_DIR=str(profile / "submitter"),
+                           ABAQUS_POSTPROCESSOR_DATA_DIR=str(profile / "postprocessor"))
+        assert run([host, "--launch-bundle", payload, profile], work / "installed-host.log", owners,
+                   environment=environment) == 0
         step("installed production host startup APIs and shutdown passed")
         before_uninstall = user_data_hashes(work)
         assert "installed-host/submitter/scheduler_state.db" in before_uninstall

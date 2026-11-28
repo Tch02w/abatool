@@ -6,7 +6,9 @@
 
 WinUI 作业概览从没有远端缓存开始，在记录锁仍被持有时，137 毫秒内显示本机日志。第二次写入时，已有远端作业、日志文字及四字选区都保留。切回本机后能看见新日志；手动刷新期间切页，旧响应也没有改写已离开的页面。实窗测试使用生产页面和隔离的替代启动程序，未启动 Abaqus 求解。回执为 `GPTWork/overview-lock-20261128/native1/native.json` 及同目录 `verified.json`。真实远端物理断网与长期求解负载仍需另行核验。[刷新规则](../../03-features/REMOTE_JOBS.md)
 
-正式版 `cbe221e` 和 `c876875` 的队列工具栏分别在各自实际窗口截取了 516 × 48 原像素图。两份 PNG 逐字节一致，SHA-256 为 `9b370b4de1482e1ea9b2b649ba0e09b0c62eee16449adcdfe1d0d81655776ca1`。两端按钮的可点击范围相同，浅底像素均为 `#EEEEEE`，中央输入区为 `#FEFEFE`。数字 3 的字形中心到输入区中心的水平偏差为 0 像素。新成品截图为 `GPTWork/native-queue-toolbar-cbe221e-20261128/case1/queue-toolbar.png`，同目录有 `capture.json`。对照测量在 `GPTWork/native-queue-toolbar-c876875-20261128/case2/verification.json`。
+## 队列工具栏的浅底增减按钮
+
+正式版 `328ad47`、`cbe221e` 和 `c876875` 均在各自的实际队列窗口截取了 516 × 48 原像素图。三份 PNG 的 SHA-256 均为 `9b370b4de1482e1ea9b2b649ba0e09b0c62eee16449adcdfe1d0d81655776ca1`。96 DPI 下，左右两端热区各为 40 × 38 像素，浅底像素均为 `#EEEEEE`，中央输入区为 `#FEFEFE`。数字 3 的字形中心到输入区中心的水平偏差为 0 像素。当前成品截图与逐像素测量保存在 `GPTWork/native-queue-toolbar-328ad47-20261128/case1/queue-toolbar.png` 及同目录 `verification.json`。实测时使用独立空队列，验收进程均已退出。[工具栏实图](../../repowiki/images/queue-parallel-limit.png)
 
 ## 运行中队列的菜单与页面命令
 

@@ -1,8 +1,10 @@
 # 当前状态与接续点
 
+当前成品队列页已核对左减、居中数值、右加及两端浅底按钮。最新整套回归中 1274 项和 9 个子检查通过，另外四项超过等待时限，逐项复测均通过。[当前版队列截图与测量](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮) · [完整回归与剩余验收](ACTIVE_TASKS/TASK-002-migration.md#328ad47-成品与回归)
+
 作业概览已在远端写入暂停约两秒的实窗中保留日志选区并继续更新本机数据。结果浏览可读取 GBK 和带标记的 UTF-16，GJB 工程状态表的原件和两种另存副本已在 WinUI 结果页对照。另在 `cbe221e` 的管理分组和图例范围窗口核对了会话结束后的原文恢复，输到一半的负号可恢复，数值有效且显式保存后才更新正式色标。[概览实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览在远端记录写入期间更新本机日志f005f010) · [结果浏览与参数草稿](ACTIVE_TASKS/TASK-001-postprocessing.md)
 
-`cbe221e` 已从干净提交构建 Windows x64 免安装目录和安装器，核对了 1698 个文件、独立标识安装升级、中文向导与软件内文档。全量回归第一次有 3 项 HTTP 超时，单独复测全部通过。正式成品的新建作业窗口、草稿恢复、工程合并和浅底数字框均有实测记录。[成品与回归](ACTIVE_TASKS/TASK-002-migration.md#cbe221e-成品工程与安装复核) · [安装包](../05-development/INSTALLATION.md) · [队列工具栏](ACTIVE_TASKS/TASK-004-ui-interaction.md)
+当前 Windows x64 免安装成品从干净提交 `328ad47` 构建，1699 个文件、20 个 Abaqus 脚本和正式客户端的队列接口均已核验。成品实测覆盖 GJB-16 带历史合并、慢启动返回上次查看的子目录及中文结果预览。[程序与清单](../05-development/RELEASE.md) · [安装包](../05-development/INSTALLATION.md) · [队列工具栏](ACTIVE_TASKS/TASK-004-ui-interaction.md)
 
 首次打开空配置时，五个操作历史的初始化中位耗时从 10.80 秒降到 1.40 秒。五组成对测试均保有五个所有权锁，首次启动只建立有业务记录的提醒库。这个计时只涵盖五个历史库。[原始范围与验证方法](../06-testing/VALIDATION.md#空历史与首次业务写入)
 
@@ -50,7 +52,7 @@ README 已按安装包、免安装目录和 GitHub 源码分别给出启动方�
 
 11 月 28 日新增结果根目录和对比组的批量补索引，以及未确认数字输入的原文恢复。索引后台的 14 项定向检查和 8 项原生组/根操作、参数三进程的 19 项原生检查、数字框的 74 项原生检查已通过。现场证据还包括 92 节点真实工程图谱，以及旧版 ODB 在写入前、写入中、两次改名之间、新版就位但尚未写入成功回执时的四种中断。[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md) · [工程图谱](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--真实-gjb-和-zc-工程的重启动图)
 
-当前 Windows x64 免安装候选为 `cbe221e`，1698 个文件已核对。数字框保留左减、居中数值、右加及浅底圆角键，其编译模板和上一版实窗验证时一致。上一成品 `c876875` 已核对 GJA-32 的工作簿选表和 GJB-15 的九个 GIF 及无纵筋截面汇总。[可执行文件与清单](../05-development/RELEASE.md) · [队列实窗](ACTIVE_TASKS/TASK-004-ui-interaction.md) · [八个页面的验收范围](../06-testing/COMPLETION_AUDIT.md)
+此前免安装版 `cbe221e` 曾在队列实窗核对左减、居中数值、右加及浅底圆角键。`c876875` 已核对 GJA-32 的工作簿选表和 GJB-15 的九个 GIF 及无纵筋截面汇总。[可执行文件与清单](../05-development/RELEASE.md) · [队列实窗](ACTIVE_TASKS/TASK-004-ui-interaction.md) · [八个页面的验收范围](../06-testing/COMPLETION_AUDIT.md)
 
 本轮已复现队列状态写入期间自动刷新超时，现可在后台忙时保留上一次的显示。另修复了后台启动失败时的资源释放与首次创建操作历史中途失败后的重试。18 MiB 下载已在计算资源页完成切页、断线、返回、重连与手动重试。[实现与测量](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--队列自动刷新后台启动及传输切页)
 

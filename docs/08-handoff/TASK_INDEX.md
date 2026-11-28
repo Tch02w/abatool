@@ -1,5 +1,9 @@
 # 任务索引
 
+当前正式队列页的浅底减加键尺寸和数字居中见[工具栏实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。当前成品的八页草稿绑定、整套回归和四项超时后的逐项复测见[迁移任务记录](ACTIVE_TASKS/TASK-002-migration.md#328ad47-成品与回归)。
+
+成品 `328ad47` 的 1699 项文件核对和恢复上次浏览位置的记录见[Windows 发布构建](../05-development/RELEASE.md)。从 `cbe221e` 升级、八项安装生命周期及外层测试配置不受影响的复测见[安装与卸载](../05-development/INSTALLATION.md)。最后一次带历史的 GJB-16 工程合并及在 N06 窗口重开记录见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--gjb-16-三级结果链保留接触历史)。
+
 作业概览在远端记录写入期间保留日志与选区，实窗见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览在远端记录写入期间更新本机日志f005f010)。GJB 状态表的中文编码和文本截断、正式成品中管理分组与图例范围的会话结束恢复见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
 
 F001/F004 空配置首次启动、首条记录写入和已有库恢复见[空历史与首次业务写入](../06-testing/VALIDATION.md#空历史与首次业务写入)。

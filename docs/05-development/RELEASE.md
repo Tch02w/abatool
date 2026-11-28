@@ -1,6 +1,16 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-ea1bf854f0f6/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cbe221ec4068bc16dd5ab06a37473022daceb6e8`。随包 1698 个文件已核对，清单 SHA-256 为 `14b32b500fc6b2d374bc457d14d444b3e1a84270a693deeff2d48d57aac8c44e`。远端提交恢复、中途续算校验、首次操作历史写入及八页 Wiki 使用说明均在该候选中。核对范围包括编译资源、Abaqus 脚本、后台依赖和正式客户端队列接口。回执为 `GPTWork/release-queue-portable-cbe221e-20261128-141914/verification.json`。
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-085ee6dcbe13/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `328ad47577fd3a3d8068634ea1ce4089bd640ff2`。1699 个文件均已核对，清单 SHA-256 为 `ae92fbeace3a9e4e0d513a9708d89c533c4b11fa07f93514d89aae518850077b`。校验包含编译后的界面、20 个 Abaqus 脚本及正式客户端的队列读写。新版包含接触历史重建、作业概览在远端写入时的刷新和中文结果预览。回执为 `GPTWork/release-queue-portable-328ad47-20261128-152719/verification.json`。
+
+成品窗口使用自身后台核对了八个结果文件，涵盖 GJB 工程状态汇总原件、不同中文编码的另存副本、带前导零和内嵌换行的小表、两种日志及编码错误。延迟启动成品后台时，窗口也能恢复上次的直接浏览子目录，并保留输入栏中尚未读取的路径。相应回执位于 `GPTWork/result-preview-text-20261128/frozen-4fb319de/receipt.json` 及 `GPTWork/native-direct-bookmark-328ad47-20261128/frozen-4d2bf476/verified.json`。[工程与页面实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [安装与升级](INSTALLATION.md)
+
+成品后台在启用历史输出及原始副本的条件下重新合并 GJB-16。再次只读打开 ODB，核对了 324 条按步累计的通道和 7510 个源样本。[工程验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--gjb-16-三级结果链保留接触历史)
+
+在该成品队列页实际截图后，核对了数值居中、左右同尺寸的浅底减加键和说明图标。96 DPI 的 516 × 48 工具栏区域与 `cbe221e` 逐像素一致。[队列工具栏实图](../repowiki/images/queue-parallel-limit.png) · [测量与原始回执](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)
+
+### 历史版本 cbe221e
+
+此版 Windows x64 免安装入口为 `GPTWork/release-win-x64-ea1bf854f0f6/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cbe221ec4068bc16dd5ab06a37473022daceb6e8`。随包 1698 个文件已核对，清单 SHA-256 为 `14b32b500fc6b2d374bc457d14d444b3e1a84270a693deeff2d48d57aac8c44e`。远端提交恢复、中途续算校验、首次操作历史写入及八页 Wiki 使用说明均在该候选中。回执为 `GPTWork/release-queue-portable-cbe221e-20261128-141914/verification.json`。
 
 在独立的空配置实际打开此包后，窗口和已认证后台在 13.15 秒内就绪。草稿持续被占用时，普通关闭被取消；仅向测试窗口送达系统结束消息后，重开恢复了最后一次成功保存的作业名，并接回原后台。回执为 `GPTWork/session-window-c876875-20261128/native-75654c74/verification.json`，同目录 `release.json` 记录实际执行文件。
 

@@ -48,7 +48,7 @@ F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/
 
 F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的 `HostKeyChanged` 提供观察值，`modules/control_plane/remote_servers.py` 的 `_connect` 在同一配置二次认证后更新信任记录。`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` 的连接窗口核对用户独立取得的指纹，并在断线时清空旧资源。控制面回归见 `tests/control_plane/test_remote_servers_api.py`。[连接与换钥](REMOTE_JOBS.md)
 
-F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `check_install_log` 除磁盘校验外，还检查安装期间是否出现异常和被自动关闭的弹窗。回归覆盖在 `tests/common/test_installer_manifest.py`。[安装与升级](../05-development/INSTALLATION.md)
+F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `verify` 为旧后台和已安装客户端分别指定测试配置，`check_install_log` 检查安装异常和自动关闭的弹窗。清单回归见 `tests/common/test_installer_manifest.py`，独立配置、升级和卸载实测见[安装与升级](../05-development/INSTALLATION.md)。
 
 F021 结果排序与分页由 `modules/control_plane/results.py` 的 `_ResultSort`、`_direct_page` 和 `list_result_records` 提供。WinUI 的 `Pages/ResultBrowserPage.xaml` 和同名代码文件通过 `OnSortClicked`、`LoadRecordsAsync`、`UpdateSortIndicators` 管理排序与选区。宿主在 `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` 的 `GetResultRecordsAsync` 校验响应，`Services/ResultContracts.cs` 的 `ResultRecordsResponse.PageAnchor` 取直接浏览的首末行边界。测试见 `tests/control_plane/test_result_record_sort.py`、`tests/control_plane/test_results_api.py`、`tests/winui/test_shell_contract.py` 和 `tests/winui_host/Program.cs`。[结果排序协议](../api-contract.md#结果记录排序f021) · [核验记录](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
 

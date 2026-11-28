@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-remote-merge-20261128/source/GPTWork/installer-win-x64-a8b37404cc42/AbaqusTools-0.1.0-win-x64-setup.exe`，源码 `cbe221e`，版本 0.1.0，大小 126621879 字节，SHA-256 为 `8a9f6b1bbd0ceb06c49899671ceb9d13458497cfac334e3db099195760e67bb7`，签名状态为 NotSigned。[免安装包与来源](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-history-preview-20261128/source/GPTWork/installer-win-x64-6cf67a992614/AbaqusTools-0.1.0-win-x64-setup.exe`。应用提交为 `328ad47`，版本 0.1.0，大小 126641061 字节，SHA-256 为 `9d7af4703cc76e6549a2f809a8a2e3fbccce7471f4ad07c11c68f47a3bd5cc9d`，签名状态为 NotSigned。[免安装包与来源](RELEASE.md)
+
+本机用独立测试标识从 `cbe221e` 升级。八项安装与卸载检查通过，包括运行中阻止升级或卸载、退出后升级，以及升级前 1 份、卸载前 12 份测试数据逐文件核对。中文向导可选带空格的 G 盘路径，点“上一步”后保留选择。已安装的 1699 个应用文件、67 份文档和 886 个本地链接通过核对。正式安装标识及单独一台没有 Python 和 .NET SDK 的 Windows 机器仍待验。
+
+首次运行验收工具时，外层测试配置使调度数据库写到了另一个测试目录。已让验收工具显式向已安装客户端指定数据目录，并使用同一对安装包从首次安装重新跑完八项检查。独立配置中的测试文件及其摘要均得到保留，卸载后测试注册项与快捷方式已移除，所有本轮进程正常退出。完整回执为 `GPTWork/installer-history-preview-20261128/verified.json`，目录隔离复测见同目录 `profile-regression.json`。
+
+## 历史版本 cbe221e
+
+该版 Windows x64 安装程序为 `GPTWork/installer-remote-merge-20261128/source/GPTWork/installer-win-x64-a8b37404cc42/AbaqusTools-0.1.0-win-x64-setup.exe`，源码 `cbe221e`，版本 0.1.0，大小 126621879 字节，SHA-256 为 `8a9f6b1bbd0ceb06c49899671ceb9d13458497cfac334e3db099195760e67bb7`，签名状态为 NotSigned。
 
 在本机用独立测试标识从 `c876875` 升级，核对了安装、运行中保护、升级、客户端连接、用户数据保留及卸载，八项通过。中文向导内的 1698 个应用文件、67 份文档和 858 个链接已经核对。升级前 1 份、卸载前 12 份测试数据文件的摘要保持一致。首次检查旧后台遇到 30 秒启动等待超时，重试在原已升级实例完成了数据保留与卸载验证。详细回执为 `GPTWork/installer-remote-merge-20261128/verified.json`。
 

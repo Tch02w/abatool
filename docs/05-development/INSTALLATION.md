@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-queue-index-20261128/source/GPTWork/installer-win-x64-a4d196da215b/AbaqusTools-0.1.0-win-x64-setup.exe`。应用及安装器来自提交 `41c104c`，版本 `0.1.0`，大小 126589848 字节，SHA-256 为 `0da3162fcbaf3744c01219787c5a8a40640ee1ecb2a060ea51c6c2d07259c215`，签名状态为 NotSigned。免安装入口和清单摘要见[发布记录](RELEASE.md)。
+当前 Windows x64 安装程序为 `GPTWork/installer-menu-gif-20261128/source/GPTWork/installer-win-x64-8b5011fbf087/AbaqusTools-0.1.0-win-x64-setup.exe`。源码提交 `c876875`，版本 0.1.0，大小 126606267 字节，SHA-256 为 `6d2ef52651ffed472404ce24bca04f5b8d64d9bda7bed5c8c6e894199897403e`，签名状态为 NotSigned。[免安装包](RELEASE.md)
+
+以独立测试标识从 41c104c 升级，本机安装、运行中保护和卸载的 8 项检查已通过。升级前 1 个、卸载前 16 个数据文件的摘要均保留，快捷方式、注册项和测试进程已清理。中文向导完成后核对了 1698 个应用文件、67 份文档和其中的 825 条链接。第一次向导检测在正常写盘期间触及固定时间限制，改为依据安装写入进展等待后完整通过。回执为 `GPTWork/installer-menu-gif-20261128/verified.json` 和同目录的 `wizard-retry.json`。
+
+开发机上另一份中文路径的免安装程序在无开发工具的 PATH 下运行。前台 174 个、后台 88 个加载模块全部来自成品或 Windows，程序正常退出。回执为 `GPTWork/installer-menu-gif-20261128/run-5cce0916/verification.json`。独立无开发工具 Windows 及正式标识的安装生命周期仍待验收。
+
+## 历史版本 41c104c
+
+Windows x64 安装程序为 `GPTWork/installer-queue-index-20261128/source/GPTWork/installer-win-x64-a4d196da215b/AbaqusTools-0.1.0-win-x64-setup.exe`。应用及安装器来自提交 `41c104c`，版本 `0.1.0`，大小 126589848 字节，SHA-256 为 `0da3162fcbaf3744c01219787c5a8a40640ee1ecb2a060ea51c6c2d07259c215`，签名状态为 NotSigned。免安装入口和清单摘要见[发布记录](RELEASE.md)。
 
 使用同一负载的独立测试标识从 `827a45f` 升级，安装、运行时保护与卸载共 8 项通过。中文向导也已实际完成安装、返回和卸载。1698 个应用文件逐一匹配清单，已安装的 67 份说明中 806 个相对文件链接均可访问。升级前 1 个、卸载前 16 个应用数据文件的摘要均保留，三份安装日志无异常，测试标识、快捷方式和自有进程已清理。回执为 `GPTWork/installer-queue-index-20261128/verified.json`。独立无开发工具 Windows 及正式安装标识的生命周期仍待测试。
 

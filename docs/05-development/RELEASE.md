@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-8a9e9268b45a/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `2c06b77249047d8c2b4d201cba1ad4d1e721a154`。1700 个文件、20 个 Abaqus 脚本、7 项冻结后台自检及正式客户端读取队列与退出均已核对。清单 SHA-256 为 `9f680c7167a2e2953df2d412255799a0f842b0ebbf15213992872860fabbfa39`，回执为 `GPTWork/release-queue-portable-2c06b77-20261128-164455/verification.json`。
+当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-b22a52850b3c/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cf58e9e04f196d7ec21b4e281c27f168f7550053`。已核对 1700 个文件、客户端、随包后台和编译后的界面资源。清单 SHA-256 为 `01829a672d8dfe93cd801aebfa9f5b5a58be504b5ab8f0fe5b6f445bff1ce320`，回执为 `GPTWork/release-queue-portable-cf58e9e-20261128-172322/verification.json`。新包实测了旧服务器配置往返、四组菜单键盘访问，以及从所选模型直接浏览、重建索引并保留文件预览。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
+
+### 历史版本 2c06b77
+
+该版免安装程序为 `GPTWork/release-win-x64-8a9e9268b45a/AbaqusTools/AbaqusTools.WinUI.exe`。1700 个文件、20 个 Abaqus 脚本、7 项冻结后台自检及正式客户端读取队列与退出均已核对。清单 SHA-256 为 `9f680c7167a2e2953df2d412255799a0f842b0ebbf15213992872860fabbfa39`，回执为 `GPTWork/release-queue-portable-2c06b77-20261128-164455/verification.json`。
 
 包内后台分别重开 GJB-16 最终目标替换前后两份真实中断记录，只有确认目标和两份备份属于本次验证时才补齐公开回执。迁移前 PySide 生成的索引能被该后台读取，重建后的新索引也能在迁移前的结果窗口读回。结果图已用同一成品两次启动，核对节点与最后编辑的三个字段均可恢复。[中断恢复](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出) · [旧索引兼容](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#迁移前结果索引的互读与写入恢复) · [安装包](INSTALLATION.md)
 

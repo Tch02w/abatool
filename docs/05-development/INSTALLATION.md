@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-index-recovery-20261128/source/GPTWork/installer-win-x64-db199b3d97d0/AbaqusTools-0.1.0-win-x64-setup.exe`。应用和安装程序均从干净提交 `2c06b77` 构建，版本 0.1.0，大小 126663986 字节，SHA-256 为 `ef2ead96c44034acf716710b4875175b9355ed8ea315e99298e525a61e22ad1d`，尚未签名。[免安装包与来源](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-legacy-workbench-20261128/source/GPTWork/installer-win-x64-d053fe8ae824/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装程序均从干净提交 `cf58e9e` 构建，版本 0.1.0，大小 126676263 字节，SHA-256 为 `5f1caf673daaa2371c0e2477d76c8eaac4f2d4448e5ca91e046ef630abe0c0f4`，尚未签名。[免安装包与来源](RELEASE.md)
+
+在开发机上使用独立测试标识，从 `2c06b77` 安装、升级、卸载的八项检查通过。运行中升级与卸载均被阻止，退出后台后可继续。升级前 1 份、卸载前 12 份测试数据的摘要保持一致。中文向导复核了 G 盘安装目录、1700 个负载文件、67 份文档及 967 个本地链接。卸载后测试注册项和快捷方式已移除，验收进程均已退出。
+
+从实际安装目录打开新版时，旧 PySide 保存的作业名、3 核、17 GB 内存、Abaqus 命令、输入与归档路径均读回。修改作业名并重开后 WinUI 显示新名，同一旧配置仍可由历史版本 PySide 打开，原文件摘要一致。首次检查时测试脚本缺少哈希命令，在应用启动前失败；改用 .NET SHA-256 后，在新隔离目录重跑中文向导和两次应用启动均通过。回执为 `GPTWork/installer-legacy-workbench-20261128/verified.json` 和 `GPTWork/native-legacy-workbench-20261128/package-94b0807e/package-reopen.json`。正式标识安装及独立无开发工具 Windows 设备仍待实测。[本机设置的迁移范围](../03-features/UI_INTERACTION.md#从旧版工作台接续本机设置)
+
+## 历史版本 2c06b77
+
+该版 Windows x64 安装程序为 `GPTWork/installer-index-recovery-20261128/source/GPTWork/installer-win-x64-db199b3d97d0/AbaqusTools-0.1.0-win-x64-setup.exe`。应用和安装程序均从干净提交 `2c06b77` 构建，版本 0.1.0，大小 126663986 字节，SHA-256 为 `ef2ead96c44034acf716710b4875175b9355ed8ea315e99298e525a61e22ad1d`，尚未签名。
 
 本机使用独立测试标识从 `328ad47` 升级，八项安装、升级和卸载检查通过。后台运行时安装程序会阻止升级和卸载，关闭后可继续。升级前 1 份、卸载前 12 份测试数据的摘要逐一吻合。中文向导在带空格的 G 盘目录完成安装，返回上一步时保留原路径。已核对 1700 个应用负载文件及随包清单、67 份文档和 924 个本地链接。卸载后，测试注册项、快捷方式和版本文件均已移除。三份安装日志均无异常，测试进程正常退出。
 

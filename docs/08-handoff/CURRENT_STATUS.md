@@ -1,8 +1,8 @@
 # 当前状态与接续点
 
-当前源码已实测迁移前的本机作业与合并设置、服务器配置、四组菜单键盘访问，以及直接浏览中修复索引后的模型选择。旧版配置与新版工作区草稿的优先级、服务器同名处理和可重复的实窗步骤分别见[本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)、[服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)、[四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)和[结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)。
+Windows x64 当前成品来自干净提交 `cf58e9e`。1700 个负载文件通过核对，在开发机的隔离安装标识下从 `2c06b77` 升级、卸载等八项检查通过。实际安装目录中的程序已读回旧版作业参数，随包后台验证了服务器设置的旧版往返，正式窗口验证了顶栏访问键和模型索引重建。另核对安装后的 67 份文档、967 个本地链接。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md) · [本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
 
-Windows x64 当前成品来自干净提交 `2c06b77`。免安装包核对了 1700 个文件，开发机隔离标识从 `328ad47` 升级、卸载等八项检查通过，安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立机器仍待实测。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md)
+上一版 `2c06b77` 安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立 Windows 仍待实测。整队停止与原版取消待运行作业的行为差异留在[迁移合同](../winui-migration.md)。
 
 通过源码与成品重放已核对 GJB-16 合并在目标替换前和替换后中断的两种状态。公开成功回执只在目标就位后出现；重开可以核对输出和两份备份，再报告实际发布状态。结果浏览在刷新过程中可以继续查看其他已列文件，取消或失败后保留当前预览。单文件索引在本轮 G 盘负载下四组交错测量的中位耗时从 9.08 秒降到 1.22 秒。[合并中断](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出) · [索引操作与计时](ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)
 

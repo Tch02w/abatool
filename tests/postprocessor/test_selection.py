@@ -4,7 +4,6 @@ import json
 import os
 import re
 import threading
-import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -175,6 +174,7 @@ def test_initial_odb_scan_uses_configured_parallel_workers(
     active = 0
     maximum_active = 0
     lock = threading.Lock()
+    first_three_running = threading.Event()
 
     def fake_run_process(arguments, _cwd, log=None, controller=None):
         nonlocal active, maximum_active
@@ -184,7 +184,9 @@ def test_initial_odb_scan_uses_configured_parallel_workers(
         with lock:
             active += 1
             maximum_active = max(maximum_active, active)
-        time.sleep(0.04)
+            if active == 3:
+                first_three_running.set()
+        assert first_three_running.wait(timeout=10), "Three ODB scans did not enter the worker concurrently"
         runner_module.save_json(
             output_path,
             {

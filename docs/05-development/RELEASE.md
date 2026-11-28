@@ -1,6 +1,14 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-6ace159593c4/AbaqusTools/AbaqusTools.WinUI.exe`，应用提交 `c87687527f1be1971997f14cee4ac2a54b1f71e1`。此次包含多工作表预览、逐帧 GIF 编码、工作簿修订和跨页远端菜单修复。1698 个文件已通过校验，清单 SHA-256 为 `1bf0c2b5a0ccbcf956d23878b029f4343fc5708eac6879bdb58782b547f28e6c`。包内原生窗口启动、队列与资源接口、退出及真实工程工作表切换均已实测。回执为 `GPTWork/release-queue-portable-c876875-20261128-131626/verification.json` 和 `GPTWork/native-workbook-preview-20261128/run-d76107b7/verification.json`。数字框与上一版使用相同编译资源。[队列工具栏实图](../repowiki/images/job-queue-toolbar.png) · [安装说明](INSTALLATION.md)
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-ea1bf854f0f6/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cbe221ec4068bc16dd5ab06a37473022daceb6e8`。随包 1698 个文件已核对，清单 SHA-256 为 `14b32b500fc6b2d374bc457d14d444b3e1a84270a693deeff2d48d57aac8c44e`。远端提交恢复、中途续算校验、首次操作历史写入及八页 Wiki 使用说明均在该候选中。核对范围包括编译资源、Abaqus 脚本、后台依赖和正式客户端队列接口。回执为 `GPTWork/release-queue-portable-cbe221e-20261128-141914/verification.json`。
+
+在独立的空配置实际打开此包后，窗口和已认证后台在 13.15 秒内就绪。草稿持续被占用时，普通关闭被取消；仅向测试窗口送达系统结束消息后，重开恢复了最后一次成功保存的作业名，并接回原后台。回执为 `GPTWork/session-window-c876875-20261128/native-75654c74/verification.json`，同目录 `release.json` 记录实际执行文件。
+
+数字框沿用已经实窗核对的第 2 款布局和第 3 款浅底圆角按钮。与旧成品相比，数字框编译模板逐字节相同。[队列工具栏实图](../repowiki/images/job-queue-toolbar.png) · [安装说明](INSTALLATION.md)
+
+### 历史版本 c876875
+
+该版免安装入口为 `GPTWork/release-win-x64-6ace159593c4/AbaqusTools/AbaqusTools.WinUI.exe`，应用提交 `c87687527f1be1971997f14cee4ac2a54b1f71e1`。此次包含多工作表预览、逐帧 GIF 编码、工作簿修订和跨页远端菜单修复。1698 个文件已通过校验，清单 SHA-256 为 `1bf0c2b5a0ccbcf956d23878b029f4343fc5708eac6879bdb58782b547f28e6c`。包内原生窗口启动、队列与资源接口、退出及真实工程工作表切换均已实测。回执为 `GPTWork/release-queue-portable-c876875-20261128-131626/verification.json` 和 `GPTWork/native-workbook-preview-20261128/run-d76107b7/verification.json`。
 
 ### 历史版本 41c104c
 

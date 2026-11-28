@@ -1,6 +1,6 @@
 # TASK-004：日志选区稳定与数字输入样式
 
-正式版 `c876875` 的队列工具栏在实际窗口截取了 516 × 48 原像素图。两端按钮的可点击范围相同，浅底像素均为 `#EEEEEE`，中央输入区为 `#FEFEFE`。数字 3 的字形中心到输入区中心的水平偏差为 0 像素。图像和测量回执在 `GPTWork/native-queue-toolbar-c876875-20261128/case2/queue-toolbar.png` 与同目录的 `verification.json`。该窗口使用独立空队列，关闭时前后台均正常退出。
+正式版 `cbe221e` 和 `c876875` 的队列工具栏分别在各自实际窗口截取了 516 × 48 原像素图。两份 PNG 逐字节一致，SHA-256 为 `9b370b4de1482e1ea9b2b649ba0e09b0c62eee16449adcdfe1d0d81655776ca1`。两端按钮的可点击范围相同，浅底像素均为 `#EEEEEE`，中央输入区为 `#FEFEFE`。数字 3 的字形中心到输入区中心的水平偏差为 0 像素。新成品截图为 `GPTWork/native-queue-toolbar-cbe221e-20261128/case1/queue-toolbar.png`，同目录有 `capture.json`。对照测量在 `GPTWork/native-queue-toolbar-c876875-20261128/case2/verification.json`。
 
 ## 运行中队列的菜单与页面命令
 

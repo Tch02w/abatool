@@ -1,5 +1,7 @@
 # 任务索引
 
+F005/F010 作业概览的展开菜单、同名选择、后台增删和日志选区见[下拉列表与轮询](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)。F014 单个 ODB 的大小、本地修改时间及路径展示见[后处理说明](../03-features/POSTPROCESSING.md)。
+
 成品 `cf58e9e` 的完整回归、独立 Qt 窗口和安装检查见[本轮回归](ACTIVE_TASKS/TASK-002-migration.md#cf58e9e-成品与回归)。迁移前后的 ODB 发现顺序及三个作业入口分别见[发现规则](ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序)和[作业定位](ACTIVE_TASKS/TASK-002-migration.md#从三处作业入口定位-odb)。
 
 最新迁移验证涵盖[旧版新建及合并设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)、[服务器配置往返](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)、[顶栏菜单访问键](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)和[模型索引损坏后的直接浏览及重建](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)。

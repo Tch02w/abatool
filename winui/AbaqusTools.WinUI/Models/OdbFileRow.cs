@@ -69,6 +69,18 @@ public sealed class OdbFileRow : INotifyPropertyChanged
 
     public string ModifiedDisplay { get; }
 
+    public string SingleSelectionSummary
+    {
+        get
+        {
+            var metadata = ModifiedAt == DateTimeOffset.MinValue
+                ? "文件大小与修改时间不可用"
+                : $"{SizeDisplay} · 修改时间 {ModifiedDisplay}";
+            var plan = HasPostprocessConfiguration ? PostprocessSummary : "请先读取 ODB 结构";
+            return string.Join(Environment.NewLine, Name, metadata, plan);
+        }
+    }
+
     public OdbPostprocessScanItem? ScanDetails { get; private set; }
 
     public OdbPostprocessJobDraft? PostprocessJob { get; private set; }

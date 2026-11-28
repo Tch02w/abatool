@@ -2069,9 +2069,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         SelectedPlanText.Text = selectedRows.Length switch
         {
             0 => "选择 ODB 后可编辑参数",
-            1 when selectedRows[0].HasPostprocessConfiguration =>
-                $"{selectedRows[0].Name}{Environment.NewLine}{selectedRows[0].PostprocessSummary}",
-            1 => $"{selectedRows[0].Name}{Environment.NewLine}请先读取 ODB 结构",
+            1 => selectedRows[0].SingleSelectionSummary,
             _ => $"已选择 {selectedRows.Length} 个 ODB · 已就绪 {selectedRows.Count(row => row.HasPostprocessConfiguration)} 个",
         };
     }

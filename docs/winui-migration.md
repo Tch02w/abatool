@@ -149,7 +149,7 @@ WinUI 3 页面只依赖 ViewModel 和带版本的 DTO，不得直接操作 Pytho
 
 第一片优先验证 WinUI、Python 3.14 控制面和 Abaqus Python 3.10 三层边界，且只读源 ODB，避免在协议尚未稳定时触及求解队列或破坏性文件操作。
 
-- [ ] WinUI 3 壳可启动并固定 8 页导航；第 7 页可选择/输入目录、递归发现 ODB，并展示路径、大小和修改时间。
+- [x] WinUI 3 壳可启动并固定 8 页导航。第 7 页支持选择或输入目录、递归发现 ODB，单选后显示大小与本地修改时间，列表保留路径。[发现顺序与输入](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序) · [文件详情](03-features/POSTPROCESSING.md#在发现列表中查看文件修改时间)
 - [ ] 控制面只绑定 `127.0.0.1`，使用随机端口、实例描述文件和 bearer token；命令使用版本化 JSON，事件带全局单调序号并可断线重放。
 - [x] 发现规则与 PySide6 一致。排除结果目录、`.git`、`.venv`、`-old` 和升级临时文件，支持中文、空格和自然排序。[旧选择窗口与成品发现接口逐项对照](08-handoff/ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序)
 - [ ] 选中 ODB 后可创建异步兼容性检查，调用现有 Abaqus 3.10 worker，逐文件呈现 `valid / upgrade_required / newer_release / invalid / missing / empty`、进度和结构化错误。

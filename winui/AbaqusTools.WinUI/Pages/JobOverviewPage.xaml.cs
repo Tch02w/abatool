@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using AbaqusTools.WinUI.Explorer;
 using AbaqusTools.WinUI.Services;
 using Microsoft.UI.Xaml;
@@ -9,10 +10,14 @@ using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
 
+public sealed record JobOverviewChoice(string Key, string DisplayName);
+
 public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
 {
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _refreshTimer;
     private readonly JobMonitorExplorerAdapter _jobExplorerAdapter;
+    private readonly ObservableCollection<JobOverviewChoice> _jobChoices = [];
+    private JobOverviewEntry[] _latestEntries = [];
     private JobOverviewEntry? _currentEntry;
     private LocalQueueRuntimeSnapshot? _runtime;
     private RemoteJobListResponse? _remoteJobs;
@@ -35,6 +40,11 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
     public JobOverviewPage()
     {
         InitializeComponent();
+        JobSelector.ItemsSource = _jobChoices;
+        JobSelector.DropDownClosed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (IsLoaded && !JobSelector.IsDropDownOpen) ApplyJob(RefreshJobChoices());
+        });
         _runtimeLog = new RuntimeLogUpdateState(RuntimeLogTextBox.Text);
         RuntimeLogTextBox.SelectionChanged += OnRuntimeLogSelectionChanged;
         RuntimeLogTextBox.AddHandler(PointerPressedEvent,
@@ -77,8 +87,8 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         while ((!IsLoaded || _loading) && DateTime.UtcNow < deadline) await Task.Delay(50);
         if (!IsLoaded || _loading || App.Current.Session.IsClosing) return false;
         await RefreshAsync();
-        if (!IsLoaded || App.Current.Session.IsClosing || JobSelector.ItemsSource is not IEnumerable<JobOverviewEntry> entries) return false;
-        var entry = entries.FirstOrDefault(item => item.Key == notification.JobKey
+        if (!IsLoaded || App.Current.Session.IsClosing) return false;
+        var entry = _latestEntries.FirstOrDefault(item => item.Key == notification.JobKey
             && (item.LocalItem is null || item.LocalItem.AttemptId == notification.LocalAttemptId));
         if (entry is null) return false;
         SelectJob(entry.Key);
@@ -133,12 +143,11 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             // Read selection after the await: the user may switch jobs while polling.
             var local = await localTask;
             var remote = await remoteTask;
-            var selectedKey = _currentEntry?.Key;
             if (!local.RefreshPending) _runtime = local;
             if (!remote.RefreshPending) _remoteJobs = remote;
             var snapshot = _runtime?.Queue;
             var remoteOperations = _remoteJobs?.Operations ?? [];
-            var entries = (snapshot?.QueueItems ?? [])
+            _latestEntries = (snapshot?.QueueItems ?? [])
                 .Select(JobOverviewEntry.FromLocal)
                 .Concat(remoteOperations.Select(JobOverviewEntry.FromRemote))
                 .ToArray();
@@ -146,21 +155,7 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
             JobStatsText.Text = snapshot is null
                 ? (_remoteJobs is null ? "正在读取作业…" : $"远端作业 {remoteOperations.Count}")
                 : (_remoteJobs is null ? "本机 " : "") + FormatStats(snapshot, remoteOperations);
-            var selected = entries.FirstOrDefault(
-                item => string.Equals(item.Key, selectedKey, StringComparison.Ordinal))
-                ?? entries.FirstOrDefault(item => item.Active)
-                ?? entries.FirstOrDefault();
-            _updatingJobSelector = true;
-            try
-            {
-                JobSelector.ItemsSource = entries;
-                JobSelector.IsEnabled = entries.Length > 0;
-                JobSelector.SelectedItem = selected;
-            }
-            finally
-            {
-                _updatingJobSelector = false;
-            }
+            var selected = RefreshJobChoices();
             ApplyJob(selected);
             var localStatus = local.RefreshPending
                 ? (_runtime is null ? "正在读取本机队列…" : "正在更新本机队列…")
@@ -191,27 +186,72 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         }
     }
 
+    private JobOverviewEntry? EntryForChoice() => JobSelector.SelectedItem is JobOverviewChoice choice
+        ? _latestEntries.FirstOrDefault(entry => entry.Key == choice.Key)
+        : null;
+
+    private JobOverviewEntry? RefreshJobChoices()
+    {
+        var selected = EntryForChoice();
+        // Keep the open list and keyboard focus stable. A removed job immediately
+        // loses its detail/actions, even while its old menu row is still visible.
+        if (JobSelector.IsDropDownOpen) return selected;
+        selected ??= _latestEntries.FirstOrDefault(entry => entry.Active) ?? _latestEntries.FirstOrDefault();
+        _updatingJobSelector = true;
+        try
+        {
+            if (_jobChoices.Count > _latestEntries.Length)
+            {
+                var wanted = _latestEntries.Select(entry => entry.Key).ToHashSet(StringComparer.Ordinal);
+                for (var index = _jobChoices.Count - 1; index >= 0; index--)
+                    if (!wanted.Contains(_jobChoices[index].Key)) _jobChoices.RemoveAt(index);
+            }
+            for (var index = 0; index < _latestEntries.Length; index++)
+            {
+                var next = _latestEntries[index];
+                if (index == _jobChoices.Count)
+                {
+                    _jobChoices.Add(new(next.Key, next.DisplayName));
+                    continue;
+                }
+                if (_jobChoices[index].Key == next.Key && _jobChoices[index].DisplayName == next.DisplayName) continue;
+                var existing = _jobChoices.FirstOrDefault(choice => choice.Key == next.Key);
+                if (existing is null) _jobChoices.Insert(index, new(next.Key, next.DisplayName));
+                else
+                {
+                    var oldIndex = _jobChoices.IndexOf(existing);
+                    if (oldIndex != index) _jobChoices.Move(oldIndex, index);
+                    if (existing.DisplayName != next.DisplayName) _jobChoices[index] = new(next.Key, next.DisplayName);
+                }
+            }
+            while (_jobChoices.Count > _latestEntries.Length) _jobChoices.RemoveAt(_jobChoices.Count - 1);
+            var choice = selected is null ? null : _jobChoices.First(item => item.Key == selected.Key);
+            if (!ReferenceEquals(JobSelector.SelectedItem, choice)) JobSelector.SelectedItem = choice;
+            JobSelector.IsEnabled = _jobChoices.Count > 0;
+            return selected;
+        }
+        finally { _updatingJobSelector = false; }
+    }
+
     private void OnJobSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_updatingJobSelector)
         {
-            ApplyJob(JobSelector.SelectedItem as JobOverviewEntry);
+            ApplyJob(EntryForChoice());
         }
     }
 
     public void SelectJob(string key)
     {
-        if (JobSelector.ItemsSource is not IEnumerable<JobOverviewEntry> entries)
-        {
-            return;
-        }
-        var selected = entries.FirstOrDefault(
+        var selected = _latestEntries.FirstOrDefault(
             item => string.Equals(item.Key, key, StringComparison.Ordinal));
         if (selected is null)
         {
             return;
         }
-        JobSelector.SelectedItem = selected;
+        if (JobSelector.IsDropDownOpen) JobSelector.IsDropDownOpen = false;
+        RefreshJobChoices();
+        JobSelector.SelectedItem = _jobChoices.First(choice => choice.Key == key);
         ApplyJob(selected);
     }
 

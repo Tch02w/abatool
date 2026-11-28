@@ -1,5 +1,7 @@
 # 功能定位索引
 
+F005/F010 概览的作业下拉框由 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs` 的 `RefreshJobChoices` 与 `EntryForChoice` 更新，展开期间保留显示行，操作目标使用最新作业记录。回归为 `tests/winui/test_overview_selector.py`，[实窗及日志验收](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)。F014 单选 ODB 的文件信息由 `winui/AbaqusTools.WinUI/Models/OdbFileRow.cs` 的 `SingleSelectionSummary` 生成，`tests/winui_postprocess/Program.cs` 核对大小、时间及无元数据的显示。
+
 F001/F003/F013 的旧版新建与合并设置由 `winui/AbaqusTools.WinUI/Services/LegacyWorkbenchSettings.cs` 的 `ImportMissingPages` 读取，原生页已保存的草稿优先。回归位于 `tests/winui_host/WorkbenchSessionChecks.cs`，[旧版与新版实窗](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)。F008 的旧服务器读取与修改由 `modules/control_plane/remote_servers.py` 和 `modules/submitter/app_settings.py` 处理，[往返验证](REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)覆盖 `tests/control_plane/test_legacy_server_profile.py`。
 
 F001 四组菜单的原生访问键在 `winui/AbaqusTools.WinUI/MainWindow.xaml`，[Windows 测试记录](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)。F021 的 `DirectBuildIndexButton` 与原索引视图共用 `BuildIndexAsync`，`ReloadPublishedIndexAsync` 在首次建索引和重建后恢复发起操作的模型。[两个模型的修复实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)

@@ -1,5 +1,9 @@
 # TASK-001：数据提取与后处理应用交付
 
+## 发现列表中单个 ODB 的修改时间
+
+旧成品的后台已经返回修改时间，页面只显示文件名和结构读取提示。修复后在同一后台分别选择两个 G 盘隔离文件，右侧显示 512 B 和 2 KB，时间与两个文件的本地修改时间逐秒一致。清空或多选时回到相应的选区提示。未启动求解。原生窗口前后对照在 `GPTWork/native-odb-file-details-20261128/before-024ec1c7/receipt.json` 与同目录的 `after-83c6740d/receipt.json`。[操作说明](../../03-features/POSTPROCESSING.md#在发现列表中查看文件修改时间)
+
 ## 从模型直接浏览并重建索引
 
 正式免安装包 `cf58e9e` 使用自身前端与后台重做三项检查。直接浏览工具栏建索引的回执为 `GPTWork/index-damaged-scope-20261128/published-19204316/receipt.json`，损坏重建与首次建立的回执在同目录的 `published-c1feab54`、`published-2085e887`。三次发布后均只有模型甲的一条记录，预览值 123，各次输入摘要一致，三个窗口正常退出。

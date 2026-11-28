@@ -2,6 +2,8 @@
 
 ## 2026-11-28 核对结论
 
+作业概览的下拉列表已在实窗中跨多轮刷新保持展开，同名作业切换、打开列表时增加或删除作业以及本机和远端样例日志选区均已复查。后处理的两份 G 盘样例也已在生产页面逐一核对大小与本地修改时间。[概览详情](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [文件详情](../03-features/POSTPROCESSING.md#在发现列表中查看文件修改时间)
+
 旧版 PySide 保存的作业参数和合并设置已在 WinUI 实窗读回；服务器配置修改后可由历史 Qt 窗口读回。四组顶栏菜单已用投递至测试窗口的 Windows 组合键核对。结果页在缺少索引和索引损坏时均能从模型范围重建；直接浏览的文件仍在结果页时保留选区和预览。[设置迁移](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器范围](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [菜单](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [索引](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
 
 当前免安装版及安装程序来自 `cf58e9e`。1700 个负载文件核对和隔离测试身份的八项安装生命周期通过。前版 `2c06b77` 的成品后台可读取旧版结果索引，写入中断后能恢复索引与合并发布，正式结果图编辑器可在重开时找回最后一次输入。物理环境与最终切换条件见下表。[当前安装程序](../05-development/INSTALLATION.md) · [当前免安装程序](../05-development/RELEASE.md)

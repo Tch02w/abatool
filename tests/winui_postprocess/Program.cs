@@ -74,6 +74,16 @@ Check(structureScan.StructureCatalog.Steps[0].Frames[1].Fields[0].Components[0] 
 Check(structureScan.StructureCatalog.Regions[0].DisplayName != structureScan.StructureCatalog.Regions[1].DisplayName, "Region labels must distinguish kinds");
 Console.WriteLine("5 structure catalog contract checks passed");
 var row = new OdbFileRow(new OdbDiscoveryItem { Path = "case.odb", Name = "case.odb" });
+Check(row.SingleSelectionSummary.Contains("文件大小与修改时间不可用")
+    && !row.SingleSelectionSummary.Contains("0001-"), "Unknown file metadata must not appear as a file timestamp");
+var knownTime = new DateTimeOffset(2025, 2, 3, 21, 45, 52, TimeSpan.Zero);
+var discovered = new OdbFileRow(new OdbDiscoveryItem { Path = "ready.odb", Name = "ready.odb", SizeBytes = 2048, ModifiedAt = knownTime });
+var localTimestamp = knownTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+Check(discovered.SingleSelectionSummary.Contains($"{discovered.SizeDisplay} · 修改时间 {localTimestamp}")
+    && discovered.SingleSelectionSummary.Contains("请先读取 ODB 结构"), "Show discovered local time and size before structure scan");
+discovered.ApplyPostprocessScan(Scan());
+Check(discovered.SingleSelectionSummary.Contains(localTimestamp)
+    && discovered.SingleSelectionSummary.EndsWith(discovered.PostprocessSummary), "Keep file metadata with the configured extraction summary");
 row.ApplyPostprocessScan(Scan());
 Check(row.HasPostprocessConfiguration, "Valid defaults should be ready");
 var noBars = new OdbFileRow(new OdbDiscoveryItem { Path = "plain.odb" });

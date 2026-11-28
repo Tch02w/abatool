@@ -1,5 +1,7 @@
 # 当前状态与接续点
 
+后续界面修复已在隔离窗口核对概览作业列表的展开、同名选择与作业增删。轮询期间可以继续选择作业，当前项被删除时不再提供该项的操作。本机和远端测试日志的文字选区亦已核对。[概览列表实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)
+
 Windows x64 当前成品来自干净提交 `cf58e9e`。1700 个负载文件通过核对，在开发机的隔离安装标识下从 `2c06b77` 升级、卸载等八项检查通过。实际安装目录中的程序已读回旧版作业参数，随包后台验证了服务器设置的旧版往返，正式窗口验证了顶栏访问键和模型索引重建。另核对安装后的 67 份文档、967 个本地链接。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md) · [本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
 
 上一版 `2c06b77` 安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立 Windows 仍待实测。整队停止与原版取消待运行作业的行为差异留在[迁移合同](../winui-migration.md)。

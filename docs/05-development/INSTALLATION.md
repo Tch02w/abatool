@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-transfer-context-20261128/source/GPTWork/installer-win-x64-46bcbbe7d191/AbaqusTools-0.1.0-win-x64-setup.exe`，来自应用提交 `827a45f`，版本 `0.1.0`，大小 126576854 字节，SHA-256 为 `3434b2ad49720d1b225cbea08f0af62d445d1d1043fa6788a540de8b64012336`，尚未签名。免安装入口和清单摘要见[发布记录](RELEASE.md)。
+当前 Windows x64 安装程序为 `GPTWork/installer-queue-index-20261128/source/GPTWork/installer-win-x64-a4d196da215b/AbaqusTools-0.1.0-win-x64-setup.exe`。应用及安装器来自提交 `41c104c`，版本 `0.1.0`，大小 126589848 字节，SHA-256 为 `0da3162fcbaf3744c01219787c5a8a40640ee1ecb2a060ea51c6c2d07259c215`，签名状态为 NotSigned。免安装入口和清单摘要见[发布记录](RELEASE.md)。
+
+使用同一负载的独立测试标识从 `827a45f` 升级，安装、运行时保护与卸载共 8 项通过。中文向导也已实际完成安装、返回和卸载。1698 个应用文件逐一匹配清单，已安装的 67 份说明中 806 个相对文件链接均可访问。升级前 1 个、卸载前 16 个应用数据文件的摘要均保留，三份安装日志无异常，测试标识、快捷方式和自有进程已清理。回执为 `GPTWork/installer-queue-index-20261128/verified.json`。独立无开发工具 Windows 及正式安装标识的生命周期仍待测试。
+
+另将此版本放到 G 盘独立中文目录，逐一校验 1698 个应用文件和清单。在 PATH 无 Python、.NET 与 Abaqus 的独立进程环境下打开 WinUI，前台 174 个、后台 87 个加载模块全部来自程序目录或 Windows，退出码为 0，后台及连接描述文件已清理。回执为 `GPTWork/installer-queue-index-20261128/run-72e86c58/verification.json`。本机 Windows Sandbox、Hyper-V 均处于禁用状态，实际设备范围见 `GPTWork/installer-queue-index-20261128/environment.json`。
+
+## 历史版本 827a45f
+
+`GPTWork/installer-transfer-context-20261128/source/GPTWork/installer-win-x64-46bcbbe7d191/AbaqusTools-0.1.0-win-x64-setup.exe` 来自应用提交 `827a45f`，版本 `0.1.0`，大小 126576854 字节，SHA-256 为 `3434b2ad49720d1b225cbea08f0af62d445d1d1043fa6788a540de8b64012336`，尚未签名。
 
 本机从 `1b899eb` 升级独立标识的安装，8 项检查全部通过。中文向导完整走过安装、返回以及卸载。1698 份负载与清单逐项一致，安装目录中 67 份文档的 778 个相对链接均可达。升级前 1 份数据文件和卸载前 16 份数据文件均保留原摘要。三份日志均无异常，无残留测试登记、快捷方式或自有进程。回执为 `GPTWork/installer-transfer-context-20261128/verified.json`。
 

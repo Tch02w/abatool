@@ -1,6 +1,10 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-c267b384c114/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `827a45f04001c65ed18824a91acb27d12f0b0b8b`。修复包括结果浏览切页、远端文件下载和后处理尺寸单位。1698 项文件已核对，清单 SHA-256 为 `d72e103086aff95fce72084c480c1a4aad3dc2138109656009ef0c3ded0dfbd3`。包内数字框样式与使用左减、居中数字、右加及浅底圆角键的实窗版本逐字节一致。冻结后台探测、正式客户端队列读写及关闭的回执为 `GPTWork/release-queue-portable-827a45f-20261128-120245/verification.json`。[安装说明](INSTALLATION.md) · [队列数字框实窗](../repowiki/images/job-queue-toolbar.png)
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-fda6686733d1/AbaqusTools/AbaqusTools.WinUI.exe`，应用提交 `41c104c4f7ce424505ecc01e1543a2c8ebe2fcc3`。已校验 1698 个文件，清单 SHA-256 为 `59dcadb949148ba50d43005f5e7c15668768b62a6e1f17898fd5072342cf1dee`。目录内程序、实际后台的依赖探测、队列读写和关闭均通过。数字框编译资源与实窗截图使用的模板相同，SHA-256 为 `58592d0a249a20113f5b31ed152a8778b4fceebdc9a8c46e768374b169732cd1`。回执为 `GPTWork/release-queue-portable-41c104c-20261128-123907/verification.json`。[队列工具栏实图](../repowiki/images/job-queue-toolbar.png) · [安装说明](INSTALLATION.md)
+
+### 历史版本 827a45f
+
+Windows x64 免安装程序 `GPTWork/release-win-x64-c267b384c114/AbaqusTools/AbaqusTools.WinUI.exe` 来自干净提交 `827a45f04001c65ed18824a91acb27d12f0b0b8b`。修复包括结果浏览切页、远端文件下载和后处理尺寸单位。1698 项文件已核对，清单 SHA-256 为 `d72e103086aff95fce72084c480c1a4aad3dc2138109656009ef0c3ded0dfbd3`。冻结后台探测、正式客户端队列读写及关闭的回执为 `GPTWork/release-queue-portable-827a45f-20261128-120245/verification.json`。
 
 ### 历史版本 1b899eb
 

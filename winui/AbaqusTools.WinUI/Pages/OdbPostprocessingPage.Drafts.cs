@@ -34,10 +34,17 @@ public sealed partial class OdbPostprocessingPage
     private static Dictionary<string, string> CaptureInputs(Dictionary<string, Control> fields) => fields.ToDictionary(
         p => p.Key, p => p.Value switch
         {
-            TextBox text => text.Text, Controls.WorkbenchNumberBox number => number.EditingText,
+            TextBox text => text.Text, Controls.WorkbenchNumberBox number => CaptureNumberText(number),
             ComboBox combo => ChoiceValue(combo.SelectedItem), CheckBox check => check.IsChecked == true ? "true" : "false",
             _ => throw new InvalidOperationException("未登记的草稿输入类型。"),
         });
+
+    private static string CaptureNumberText(Controls.WorkbenchNumberBox number)
+    {
+        // An unopened editor initially has a value but no text. An existing editor may intentionally be blank.
+        number.ApplyTemplate();
+        return number.EditingText;
+    }
 
     private static void RestoreInputs(Dictionary<string, Control> fields, IReadOnlyDictionary<string, string> values)
     {

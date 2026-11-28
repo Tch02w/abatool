@@ -69,6 +69,12 @@ static class PostprocessDraftChecks
             ["GIF帧率"] = "25.0", ["GIF时长"] = "4", ["纵筋容差"] = "1e-4", ["白底"] = "true", ["透明底"] = "true",
         };
         Check(!OdbPostprocessDraftRecovery.OutputChanged(workspace.Output, raw), "Equivalent numeric formatting detected as a change");
+        foreach (var unfinished in new[] { "", "1e" })
+        {
+            raw["GIF时长"] = unfinished;
+            Check(OdbPostprocessDraftRecovery.OutputChanged(workspace.Output, raw), "Hidden duration edit lost: " + unfinished);
+        }
+        raw["GIF时长"] = "4";
         foreach (var bad in new[] { "", "-", "1e", "NaN", "Infinity", "30" })
         {
             raw["GIF帧率"] = bad;
@@ -83,12 +89,14 @@ static class PostprocessDraftChecks
         var store = Store(path);
         Check(store.Load() is null, "Fresh checkpoint not empty");
         raw["GIF帧率"] = "1e";
+        raw["GIF时长"] = "";
         var writing = store.SaveAsync(draft);
         raw["GIF帧率"] = "60";
         dialogs["提取参数"].Inputs["未确认填写"] = "later";
         await writing;
         var restored = Store(path).Load()!;
-        Check(restored.OutputInputs["GIF帧率"] == "1e" && restored.Dialogs["提取参数"].Inputs["未确认填写"] == " 0,5-\n中文 "
+        Check(restored.OutputInputs["GIF帧率"] == "1e" && restored.OutputInputs["GIF时长"] == ""
+            && restored.Dialogs["提取参数"].Inputs["未确认填写"] == " 0,5-\n中文 "
             && restored.Dialogs.Count == 4, "Raw/immutable modal capture lost");
         Check(formalBytes.SequenceEqual(File.ReadAllBytes(formalPath)), "Recovery checkpoint published formal workspace");
         Check(restored.Matches(root.ToLowerInvariant() + "\\", basis, [source with { Path = source.Path.ToLowerInvariant() }]), "Path normalization changed identity");

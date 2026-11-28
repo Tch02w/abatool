@@ -28,6 +28,7 @@ class OutputServers(FakeRemoteManager):
     def __init__(self):
         super().__init__()
         self.reads = []
+        self.upload_hosts = []
 
     def list_directory(self, remote_path=""):
         self.reads.append(("list", self.connected_profile.host))
@@ -38,10 +39,44 @@ class OutputServers(FakeRemoteManager):
         Path(local_path).write_text(self.connected_profile.host, encoding="ascii")
         return super().download_file(remote_path, local_path, **kwargs)
 
+    def upload_file(self, local_path, remote_path, **kwargs):
+        self.upload_hosts.append(self.connected_profile.host)
+        return super().upload_file(local_path, remote_path, **kwargs)
+
 
 def post(runtime, route, payload):
     response = api_request(runtime, "/api/v1/" + route, method="POST", payload=payload)
     return response[0], json_response(response)
+
+
+def test_resource_browser_keeps_its_original_server_through_selection_and_retry(tmp_path):
+    remote = OutputServers()
+    original = {**profile_payload(), "hostFingerprint": "SHA256:test-server"}
+    other = {**original, "host": "10.0.0.99"}
+    with running_control_plane(tmp_path, remote_manager=remote, server_profiles_path=tmp_path / "profiles.json") as runtime:
+        _connect(runtime)
+        listing = {"schemaVersion": 1, "expectedProfile": original, "path": original["computeRoot"]}
+        assert post(runtime, "remote-file-listings", listing)[0] == 200
+        source = tmp_path / "upload.txt"
+        source.write_text("fixture")
+        transfer = {"schemaVersion": 1, "expectedProfile": original, "clientRequestId": "upload",
+                    "direction": "upload", "source": str(source), "destination": r"D:\Abaqus_Cal\upload.txt",
+                    "overwrite": True}
+        status, operation = post(runtime, "remote-transfers", transfer)
+        assert status == 202
+        wait_for(lambda: json_response(api_request(runtime, "/api/v1/remote-transfers/" + operation["operationId"]))["status"] == "succeeded")
+        assert post(runtime, "remote-server-commands", command("connect", profile=other))[0] == 200
+        assert post(runtime, "remote-file-listings", listing)[1]["error"]["code"] == "REMOTE_CONNECTION_CHANGED"
+        assert post(runtime, "remote-transfers", transfer)[1]["operationId"] == operation["operationId"]
+        assert post(runtime, "remote-transfers", transfer | {"expectedProfile": other})[1]["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+        assert post(runtime, "remote-transfers", transfer | {"clientRequestId": "overwrite-retry"})[1]["error"]["code"] == "REMOTE_CONNECTION_CHANGED"
+        assert remote.reads == [("list", original["host"])]
+        assert remote.upload_hosts == [original["host"]]
+        for route, request in (("remote-file-listings", listing), ("remote-transfers", transfer)):
+            assert post(runtime, route, request | {"expectedProfile": None})[0] == 400
+        for route, request in (("remote-file-listings", listing), ("remote-transfers", transfer | {"direction": "download"})):
+            conflict = post(runtime, route, request | {"sourceOperationId": "a" * 32})
+            assert (conflict[0], conflict[1]["error"]["code"]) == (400, "CONFLICTING_REMOTE_TARGET")
 
 
 def test_recovered_job_browses_and_downloads_only_from_its_original_server(tmp_path):
@@ -101,12 +136,20 @@ def test_invalid_job_binding_never_falls_back_to_general_browser(tmp_path, inval
         assert post(runtime, "remote-transfers", body)[1]["error"]["code"] == "INVALID_SOURCE_OPERATION_ID"
 
 
-def test_queued_download_rechecks_identity_when_it_reaches_the_transport(tmp_path, monkeypatch):
+@pytest.mark.parametrize("binding", ["job", "profile", "legacy"])
+def test_queued_download_rechecks_identity_when_it_reaches_the_transport(tmp_path, monkeypatch, binding):
     remote = OutputServers()
     with running_control_plane(tmp_path, remote_manager=remote, server_profiles_path=tmp_path / "profiles.json") as runtime:
         _connect(runtime)
-        job = create(runtime, request_for(tmp_path / "case.inp"))
-        wait_for(lambda: view(runtime, job)["status"] == "succeeded")
+        source = r"D:\Abaqus_Cal\result.sta"
+        target_fields = {}
+        if binding == "job":
+            job = create(runtime, request_for(tmp_path / "case.inp"))
+            wait_for(lambda: view(runtime, job)["status"] == "succeeded")
+            source = view(runtime, job)["files"]["sta"]
+            target_fields = {"sourceOperationId": job}
+        elif binding == "profile":
+            target_fields = {"expectedProfile": {**profile_payload(), "hostFingerprint": "SHA256:test-server"}}
         service = runtime.httpd.context.remote_server_service
         transfer = service.transfer_file
         ready, release = threading.Event(), threading.Event()
@@ -120,8 +163,8 @@ def test_queued_download_rechecks_identity_when_it_reaches_the_transport(tmp_pat
         target = tmp_path / "queued.sta"
         try:
             code, data = post(runtime, "remote-transfers", {
-                "schemaVersion": 1, "clientRequestId": "queued", "sourceOperationId": job, "direction": "download",
-                "source": view(runtime, job)["files"]["sta"], "destination": str(target), "overwrite": False,
+                "schemaVersion": 1, "clientRequestId": "queued", **target_fields, "direction": "download",
+                "source": source, "destination": str(target), "overwrite": False,
             })
             assert code == 202 and ready.wait(5)
             # Swap the verified transport after acceptance but before any file I/O.

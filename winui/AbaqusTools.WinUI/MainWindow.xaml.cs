@@ -240,12 +240,12 @@ public sealed partial class MainWindow : Window
         if (route == "result-browser")
         {
             WindowTitleText.Text = "Abaqus Workbench — 结果浏览";
-            ReportPageStatus("选择结果根目录以读取索引");
             if (ContentFrame.CurrentSourcePageType != typeof(ResultBrowserPage))
             {
                 ContentFrame.Navigate(typeof(ResultBrowserPage));
             }
             AttachExplorerForCurrentPage();
+            if (ContentFrame.Content is ResultBrowserPage page) ReportPageStatus(page.StatusBarMessage);
             return;
         }
 
@@ -272,7 +272,7 @@ public sealed partial class MainWindow : Window
     {
         var adapter = (ContentFrame.Content as IWorkbenchExplorerPage)?.ExplorerAdapter
             ?? _fallbackExplorerAdapter;
-        ExplorerHost.Attach(adapter);
+        ExplorerHost.Attach(adapter, refreshOnAttach: ContentFrame.Content is not ResultBrowserPage { HasLoadedDirectory: true });
     }
 
     private async Task ActivateFallbackExplorerItemAsync(ExplorerItem item)

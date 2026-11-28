@@ -60,6 +60,9 @@ public sealed class RemoteDirectoryEntry
 
 public sealed class RemoteDirectoryListingRequest
 {
+    [JsonPropertyName("expectedProfile"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RemoteServerProfile? ExpectedProfile { get; init; }
+
     [JsonPropertyName("sourceOperationId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceOperationId { get; init; }
 
@@ -72,6 +75,9 @@ public sealed class RemoteDirectoryListingRequest
 
 public sealed class RemoteTransferRequest
 {
+    [JsonPropertyName("expectedProfile"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RemoteServerProfile? ExpectedProfile { get; init; }
+
     [JsonPropertyName("sourceOperationId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceOperationId { get; init; }
 

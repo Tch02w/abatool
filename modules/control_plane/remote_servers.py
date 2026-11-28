@@ -163,6 +163,14 @@ def _profile_from_payload(payload: object) -> ServerProfileDraft:
     )
 
 
+def file_request_identity(payload: Mapping[str, Any]) -> dict | None:
+    if "expectedProfile" not in payload:
+        return None
+    if "sourceOperationId" in payload:
+        raise ApiProblem(400, "CONFLICTING_REMOTE_TARGET", "历史作业文件使用该作业记录的服务器身份。")
+    return server_identity(_profile_from_payload(payload["expectedProfile"]))
+
+
 def _profile_payload(profile: ServerProfileDraft) -> dict[str, Any]:
     return {
         "profileName": profile.profile_name,
@@ -212,8 +220,19 @@ class RemoteServerService:
     def _publish_snapshot_locked(self) -> None:
         result = deepcopy(self._snapshot_locked())
         result["connection"].update(busy=bool(self._activity), activity=self._activity)
+        profile = self._manager.connected_profile if self._connection_status == "connected" else None
         with self._snapshot_lock:
             self._published_snapshot = result
+            self._published_file_identity = server_identity(profile) if profile is not None else None
+
+    def file_transfer_identity(self, expected: dict | None) -> dict:
+        # A queued transfer may already own the communication lock. Admission
+        # uses the last published session, then the worker verifies it under that lock.
+        with self._snapshot_lock:
+            active = self._published_file_identity
+            if active is None or (expected is not None and expected != active):
+                raise ApiProblem(409, "REMOTE_CONNECTION_CHANGED", "请重新连接所选服务器，再次选择传输文件。")
+            return deepcopy(active)
 
     @contextmanager
     def _communication(self, activity):

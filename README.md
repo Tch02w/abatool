@@ -6,7 +6,7 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 
 队列支持对齐的行列线与保留选区的刷新。后处理支持运行中追加对比组、编辑等待组、取消单组后继续，并能在重开前台时接回队列。各项的工程测试、桌面实测及待验范围见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
 
-队列中的并行上限可以直接输入，也可以点击两侧的浅底减号和加号。悬停在参数旁的 **i** 可查看说明。[队列工具栏实图](docs/repowiki/images/job-queue-toolbar.png)
+队列中的并行上限支持居中输入，左边的浅底减号减少一个作业名额，右边的浅底加号增加一个。悬停在参数旁的 **i** 可查看说明。[队列工具栏实图](docs/repowiki/images/job-queue-toolbar.png)
 
 ## 功能
 

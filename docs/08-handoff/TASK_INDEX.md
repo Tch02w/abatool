@@ -1,5 +1,11 @@
 # 任务索引
 
+F020/F022 在云图像素与毫米之间切换、已有目录尺寸恢复及 GIF 草稿的验收见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
+真实 CAE 对均匀应力 C3D8 的三向斜截面，以及力、弯矩和形心的解析核验见[斜截面记录](ACTIVE_TASKS/TASK-001-postprocessing.md#均匀应力实体的三向斜截面)。
+
+F009 远端文件选择、连接切换及本机保存行为见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md#选定服务器与下载目标)。F021 结果页切换时保留文件选区、预览、页码和目录草稿，以及系统目录选择器的实际操作见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 结果浏览页的全范围排序与分页见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。计算资源页的在线筛选、轮询和私钥选择见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#资源筛选和私钥选择)。
 
 F013 合并覆盖遇到输出占用，以及释放占用后重新预览、重试的结果见 [TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--odb-合并发布时目标被占用)。

@@ -40,10 +40,20 @@ public sealed class OdbPostprocessOutputOptions
     public bool WhiteBackground { get; set; } = true;
     public bool TransparentBackground { get; set; } = true;
 
+    internal static (int Minimum, int Maximum) ImageLimits(string unit) =>
+        unit == "mm" ? (30, 500) : (320, 4096);
+
+    internal static double ConvertImageDimension(double value, string targetUnit)
+    {
+        if (!double.IsFinite(value)) return double.NaN;
+        var (minimum, maximum) = ImageLimits(targetUnit);
+        var converted = targetUnit == "mm" ? value * 25.4 / 96 : value * 96 / 25.4;
+        return Math.Clamp(Math.Round(converted), minimum, maximum);
+    }
+
     public void Validate()
     {
-        var min = ImageUnit == "mm" ? 30 : 320;
-        var max = ImageUnit == "mm" ? 500 : 4096;
+        var (min, max) = ImageLimits(ImageUnit);
         // Saved workspaces may come from a larger machine; clamp on restore.
         if (ParallelWorkers < 1 || ExpectedRebarCount is < 0 or > 10000
             || RebarMethod is not ("element_cut" or "legacy_interpolation")

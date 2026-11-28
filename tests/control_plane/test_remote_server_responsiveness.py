@@ -164,6 +164,8 @@ def test_snapshot_remains_available_during_file_operations(tmp_path, action):
             snapshot = pool.submit(service.snapshot).result(timeout=2)
             assert snapshot["connection"]["busy"] and not operation.done()
             assert snapshot["connection"]["resource"]["cpu_total"] == 32
+            identity = pool.submit(service.file_transfer_identity, None).result(timeout=2)
+            assert identity["host"] == connect_payload()["profile"]["host"] and not operation.done()
         finally:
             manager.release.set()
             operation.result(timeout=3)

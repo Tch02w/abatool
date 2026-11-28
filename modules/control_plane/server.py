@@ -66,7 +66,7 @@ from .postprocessing import (
     PostprocessScanRunner,
 )
 from .remote_jobs import RemoteJobOperationManager, RemoteJobRequest, preview_remote_job
-from .remote_servers import RemoteManager, RemoteServerService
+from .remote_servers import RemoteManager, RemoteServerService, file_request_identity
 from .remote_transfers import (
     RemoteTransferOperationManager,
     RemoteTransferRequest,
@@ -418,7 +418,8 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
             if target.path == "/api/v1/remote-file-listings" and not target.query:
                 payload = self._read_json_object()
                 job_id = source_operation_id(payload)
-                identity = None
+                identity = file_request_identity(payload)
+                payload.pop("expectedProfile", None)
                 if job_id is not None:
                     identity = self.context.remote_job_manager.file_access_identity(job_id)
                     del payload["sourceOperationId"]

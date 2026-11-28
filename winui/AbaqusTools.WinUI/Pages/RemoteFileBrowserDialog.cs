@@ -19,6 +19,7 @@ public sealed class RemoteFileBrowserDialog
 {
     private readonly RemoteSelectionMode _mode;
     private readonly string? _sourceOperationId;
+    private readonly RemoteServerProfile? _expectedProfile;
     private readonly ContentDialog _dialog;
     private readonly TextBox _pathBox;
     private readonly ListView _list;
@@ -34,10 +35,12 @@ public sealed class RemoteFileBrowserDialog
         XamlRoot xamlRoot,
         RemoteSelectionMode mode,
         string title,
-        string? sourceOperationId = null)
+        string? sourceOperationId = null,
+        RemoteServerProfile? expectedProfile = null)
     {
         _mode = mode;
         _sourceOperationId = sourceOperationId;
+        _expectedProfile = expectedProfile;
         _pathBox = new TextBox { IsReadOnly = true, PlaceholderText = "服务器目录" };
         _upButton = new Button { Content = "上一级", IsEnabled = false };
         _openButton = new Button { Content = "进入", IsEnabled = false };
@@ -165,7 +168,8 @@ public sealed class RemoteFileBrowserDialog
         _infoBar.IsOpen = false;
         try
         {
-            var listing = await App.Current.ControlPlane.BrowseRemoteDirectoryAsync(path, sourceOperationId: _sourceOperationId);
+            var listing = await App.Current.ControlPlane.BrowseRemoteDirectoryAsync(path,
+                sourceOperationId: _sourceOperationId, expectedProfile: _expectedProfile);
             _retryPath = null;
             _pathBox.Text = listing.Path;
             _parentPath = listing.ParentPath;

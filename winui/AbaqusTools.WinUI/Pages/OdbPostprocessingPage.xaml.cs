@@ -39,6 +39,7 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
     private bool _updatingSelection;
     private string? _lastDiscoveryRoot;
     private bool _updatingRunScopes;
+    private string _imageUnit = "px";
     private string? _scopeCatalogRoot;
     private List<OdbRunScope>? _runScopeChoices;
     private readonly OdbPostprocessResultLocations _resultLocations = new();
@@ -675,9 +676,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         FullTimehistory = FullTimehistoryCheckBox.IsChecked is true,
         RebarMethod = SelectedTag(RebarMethodComboBox, "element_cut"),
         ExpectedRebarCount = (int)Math.Round(ExpectedRebarCountNumberBox.Value),
-        ImageUnit = SelectedTag(ImageUnitComboBox, "px"),
-        ImageWidth = (int)Math.Round(ImageWidthNumberBox.Value),
-        ImageHeight = (int)Math.Round(ImageHeightNumberBox.Value),
+        ImageUnit = _imageUnit,
+        ImageWidth = ImageDimensionForSave(ImageWidthNumberBox),
+        ImageHeight = ImageDimensionForSave(ImageHeightNumberBox),
         AnimationFps = DurationMode && double.IsNaN(AnimationFpsNumberBox.Value) ? 25 : (int)Math.Round(AnimationFpsNumberBox.Value),
         AnimationTimingMode = DurationMode ? "duration" : "fps",
         AnimationDurationSeconds = !DurationMode && double.IsNaN(AnimationDurationNumberBox.Value) ? 4 : AnimationDurationNumberBox.Value,
@@ -692,10 +693,9 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
         FullTimehistoryCheckBox.IsChecked = options.FullTimehistory;
         RebarMethodComboBox.SelectedIndex = options.RebarMethod == "element_cut" ? 0 : 1;
         ExpectedRebarCountNumberBox.Value = options.ExpectedRebarCount;
-        // Apply units first: the selection handler changes bounds and converts dimensions.
+        // Saved values are already expressed in their stored unit.
+        ApplyImageDimensions(options.ImageUnit, options.ImageWidth, options.ImageHeight);
         ImageUnitComboBox.SelectedIndex = options.ImageUnit == "px" ? 0 : 1;
-        ImageWidthNumberBox.Value = options.ImageWidth;
-        ImageHeightNumberBox.Value = options.ImageHeight;
         AnimationFpsNumberBox.Value = options.AnimationFps;
         AnimationDurationNumberBox.Value = options.AnimationDurationSeconds;
         AnimationTimingModeComboBox.SelectedIndex = options.AnimationTimingMode == "duration" ? 1 : 0;
@@ -1427,7 +1427,14 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
             ShowWarning("请填写 1 至 60 之间的整数帧率。", "输出设置无效");
             return null;
         }
-        return OdbScopedRunPlan.BuildRequest(RootTextBox.Text, rows, selectedGroups, CaptureOutputOptions(),
+        OdbPostprocessOutputOptions options;
+        try { options = CaptureOutputOptions(); }
+        catch (InvalidDataException error)
+        {
+            ShowWarning(error.Message, "输出设置无效");
+            return null;
+        }
+        return OdbScopedRunPlan.BuildRequest(RootTextBox.Text, rows, selectedGroups, options,
             ForceRescanCheckBox.IsChecked is true, _groupMemberOrder, _legendOverridesByGroup);
     }
 
@@ -1638,27 +1645,41 @@ public sealed partial class OdbPostprocessingPage : Page, IWorkbenchExplorerPage
 
     private void OnImageUnitChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ImageWidthNumberBox is null || ImageHeightNumberBox is null)
+        if (ImageWidthNumberBox is null || ImageHeightNumberBox is null
+            || ImageUnitComboBox.SelectedItem is not ComboBoxItem { Tag: string unit } || unit == _imageUnit) return;
+        var width = OdbPostprocessOutputOptions.ConvertImageDimension(EditingDimension(ImageWidthNumberBox), unit);
+        var height = OdbPostprocessOutputOptions.ConvertImageDimension(EditingDimension(ImageHeightNumberBox), unit);
+        ApplyImageDimensions(unit, width, height);
+    }
+
+    private static double EditingDimension(Controls.WorkbenchNumberBox input) =>
+        input.ParseEditingValue(CaptureNumberText(input)) ?? double.NaN;
+
+    private int ImageDimensionForSave(Controls.WorkbenchNumberBox input)
+    {
+        var value = EditingDimension(input);
+        if (!double.IsFinite(value))
+            throw new InvalidDataException($"请填写 {input.Minimum:0} 至 {input.Maximum:0} {_imageUnit} 的图像宽度和高度。");
+        return (int)Math.Round(value);
+    }
+
+    private void ApplyImageDimensions(string unit, double width, double height)
+    {
+        _imageUnit = unit;
+        var (minimum, maximum) = OdbPostprocessOutputOptions.ImageLimits(unit);
+        void SetDimension(Controls.WorkbenchNumberBox input, double value)
         {
-            return;
+            // Move the outer bound first so the intermediate range remains valid.
+            if (maximum > input.Maximum) input.Maximum = maximum;
+            input.Minimum = minimum;
+            input.Maximum = maximum;
+            input.Value = value;
+            // Assigning the same committed number leaves any pending edit in the native textbox.
+            if (double.IsFinite(value) && EditingDimension(input) != value)
+                input.RestoreEditingText(input.NumberFormatter.FormatDouble(value));
         }
-        var millimetres = SelectedTag(ImageUnitComboBox, "px") == "mm";
-        var oldWidth = ImageWidthNumberBox.Value;
-        var oldHeight = ImageHeightNumberBox.Value;
-        ImageWidthNumberBox.Minimum = millimetres ? 30 : 320;
-        ImageWidthNumberBox.Maximum = millimetres ? 500 : 4096;
-        ImageHeightNumberBox.Minimum = millimetres ? 30 : 320;
-        ImageHeightNumberBox.Maximum = millimetres ? 500 : 4096;
-        if (millimetres && oldWidth > 500)
-        {
-            ImageWidthNumberBox.Value = Math.Clamp(Math.Round(oldWidth * 25.4 / 96), 30, 500);
-            ImageHeightNumberBox.Value = Math.Clamp(Math.Round(oldHeight * 25.4 / 96), 30, 500);
-        }
-        else if (!millimetres && oldWidth <= 500)
-        {
-            ImageWidthNumberBox.Value = Math.Clamp(Math.Round(oldWidth * 96 / 25.4), 320, 4096);
-            ImageHeightNumberBox.Value = Math.Clamp(Math.Round(oldHeight * 96 / 25.4), 320, 4096);
-        }
+        SetDimension(ImageWidthNumberBox, width);
+        SetDimension(ImageHeightNumberBox, height);
     }
 
     private static string PostprocessStatusDisplay(string status) => status switch

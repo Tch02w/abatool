@@ -8,8 +8,27 @@ static class RemoteObservationChecks
     public static async Task RunJobOutputAsync(ControlPlaneHost host, string id, string localFile, bool original)
     {
         var job = await host.GetRemoteJobAsync(id);
-        // The unscoped resource browser remains on the current connection.
-        await host.BrowseRemoteDirectoryAsync(job.WorkDirectory);
+        var servers = await host.GetRemoteServersAsync();
+        var selected = servers.Profiles.Single(p => p.ProfileName == servers.Connection.ProfileName);
+        await host.BrowseRemoteDirectoryAsync(job.WorkDirectory, expectedProfile: selected);
+        var other = new RemoteServerProfile
+        {
+            ProfileName = selected.ProfileName, Host = selected.Host, Username = selected.Username,
+            Port = selected.Port == 22 ? 2222 : 22, HostFingerprint = selected.HostFingerprint,
+            ComputeRoot = selected.ComputeRoot, AllowedRoots = selected.AllowedRoots, AbaqusCommand = selected.AbaqusCommand,
+        };
+        try
+        {
+            await host.BrowseRemoteDirectoryAsync(job.WorkDirectory, expectedProfile: other);
+            throw new Exception("Resource browser accepted the wrong port");
+        }
+        catch (ControlPlaneException error) when (error.Code == "REMOTE_CONNECTION_CHANGED") { }
+        try
+        {
+            await host.StartRemoteTransferAsync("download", job.Files["sta"], localFile, true, expectedProfile: other);
+            throw new Exception("Resource transfer accepted the wrong port");
+        }
+        catch (ControlPlaneException error) when (error.Code == "REMOTE_CONNECTION_CHANGED") { }
         try
         {
             await host.BrowseRemoteDirectoryAsync(job.WorkDirectory, sourceOperationId: job.OperationId);

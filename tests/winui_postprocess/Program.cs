@@ -28,6 +28,18 @@ static OdbPostprocessScanItem Scan(string error = "", bool removePile = false) =
 
 try
 {
+    foreach (var (value, unit, expected) in new[]
+    {
+        (320, "mm", 85), (400, "mm", 106), (500, "mm", 132), (1000, "mm", 265),
+        (4096, "mm", 500), (30, "px", 320), (106, "px", 401), (265, "px", 1002),
+        (500, "px", 1890),
+    })
+        Check(OdbPostprocessOutputOptions.ConvertImageDimension(value, unit) == expected,
+            $"Converting {value} to {unit} should produce {expected}");
+    foreach (var unit in new[] { "mm", "px" })
+        Check(double.IsNaN(OdbPostprocessOutputOptions.ConvertImageDimension(double.NaN, unit)),
+            $"An empty dimension must stay empty when switching to {unit}");
+    Console.WriteLine("11 image unit conversion checks passed");
     // Verify this executable's failure contract without a Windows crash dialog.
     if (args.Contains("--verify-failure-exit"))
         throw new InvalidOperationException("Intentional test-runner failure-exit verification");

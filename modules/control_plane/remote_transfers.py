@@ -31,7 +31,7 @@ from .contracts import (
     utc_now_text,
 )
 from .events import EventStore
-from .remote_servers import RemoteServerService
+from .remote_servers import RemoteServerService, file_request_identity
 from .shutdown_guard import OperationShutdownGuard
 
 TRANSFER_DIRECTIONS = frozenset({"upload", "download"})
@@ -55,6 +55,7 @@ class RemoteTransferRequest:
     destination: str
     overwrite: bool
     source_operation_id: str | None = None
+    expected_identity: dict | None = None
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> RemoteTransferRequest:
@@ -66,7 +67,7 @@ class RemoteTransferRequest:
             "destination",
             "overwrite",
         }
-        unknown = sorted(set(payload) - allowed - {"sourceOperationId"})
+        unknown = sorted(set(payload) - allowed - {"sourceOperationId", "expectedProfile"})
         missing = sorted(allowed - set(payload))
         if unknown:
             raise ApiProblem(
@@ -118,11 +119,8 @@ class RemoteTransferRequest:
             text("destination"),
             overwrite,
             job_id,
+            file_request_identity(payload),
         )
-
-    @property
-    def signature(self) -> tuple[str, str, str, bool, str | None]:
-        return self.direction, self.source, self.destination, self.overwrite, self.source_operation_id
 
 
 @dataclass
@@ -169,7 +167,7 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
             existing_id = self._client_requests.get(request.client_request_id)
             if existing_id is not None:
                 existing = self._operations[existing_id]
-                if existing.request.signature != request.signature:
+                if existing.request != request:
                     raise ApiProblem(
                         409,
                         "IDEMPOTENCY_CONFLICT",
@@ -178,6 +176,8 @@ class RemoteTransferOperationManager(OperationShutdownGuard):
                 return self._snapshot_locked(existing)
             if request.source_operation_id is not None and not expected_profile:
                 raise ApiProblem(409, "REMOTE_JOB_WORKSPACE_UNAVAILABLE", "无法核对原作业的服务器身份。")
+            if request.source_operation_id is None:
+                expected_profile = self._service.file_transfer_identity(request.expected_identity)
             operation = RemoteTransferOperation(request, expected_profile=expected_profile)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id

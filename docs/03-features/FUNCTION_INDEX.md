@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F020/F022 图像宽高由 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.xaml.cs` 的 `OnImageUnitChanged` 换算，`RestoreOutputOptions` 恢复已保存的单位及数值。允许范围与换算位于 `winui/AbaqusTools.WinUI/Services/OdbPostprocessWorkspaceStore.cs` 的 `ImageLimits` 和 `ConvertImageDimension`。测试入口为 `tests/winui_postprocess/Program.cs`。[后处理设置与验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
+
+隐藏 GIF 数字框的草稿由 `winui/AbaqusTools.WinUI/Pages/OdbPostprocessingPage.Drafts.cs` 的 `CaptureNumberText` 捕获，回归见 `tests/winui_postprocess/PostprocessDraftChecks.cs`。
+
+F005/F009 远端下载共用 `winui/AbaqusTools.WinUI/Pages/RemoteDownloadDestination.cs` 的 `PickAsync`。计算资源页与 `RemoteFileBrowserDialog` 在整次操作中传递 `expectedProfile`。后台 `modules/control_plane/remote_servers.py` 的 `file_request_identity`、`file_transfer_identity` 与 `modules/control_plane/remote_transfers.py` 的 `RemoteTransferOperationManager.create` 在入队、传输和幂等重放时核对身份。回归见 `tests/control_plane/test_remote_job_output_access.py` 和 `tests/control_plane/test_remote_server_responsiveness.py`。[文件选择与目标保护](REMOTE_TRANSFERS.md#输入结果与发布)
+
 F007/F008 资源状态筛选、列表增量更新和私钥文件选择位于 `winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml` 和同目录的 `ComputeResourcesPage.xaml.cs`，入口为 `RebuildRows`、`ApplySelection`、`ShowServerDialogAsync` 与 `PickLocalFileAsync`。[筛选和认证](REMOTE_JOBS.md#在资源页找到服务器) · [原生验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#资源筛选和私钥选择)
 
 F026 随包启动说明由 `packaging/release_inventory.py` 的 `write_release_manifest` 使用 `packaging/portable-readme.md.in` 生成。`packaging/build_release.py` 的 `copy_release_docs` 收集离线手册。`tests/common/test_release_readme.py` 核对提交号、文件摘要和搬到其他目录后的文档链接。[构建与清单](../05-development/RELEASE.md)
@@ -19,6 +25,8 @@ F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的
 F026 安装包逐文件校验由 `packaging/build_installer.py` 和 `packaging/installer.iss.in` 生成 Inno 文件摘要。`packaging/verify_installer.py` 的 `check_install_log` 除磁盘校验外，还检查安装期间是否出现异常和被自动关闭的弹窗。回归覆盖在 `tests/common/test_installer_manifest.py`。[安装与升级](../05-development/INSTALLATION.md)
 
 F021 结果排序与分页由 `modules/control_plane/results.py` 的 `_ResultSort`、`_direct_page` 和 `list_result_records` 提供。WinUI 的 `Pages/ResultBrowserPage.xaml` 和同名代码文件通过 `OnSortClicked`、`LoadRecordsAsync`、`UpdateSortIndicators` 管理排序与选区。宿主在 `winui/AbaqusTools.WinUI/Services/ControlPlaneHost.cs` 的 `GetResultRecordsAsync` 校验响应，`Services/ResultContracts.cs` 的 `ResultRecordsResponse.PageAnchor` 取直接浏览的首末行边界。测试见 `tests/control_plane/test_result_record_sort.py`、`tests/control_plane/test_results_api.py`、`tests/winui/test_shell_contract.py` 和 `tests/winui_host/Program.cs`。[结果排序协议](../api-contract.md#结果记录排序f021) · [核验记录](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md)
+
+F021 返回已读取目录时，`winui/AbaqusTools.WinUI/MainWindow.xaml.cs` 的 `AttachExplorerForCurrentPage` 检查结果页的 `HasLoadedDirectory`。`Controls/WorkbenchExplorerHost.xaml.cs` 中的 `Attach` 接回已有快照，手动刷新仍走 `RefreshAsync`。结果页的 `ReportPageStatus` 将消息保存到 `StatusBarMessage`，回到页面时恢复。侧栏控件和路由回归见 `tests/winui_explorer/App.xaml.cs` 的 `CheckSelectionsAsync`、`tests/winui/test_shell_contract.py`。[系统目录选择、分页与切页实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#2026-11-28--系统文件夹选择与切回结果页f021)
 
 F011 重启动链图谱和依赖编辑在 `winui/AbaqusTools.WinUI/Pages/RestartChainPage.xaml` 及同名 .xaml.cs。图谱使用原生滚动视图缩放；`OnEditDependencyClicked` 在控制面校验通过后关闭编辑框。后台原子更新和无效依赖见 `tests/control_plane/test_restart_dependency_edits.py`。[操作说明](../repowiki/user-guide.md#重启动链) · [原生验收记录](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
 

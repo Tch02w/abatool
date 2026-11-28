@@ -90,6 +90,16 @@ def test_result_sort_headers_match_record_columns_and_offer_secondary_orders():
     assert all(control.get("Click") == "OnSortClicked" for control in buttons + menu)
 
 
+def test_cached_result_page_reattaches_its_snapshot_and_reports_status_only_while_visible():
+    window = (WINUI_ROOT / "MainWindow.xaml.cs").read_text(encoding="utf-8")
+    page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.xaml.cs").read_text(encoding="utf-8")
+    assert "refreshOnAttach: ContentFrame.Content is not ResultBrowserPage { HasLoadedDirectory: true }" in window
+    assert "HasLoadedDirectory => _location.LoadedRoot is not null" in page
+    assert "ReportPageStatus(page.StatusBarMessage)" in window
+    assert page.count("App.Current.MainWindow.ReportPageStatus(") == 1
+    assert "if (ReferenceEquals(Frame?.Content, this)) App.Current.MainWindow.ReportPageStatus(message)" in page
+
+
 def test_result_export_and_recycle_register_the_entire_operation_before_dialogs():
     page = (WINUI_ROOT / "Pages" / "ResultBrowserPage.Export.cs").read_text(encoding="utf-8")
     assert page.index("PendingResultFileOperation = completion.Task") < page.index("PickSingleFolderAsync")
@@ -1069,4 +1079,16 @@ def test_overview_directory_and_output_download_identify_the_selected_remote_job
     assert "RemoteSelectionMode.Browse" in directory and "remote.OperationId" in directory
     assert "DownloadRemoteOutputAsync(remote.OperationId, remotePath)" in page
     assert "sourceOperationId: sourceOperationId" in page
-    assert "BrowseRemoteDirectoryAsync(path, sourceOperationId: _sourceOperationId)" in browser
+    assert "sourceOperationId: _sourceOperationId, expectedProfile: _expectedProfile" in browser
+
+
+def test_both_remote_download_pages_use_the_path_only_picker_and_its_overwrite_decision():
+    pages = WINUI_ROOT / "Pages"
+    picker = (pages / "RemoteDownloadDestination.cs").read_text(encoding="utf-8")
+    assert "using Microsoft.Windows.Storage.Pickers;" in picker
+    assert "ShowOverwritePrompt = false" in picker
+    assert "DefaultButton = ContentDialogButton.Close" in picker
+    for source in ("ComputeResourcesPage.xaml.cs", "JobOverviewPage.xaml.cs"):
+        page = (pages / source).read_text(encoding="utf-8")
+        assert "RemoteDownloadDestination.PickAsync(" in page
+        assert "destination.Overwrite" in page

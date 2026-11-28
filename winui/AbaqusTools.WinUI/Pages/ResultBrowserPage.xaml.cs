@@ -78,6 +78,14 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     }
 
     public IWorkbenchExplorerAdapter ExplorerAdapter => _explorerAdapter;
+    internal bool HasLoadedDirectory => _location.LoadedRoot is not null;
+    internal string StatusBarMessage { get; private set; } = "选择结果根目录以读取索引";
+
+    private void ReportPageStatus(string message)
+    {
+        StatusBarMessage = message;
+        if (ReferenceEquals(Frame?.Content, this)) App.Current.MainWindow.ReportPageStatus(message);
+    }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
@@ -286,7 +294,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var previousDirect = restoreDirect ?? _direct;
         IndexInfoBar.IsOpen = false;
         ScopeStatusText.Text = "正在读取目录结构…";
-        App.Current.MainWindow.ReportPageStatus("正在读取结果目录结构…");
+        ReportPageStatus("正在读取结果目录结构…");
         await _loads.RefreshScopesAsync(
             () => string.IsNullOrWhiteSpace(root)
                 ? Task.FromException<ResultScopesResponse>(
@@ -323,7 +331,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                     ScopeTree.SelectedNode = targetNode;
                     ExpandAncestors(targetNode);
                 }
-                App.Current.MainWindow.ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
+                ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
             },
             RefreshSelectedScopeAsync,
             exception =>
@@ -745,7 +753,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             ScopeStatusText.Text = scope.IndexStateDisplay.Length > 0
                 ? $"{scope.Name} · {scope.IndexStateDisplay}"
                 : scope.Name;
-            App.Current.MainWindow.ReportPageStatus(
+            ReportPageStatus(
                 $"结果浏览 · {response.FilteredCount} 个匹配文件");
             restorePreview = selectedPaths is { Count: > 0 } && ResultList.SelectedItems.Count > 0;
         }
@@ -906,7 +914,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             var progress = $"{state} · {batch.Processed}/{batch.Total} 个目录 · 跳过 {batch.Skipped} · 失败 {batch.Failed}";
             ResultStatusText.Text = string.IsNullOrWhiteSpace(batch.CurrentDirectory)
                 ? progress : $"{progress} · {batch.CurrentDirectory}";
-            App.Current.MainWindow.ReportPageStatus(progress);
+            ReportPageStatus(progress);
             RefreshInteractionState();
             await Task.Delay(400);
             batch = await App.Current.ControlPlane.GetResultIndexBatchAsync(batch.BatchId);
@@ -947,7 +955,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             : $" · {snapshot.Progress.CurrentItem}";
         ResultStatusText.Text =
             $"{IndexStatusDisplay(snapshot.Status)} · 已处理 {snapshot.Progress.Processed} 个{current}";
-        App.Current.MainWindow.ReportPageStatus(
+        ReportPageStatus(
             $"结果索引 · {IndexStatusDisplay(snapshot.Status)} · {snapshot.Progress.Processed} 个");
     }
 
@@ -1342,7 +1350,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private void ShowError(string message, string title = "操作失败")
     {
         App.Current.MainWindow.ShowFeedback(title, message, InfoBarSeverity.Error);
-        App.Current.MainWindow.ReportPageStatus(title);
+        ReportPageStatus(title);
     }
 
     private void ShowWarning(string message, string title)

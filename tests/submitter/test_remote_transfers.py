@@ -12,10 +12,16 @@ from types import SimpleNamespace
 import pytest
 
 from modules.control_plane.events import EventStore
-from modules.control_plane.remote_transfers import RemoteTransferOperationManager, RemoteTransferRequest
+from modules.control_plane.remote_transfers import (
+    RemoteTransferOperationManager,
+    RemoteTransferRequest,
+)
 from modules.submitter.remote_connection import (
-    RemoteConnectionError, RemoteConnectionManager, RemoteTransferCancelled,
-    ServerConnectionRequest, _remote_replace_file_script,
+    RemoteConnectionError,
+    RemoteConnectionManager,
+    RemoteTransferCancelled,
+    ServerConnectionRequest,
+    _remote_replace_file_script,
 )
 from modules.submitter.remote_models import ServerProfileDraft
 
@@ -146,7 +152,7 @@ def test_windows_upload_commit_uses_literal_paths_and_keeps_locked_target(tmp_pa
                   + script + "\n} finally { $lockedStream.Dispose() }")
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-        capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
+        capture_output=True, check=False, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
     if locked:
         assert result.returncode != 0
         assert target.read_bytes() == b"old" and source.read_bytes() == b"new"
@@ -161,6 +167,9 @@ def test_transfer_cancel_reports_the_actual_publication_state(tmp_path, publishe
     output = tmp_path / "result.txt"
     output.write_bytes(b"old")
     class Service:
+        def file_transfer_identity(self, expected):
+            return {"host": "fixture"}
+
         def transfer_file(self, **kwargs):
             if published:
                 output.write_bytes(b"new")

@@ -266,31 +266,29 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private async void OnBrowseRemoteFilesClicked(object sender, RoutedEventArgs e)
     {
+        if (SelectedRemoteProfile() is not { } profile) return;
         var browser = new RemoteFileBrowserDialog(
             XamlRoot,
             RemoteSelectionMode.File,
-            "浏览服务器文件");
-        var selection = await browser.ShowAsync(SelectedRemoteProfile()?.ComputeRoot ?? string.Empty);
+            "浏览服务器文件", expectedProfile: profile);
+        var selection = await browser.ShowAsync(profile.ComputeRoot);
         if (selection is null)
         {
             return;
         }
-        var extension = Path.GetExtension(selection.Path);
-        var picker = new FileSavePicker
+        RemoteDownloadDestination? destination;
+        try
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = Path.GetFileName(selection.Path),
-            CommitButtonText = "下载到此处",
-        };
-        picker.FileTypeChoices.Add(
-            string.IsNullOrWhiteSpace(extension) ? "所有文件" : $"{extension} 文件",
-            [string.IsNullOrWhiteSpace(extension) ? ".dat" : extension]);
-        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-        var destination = await picker.PickSaveFileAsync();
+            destination = await RemoteDownloadDestination.PickAsync(XamlRoot, selection.Path, "下载到此处");
+        }
+        catch (Exception exception)
+        {
+            ShowError($"无法选择下载位置。{exception.Message}");
+            return;
+        }
         if (destination is not null)
         {
-            await RunTransferAsync("download", selection.Path, destination.Path, overwrite: true);
+            await RunTransferAsync("download", selection.Path, destination.Path, destination.Overwrite, profile);
         }
     }
 
@@ -309,6 +307,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
 
     private async void OnUploadRemoteFileClicked(object sender, RoutedEventArgs e)
     {
+        if (SelectedRemoteProfile() is not { } profile) return;
         Windows.Storage.StorageFile? source;
         try { source = await PickLocalFileAsync("选择要上传的文件"); }
         catch (Exception exception)
@@ -323,8 +322,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         var browser = new RemoteFileBrowserDialog(
             XamlRoot,
             RemoteSelectionMode.Folder,
-            "选择服务器目标目录");
-        var selection = await browser.ShowAsync(SelectedRemoteProfile()?.ComputeRoot ?? string.Empty);
+            "选择服务器目标目录", expectedProfile: profile);
+        var selection = await browser.ShowAsync(profile.ComputeRoot);
         if (selection is null)
         {
             return;
@@ -334,12 +333,12 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
             "upload",
             source.Path,
             destination,
-            overwrite: false);
+            overwrite: false, expectedProfile: profile);
         if (result?.Status == "failed"
             && result.Error?.Message.Contains("已存在", StringComparison.Ordinal) is true
             && await ConfirmOverwriteAsync(destination))
         {
-            await RunTransferAsync("upload", source.Path, destination, overwrite: true);
+            await RunTransferAsync("upload", source.Path, destination, overwrite: true, expectedProfile: profile);
         }
     }
 
@@ -366,7 +365,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         string direction,
         string source,
         string destination,
-        bool overwrite)
+        bool overwrite,
+        RemoteServerProfile expectedProfile)
     {
         if (_busy)
         {
@@ -390,7 +390,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
                 direction,
                 source,
                 destination,
-                overwrite);
+                overwrite, expectedProfile: expectedProfile);
             _activeTransferId = operation.OperationId;
             _transferRecoveryPending = true;
             return await ObserveTransferAsync(operation, observationToken);

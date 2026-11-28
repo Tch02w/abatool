@@ -26,6 +26,10 @@
 
 ### 历史远端作业输出（F005/F009/F010）
 
+资源页调用 `POST /api/v1/remote-file-listings` 或 `POST /api/v1/remote-transfers` 时可携带 `expectedProfile`，其结构与服务器配置相同。后台只使用归一化的主机、端口、账号、主机指纹、计算目录、允许目录与 Abaqus 命令识别目标。显式传入空值或同时传入 `sourceOperationId` 会返回 400。浏览时在 SSH 通信锁内核对，新传输在受理和实际读写前各核对一次。创建时连接不匹配返回 409 `REMOTE_CONNECTION_CHANGED`，排队后换机则该任务失败。重放同一请求返回原任务，同一请求编号指定另一目标返回 409 `IDEMPOTENCY_CONFLICT`。
+
+旧客户端省略两项身份字段时，浏览使用当前连接，传输绑定受理时已连接的主机。尚未建立连接时，新传输返回 409。历史作业仍从作业日志获取目标，可在重新启动前台或后台后使用。
+
 `POST /api/v1/remote-file-listings` 和下载方向的 `POST /api/v1/remote-transfers` 接受可选 `sourceOperationId`，为远端作业的 32 位小写十六进制编号。普通资源页省略此字段。提供编号时从持久作业记录解析对应的服务器身份，作业下载还要匹配已登记的输出路径。目录请求遇到不同连接返回 409 `REMOTE_CONNECTION_CHANGED`。已受理的下载在执行文件操作前核对连接，错服时状态为 failed，保留目标文件。编号加入传输幂等签名并随该任务的 request 返回。未知作业返回 404，错误编号、未登记的输出和以作业身份上传均返回 400。
 
 ### 候选及正式队列的目录编辑（F004）

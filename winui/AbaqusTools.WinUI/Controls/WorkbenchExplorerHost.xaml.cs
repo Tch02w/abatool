@@ -30,7 +30,7 @@ public sealed partial class WorkbenchExplorerHost : UserControl
 
     private void OnCollapseClicked(object sender, RoutedEventArgs args) => CollapseRequested?.Invoke(this, args);
 
-    public void Attach(IWorkbenchExplorerAdapter adapter)
+    public void Attach(IWorkbenchExplorerAdapter adapter, bool refreshOnAttach = true)
     {
         if (ReferenceEquals(_adapter, adapter))
         {
@@ -48,7 +48,8 @@ public sealed partial class WorkbenchExplorerHost : UserControl
         ExplorerSearchBox.Text = string.Empty;
         ConfigureCommands();
         ApplySnapshot(adapter.Snapshot);
-        _ = RefreshAsync(manual: false);
+        ExplorerErrorInfoBar.IsOpen = false;
+        if (refreshOnAttach) _ = RefreshAsync(manual: false);
     }
 
     public async Task RefreshAsync(bool manual)
@@ -86,6 +87,7 @@ public sealed partial class WorkbenchExplorerHost : UserControl
         }
         catch (Exception exception)
         {
+            if (generation != _generation || !ReferenceEquals(adapter, _adapter)) return;
             ExplorerErrorInfoBar.Title = "浏览内容刷新失败";
             ExplorerErrorInfoBar.Message = exception.Message;
             ExplorerErrorInfoBar.IsOpen = true;

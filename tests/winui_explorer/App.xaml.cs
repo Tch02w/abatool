@@ -448,10 +448,14 @@ public sealed partial class TestApp : Application
         explorer.Attach(other);
         await DispatchAsync();
         Check(other.Selections == 0, "Changing adapter does not select its first node implicitly");
-        explorer.Attach(adapter);
+        Check(adapter.Refreshes == 1 && other.Refreshes == 1, "Ordinary sidebar attachments refresh their pages");
+        explorer.Attach(adapter, refreshOnAttach: false);
         await DispatchAsync();
         Check(adapter.Selections == 1 && SelectedId(tree) == "a",
             "Reattaching a context restores its selection without a command");
+        Check(adapter.Refreshes == 1, "Reattaching a loaded result directory displays its snapshot without reading it again");
+        await explorer.RefreshAsync(manual: true);
+        Check(adapter.Refreshes == 2, "Explicit refresh is available after a cached result directory is reattached");
         _root.Measure(new Windows.Foundation.Size(400, 800));
         _root.Arrange(new Windows.Foundation.Rect(0, 0, 400, 800));
         _root.UpdateLayout();
@@ -483,12 +487,17 @@ public sealed partial class TestApp : Application
     private sealed class SnapshotAdapter(string context) : IWorkbenchExplorerAdapter
     {
         private int _revision;
+        public int Refreshes { get; private set; }
         public int Selections { get; private set; }
         public string ContextKey => context;
         public string PrimaryActionText => "";
         public WorkbenchExplorerSnapshot Snapshot { get; private set; } = Make(context, 0, true);
         public event EventHandler? SnapshotChanged;
-        public Task RefreshAsync(CancellationToken token) => Task.CompletedTask;
+        public Task RefreshAsync(CancellationToken token)
+        {
+            Refreshes++;
+            return Task.CompletedTask;
+        }
         public Task ExecutePrimaryActionAsync(CancellationToken token) => Task.CompletedTask;
         public Task ActivateAsync(ExplorerItem item, ExplorerActivationKind kind, CancellationToken token) => Task.CompletedTask;
         public void Select(ExplorerItem item)

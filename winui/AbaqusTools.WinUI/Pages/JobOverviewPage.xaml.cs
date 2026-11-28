@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
 
 namespace AbaqusTools.WinUI.Pages;
@@ -808,25 +807,13 @@ public sealed partial class JobOverviewPage : Page, IWorkbenchExplorerPage
         string? downloadedPath = null;
         try
         {
-            var extension = Path.GetExtension(remotePath);
-            var picker = new FileSavePicker
-            {
-                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-                SuggestedFileName = Path.GetFileName(remotePath),
-                CommitButtonText = "下载并打开",
-            };
-            picker.FileTypeChoices.Add(
-                string.IsNullOrWhiteSpace(extension) ? "数据文件" : $"{extension} 文件",
-                [string.IsNullOrWhiteSpace(extension) ? ".dat" : extension]);
-            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
-            var destination = await picker.PickSaveFileAsync();
+            var destination = await RemoteDownloadDestination.PickAsync(XamlRoot, remotePath, "下载并打开");
             if (destination is null) return;
             var operation = await App.Current.ControlPlane.StartRemoteTransferAsync(
                 "download",
                 remotePath,
                 destination.Path,
-                overwrite: true,
+                overwrite: destination.Overwrite,
                 sourceOperationId: sourceOperationId);
             var terminal = await App.Current.ControlPlane.PollRemoteTransferUntilTerminalAsync(
                 operation.OperationId,

@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-legacy-workbench-20261128/source/GPTWork/installer-win-x64-d053fe8ae824/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装程序均从干净提交 `cf58e9e` 构建，版本 0.1.0，大小 126676263 字节，SHA-256 为 `5f1caf673daaa2371c0e2477d76c8eaac4f2d4448e5ca91e046ef630abe0c0f4`，尚未签名。[免安装包与来源](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-overview-selector-20261128/source/GPTWork/installer-win-x64-11e255680e90/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装器均由干净提交 `175e683` 构建，版本 0.1.0，大小 126683467 字节，SHA-256 为 `6e3ef3a7f522e845dc34b17af8b98ec0e9d59a6d258ffc0ec77b753868e2f882`，尚未签名。[免安装程序](RELEASE.md)
+
+在开发机独立测试标识下，从 `cf58e9e` 升级与卸载的八项检查均通过。运行中的安装目录触发保护，后台退出后完成升级。升级前的 1 份测试数据与卸载前的 12 份测试数据均保持原摘要。中文安装向导复核 1700 个负载文件、67 份文档和 989 个本地链接。安装目录中的 WinUI 读取迁移前保存的作业配置，编辑后重开显示新作业名，旧 PySide 仍能读回原值。测试注册、快捷方式和自有进程已清理。原始回执为 `GPTWork/installer-overview-selector-20261128/verified.json`。
+
+首次测试在旧后台退出后，安装器提示无法确定运行程序的位置并停止，旧版保持已安装。事后查询能读到其余四个工作台进程的位置，均位于其他目录。首次日志没有记录进程号，不能确定当时是哪一个进程位置不可读。核对并卸载测试标识的旧版后，在新目录重新完成八项检查。首次记录为 `GPTWork/installer-overview-selector-20261128/source/GPTWork/installer-lifecycle-31f4f0b4da92/upgrade-new.log`。正式身份与独立无开发工具 Windows 设备仍待实测。
+
+## 历史版本 cf58e9e
+
+该版 Windows x64 安装程序为 `GPTWork/installer-legacy-workbench-20261128/source/GPTWork/installer-win-x64-d053fe8ae824/AbaqusTools-0.1.0-win-x64-setup.exe`。应用与安装程序均从干净提交 `cf58e9e` 构建，版本 0.1.0，大小 126676263 字节，SHA-256 为 `5f1caf673daaa2371c0e2477d76c8eaac4f2d4448e5ca91e046ef630abe0c0f4`，尚未签名。
 
 在开发机上使用独立测试标识，从 `2c06b77` 安装、升级、卸载的八项检查通过。运行中升级与卸载均被阻止，退出后台后可继续。升级前 1 份、卸载前 12 份测试数据的摘要保持一致。中文向导复核了 G 盘安装目录、1700 个负载文件、67 份文档及 967 个本地链接。卸载后测试注册项和快捷方式已移除，验收进程均已退出。
 

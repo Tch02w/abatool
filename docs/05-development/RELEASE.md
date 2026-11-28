@@ -1,6 +1,12 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-b22a52850b3c/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cf58e9e04f196d7ec21b4e281c27f168f7550053`。已核对 1700 个文件、客户端、随包后台和编译后的界面资源。清单 SHA-256 为 `01829a672d8dfe93cd801aebfa9f5b5a58be504b5ab8f0fe5b6f445bff1ce320`，回执为 `GPTWork/release-queue-portable-cf58e9e-20261128-172322/verification.json`。新包实测了旧服务器配置往返、四组菜单键盘访问，以及从所选模型直接浏览、重建索引并保留文件预览。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
+当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-730de6c2879b/AbaqusTools/AbaqusTools.WinUI.exe`。应用来自干净提交 `175e683c9e1b18ed8dbdedea428e76994925b7d1`，已逐项核对 1700 个文件。清单 SHA-256 为 `c4a2a0d456d9d7231c5556888c38060d4cfc0872c30f65b54cda219bd9eedb0e`。原始回执为 `GPTWork/release-queue-portable-175e683-20261128-174926/verification.json`。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
+
+本版修复作业概览的下拉框被轮询关闭，并在后处理选中单个 ODB 时显示文件大小与本地修改时间。[作业选择](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [文件详情](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#发现列表中单个-odb-的修改时间)
+
+### 历史版本 cf58e9e
+
+该版 Windows x64 免安装程序为 `GPTWork/release-win-x64-b22a52850b3c/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `cf58e9e04f196d7ec21b4e281c27f168f7550053`。已核对 1700 个文件、客户端、随包后台和编译后的界面资源。清单 SHA-256 为 `01829a672d8dfe93cd801aebfa9f5b5a58be504b5ab8f0fe5b6f445bff1ce320`，回执为 `GPTWork/release-queue-portable-cf58e9e-20261128-172322/verification.json`。新包实测了旧服务器配置往返、四组菜单键盘访问，以及从所选模型直接浏览、重建索引并保留文件预览。[使用手册](../repowiki/user-guide.md) · [安装与升级](INSTALLATION.md)
 
 ### 历史版本 2c06b77
 

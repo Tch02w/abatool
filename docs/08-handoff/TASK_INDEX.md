@@ -1,12 +1,14 @@
 # 任务索引
 
+当前应用提交 `175e683` 的 1318 项回归、9 个子检查及原生 Qt 回滚入口见[本版回归](ACTIVE_TASKS/TASK-002-migration.md#175e683-成品与回归)。正式队列窗口的浅底按钮图见[截图与测量](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。
+
 F005/F010 作业概览的展开菜单、同名选择、后台增删和日志选区见[下拉列表与轮询](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)。F014 单个 ODB 的大小、本地修改时间及路径展示见[后处理说明](../03-features/POSTPROCESSING.md)。
 
 成品 `cf58e9e` 的完整回归、独立 Qt 窗口和安装检查见[本轮回归](ACTIVE_TASKS/TASK-002-migration.md#cf58e9e-成品与回归)。迁移前后的 ODB 发现顺序及三个作业入口分别见[发现规则](ACTIVE_TASKS/TASK-002-migration.md#迁移前后发现-odb-的顺序)和[作业定位](ACTIVE_TASKS/TASK-002-migration.md#从三处作业入口定位-odb)。
 
 最新迁移验证涵盖[旧版新建及合并设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿)、[服务器配置往返](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008)、[顶栏菜单访问键](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问)和[模型索引损坏后的直接浏览及重建](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)。
 
-当前 `cf58e9e` 免安装程序与 1700 个文件的清单见[Windows 发布构建](../05-development/RELEASE.md)，从 `2c06b77` 升级及八项安装生命周期见[开发机安装实测](../05-development/INSTALLATION.md)。上一版的结果图双启动及历史索引兼容记录见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)，GJB-16 两条中断记录在成品重开的结果见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)。
+前版 `cf58e9e` 免安装程序与 1700 个文件的清单见[Windows 发布构建](../05-development/RELEASE.md)，从 `2c06b77` 升级及八项安装生命周期见[开发机安装实测](../05-development/INSTALLATION.md)。上一版的结果图双启动及历史索引兼容记录见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)，GJB-16 两条中断记录在成品重开的结果见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)。
 
 F013 大文件最终发布步骤的两次中断和重开见[合并回执与实际目标](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)。F021 单目录建索引时的取消、选区、预览及磁盘耗时见[刷新已有索引](ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)。
 

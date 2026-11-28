@@ -1,8 +1,10 @@
 # 当前状态与接续点
 
-后续界面修复已在隔离窗口核对概览作业列表的展开、同名选择与作业增删。轮询期间可以继续选择作业，当前项被删除时不再提供该项的操作。本机和远端测试日志的文字选区亦已核对。[概览列表实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询)
+`175e683` 的安装版已在开发机隔离标识下完成从 `cf58e9e` 升级的八项安装、运行中保护和卸载检查，核对安装后的 67 份文档及 989 个链接。整套回归通过 1318 项与 9 个子检查，另行检查的 PySide 原生窗口已通过。首次升级的进程位置检查曾中止，重新验收后通过。[安装程序及记录](../05-development/INSTALLATION.md) · [回归](ACTIVE_TASKS/TASK-002-migration.md#175e683-成品与回归)
 
-Windows x64 当前成品来自干净提交 `cf58e9e`。1700 个负载文件通过核对，在开发机的隔离安装标识下从 `2c06b77` 升级、卸载等八项检查通过。实际安装目录中的程序已读回旧版作业参数，随包后台验证了服务器设置的旧版往返，正式窗口验证了顶栏访问键和模型索引重建。另核对安装后的 67 份文档、967 个本地链接。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md) · [本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
+当前 Windows x64 免安装版来自 `175e683`，已核对 1700 个负载文件。正式队列页的浅底减加键与已选样式逐像素一致。作业概览的三个正式窗口通过 21 项检查，涵盖展开时轮询、同名选择、后台增删与日志选区。后处理已复查两份文件的大小与修改时间。[程序](../05-development/RELEASE.md) · [按钮实图](../repowiki/images/queue-parallel-limit.png) · [作业概览](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [文件详情](ACTIVE_TASKS/TASK-001-postprocessing.md#发现列表中单个-odb-的修改时间)
+
+前版 Windows x64 成品来自干净提交 `cf58e9e`。1700 个负载文件通过核对，在开发机的隔离安装标识下从 `2c06b77` 升级、卸载等八项检查通过。实际安装目录中的程序已读回旧版作业参数，随包后台验证了服务器设置的旧版往返，正式窗口验证了顶栏访问键和模型索引重建。另核对安装后的 67 份文档、967 个本地链接。[免安装程序](../05-development/RELEASE.md) · [安装程序](../05-development/INSTALLATION.md) · [本机设置](ACTIVE_TASKS/TASK-002-migration.md#pyside-保存的本机设置与-winui-草稿) · [服务器](../03-features/REMOTE_TRANSFERS.md#旧版保存的服务器配置f008) · [四组菜单](ACTIVE_TASKS/TASK-004-ui-interaction.md#四组菜单的键盘访问) · [结果页](ACTIVE_TASKS/TASK-001-postprocessing.md#从模型直接浏览并重建索引)
 
 上一版 `2c06b77` 安装后的 67 份文档及 924 个本地链接已检查。无开发工具的独立 Windows 仍待实测。整队停止与原版取消待运行作业的行为差异留在[迁移合同](../winui-migration.md)。
 

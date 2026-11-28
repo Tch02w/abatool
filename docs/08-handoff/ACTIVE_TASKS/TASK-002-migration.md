@@ -1,5 +1,11 @@
 # TASK-002：后续迁移、完善与整理
 
+## 175e683 成品与回归
+
+开发机隔离安装从 `cf58e9e` 升级后检查了 67 份文档的 989 个链接。首次升级在写入前遇到同名进程的位置无法确认，旧版仍可用。同期另一个测试窗口正退出，但 Windows 查询没有记录返回空路径的进程编号，原因尚不能确定。相同安装器的八项复测通过，升级及卸载分别保留 1 份和 12 份测试数据。当前可从 `GPTWork/installer-overview-selector-20261128/verified.json` 续查。针对该间歇现象，下一项检查是对照「同名进程刚退出」与「进程仍在但位置未知」两种情况，分别记录进程编号和二次检查结果。[安装与复测](../../05-development/INSTALLATION.md)
+
+整套回归在 388.25 秒内通过 1318 项测试与 9 个子检查。单独运行的 PySide 原生窗口启动测试亦通过。记录分别为 `GPTWork/restart-page-20261128/regression-20261128-174236/results.xml` 和 `GPTWork/release-queue-portable-175e683-20261128-174926/qt-startup.xml`。成品已核对 1700 个随包文件。[包与校验清单](../../05-development/RELEASE.md) · [概览与日志](TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) · [后处理详情](TASK-001-postprocessing.md#发现列表中单个-odb-的修改时间)
+
 ## cf58e9e 成品与回归
 
 免安装程序及正式安装程序的源码提交是 `cf58e9e`。开发机隔离身份的八项安装生命周期、从实际安装目录读回旧设置、成品服务器配置往返、四组菜单按键和三种索引恢复均通过。[安装回执](../../05-development/INSTALLATION.md) · [随包文件](../../05-development/RELEASE.md)
@@ -8,7 +14,7 @@
 
 ## 从三处作业入口定位 ODB
 
-在概览页另做了 4.7 秒只读采样。展开包含两个同名作业的下拉框后没有发送选择、点击或按键，前 810 毫秒两项均可见，到 978 毫秒下拉框已自动收起，原作业仍选中。`JobOverviewPage.xaml.cs` 的轮询会重新设置 `JobSelector.ItemsSource`，后续需在不重建打开菜单的前提下更新作业列表，并复查列表中确实有增删时的行为。回执为 `GPTWork/current-job-walk-20261128/job-overview-da3997c9/receipt.json` 的 `comboTrace`。
+在概览页另做了 4.7 秒只读采样。展开包含两个同名作业的下拉框后没有发送选择、点击或按键，前 810 毫秒两项均可见，到 978 毫秒下拉框已自动收起，原作业仍选中。`JobOverviewPage.xaml.cs` 的轮询会重新设置 `JobSelector.ItemsSource`，这个问题已在 `175e683` 的正式窗口复验，包含打开菜单时增删作业的情况。[修复及 21 项实测](TASK-004-ui-interaction.md#作业概览的下拉列表与轮询) 回执为 `GPTWork/current-job-walk-20261128/job-overview-da3997c9/receipt.json` 的 `comboTrace`。
 
 在成品 `2c06b77` 的新建页、正式队列和作业概览点击「后处理 → 当前作业送入后处理」。新建页按当前草稿的输入目录找到 ODB。正式队列选中第一份同名作业后，定位到其实际计算目录。概览在「最近完成」切换到第二份同名作业后，定位到其已发布归档。逐项核对了目标根目录、唯一选中的文件、同名干扰项和来源摘要，三次后端作业操作数均为 0。前后台均已退出，回执为 `GPTWork/current-job-walk-20261128/verified.json`。另一次驱动从正在刷新的概览下拉列表选择同名行时，旧控件变得不可访问；该次没有用作选区成功的证据。
 

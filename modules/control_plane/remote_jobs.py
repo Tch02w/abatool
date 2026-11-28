@@ -302,30 +302,69 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
         self._closed = False
         self._init_recovery(journal_path)
 
-    def create(self, request: RemoteJobRequest) -> dict[str, Any]:
+    def lookup(self, request: RemoteJobRequest, expected_profile: dict | None) -> dict[str, Any]:
+        with self._lock:
+            self._check_history()
+            if not expected_profile:
+                raise ApiProblem(400, "REMOTE_JOB_TARGET_REQUIRED", "核对提交需要原服务器身份。")
+            existing = self._replay_locked(request, expected_profile)
+            if existing is None:
+                raise ApiProblem(404, "REMOTE_JOB_REQUEST_NOT_FOUND", "尚未登记此请求。")
+            return existing
+
+    def _submission_receipt_locked(self, operation: RemoteJobOperation) -> dict[str, Any]:
+        # A failed flush retains the in-memory fence. Never acknowledge withdrawal until it is durable.
+        if operation.tracking_state == "withdrawn" and operation.operation_id in self._pending_saves:
+            self._persist_locked(operation, required=True)
+        return self._snapshot_locked(operation)
+
+    def _replay_locked(self, request: RemoteJobRequest, expected_profile: dict | None) -> dict[str, Any] | None:
+        existing_id = self._client_requests.get(request.client_request_id)
+        if existing_id is None:
+            return None
+        existing = self._operations[existing_id]
+        if existing.request.signature != request.signature or (
+            expected_profile is not None and existing.server_identity != expected_profile
+        ):
+            raise ApiProblem(409, "IDEMPOTENCY_CONFLICT", "请求标识已用于不同远端作业或服务器")
+        return self._submission_receipt_locked(existing)
+
+    def create(self, request: RemoteJobRequest, *, expected_profile: dict | None = None, withdraw: bool = False) -> dict[str, Any]:
         with self._lock:
             if self._closed or self._shutdown_reserved:
                 raise ApiProblem(503, "CONTROL_PLANE_SHUTTING_DOWN", "控制面正在关闭")
             self._check_history()
-            existing_id = self._client_requests.get(request.client_request_id)
-            if existing_id is not None:
-                existing = self._operations[existing_id]
-                if existing.request.signature != request.signature:
-                    raise ApiProblem(409, "IDEMPOTENCY_CONFLICT", "请求标识已用于不同远端作业")
-                return self._snapshot_locked(existing)
+            existing = self._replay_locked(request, expected_profile)
+            if existing is not None:
+                return existing
+            if withdraw:
+                if not expected_profile or not expected_profile["fingerprint"] or not expected_profile["computeRoot"]:
+                    raise ApiProblem(400, "REMOTE_JOB_TARGET_REQUIRED", "放弃未登记请求需要原服务器身份。")
+                operation = RemoteJobOperation(
+                    request, server_identity=expected_profile, status=CANCELLED,
+                    tracking_state="withdrawn", phase="已放弃未登记请求，未启动作业",
+                )
+                self._operations[operation.operation_id] = operation
+                self._client_requests[request.client_request_id] = operation.operation_id
+                self._persist_locked(operation, required=True)
+                self._emit_locked(operation, "remote.job.withdrawn")
+                return self._snapshot_locked(operation)
         # Never hold the job lock while waiting for a service lock held by an
         # upload callback. Pin identity again inside every remote service call.
         from dataclasses import asdict
         RemoteJobRequest.from_payload({"schemaVersion": 1, **{REQUEST_NAMES[key]: value for key, value in asdict(request).items()}})
-        identity = server_identity(self._service.connected_profile())
+        try:
+            identity = server_identity(self._service.connected_profile(expected_profile))
+        except RemoteConnectionError as exc:
+            if expected_profile is None:
+                raise
+            raise ApiProblem(409, "REMOTE_CONNECTION_CHANGED", str(exc)) from exc
         with self._lock:
             if self._closed or self._shutdown_reserved or self._storage_error:
                 raise ApiProblem(503, "REMOTE_JOB_STORAGE_UNAVAILABLE", "后台关闭中或记录未保存，无法提交远端作业")
-            if request.client_request_id in self._client_requests:
-                existing = self._operations[self._client_requests[request.client_request_id]]
-                if existing.request.signature != request.signature:
-                    raise ApiProblem(409, "IDEMPOTENCY_CONFLICT", "请求标识已用于不同远端作业")
-                return self._snapshot_locked(existing)
+            existing = self._replay_locked(request, expected_profile)
+            if existing is not None:
+                return existing
             operation = RemoteJobOperation(request, server_identity=identity)
             self._operations[operation.operation_id] = operation
             self._client_requests[request.client_request_id] = operation.operation_id
@@ -367,7 +406,7 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
             return [
                 self._snapshot_locked(operation)
                 for operation in reversed(tuple(self._operations.values()))
-                if not active_only or operation.status not in TERMINAL_STATUSES
+                if operation.tracking_state != "withdrawn" and (not active_only or operation.status not in TERMINAL_STATUSES)
             ]
 
     def control(self, operation_id: str, action: str) -> dict[str, Any]:

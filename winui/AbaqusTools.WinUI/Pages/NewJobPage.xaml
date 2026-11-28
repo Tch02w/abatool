@@ -6,6 +6,10 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="{StaticResource WorkbenchPagePadding}" Spacing="{StaticResource WorkbenchSectionSpacing}">
+            <StackPanel x:Name="PendingRemotePanel" Spacing="6" Visibility="Collapsed">
+                <TextBlock x:Name="PendingRemoteText" TextWrapping="Wrap" />
+                <Button x:Name="CheckPendingRemoteButton" Content="核对上次远端提交" Click="OnCheckRemoteSubmission" />
+            </StackPanel>
             <Border Style="{StaticResource WorkbenchCardStyle}">
                 <StackPanel Spacing="12">
                     <TextBlock Style="{StaticResource WorkbenchSectionTitleStyle}" Text="作业输入" />

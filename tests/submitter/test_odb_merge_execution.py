@@ -120,6 +120,8 @@ def test_cancel_before_commit_rejects_but_commit_finishes_atomically(
         "wrong_path",
         "source_changed",
         "validation_failed",
+        "unrecorded_history",
+        "unrecorded_history_nonzero",
         "publish_failed",
     ],
 )
@@ -141,6 +143,13 @@ def test_bad_merge_cannot_replace_prior_result(tmp_path, monkeypatch, problem):
         else:
             if problem == "validation_failed":
                 raise RuntimeError("field mismatch")
+            if problem.startswith("unrecorded_history"):
+                log(
+                    'ABASUB_ODB_VALIDATION_FAILED|"History contains samples not present in the source: U40D / A / RF / data"'
+                )
+                if problem.endswith("nonzero"):
+                    raise RuntimeError("Command failed with exit code 1")
+                return
             if problem != "missing_receipt":
                 write_validation_receipt(arguments, cwd)
             if problem == "wrong_path":
@@ -158,11 +167,15 @@ def test_bad_merge_cannot_replace_prior_result(tmp_path, monkeypatch, problem):
         monkeypatch.setattr(
             "modules.submitter.odb_merge_execution.os.replace", fail_replace
         )
-    with pytest.raises((OdbMergeError, RuntimeError, OSError)):
+    with pytest.raises((OdbMergeError, RuntimeError, OSError)) as caught:
         execute_odb_merge(
             OdbMergeRequest(
                 original, restart, output, conflict_policy=MergeConflictPolicy.OVERWRITE
             )
+        )
+    if problem.startswith("unrecorded_history"):
+        assert "合并后的历史含源文件未记录的样本：U40D / A / RF / data" in str(
+            caught.value
         )
     assert output.read_bytes() == b"prior-result"
     assert prior_report.read_text() == "prior-report"

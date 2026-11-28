@@ -2,7 +2,9 @@
 
 本目录是随源码维护的项目知识入口，描述当前 WinUI 3 前端、Python 控制面以及保留的 PySide6 兼容实现。文档只记录稳定边界和定位入口，具体字段以代码和版本化 API 契约为准。
 
-接手开发先读 [统一文档入口](../INDEX.md)、[当前状态](../08-handoff/CURRENT_STATUS.md) 和 [功能定位索引](../03-features/FUNCTION_INDEX.md)。本目录保留既有概述和历史记录，不将其中某个日期的局部验收当作当前全项目完成状态。
+第一次使用时，从[启动和环境](user-guide.md#启动和环境)检查工作台连接，然后在[按页面查找](user-guide.md#按页面查找)选择要做的操作。使用 GitHub 源码时，可先按[仓库 README](https://github.com/Tch02w/abatool#第一次启动)准备依赖。
+
+接手开发先读[统一文档入口](../INDEX.md)、[当前状态](../08-handoff/CURRENT_STATUS.md)和[功能定位索引](../03-features/FUNCTION_INDEX.md)。实现进展与仍待核验的项目见[交付核对清单](../06-testing/COMPLETION_AUDIT.md)。
 
 ## 导航
 

@@ -626,6 +626,12 @@ class RemoteServerService:
         self._profiles = profiles
 
     def _snapshot_locked(self) -> dict[str, Any]:
+        active = self._manager.connected_profile if self._connection_status == "connected" else None
+        target = _profile_payload(active) if active is not None else None
+        if target is not None:
+            # Submission recovery needs the verified endpoint, not a login configuration.
+            target.pop("privateKeyPath")
+            target.pop("authentication")
         return {
             "schemaVersion": SCHEMA_VERSION,
             "profiles": [
@@ -641,6 +647,7 @@ class RemoteServerService:
                 "busy": False,
                 "activity": "",
                 "profileName": self._connected_profile_name,
+                "profile": target,
                 "pendingFingerprint": self._pending_fingerprint,
                 "lastError": self._last_error,
                 "resource": self._resource,

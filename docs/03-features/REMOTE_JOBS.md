@@ -64,12 +64,21 @@ WinUI 的「新建作业」通过已连接且已确认指纹的 Windows SSH 服�
 
 2026-11-19已对用户提供的192.168.1.202完成SSH握手：端口22可达，主机指纹与已有“计算节点01”配置一致。回执`GPTWork/ssh-readonly-probe-20261119.json`明确`authenticated=false`；只说明网络和服务器身份核对通过，不代表登录、目录读取、传输或远端作业通过。随后用户已在隔离窗口登录，原生资源和目录浏览/上传实际通过；下载发现Windows同步错误，正在修复并重验，见[远端传输](REMOTE_TRANSFERS.md)。最初握手回执仍保留其未认证的当时状态，不将密码写入文档或测试夹具。
 
+## 提交按钮未收到回执时
+
+WinUI 在第一次提交前，将请求编号、作业参数和当时连接的服务器身份保存在当前配置目录的 `pending-remote-job.json`。写入失败会提示本次未发送。记录不包含登录口令、私钥或私钥口令。每个配置同一时间保留一项待核对的远端提交。
+
+网络断开或后台响应超时后，点击「核对上次远端提交」查看原作业。切换页面、编辑表单或重开应用都可以继续核对；在本机模式也能从待核对提示进入。已登记的作业直接显示原回执。若后台尚未登记，可选「按原参数重试」、 「放弃未登记请求」或「返回」。重试必须连接原服务器；放弃会在后台记住请求编号，迟到的同一请求随后也不会启动作业。若受理与放弃同时到达，以后台先登记的结果为准。「放弃未登记请求」不会停止已经受理的作业，也不会向作业概览添加一条虚假的完成记录。
+
+如果后台无法确认历史记录，待核对编号会保留。如果已确认回执但本机无法清除记录，页面会说明已确认的作业状态；修复写入后再次核对即可。旧版客户端在此次改动前产生且没有保存编号的超时提交，仍需从作业概览核对。
+
 ## 定位与验证
 
 - 业务入口：`modules/control_plane/remote_jobs.py` / `RemoteJobOperationManager`，启动/状态 PowerShell 由 `_start_job_script`、`_job_status_script` 生成。
 - 确认算法：`modules/control_plane/remote_job_monitoring.py` / `RemoteCompletionState.observe`、`new_tail_lines`。
 - 持久记录与恢复：`modules/control_plane/remote_job_journal.py` / `RemoteJobJournal`、`server_identity`；`modules/control_plane/remote_job_recovery.py` / `RemoteJobRecovery`。服务器身份核对与实际命令共用连接锁，避免核对后切换服务器。
-- 原生入口：`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs`、`winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs`，无新增 UI 布局或公共必填 DTO 字段。
+- 原生入口为 `winui/AbaqusTools.WinUI/Pages/NewJobPage.RemoteSubmission.cs`、`winui/AbaqusTools.WinUI/Pages/NewJobPage.xaml.cs` 和 `winui/AbaqusTools.WinUI/Pages/JobOverviewPage.xaml.cs`。新后台兼容没有目标字段的旧提交。新页面检查实际连接返回的服务器身份后才发送。
+- `tests/control_plane/test_remote_submission_reconcile.py` 检查迟到请求、受理与放弃的先后顺序、切换服务器、参数冲突及写盘失败。
 - `tests/control_plane/test_remote_job_monitoring.py` 覆盖缺输出、完成但仍运行/有锁、签名变化、错误优先、不可读、数据检查、终止、日志重叠及生产 PowerShell 在本机的实际探测/快速启动。它只启动隔离 cmd 夹具，不是远端或求解验收。
 - API、服务器、传输和关闭测试见 `tests/control_plane/test_remote_jobs_api.py`、`tests/control_plane/test_remote_servers_api.py`、`tests/control_plane/test_remote_transfers_api.py`、`tests/control_plane/test_shutdown_guard.py`、`tests/control_plane/test_shutdown_protocol.py`。实际结果与续接点见 [TASK-002](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)。
 - `tests/control_plane/test_remote_job_recovery.py` 覆盖断线、丢启动回执、重新登录、后台重建、离线取消、历史损坏和保存失败；`tests/control_plane/test_remote_recovery_process.py` 实际执行生产 PowerShell、后台进程退出/重启、原任务续接和单次启动，只使用 GPTWork 本机夹具，无 SSH/求解。`tests/winui_host/RemoteRecoveryChecks.cs` 检查状态文案、旧 DTO 兼容和控制禁用。

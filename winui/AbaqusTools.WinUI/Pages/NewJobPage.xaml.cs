@@ -11,6 +11,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
     private readonly WorkspaceExplorerAdapter _workspaceExplorerAdapter;
     private bool _previewBusy;
     private bool _submitBusy;
+    private RemoteServerProfile? _displayedRemote;
     private int _lastExecutionIndex;
     // Unknown policy must not clamp a restored draft before the first resource response.
     private int _localCpuLimit = int.MaxValue;
@@ -95,6 +96,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        LoadRemoteSubmission();
         await RefreshCpuLimitAsync();
         await RefreshRemoteStatusAsync();
         ApplyExecutionMode();
@@ -294,7 +296,10 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         }
     }
 
-    private async void OnSubmitClicked(object sender, RoutedEventArgs e)
+    private async void OnSubmitClicked(object sender, RoutedEventArgs e) => await SubmitAsync(false);
+    private async void OnCheckRemoteSubmission(object sender, RoutedEventArgs e) => await SubmitAsync(true);
+
+    private async Task SubmitAsync(bool checkRemote)
     {
         if (IsDraftBusy || App.Current.Session.IsResettingNewJob)
         {
@@ -304,23 +309,14 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         _submitBusy = true;
         SubmitButton.IsEnabled = false;
         PreviewButton.IsEnabled = false;
-        App.Current.MainWindow.ReportPageStatus(IsRemote ? "正在提交远端作业…" : "正在加入本机正式队列…");
+        var status = checkRemote || (IsRemote && _pendingRemote is not null)
+            ? "正在核对上次远端提交…" : IsRemote ? "正在提交远端作业…" : "正在加入本机正式队列…";
+        App.Current.MainWindow.ReportPageStatus(status);
         try
         {
-            if (IsRemote)
+            if (IsRemote || checkRemote)
             {
-                var operation = await App.Current.ControlPlane.StartRemoteJobAsync(
-                    BuildRemoteJobRequest());
-                var title = operation.Status switch
-                {
-                    "failed" => "远端作业失败", "cancelled" => "远端作业已取消",
-                    "succeeded" => "远端作业已完成", _ => "远端作业已提交",
-                };
-                App.Current.MainWindow.ShowFeedback(title,
-                    $"{operation.Request.JobName} · {operation.Error?.Message ?? operation.Phase}",
-                    operation.Status == "failed" ? InfoBarSeverity.Error
-                    : operation.Status == "cancelled" ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
-                App.Current.MainWindow.NavigateToRoute("job-overview");
+                if (!checkRemote || _pendingRemote is not null) await SubmitOrRecoverRemoteAsync();
                 return;
             }
             var result = await App.Current.ControlPlane.EnqueueLocalJobDraftAsync(
@@ -352,6 +348,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
             _submitBusy = false;
             SubmitButton.IsEnabled = true;
             PreviewButton.IsEnabled = true;
+            UpdateRemoteSubmissionControls();
             if (IsLoaded) App.Current.MainWindow.ReportPageStatus("新建作业");
         }
     }
@@ -425,7 +422,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         PathDecisionText.Text = $"预期工作目录：{workDirectory}";
     }
 
-    private RemoteJobRequest BuildRemoteJobRequest()
+    private RemoteJobRequest BuildRemoteJobRequest(RemoteServerProfile? target = null)
     {
         var memoryValue = MemoryValueTextBox.Text.Trim();
         var memory = string.IsNullOrWhiteSpace(memoryValue)
@@ -434,6 +431,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         var execution = ExecutionOptionsPanel.ReadValue();
         return new RemoteJobRequest
         {
+            ExpectedProfile = target,
             ClientRequestId = Guid.NewGuid().ToString("N"),
             JobName = JobNameTextBox.Text.Trim(),
             InputMode = UsesRemoteExistingFiles ? "existing" : "upload",
@@ -471,7 +469,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         PriorityComboBox.IsEnabled = !remote;
         MaxParallelNumberBox.IsEnabled = !remote;
         InteractiveCheckBox.IsEnabled = !remote;
-        SubmitButton.Content = remote ? "提交远端作业" : "提交作业（加入队列）";
+        UpdateRemoteSubmissionControls();
         UpdatePathDecision();
     }
 
@@ -480,10 +478,13 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         try
         {
             var snapshot = await App.Current.ControlPlane.GetRemoteServersAsync();
-            RemoteServerStatusText.Text = snapshot.Connection.Status == "connected"
+            _displayedRemote = snapshot.Connection.Profile;
+            RemoteServerStatusText.Text = snapshot.Connection.Status == "connected" && _displayedRemote is null
+                ? "后台未提供已连接服务器的身份，请使用与工作台配套的后台后再提交。"
+                : snapshot.Connection.Status == "connected"
                 ? $"已连接：{snapshot.Connection.ProfileName}"
                 : "尚未连接服务器，请先在计算资源中连接";
-            RemoteServerStatusText.Foreground = snapshot.Connection.Status == "connected"
+            RemoteServerStatusText.Foreground = _displayedRemote is not null
                 ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
                     "AbaqusSuccessBrush"]
                 : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
@@ -491,6 +492,7 @@ public sealed partial class NewJobPage : Page, IWorkbenchExplorerPage
         }
         catch (Exception exception)
         {
+            _displayedRemote = null;
             RemoteServerStatusText.Text = "服务器状态读取失败：" + exception.Message;
         }
     }

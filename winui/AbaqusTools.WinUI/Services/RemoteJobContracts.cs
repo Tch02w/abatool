@@ -4,6 +4,10 @@ namespace AbaqusTools.WinUI.Services;
 
 public sealed class RemoteJobRequest
 {
+    [JsonPropertyName("expectedProfile")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RemoteServerProfile? ExpectedProfile { get; init; }
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = 1;
 

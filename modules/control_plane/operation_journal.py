@@ -6,6 +6,7 @@ import json
 import os
 import sqlite3
 import tempfile
+import threading
 from contextlib import closing
 from pathlib import Path
 
@@ -18,6 +19,7 @@ class OperationJournal:
         self._validate = validator
         self._id_field = id_field
         self.path = Path(path)
+        self._lock = threading.RLock()
         self._owner = None
         self._database = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -36,30 +38,58 @@ class OperationJournal:
 
                 fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self._owner = owner
-            if not self.path.exists():
-                self._create_database()
-            self._database = sqlite3.connect(
-                self.path, timeout=0, check_same_thread=False
-            )
-            if self._database.execute("PRAGMA user_version").fetchone()[0] != 1:
-                raise ValueError("任务记录版本无效")
-            if self._database.execute("PRAGMA quick_check").fetchone() != ("ok",):
-                raise ValueError("任务记录完整性检查失败")
-            self._database.execute("PRAGMA synchronous=FULL")
+            self._published = self._path_exists()
+            if self._published:
+                self._open_existing()
         except BaseException:
             self.close()
             owner.close()
             raise
 
-    def _create_database(self) -> None:
-        # Publish a complete schema while holding the owner lock. A failed first
-        # launch must not leave a partial database that looks like damaged history.
+    def _path_exists(self) -> bool:
+        try:
+            self.path.lstat()
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _open_existing(self) -> None:
+        # mode=rw prevents SQLite from recreating a missing history. Use an
+        # empty URI authority for a Windows UNC path, as required by SQLite.
+        uri = self.path.absolute().as_uri()
+        if self.path.drive.startswith("\\\\"):
+            uri = "file:////" + uri.removeprefix("file://")
+        database = sqlite3.connect(uri + "?mode=rw", uri=True, timeout=0, check_same_thread=False)
+        try:
+            if database.execute("PRAGMA user_version").fetchone()[0] != 1:
+                raise ValueError("任务记录版本无效")
+            if database.execute("PRAGMA quick_check").fetchone() != ("ok",):
+                raise ValueError("任务记录完整性检查失败")
+            database.execute("PRAGMA synchronous=FULL")
+        except BaseException:
+            database.close()
+            raise
+        self._database = database
+
+    def _current_database(self):
+        if self._owner is None:
+            raise OSError("任务记录写入锁已关闭")
+        if self._database is None:
+            if self._published:
+                self._open_existing()
+            elif self._path_exists():
+                raise FileExistsError("任务记录文件在启动后出现，请重新打开以读取已有记录")
+        return self._database
+
+    def _publish_first_record(self, values) -> None:
+        # Publish the schema and its first durable record together. A competing
+        # file or a failed commit must never be mistaken for our new journal.
         fd, filename = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp")
         os.close(fd)
         pending = Path(filename)
         try:
             with closing(sqlite3.connect(pending, timeout=0)) as database, database:
-                # Only the unpublished empty database uses an in-memory rollback journal.
+                # Only the unpublished database uses an in-memory rollback journal.
                 database.execute("PRAGMA journal_mode=MEMORY")
                 database.execute("PRAGMA synchronous=FULL")
                 database.execute("BEGIN IMMEDIATE")
@@ -67,14 +97,23 @@ class OperationJournal:
                     f"CREATE TABLE {self._table} (operation_id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
                 )
                 database.execute("PRAGMA user_version=1")
-            pending.replace(self.path)
+                database.execute(f"INSERT INTO {self._table} VALUES (?, ?)", values)
+            if os.name == "nt":
+                os.rename(pending, self.path)  # Fails if the destination exists.
+            else:
+                os.link(pending, self.path)
+            self._published = True
         finally:
             pending.unlink(missing_ok=True)
 
     def load(self) -> list[dict]:
-        rows = self._database.execute(
-            f"SELECT operation_id, payload FROM {self._table} ORDER BY rowid"
-        ).fetchall()
+        with self._lock:
+            database = self._current_database()
+            if database is None:
+                return []
+            rows = database.execute(
+                f"SELECT operation_id, payload FROM {self._table} ORDER BY rowid"
+            ).fetchall()
         records = []
         for operation_id, payload in rows:
             record = json.loads(payload)
@@ -85,27 +124,30 @@ class OperationJournal:
         return records
 
     def save(self, record: dict) -> None:
-        self._validate(record)
-        if self._database is None:
-            raise OSError("任务记录写入锁已关闭")
-        # Update one operation, not the whole history, for each durable checkpoint.
-        with self._database:
-            self._database.execute(
-                f"INSERT INTO {self._table}(operation_id, payload) VALUES (?, ?) "
-                "ON CONFLICT(operation_id) DO UPDATE SET payload=excluded.payload",
-                (
-                    self._record_id(record),
-                    json.dumps(record, ensure_ascii=False),
-                ),
-            )
+        with self._lock:
+            database = self._current_database()
+            self._validate(record)
+            values = (self._record_id(record), json.dumps(record, ensure_ascii=False))
+            if database is None:
+                self._publish_first_record(values)
+                return
+            with database:
+                database.execute(
+                    f"INSERT INTO {self._table}(operation_id, payload) VALUES (?, ?) "
+                    "ON CONFLICT(operation_id) DO UPDATE SET payload=excluded.payload",
+                    values,
+                )
 
     def _record_id(self, record):
         return record[self._id_field] if self._id_field else record["snapshot"]["operationId"]
 
     def close(self) -> None:
-        if self._database is not None:
-            self._database.close()
-            self._database = None
-        if self._owner is not None:
-            self._owner.close()
-            self._owner = None
+        with self._lock:
+            try:
+                if self._database is not None:
+                    self._database.close()
+                    self._database = None
+            finally:
+                if self._owner is not None:
+                    self._owner.close()
+                    self._owner = None

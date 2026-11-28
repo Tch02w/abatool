@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented in source, 2026-11-18; pure state/store checks and WinUI build pass. Native delivery of session messages and actual business-page restore remain unverified. Extends [ADR 0009](0009-reversible-workbench-close.md) without replacing its interactive close protocol.
+Implemented in source on 2026-11-18. On 2026-11-28 the Windows release received query, cancelled, confirmed and repeated session messages at its own HWND on a private desktop. A second instance restored the new-job draft and reattached to the same backend. The test left the Windows session running. [Native verification and scope](../../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#窗口关不掉或系统结束会话时的草稿). Extends [ADR 0009](0009-reversible-workbench-close.md).
 
 ## Decision
 
@@ -14,9 +14,9 @@ Implemented in source, 2026-11-18; pure state/store checks and WinUI build pass.
 
 ## Limits and verification
 
-The result-graph gap is subsequently addressed by [ADR 0018](0018-result-graph-recovery-drafts.md) through disk-only checkpoint participants. Detailed postprocessing workspaces and unconfirmed dialogs remain separate pending work.
+The result graph uses disk-only checkpoint participants as described in [ADR 0018](0018-result-graph-recovery-drafts.md). Postprocessing workspaces and four unconfirmed dialogs also register checkpoints. Their recovery after an actual OS session end needs separate verification.
 
-The two-second interval is best effort; a busy UI thread can delay capture. The final budget bounds waiting for disk, not all UI capture time, and cannot guarantee a final write on a hung disk or immediate termination. No claim of power-loss recovery is made. Existing complete release/installer candidates do not contain this source change until rebuilt.
+A busy UI thread can delay the two-second periodic capture. The final budget applies to the wait for disk writes. A hung disk or immediate termination can leave the previous checkpoint as the most recent recoverable edit. The Windows package identified above contains the session hook.
 
 `tests/winui_host/SystemSessionEndChecks.cs` runs the production message state and store using synthetic messages, a held task, and real files in a fresh evidence directory. It does not call OS shutdown APIs, create a native window, or establish HWND integration acceptance. Existing shutdown HTTP tests continue to verify ordinary-close task ownership independently.
 

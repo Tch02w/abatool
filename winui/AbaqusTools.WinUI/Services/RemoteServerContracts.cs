@@ -93,6 +93,9 @@ public sealed class RemoteServerCommandRequest
 
 public sealed class RemoteServerConnection
 {
+    [JsonPropertyName("profile")]
+    public RemoteServerProfile? Profile { get; init; }
+
     [JsonPropertyName("busy")]
     public bool IsBusy { get; init; }
 

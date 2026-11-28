@@ -16,9 +16,9 @@
 
 ## 分析步与数据规则
 
-分析步间重启动保留原始前序分析步，再接入重启动分析步。分析步中重启动使用重启动 ODB 替换重叠分析步；不会同时保留两套重叠结果或原文件中已经废弃的后续步骤。顺序依据 ODB 实际 `step.number`，不按名称猜测。此规则与 [Abaqus 2025 restartjoin 文档](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXCRefMap/simaexc-c-restartjoinproc.htm) 一致。
+分析步之间重启动时，保留原始前序分析步，再接入后续步骤。若从被中断分析步的开头重算，完整重算步替换旧步。Abaqus/Standard 还可以从指定增量继续。在实际 GJB-16 的时间域分析中，同名同编号步骤的续算文件从中段开始，合并结果保留了续算首帧之前的原始帧，共同时刻采用续算帧。验证器按实际步编号、域、累计时间、帧时间及增量号确定这一边界，逐帧检查来源。旧文件中已放弃的后续步骤不会进入结果。[Abaqus 2025 合并说明](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXCRefMap/simaexc-c-restartjoinproc.htm) · [Abaqus/Standard 重启动点](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-restart.htm)
 
-启用“历史输出”时，保留步骤的历史数据必须逐项与其来源一致。关闭时，Abaqus 会移除合并结果中**所有**历史数据，包括原始分析步的历史数据；校验确认没有残留历史输出。该行为已在本机 Abaqus 2025 实际运行中核对。
+启用「历史输出」时，保留步骤的历史数据必须逐项与来源一致。中途续算的历史通道可能比场帧记录得更密，分别按各通道第一条续算记录的时间核对其父段和续算段。若 Abaqus 的合并工具为没有父数据的通道添加了源文件中不存在的样本，工作台拒绝发布并显示步名、区域和通道名。需要历史时可分段查看源 ODB；只需完整场结果时可取消勾选历史输出，再重新预览和执行。关闭历史输出后逐步检查结果中没有历史输出。
 
 输出非空和可打开只是前置条件。发布前，Abaqus 自带 Python 只读打开两份备份和合并结果，逐项核对：
 

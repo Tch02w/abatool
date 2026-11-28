@@ -89,6 +89,87 @@ def test_midstep_restart_replaces_overlap_and_drops_abandoned_later_steps():
         verify(base, restart, joined, True)
 
 
+def partial_time_step(increments, samples):
+    output = step(6)
+    output.frames = []
+    for inc, t, value in increments:
+        frame = step(6, value).frames[0]
+        frame.incrementNumber, frame.frameValue = inc, t
+        output.frames.append(frame)
+    output.historyRegions = {
+        "RP": N(historyOutputs={"RF": N(type="SCALAR", data=samples)})
+    }
+    return output
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        None,
+        "parent_frame_at_seam",
+        "repeated_frame",
+        "lost_prefix",
+        "later_parent",
+        "parent_history_at_seam",
+        "shifted_history_time",
+        "lost_history",
+        "repeated_history",
+        "fabricated_zero",
+        "wrong_channel",
+        "unexpected_conjugate_data",
+        "inconsistent_start_time",
+    ],
+)
+def test_partial_time_step_splices_each_observable_at_its_own_restart(fault):
+    base = partial_time_step(
+        [(0, 0.0, 1), (3, 0.3, 2), (4, 0.4, 3)], [(0.0, 1.0), (0.2, 2.0), (0.4, 4.0)]
+    )
+    child = partial_time_step(
+        [(3, 0.3, 5), (6, 0.6, 6)], [(0.2, 3.0), (0.35, 5.0), (0.6, 6.0)]
+    )
+    result = partial_time_step(
+        [(0, 0.0, 1), (3, 0.3, 5), (6, 0.6, 6)],
+        [(0.0, 1.0), (0.2, 3.0), (0.35, 5.0), (0.6, 6.0)],
+    )
+    history = result.historyRegions["RP"].historyOutputs["RF"].data
+    if fault == "parent_frame_at_seam":
+        result.frames[1] = base.frames[1]
+    elif fault == "repeated_frame":
+        result.frames.insert(1, base.frames[1])
+    elif fault == "lost_prefix":
+        result.frames.pop(0)
+    elif fault == "later_parent":
+        result.frames[2] = base.frames[2]
+    elif fault == "parent_history_at_seam":
+        history[1] = (0.2, 2.0)
+    elif fault == "shifted_history_time":
+        history[2] = (0.34, 5.0)
+    elif fault == "lost_history":
+        history.pop(0)
+    elif fault == "repeated_history":
+        history.insert(1, (0.2, 2.0))
+    elif fault == "fabricated_zero":
+        base.historyRegions["RP"].historyOutputs["RF"].data = None
+        history[0] = (0.0, 0.0)
+    elif fault == "wrong_channel":
+        result.historyRegions["RP"].historyOutputs["OTHER"] = N(type="SCALAR", data=[])
+    elif fault == "unexpected_conjugate_data":
+        result.historyRegions["RP"].historyOutputs["RF"].conjugateData = [(0.0, 0.0)]
+    elif fault == "inconsistent_start_time":
+        base.totalTime = 99.0
+    args = (odb(U40D=base), odb(U40D=child), odb(U40D=result), True)
+    if fault:
+        with pytest.raises(ValueError):
+            verify(*args)
+    else:
+        (info,) = verify(*args)
+        assert (info["source"], info["frames"], info["retainedOriginalFrames"]) == (
+            "original-prefix-and-restart",
+            3,
+            1,
+        )
+
+
 def test_history_option_and_empty_uncomputed_future_step():
     base, restart = odb(Base=step(1)), odb(Restart=step(2), Future=step(3))
     restart.steps["Future"].frames.clear()

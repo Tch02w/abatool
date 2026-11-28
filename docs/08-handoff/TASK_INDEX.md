@@ -1,5 +1,11 @@
 # 任务索引
 
+F001/F004 空配置首次启动、首条记录写入和已有库恢复见[空历史与首次业务写入](../06-testing/VALIDATION.md#空历史与首次业务写入)。
+
+远端提交超时后的重开与核对见 [F010 远端作业](../03-features/REMOTE_JOBS.md)。中途续算的 GJB-16 三阶段合并、逐帧验证及接触历史缺口见 [F013 工程实测](ACTIVE_TASKS/TASK-002-migration.md#gjb-16-两分支的工程合并与续算边界)。首次从源码启动见[仓库 README](../../README.md#第一次启动)。
+
+F001 在草稿文件被占用、取消或确认系统会话结束，以及应用重开时的结果见[关闭与草稿恢复](ACTIVE_TASKS/TASK-002-migration.md#窗口关不掉或系统结束会话时的草稿)。
+
 F021 的多工作表预览见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。运行中队列的菜单与页面对照见[界面交互](ACTIVE_TASKS/TASK-004-ui-interaction.md#运行中队列的菜单与页面命令)。三目标合并在关闭前台、重开和后台中断后的实际恢复见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md#多分支合并的前台关闭与后台恢复)。
 
 逐帧核对两组工程 GIF 的颜色、时间与进程内存，以及有筋、无纵筋工作簿的说明和单元格对照见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md#工程-gif-逐帧编码及工作簿配筋说明)。

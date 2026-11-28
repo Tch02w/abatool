@@ -450,11 +450,19 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                     trace_id,
                 )
                 return
-            if target.path == "/api/v1/remote-jobs" and not target.query:
-                request = RemoteJobRequest.from_payload(self._read_json_object(), validate_local_files=False)
+            if target.path in {"/api/v1/remote-jobs", "/api/v1/remote-job-lookups", "/api/v1/remote-job-withdrawals"} and not target.query:
+                payload = self._read_json_object()
+                expected = file_request_identity(payload)
+                payload.pop("expectedProfile", None)
+                request = RemoteJobRequest.from_payload(payload, validate_local_files=False)
+                if target.path == "/api/v1/remote-job-lookups":
+                    snapshot = self.context.remote_job_manager.lookup(request, expected)
+                    self._send_json(HTTPStatus.OK, snapshot, trace_id)
+                    return
+                withdraw = target.path == "/api/v1/remote-job-withdrawals"
                 self._send_json(
-                    HTTPStatus.ACCEPTED,
-                    self.context.remote_job_manager.create(request),
+                    HTTPStatus.OK if withdraw else HTTPStatus.ACCEPTED,
+                    self.context.remote_job_manager.create(request, expected_profile=expected, withdraw=withdraw),
                     trace_id,
                 )
                 return

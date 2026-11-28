@@ -18,11 +18,11 @@ WinUI 的正式队列由 Qt-free Python 控制面调度。`LocalQueueScheduling`
 
 遇到独占锁会报告数据库忙，释放占用后可用同一文件重试。遇到更高的版本会提示当前支持的版本，原库内容保留。已确认 SQLite 文件损坏或已知调度表结构不兼容时，才沿用原有的备份重建流程，备份名带有 `.corrupt-` 和时间戳。缺少的表或索引可在一次写事务内补建。
 
-合并、批量完整结果、远端作业、作业通知和后处理分组队列使用独立的操作历史库。首次建立其中一个库时，后台取得该库的所有权锁，在同目录临时文件中完成建表并写入版本，关闭连接后才发布到正式路径。建库过程中抛错会清除临时文件，下一次启动可以重新建库。如果正式路径上原已有无效文件，后台报告错误并保留原件。
+合并、批量完整结果、远端作业、作业通知和后处理分组队列各自持有独立的历史文件锁。启动时，后台立即打开已有库，核对版本与完整性并读取记录。首次使用的配置可以直接查看空历史。作业通知需要保存提醒起始时间，首次启动会写入一条基线；其余四个库在各自有第一条业务记录时创建。
 
-空库首次建表使用 `journal_mode=MEMORY`，把这次事务的回滚日志放在内存中，临时数据库文件按 `synchronous=FULL` 提交。SQLite 指出，进程在这种事务中崩溃可能损坏数据库。因此该设置只用于尚未发布且可重新创建的空库。正式文件发布后，后台另开连接，使用磁盘回滚日志和 `synchronous=FULL` 保存业务记录。[SQLite 日志模式说明](https://www.sqlite.org/pragma.html#pragma_journal_mode) · [冷启动与中断验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--空操作历史库的首次启动)
+首次写入将表、版本和第一条记录一起提交到同目录临时库，使用 `journal_mode=MEMORY` 和 `synchronous=FULL`。临时连接关闭并成功发布后，调用方才收到保存成功的回执。后续更新按记录标识写入正式库，使用磁盘回滚日志和 `synchronous=FULL`。建库或提交失败后可以重试。若有人在后台取得锁后放入同名文件，发布会停止并保留该文件；重新打开即可读取已有历史。已有无效文件会保留，后台报告原因。[SQLite 日志模式说明](https://www.sqlite.org/pragma.html#pragma_journal_mode) · [空历史的启动测量](../06-testing/VALIDATION.md#空历史与首次业务写入)
 
-后台启动中途失败时，按创建顺序反向关闭本次已经打开的服务、数据库和监听端口。已验证本机调度器初始化失败和发布连接信息失败两种情形。两种情况下旧连接信息都保留，重新启动后作业通知接口恢复可用。代码入口为 `SQLiteSchedulerRepository._initialize`、`OperationJournal._create_database` 和 `ControlPlaneRuntime.__init__`。[测试条件与回执](../06-testing/COMPLETION_AUDIT.md#历史库与后台启动失败)
+后台启动中途失败时，按创建顺序反向关闭本次已经打开的服务、数据库和监听端口。已验证本机调度器初始化失败和发布连接信息失败两种情形。两种情况下旧连接信息都保留，重新启动后作业通知接口恢复可用。代码入口为 `SQLiteSchedulerRepository._initialize`、`OperationJournal._publish_first_record` 和 `ControlPlaneRuntime.__init__`。[测试条件与回执](../06-testing/COMPLETION_AUDIT.md#历史库与后台启动失败)
 
 ## 候选与正式作业的目录设置（F004）
 

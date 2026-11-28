@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F010 远端作业回执核对的入口在 `winui/AbaqusTools.WinUI/Pages/NewJobPage.RemoteSubmission.cs`。后台在 `modules/control_plane/remote_jobs.py` 中按照原作业参数、服务器身份和请求编号查询，回归为 `tests/control_plane/test_remote_submission_reconcile.py`。[远端作业说明](REMOTE_JOBS.md)
+
+F013 同一分析步中途续算的场帧和历史量核对见 `modules/postprocessor/abaqus_scripts/validate_odb_merge.py` 中的 `_retained_frame_count` 与 `_verify_continued_history`。操作者收到的校验错误由 `modules/submitter/odb_merge_execution.py` 传递。回归为 `tests/postprocessor/test_merge_validation.py` 和 `tests/submitter/test_odb_merge_execution.py`。[分析步与数据规则](ODB_MERGE.md#分析步与数据规则)
+
+F001 系统会话结束的原生消息入口为 `winui/AbaqusTools.WinUI/Services/SystemSessionEndHook.cs`，由 `MainWindow.Session.cs` 的 `SaveForSystemSessionEnd` 捕获检查点。状态机及文件写入回归为 `tests/winui_host/SystemSessionEndChecks.cs`，另有[成品新建作业窗口的故障与恢复实测](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#窗口关不掉或系统结束会话时的草稿)。
+
 F017 工作簿修订和已发布数值复用见 `modules/postprocessor/result_assets.py` 的 `numeric_asset_id`、`numeric_asset_is_valid`、`restore_previous_numeric_payload`，调用方为 `modules/postprocessor/postprocess_execution.py` 和旧版 `modules/postprocessor/batch_window.py`。旧版数据的来源、版本及原件保留检查见 `tests/postprocessor/test_result_assets.py`。
 
 F021 多工作表读取由 `modules/postprocessor/result_catalog.py` 的 `read_workbook_preview` 和 `modules/control_plane/results.py` 的 `preview_result` 提供。WinUI 的工作表选择位于 `winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.xaml.cs`。覆盖可见表、宽表、空表和旧格式的回归见 `tests/postprocessor/test_result_xlsx_preview.py`、`tests/control_plane/test_results_api.py`、`tests/winui_host/test_results_api.py`。
@@ -30,7 +36,7 @@ F021 的根目录与对比组补索引由 `modules/control_plane/results.py` 的
 
 F004/F005 的后台观测由 `LocalQueueRuntimeManager.snapshot`、`JobQueueService.snapshot` 和 `ControlPlaneHost` 处理。队列写入期间，WinUI 可延后本轮本机观察。真实 HTTP 和 C# 客户端覆盖在 `tests/winui_host/test_queue_poll_api.py`。[界面行为](UI_INTERACTION.md) · [接口约定](../api-contract.md)
 
-F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/control_plane/server.py` 的 `ControlPlaneRuntime`、`modules/submitter/scheduler_repository.py` 的 `SQLiteSchedulerRepository` 和 `modules/control_plane/operation_journal.py` 的 `OperationJournal._create_database`。`tests/control_plane/test_operation_journal.py` 核对首次建表的临时日志模式、正式库重开与写入、初始化失败重试。调度和启动失败的恢复见 `tests/submitter/test_scheduler_repository.py`、`tests/control_plane/test_api.py`。[首次建库与实际冷启动测量](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--空操作历史库的首次启动)
+F001/F004 的后台初始化、调度记录和操作历史分别位于 `modules/control_plane/server.py` 的 `ControlPlaneRuntime`、`modules/submitter/scheduler_repository.py` 的 `SQLiteSchedulerRepository` 和 `modules/control_plane/operation_journal.py` 的 `OperationJournal._publish_first_record`。首次保存将建表和第一条记录一并发布。`tests/control_plane/test_operation_journal.py` 涵盖空预览、现有库、并发、外部同名文件、写入失败重试和重开。调度和启动失败的恢复见 `tests/submitter/test_scheduler_repository.py`、`tests/control_plane/test_api.py`。[存储和恢复约定](LOCAL_SCHEDULING.md#已有调度库首次建库和后台启动失败)
 
 F008 已保存服务器换钥时由 `modules/submitter/remote_connection.py` 的 `HostKeyChanged` 提供观察值，`modules/control_plane/remote_servers.py` 的 `_connect` 在同一配置二次认证后更新信任记录。`winui/AbaqusTools.WinUI/Pages/ComputeResourcesPage.xaml.cs` 的连接窗口核对用户独立取得的指纹，并在断线时清空旧资源。控制面回归见 `tests/control_plane/test_remote_servers_api.py`。[连接与换钥](REMOTE_JOBS.md)
 

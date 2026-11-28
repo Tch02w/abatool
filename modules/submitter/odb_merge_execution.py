@@ -82,18 +82,43 @@ def execute_odb_merge(
 
     def run(arguments: tuple[str, ...]) -> str:
         captured: list[str] = []
+        validation_marker: str | None = None
 
         def capture(message: str) -> None:
+            nonlocal validation_marker
             captured.append(message)
+            if arguments == plan.validation_arguments and message.startswith(
+                "ABASUB_ODB_VALIDATION_FAILED|"
+            ):
+                validation_marker = message.partition("|")[2]
             if log is not None:
                 log(message)
 
-        run_process(
-            [plan.request.abaqus_command, *arguments],
-            plan.staging_dir,
-            capture,
-            effective_controller,
-        )
+        try:
+            run_process(
+                [plan.request.abaqus_command, *arguments],
+                plan.staging_dir,
+                capture,
+                effective_controller,
+            )
+        except ProcessCancelled:
+            raise
+        except RuntimeError:
+            if validation_marker is None:
+                raise
+        if validation_marker is not None:
+            validation_reason = json.loads(validation_marker)
+            if not isinstance(validation_reason, str):
+                raise OdbMergeError("ODB 合并内容校验返回了无效的错误说明。")
+            if validation_reason.startswith(
+                "History contains samples not present in the source: "
+            ):
+                channel = validation_reason.partition(": ")[2]
+                raise OdbMergeError(
+                    f"合并后的历史含源文件未记录的样本：{channel}。请分段查看源历史；"
+                    "只需场结果时，可取消勾选历史输出后重新执行。"
+                )
+            raise OdbMergeError(f"ODB 合并内容校验失败：{validation_reason}")
         return "\n".join(captured)
 
     def publish(source: Path, destination: Path, *, overwrite: bool = False) -> None:

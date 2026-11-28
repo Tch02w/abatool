@@ -82,6 +82,10 @@
 
 持久恢复补充：快照新增可选 `trackingState`（preparing/tracking/reconnecting/submission_unknown/unverified/finished/interrupted）和 `persistenceWarning`。启动后 SSH 失败不再返回终态失败，而保持 running/cancelling；重连后核对原回执与原任务。历史错误返回 503 `REMOTE_JOB_HISTORY_UNAVAILABLE`；保存错误返回 503 `REMOTE_JOB_STORAGE_UNAVAILABLE`，不启动新计算。preparing 阶段后台重启返回 failed / `REMOTE_PREPARATION_INTERRUPTED`，明确没有自动提交；线程提交失败为 `REMOTE_JOB_DISPATCH_FAILED`。同一 `clientRequestId`、同参数跨后台返回原操作，不重新要求已上传本地源文件存在；新请求仍验证本地文件。活动作业只允许连接相同的固定服务器身份/路径范围，存在活动传输时仍拒绝切换/重连，返回 409 `REMOTE_SESSION_BUSY`。取消先持久保存，未核对时暂缓远端控制；暂停/恢复在非 tracking 状态返回 409 `REMOTE_JOB_NOT_STARTED`。细节见 [ADR 0012](submitter/adr/0012-durable-remote-tracking.md)。
 
+`POST /api/v1/remote-jobs` 可附带 `expectedProfile`，取自远端服务器状态的 `connection.profile`。受理新请求时核对当前连接的目标。已登记同一编号时核对原参数和服务器，可在离线或切换服务器后读回原作业。参数或目标冲突返回 409 `IDEMPOTENCY_CONFLICT`。新提交指向与当前连接不同的服务器返回 409 `REMOTE_CONNECTION_CHANGED`。
+
+`POST /api/v1/remote-job-lookups` 接收原提交参数和必填的 `expectedProfile`，只读查询，返回 200 与原回执，或 404 `REMOTE_JOB_REQUEST_NOT_FOUND`。`POST /api/v1/remote-job-withdrawals` 接收相同请求体。若编号已登记则返回原回执；否则在后台持久记录该编号后返回 200、`trackingState=withdrawn`。迟到的提交也读回该记录，作业列表和作业结束提醒均不展示它。写入失败返回 503，客户端须保留原编号。
+
 `remote-jobs` 的公开 DTO 结构保持兼容。收到成功文本后仍为 running（取消请求期间 cancelling），phase 说明正在确认，须 launcher/锁已停止且四种输出签名连续 3 次稳定才终结。数据检查不再凭进程连续消失判成功；稳定 5 次无成功证据返回 failed / `REMOTE_JOB_EXIT_UNCONFIRMED`。错误与非请求终止优先于成功，代码分别为 `ABAQUS_REMOTE_ERROR`、`REMOTE_JOB_TERMINATED`；不可读探测继续活动并重置确认。内部探针增加 launcher 创建时间、probe_complete、output_signature、DAT/MSG 尾部；它们不是新增公共请求字段。细节与连接中断/重启限制见 [远端作业说明](03-features/REMOTE_JOBS.md)。
 
 ### 本机调度补充（2026-11-18，F004/F005）

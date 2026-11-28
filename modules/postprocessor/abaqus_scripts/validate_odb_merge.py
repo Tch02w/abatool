@@ -125,6 +125,99 @@ def expected_steps(original, restart):
     ]
 
 
+def _continued_step(original, restart, name):
+    """Identify a time-domain continuation whose first saved frame is inside the step."""
+    if name != next(iter(restart.steps.keys())) or name not in original.steps:
+        return None
+    prior, resumed = original.steps[name], restart.steps[name]
+    if (
+        not len(resumed.frames)
+        or str(resumed.domain) != "TIME"
+        or prior.number != resumed.number
+    ):
+        return None
+    first = resumed.frames[0]
+    if first.frameValue <= 0 or first.incrementNumber <= 0:
+        return None
+    if str(prior.domain) != "TIME" or prior.totalTime != resumed.totalTime:
+        raise ValueError("Continuation step metadata differs: " + name)
+    return prior
+
+
+def _retained_frame_count(prior, first):
+    count = 0
+    previous = None
+    for frame in prior.frames:
+        key = (frame.frameValue, frame.incrementNumber)
+        if previous is not None and (key[0] < previous[0] or key[1] < previous[1]):
+            raise ValueError("Original step frames are out of order")
+        previous = key
+        earlier = key[0] < first.frameValue
+        if earlier != (key[1] < first.incrementNumber):
+            raise ValueError("Ambiguous restart frame boundary")
+        if earlier:
+            count += 1
+    return count
+
+
+def _verify_history_series(old, new, joined, label):
+    if old is None or not len(old):
+        if new is None and joined is None:
+            return
+        if new is not None and np.array_equal(new, joined):
+            return
+        raise ValueError("History contains samples not present in the source: " + label)
+    if new is None or not len(new):
+        raise ValueError("History restart boundary is unavailable: " + label)
+    old, new = np.asarray(old), np.asarray(new)
+    if any(
+        not np.isfinite(a[:, 0]).all() or np.any(np.diff(a[:, 0]) < 0)
+        for a in (old, new)
+    ):
+        raise ValueError("History times are out of order: " + label)
+    keep = int(np.searchsorted(old[:, 0], new[0, 0], side="left"))
+    if joined is None or len(joined) != keep + len(new):
+        raise ValueError("History sample count differs: " + label)
+    joined = np.asarray(joined)
+    if not np.array_equal(old[:keep], joined[:keep]) or not np.array_equal(
+        new, joined[keep:]
+    ):
+        raise ValueError("History samples differ at restart: " + label)
+
+
+def _verify_continued_history(name, prior, resumed, joined):
+    def channels(step):
+        return {
+            (region, key): output
+            for region, item in step.historyRegions.items()
+            for key, output in item.historyOutputs.items()
+        }
+
+    parents, children, results = (channels(step) for step in (prior, resumed, joined))
+    if (
+        set(parents) - set(children)
+        or set(children) != set(results)
+        or set(joined.historyRegions.keys()) != set(resumed.historyRegions.keys())
+    ):
+        raise ValueError(
+            "History coverage differs or restart boundary is unavailable: " + name
+        )
+    for key in sorted(children):
+        child, result, parent = children[key], results[key], parents.get(key)
+        label = "{0} / {1} / {2}".format(name, *key)
+        if str(child.type) != str(result.type) or (
+            parent is not None and str(parent.type) != str(child.type)
+        ):
+            raise ValueError("History type differs: " + label)
+        for field in ("data", "conjugateData"):
+            _verify_history_series(
+                getattr(parent, field, None),
+                getattr(child, field, None),
+                getattr(result, field, None),
+                label + " / " + field,
+            )
+
+
 def verify(original, restart, joined, include_history):
     expected = expected_steps(original, restart)
     if list(joined.steps.keys()) != [name for name, _, _ in expected]:
@@ -140,12 +233,19 @@ def verify(original, restart, joined, include_history):
             source.totalTime,
         ):
             raise ValueError("Step metadata differs: " + name)
-        if len(result.frames) != len(source.frames):
+        prior = _continued_step(original, restart, name)
+        retained = (
+            _retained_frame_count(prior, source.frames[0]) if prior is not None else 0
+        )
+        if len(result.frames) != retained + len(source.frames):
             raise ValueError("Frame count differs: " + name)
-        for index in range(len(source.frames)):
-            if _frame_signature(source.frames[index]) != _frame_signature(
-                result.frames[index]
-            ):
+        for index in range(len(result.frames)):
+            source_frame = (
+                prior.frames[index]
+                if index < retained
+                else source.frames[index - retained]
+            )
+            if _frame_signature(source_frame) != _frame_signature(result.frames[index]):
                 raise ValueError(
                     "Frame time, field coverage or values differ: {0}, frame {1}".format(
                         name, index
@@ -153,7 +253,9 @@ def verify(original, restart, joined, include_history):
                 )
         # Without `history`, restartjoin removes history from the whole result,
         # including retained original steps (Abaqus 2025 real-run verified).
-        if include_history:
+        if include_history and prior is not None:
+            _verify_continued_history(name, prior, source, result)
+        elif include_history:
             if _history_signature(source) != _history_signature(result):
                 raise ValueError("History output differs: " + name)
         elif any(
@@ -163,8 +265,9 @@ def verify(original, restart, joined, include_history):
         report.append(
             {
                 "name": name,
-                "source": origin,
-                "frames": len(source.frames),
+                "source": "original-prefix-and-restart" if retained else origin,
+                "frames": len(result.frames),
+                "retainedOriginalFrames": retained,
                 "history_checked": True,
                 "history_policy": "preserved" if include_history else "omitted",
             }
@@ -208,4 +311,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as error:
+        print(
+            "ABASUB_ODB_VALIDATION_FAILED|" + json.dumps(str(error), ensure_ascii=True)
+        )
+        sys.stdout.flush()
+        raise

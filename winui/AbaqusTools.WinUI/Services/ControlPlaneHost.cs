@@ -778,7 +778,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     public async Task<RemoteJobOperationSnapshot> StartRemoteJobAsync(
         RemoteJobRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool withdrawUnregistered = false)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -788,12 +789,34 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         var response = await SendJsonRequestAsync<RemoteJobOperationSnapshot>(
             descriptor,
             HttpMethod.Post,
-            "/api/v1/remote-jobs",
+            withdrawUnregistered ? "/api/v1/remote-job-withdrawals" : "/api/v1/remote-jobs",
             request,
-            "提交远端作业",
+            withdrawUnregistered ? "放弃未登记请求" : "提交远端作业",
             effectiveSource.Token);
         ValidateRemoteJobSnapshot(response);
+        if (response.Request.ClientRequestId != request.ClientRequestId)
+            throw new ControlPlaneException("远端作业回执与提交编号不一致。");
         return response;
+    }
+
+    public async Task<RemoteJobOperationSnapshot?> FindRemoteSubmissionAsync(RemoteJobRequest request)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_shutdownSource.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        var descriptor = await EnsureReadyAsync(timeout.Token);
+        try
+        {
+            var result = await SendJsonRequestAsync<RemoteJobOperationSnapshot>(
+                descriptor, HttpMethod.Post, "/api/v1/remote-job-lookups", request, "核对远端作业请求", timeout.Token);
+            ValidateRemoteJobSnapshot(result);
+            if (result.Request.ClientRequestId != request.ClientRequestId)
+                throw new ControlPlaneException("远端作业回执与提交编号不一致。");
+            return result;
+        }
+        catch (ControlPlaneException error) when (error.StatusCode == 404 && error.Code == "REMOTE_JOB_REQUEST_NOT_FOUND")
+        {
+            return null;
+        }
     }
 
     public async Task<RemoteJobOperationSnapshot> GetRemoteJobAsync(

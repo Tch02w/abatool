@@ -2,7 +2,32 @@
 
 Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台。当前原生前端使用 C#、.NET 10 和 WinUI 3；Python 3.14 控制面复用经过验证的提交、调度、SSH、ODB 与结果处理核心。PySide6 实现暂时保留为兼容与回滚入口，不参与原生页面渲染。
 
-使用 Windows 成品时，请打开程序目录内的 `README.md`，查看启动步骤及这份程序对应的源码提交。安装和升级步骤见[安装说明](docs/05-development/INSTALLATION.md)，页面操作见[工作台使用手册](docs/repowiki/user-guide.md)。开发者可从 [RepoWiki](docs/repowiki/README.md) 查看功能说明和历史记录。
+## 第一次启动
+
+| 你拿到的文件 | Windows x64 上的操作 |
+|---|---|
+| 安装程序 `AbaqusTools-…-win-x64-setup.exe` | 运行安装向导，随后从 Windows 开始菜单打开工作台。[安装与升级](docs/05-development/INSTALLATION.md) |
+| 含 `AbaqusTools.WinUI.exe` 的完整程序目录 | 整体解压后双击该程序。保留同目录的 `control-plane`、运行库和文档。随包 `README.md` 记录这份程序对应的源码提交。 |
+| GitHub 源码或「Code → Download ZIP」 | 源码包内可见 `pyproject.toml`、`winui` 和 `docs`。按下方步骤从源码启动。交接记录中的 `GPTWork/` 路径指向开发机上的构建或验收产物。 |
+
+**从源码启动。** 在 Windows x64 上准备 Git、uv 和 .NET 10 SDK。第一次获取代码时，在准备存放项目的目录打开 PowerShell。已经解压源码 ZIP 的用户可直接在包含 `pyproject.toml` 的目录执行第二组命令。
+
+```powershell
+git clone https://github.com/Tch02w/abatool.git
+Set-Location .\abatool
+```
+
+```powershell
+uv sync --locked --group dev
+dotnet restore .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64
+dotnet run --project .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64 --no-restore
+```
+
+uv 会按仓库要求准备 Python 3.14 和项目 `.venv`。首次同步与还原需能获取锁定的 Python 包和 NuGet 包。窗口打开后，等底部「控制面」显示「已连接」，进入「计算资源」，选择「本机」并点击「刷新所选资源」，即可查看本机 CPU 和内存。此操作无需模型。实际求解、读取 ODB 和出图需配置可用的 Abaqus。
+
+按页面找操作请看[八页使用手册](docs/repowiki/user-guide.md)，开发和交接请看[RepoWiki](docs/repowiki/README.md)与[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
+
+## 工作台概览
 
 队列支持对齐的行列线与保留选区的刷新。后处理支持运行中追加对比组、编辑等待组、取消单组后继续，并能在重开前台时接回队列。各项的工程测试、桌面实测及待验范围见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
 
@@ -42,31 +67,11 @@ Abaqus Tools 是面向 Windows 的 Abaqus 作业管理与 ODB 后处理工作台
 - 预览文本、表格、图片和动画。Excel 工作簿可切换可见工作表，并翻看宽表右侧的列。已有索引时可按用途筛选；时间目录或模型目录缺少有效索引时，点「直接浏览当前目录」可逐层查看、预览和导出已有文件。
 - 关闭前保存页面草稿，支持后台继续、停止后关闭或取消；联合检查受管任务及线程收尾，未知状态保留后台；[退出与恢复边界](docs/03-features/UI_INTERACTION.md)。
 
-## 原生工作台
+## 开发与打包
 
-GitHub 仓库提供源码和使用手册。交接文档中以 `GPTWork/` 开头的是开发机上的构建或验证目录。首次使用时，拿到完整 Windows 目录包可直接运行其中的 `AbaqusTools.WinUI.exe`，拿到安装程序则按安装说明操作。只有源码时，可使用下方构建命令。[安装说明](docs/05-development/INSTALLATION.md)
+源码启动后，WinUI 会自动从项目 `.venv` 启动控制面，连接本机随机端口。自定义解释器可设置 `ABAQUS_TOOLS_PYTHON`，非标准源码布局可设置 `ABAQUS_TOOLS_ROOT`。[控制面协议](docs/api-contract.md)
 
-八个页面共用适度紧凑的留白，侧栏右上角折线按钮或Ctrl+B收起/展开；收起后保留小型展开入口，内容随当前页面显示相关目录、作业或结果。实际候选与待验范围见当前状态。
-
-首次使用请按 [使用手册](docs/repowiki/user-guide.md)操作。当前版本支持分组统一云图范围、GIF 统一帧率或统一时长、结果列表分页和表格预览；结果清理位于「更多 → 移到回收站」。
-
-以下是源码启动方式，要求 Windows、.NET 10 SDK，以及仓库根目录的 Python 3.14 `.venv`。安装候选/完整目录携带运行库，操作与验收限制见[安装说明](docs/05-development/INSTALLATION.md)。
-
-```powershell
-uv sync --group dev
-dotnet restore .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64
-dotnet run --project .\winui\AbaqusTools.WinUI\AbaqusTools.WinUI.csproj -p:Platform=x64
-```
-
-WinUI 客户端只连接 `127.0.0.1` 上的随机端口控制面，使用进程级随机 token 鉴权；需要时自动启动：
-
-```powershell
-.\.venv\Scripts\python.exe -m modules.control_plane
-```
-
-如需指定解释器，可设置 `ABAQUS_TOOLS_PYTHON`。只有仓库位于非标准布局时才需要设置 `ABAQUS_TOOLS_ROOT`。
-
-开发者可用 `.\.venv\Scripts\python.exe packaging/build_release.py` 构建携带 .NET、Windows App SDK 和 Python 控制面的 Windows x64 完整目录。使用者需整体解压并运行其中的 `AbaqusTools.WinUI.exe`；目标机器仍需配置自己的 Abaqus。构建、诊断与未完成的发布门槛见 [发布说明](docs/05-development/RELEASE.md)。
+需要在其他机器使用时，可在 **Git 克隆目录** 完成上述依赖准备，然后运行 `.\.venv\Scripts\python.exe packaging/build_release.py`。命令最后输出的 `BUNDLE=` 是本次完整程序目录，包含界面、随包控制面和离线手册。复制整个目录即可分发。[构建与诊断](docs/05-development/RELEASE.md)
 
 ## 兼容入口
 

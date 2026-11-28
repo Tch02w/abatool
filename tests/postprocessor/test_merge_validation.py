@@ -3,11 +3,65 @@ from types import SimpleNamespace as N
 
 import pytest
 
+from modules.postprocessor.abaqus_scripts.restore_odb_history import (
+    _assembly_node_set,
+    _channel_metadata,
+    _location,
+    _splice,
+)
 from modules.postprocessor.abaqus_scripts.validate_odb_merge import (
+    ExtraInitialHistoryZero,
+    _verify_history_series,
     field_signature,
     main,
     verify,
 )
+
+
+def test_only_extra_initial_real_zero_on_empty_parent_can_be_rebuilt():
+    resumed = ((0.3, 1.1), (0.4, -23.0))
+    with pytest.raises(ExtraInitialHistoryZero):
+        _verify_history_series(None, resumed, ((0.0, 0.0),) + resumed, "U / RF / data")
+    for child, candidate, label in [
+        (resumed, ((0.0, 0.0), (0.3, 9.1), resumed[-1]), "U / RF / data"),
+        (resumed, ((0.0, 7.0),) + resumed, "U / RF / data"),
+        (resumed, ((0.0, 0.0),) + resumed, "U / RF / conjugateData"),
+        (((0.0, 1.0),), ((0.0, 0.0), (0.0, 1.0)), "U / RF / data"),
+    ]:
+        with pytest.raises(ValueError) as error:
+            _verify_history_series(None, child, candidate, label)
+        assert not isinstance(error.value, ExtraInitialHistoryZero)
+
+
+def test_rebuilt_history_uses_source_boundary_and_rejects_unsupported_location_or_data():
+    assert _splice(((0.1, 3.0), (0.3, 6.0)), ((0.3, 5.0),)) == ((0.1, 3.0), (0.3, 5.0))
+    with pytest.raises(ValueError, match="Missing continuation"):
+        _splice(((0.2, 1.0),), None)
+    with pytest.raises(ValueError, match="out of order"):
+        _splice(((0.2, 1.0),), ((0.3, 2.0), (0.1, 2.0)))
+    with pytest.raises(ValueError, match="complex"):
+        _channel_metadata(N(name="RF", type="SCALAR", conjugateData=((0.5, 12.0),)))
+    with pytest.raises(ValueError, match="load case"):
+        _location(N(name="left", loadCase=N(name="case")), None)
+    with pytest.raises(ValueError, match="Unsupported history location"):
+        _location(
+            N(name="left", position="NODAL", point=N(position="NODAL"), loadCase=None),
+            None,
+        )
+
+
+@pytest.mark.parametrize(
+    "node, element, surface",
+    [(False, True, False), (True, True, False), (True, False, True)],
+)
+def test_history_region_needs_an_unambiguous_assembly_node_set(node, element, surface):
+    tables = [
+        {"same": object()} if present else {} for present in (node, element, surface)
+    ]
+    with pytest.raises(ValueError, match="ambiguous"):
+        _assembly_node_set(
+            N(nodeSets=tables[0], elementSets=tables[1], surfaces=tables[2]), "same"
+        )
 
 
 def step(number, value=1.0, name="S"):

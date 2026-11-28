@@ -18,6 +18,8 @@
 
 隐藏表、深度隐藏表和图表页不在可选范围。空工作表返回空的表头与行。名称不可用时返回 422 `RESULT_WORKSHEET_UNAVAILABLE`。工作簿没有可见数据表、数据关系损坏或无法读取时返回 422 `RESULT_PREVIEW_FAILED`。非 XLSX 文件指定工作表或传入无效名称类型时返回 400 `INVALID_RESULT_WORKSHEET`。选择表使用工作簿内部关系，文件路径仍按原有结果根目录限制校验。
 
+CSV 和文本预览按 Unicode 字节顺序标记读取 UTF-8、UTF-16 或 UTF-32。无标记时优先 UTF-8，失败后尝试 GB18030。文件中无法解码的字节返回 422 `RESULT_PREVIEW_FAILED`。文本保留原换行，最多展示 256 KiB 范围内的完整字符，超限时 `truncated=true`。CSV 保留原单元格字符串，按逻辑记录限制行数。
+
 ### 结果记录排序（F021）
 
 当 `scope` 等于已验证的 `timeDirectory` 且 `includeInternal=true` 时，结果中增加一条可按普通规则筛选、排序、分页的索引诊断记录（`internal=true`、`section=info`、`recommended=false`）。其只读展示使用同一响应中的 `indexMetadata`。`totalCount` 和 `sectionCounts` 包含符合显示规则的诊断项，元数据的 `record_count` 是库内普通记录数。直接浏览和模型子目录均不生成该项。
@@ -79,6 +81,8 @@
 远端请求可选 `notify`，严格布尔类型，省略默认 true；进入请求幂等签名及持久恢复记录。本机沿用 `complete_notify`。队列条目增加 `attemptId`（旧条目为空）；查看本机提醒必须匹配此执行 ID，不能仅以 job ID 或名称定位。提醒规则见 [F027 说明](03-features/JOB_NOTIFICATIONS.md)。
 
 ### 远端完成确认补充（2026-11-18，F010）
+
+作业概览自动读取 `GET /api/v1/remote-jobs` 时可发送 `Prefer: wait=0`。后台正在写入或读取远端作业状态时，若此次读取未能取得锁，返回 HTTP 200 和 `{"schemaVersion":1,"refreshPending":true}`，省略 `operations` 和 `eventCursor`。客户端保留上次确认的结果，并在下次轮询重试。`activeOnly=true` 支持相同语义。未指定该请求头的客户端仍等待读取完整列表；历史记录无法读取等原有错误继续按错误响应处理。
 
 持久恢复补充：快照新增可选 `trackingState`（preparing/tracking/reconnecting/submission_unknown/unverified/finished/interrupted）和 `persistenceWarning`。启动后 SSH 失败不再返回终态失败，而保持 running/cancelling；重连后核对原回执与原任务。历史错误返回 503 `REMOTE_JOB_HISTORY_UNAVAILABLE`；保存错误返回 503 `REMOTE_JOB_STORAGE_UNAVAILABLE`，不启动新计算。preparing 阶段后台重启返回 failed / `REMOTE_PREPARATION_INTERRUPTED`，明确没有自动提交；线程提交失败为 `REMOTE_JOB_DISPATCH_FAILED`。同一 `clientRequestId`、同参数跨后台返回原操作，不重新要求已上传本地源文件存在；新请求仍验证本地文件。活动作业只允许连接相同的固定服务器身份/路径范围，存在活动传输时仍拒绝切换/重连，返回 409 `REMOTE_SESSION_BUSY`。取消先持久保存，未核对时暂缓远端控制；暂停/恢复在非 tracking 状态返回 409 `REMOTE_JOB_NOT_STARTED`。细节见 [ADR 0012](submitter/adr/0012-durable-remote-tracking.md)。
 

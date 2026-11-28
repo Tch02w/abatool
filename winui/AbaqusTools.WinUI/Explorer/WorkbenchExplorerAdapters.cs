@@ -291,18 +291,18 @@ public sealed class JobMonitorExplorerAdapter : WorkbenchExplorerAdapterBase
 
     public void Update(
         JobQueueSnapshot? localQueue,
-        IReadOnlyList<RemoteJobOperationSnapshot> remoteJobs)
+        IReadOnlyList<RemoteJobOperationSnapshot>? remoteJobs)
     {
         _items = (localQueue?.QueueItems ?? []).Select(LocalJobItem)
-            .Concat(remoteJobs.Select(RemoteJobItem))
+            .Concat((remoteJobs ?? []).Select(RemoteJobItem))
             .ToArray();
-        Publish(BuildSnapshot(hasLocalQueue: localQueue is not null));
+        Publish(BuildSnapshot(localQueue is not null, remoteJobs is not null));
     }
 
     public override async Task RefreshAsync(CancellationToken cancellationToken)
     {
-        var localTask = _controlPlane.GetLocalQueueRuntimeAsync();
-        var remoteTask = _controlPlane.ListRemoteJobsAsync();
+        var localTask = _controlPlane.GetLocalQueueRuntimeAsync(cancellationToken);
+        var remoteTask = _controlPlane.ListRemoteJobsAsync(cancellationToken: cancellationToken);
         await Task.WhenAll(localTask, remoteTask);
         cancellationToken.ThrowIfCancellationRequested();
         Update((await localTask).Queue, (await remoteTask).Operations);
@@ -319,19 +319,25 @@ public sealed class JobMonitorExplorerAdapter : WorkbenchExplorerAdapterBase
         return Task.CompletedTask;
     }
 
-    private WorkbenchExplorerSnapshot BuildSnapshot(bool hasLocalQueue)
+    private WorkbenchExplorerSnapshot BuildSnapshot(bool hasLocalQueue, bool hasRemoteJobs)
     {
         var active = _items.Where(item => IsActive(item.Status)).ToArray();
         var waiting = _items.Where(item => IsWaiting(item.Status)).ToArray();
         var abnormal = _items.Where(item => IsAbnormal(item.Status)).ToArray();
         var completed = _items.Except(active).Except(waiting).Except(abnormal).ToArray();
+        var (summary, emptyMessage) = (hasLocalQueue, hasRemoteJobs) switch
+        {
+            (true, true) => ($"运行 {active.Length} · 等待 {waiting.Length} · 异常 {abnormal.Length}", "本机正式队列和远端会话中尚无作业"),
+            (true, false) => ($"本机作业 {_items.Count} · 正在读取远端作业…", "正在读取远端作业…"),
+            (false, true) => ($"正在读取本机队列… · 远端作业 {_items.Count}", "正在读取本机队列…"),
+            _ => ("正在读取作业…", "正在读取作业…")
+        };
         return new WorkbenchExplorerSnapshot
         {
             ContextKey = ContextKey,
             Title = "运行作业",
-            Summary = hasLocalQueue ? $"运行 {active.Length} · 等待 {waiting.Length} · 异常 {abnormal.Length}"
-                : $"正在读取本机队列… · 远端作业 {_items.Count}",
-            EmptyMessage = hasLocalQueue ? "本机正式队列和远端会话中尚无作业" : "正在读取本机队列…",
+            Summary = summary,
+            EmptyMessage = emptyMessage,
             RootItems =
             [
                 Group("jobs:active", "运行中", active, active.Length.ToString()),

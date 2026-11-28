@@ -186,6 +186,9 @@ public sealed class RemoteJobListResponse
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; }
 
+    [JsonPropertyName("refreshPending")]
+    public bool RefreshPending { get; init; }
+
     [JsonPropertyName("operations")]
     public IReadOnlyList<RemoteJobOperationSnapshot> Operations { get; init; } = [];
 

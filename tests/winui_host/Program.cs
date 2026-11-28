@@ -184,14 +184,32 @@ try
         await ArchivePresentationChecks.RunApi(host, args[2]);
         return 0;
     }
-    if (args.Length == 3 && args[0] is "--queue-directories-api" or "--queue-poll-api")
+    if (args.Length == 3 && args[0] is "--queue-directories-api" or "--queue-poll-api" or "--remote-poll-api")
     {
         var descriptor = JsonSerializer.Deserialize<ControlPlaneDescriptor>(await File.ReadAllTextAsync(args[1]),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         await using var host = new ControlPlaneHost();
         SetField(host, "_descriptor", descriptor);
         SetField(host, "_descriptorPath", args[1]);
-        if (args[0] == "--queue-poll-api")
+        if (args[0] == "--remote-poll-api")
+        {
+            try
+            {
+                var local = host.GetLocalQueueRuntimeAsync(deferIfBusy: true);
+                var remote = host.ListRemoteJobsAsync(deferIfBusy: true);
+                await Task.WhenAll(local, remote);
+                if (!(await remote).RefreshPending || (await local).Queue.QueueItems.Single().JobName != args[2])
+                    throw new Exception("Remote journal contention must not delay the local overview.");
+                if (!(await host.ListRemoteJobsAsync(activeOnly: true, deferIfBusy: true)).RefreshPending)
+                    throw new Exception("Filtering active jobs must preserve the no-wait policy.");
+                var strict = await host.ListRemoteJobsAsync();
+                var refreshed = await host.ListRemoteJobsAsync(deferIfBusy: true);
+                if (strict.RefreshPending || refreshed.RefreshPending || strict.Operations.Count != 0 || refreshed.Operations.Count != 0)
+                    throw new Exception("Withdrawn records must be absent from both confirmed lists.");
+            }
+            finally { await host.DetachForCloseAsync(); }
+        }
+        else if (args[0] == "--queue-poll-api")
         {
             try
             {

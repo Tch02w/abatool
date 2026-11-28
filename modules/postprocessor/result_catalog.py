@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import codecs
 import csv
 import os
 import posixpath
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from io import TextIOWrapper
 from itertools import islice
 from pathlib import Path
 from xml.etree import ElementTree
@@ -347,14 +349,61 @@ def preview_row_limit(path: Path) -> int:
     return 12
 
 
-def read_csv_preview(
-    path: Path, max_rows: int = 50
-) -> tuple[list[str], list[list[str]]]:
-    with path.open("r", encoding="utf-8-sig", newline="") as stream:
-        reader = csv.reader(stream)
-        header = next(reader, [])
-        rows = list(islice(reader, max_rows))
-    return [str(value) for value in header], rows
+def _bom_encoding(prefix: bytes) -> str | None:
+    # UTF-32 LE starts with the same two bytes as UTF-16 LE.
+    if prefix.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        return "utf-32"
+    if prefix.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return "utf-16"
+    if prefix.startswith(codecs.BOM_UTF8):
+        return "utf-8-sig"
+    return None
+
+
+def _csv_rows(lines: Iterable[str], max_rows: int) -> tuple[list[str], list[list[str]]]:
+    reader = csv.reader(lines)
+    return next(reader, []), list(islice(reader, max_rows))
+
+
+def read_csv_preview(path: Path, max_rows: int = 50) -> tuple[list[str], list[list[str]]]:
+    with path.open("rb") as raw:
+        encoding = _bom_encoding(raw.peek(4)[:4])
+        if encoding:
+            with TextIOWrapper(raw, encoding=encoding, newline="") as stream:
+                return _csv_rows(stream, max_rows)
+
+        # Latin-1 maps bytes one-to-one. Split only at CR/LF and decode the
+        # physical lines that csv.reader actually requests, including quoted
+        # multiline fields. Bytes beyond the preview cannot change its encoding.
+        with TextIOWrapper(raw, encoding="latin-1", newline="") as lines:
+            def decoded(codec: str) -> Iterable[str]:
+                return (line.encode("latin-1").decode(codec) for line in lines)
+
+            try:
+                return _csv_rows(decoded("utf-8"), max_rows)
+            except UnicodeDecodeError:
+                lines.seek(0)
+                return _csv_rows(decoded("gb18030"), max_rows)
+
+
+def read_text_preview(path: Path, max_bytes: int) -> tuple[str, bool]:
+    with path.open("rb") as stream:
+        content = stream.read(max_bytes + 1)
+    truncated = len(content) > max_bytes
+    prefix = content[:max_bytes]
+    encoding = _bom_encoding(prefix)
+
+    def decode(codec: str) -> str:
+        # A complete file must decode strictly; a bounded preview may end
+        # partway through a character, which belongs outside the displayed text.
+        return codecs.getincrementaldecoder(codec)().decode(prefix, final=not truncated)
+
+    if encoding:
+        return decode(encoding), truncated
+    try:
+        return decode("utf-8"), truncated
+    except UnicodeDecodeError:
+        return decode("gb18030"), truncated
 
 
 def _excel_column_index(reference: str) -> int:
@@ -541,6 +590,7 @@ __all__ = [
     "index_diagnostic_record",
     "preview_row_limit",
     "read_csv_preview",
+    "read_text_preview",
     "read_workbook_preview",
     "read_xlsx_preview",
     "record_matches_section",

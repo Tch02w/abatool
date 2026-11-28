@@ -1,8 +1,10 @@
 # 任务索引
 
+作业概览在远端记录写入期间保留日志与选区，实窗见 [TASK-004](ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览在远端记录写入期间更新本机日志f005f010)。GJB 状态表的中文编码和文本截断、正式成品中管理分组与图例范围的会话结束恢复见 [TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)。
+
 F001/F004 空配置首次启动、首条记录写入和已有库恢复见[空历史与首次业务写入](../06-testing/VALIDATION.md#空历史与首次业务写入)。
 
-远端提交超时后的重开与核对见 [F010 远端作业](../03-features/REMOTE_JOBS.md)。中途续算的 GJB-16 三阶段合并、逐帧验证及接触历史缺口见 [F013 工程实测](ACTIVE_TASKS/TASK-002-migration.md#gjb-16-两分支的工程合并与续算边界)。首次从源码启动见[仓库 README](../../README.md#第一次启动)。
+远端提交超时后的重开与核对见 [F010 远端作业](../03-features/REMOTE_JOBS.md)。GJB-16 三阶段生产批次的场帧与原始接触历史核验见 [F013 工程实测](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--gjb-16-三级结果链保留接触历史)。结果浏览在慢启动检查点恢复子目录的基线与修复见 [F021 实窗](ACTIVE_TASKS/TASK-001-postprocessing.md#结果浏览慢启动期间保留直接浏览目录n08f021)。首次从源码启动见[仓库 README](../../README.md#第一次启动)。
 
 F001 在草稿文件被占用、取消或确认系统会话结束，以及应用重开时的结果见[关闭与草稿恢复](ACTIVE_TASKS/TASK-002-migration.md#窗口关不掉或系统结束会话时的草稿)。
 

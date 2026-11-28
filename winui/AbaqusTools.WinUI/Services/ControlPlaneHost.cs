@@ -841,7 +841,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     public async Task<RemoteJobListResponse> ListRemoteJobsAsync(
         bool activeOnly = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool deferIfBusy = false)
     {
         using var effectiveSource = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -855,8 +856,9 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             path,
             requestBody: null,
             "远端作业列表",
-            effectiveSource.Token);
-        if (response.SchemaVersion != 1)
+            effectiveSource.Token,
+            preferNoWait: deferIfBusy);
+        if (response.SchemaVersion != 1 || (response.RefreshPending && !deferIfBusy))
         {
             throw new ControlPlaneException("控制面返回了无效的远端作业列表。");
         }

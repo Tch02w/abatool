@@ -66,7 +66,9 @@ def main() -> None:
     required = ["AbaqusTools.WinUI.exe", "coreclr.dll", "hostfxr.dll", "Microsoft.UI.Xaml.dll",
                 "control-plane/AbaqusTools.ControlPlane.exe",
                 "control-plane/_internal/modules/postprocessor/defaults.json",
-                "control-plane/_internal/modules/postprocessor/abaqus_scripts/scan_odb.py"]
+                "control-plane/_internal/modules/postprocessor/abaqus_scripts/scan_odb.py",
+                "control-plane/_internal/modules/postprocessor/abaqus_scripts/validate_odb_merge.py",
+                "control-plane/_internal/modules/postprocessor/abaqus_scripts/restore_odb_history.py"]
     for relative in required:
         if not (bundle / relative).is_file():
             raise RuntimeError(f"Missing required release file: {relative}")

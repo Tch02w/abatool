@@ -38,6 +38,7 @@ from modules.postprocessor.result_catalog import (
     index_diagnostic_record,
     preview_row_limit,
     read_csv_preview,
+    read_text_preview,
     read_workbook_preview,
     result_section,
 )
@@ -735,10 +736,7 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
                 "truncated": len(rows) > max_rows,
             }
         if suffix in TEXT_SUFFIXES:
-            with path.open("rb") as stream:
-                content = stream.read(MAX_TEXT_PREVIEW_BYTES + 1)
-            truncated = len(content) > MAX_TEXT_PREVIEW_BYTES
-            text = content[:MAX_TEXT_PREVIEW_BYTES].decode("utf-8-sig", errors="replace")
+            text, truncated = read_text_preview(path, MAX_TEXT_PREVIEW_BYTES)
             return base | {"kind": "text", "text": text, "truncated": truncated}
         if suffix in IMAGE_SUFFIXES:
             return base | {"kind": "image", "mediaPath": str(path)}
@@ -750,6 +748,12 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ApiProblem(422, "RESULT_WORKSHEET_UNAVAILABLE", str(exc)) from exc
     except NoVisibleWorksheet as exc:
         raise ApiProblem(422, "RESULT_PREVIEW_FAILED", str(exc), details={"path": str(path)}) from exc
+    except UnicodeDecodeError as exc:
+        raise ApiProblem(
+            422, "RESULT_PREVIEW_FAILED",
+            "文件含有无法解码的文字。请检查源文件的编码，或另存为 UTF-8 后重试。",
+            details={"path": str(path), "reason": str(exc)},
+        ) from exc
     except (OSError, ValueError, IndexError, KeyError, BadZipFile, ParseError, csv.Error) as exc:
         raise ApiProblem(
             422,

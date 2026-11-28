@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import os
 from pathlib import Path
 
@@ -39,6 +40,66 @@ def _make_result_tree(root: Path) -> tuple[Path, Path, Path]:
     (odb / "metadata.json").write_text('{"name":"中文"}', encoding="utf-8")
     build_result_index(batch, classify_result, result_section)
     return batch, odb, data
+
+
+def test_chinese_table_and_log_previews_keep_source_values(tmp_path):
+    root = tmp_path / "结果"
+    root.mkdir()
+    table = '测点,荷载,备注\r\n0012,-1.250E+03,"东侧,加载\r\n第二行"\r\n0013,,终点\r\n'
+    text = "第 3 荷载步完成。\r\n位移 -0.250 mm"
+    # Include both byte orders and UTF-32 LE, whose signature overlaps UTF-16.
+    formats = [
+        (b"", "utf-8"), (codecs.BOM_UTF8, "utf-8"), (b"", "gbk"), (b"", "gb18030"),
+        (codecs.BOM_UTF16_LE, "utf-16-le"), (codecs.BOM_UTF16_BE, "utf-16-be"),
+        (codecs.BOM_UTF32_LE, "utf-32-le"), (codecs.BOM_UTF32_BE, "utf-32-be"),
+    ]
+    with running_control_plane(tmp_path / "profile") as runtime:
+        def preview(path):
+            response = _post(runtime, "/api/v1/result-previews", {
+                "root": str(root), "path": str(path), "maxRows": 1,
+            })
+            return response[0], json_response(response)
+
+        for signature, codec in formats:
+            csv_file = root / "荷载.csv"
+            csv_file.write_bytes(signature + table.encode(codec))
+            status, result = preview(csv_file)
+            assert status == 200, codec
+            assert result["headers"] == ["测点", "荷载", "备注"]
+            assert result["rows"] == [["0012", "-1.250E+03", "东侧,加载\r\n第二行"]]
+            assert result["truncated"]
+            log = root / "作业.log"
+            log.write_bytes(signature + text.encode(codec))
+            status, result = preview(log)
+            assert status == 200 and result["text"] == text and not result["truncated"], codec
+
+        for path, invalid in [(csv_file, codecs.BOM_UTF8 + b"name\n\xff\n"), (log, b"\xff\xff")]:
+            path.write_bytes(invalid)
+            status, result = preview(path)
+            assert status == 422 and result["error"]["code"] == "RESULT_PREVIEW_FAILED"
+            assert "编码" in result["error"]["message"]
+
+
+def test_preview_truncates_before_incomplete_characters(tmp_path):
+    from modules.postprocessor.result_catalog import read_csv_preview, read_text_preview
+
+    path = tmp_path / "日志.txt"
+    for signature, codec, prefix, character in [
+        (b"", "utf-8", "A", "荷"),
+        (b"", "gb18030", "中文", "𠀀"),
+        (codecs.BOM_UTF16_BE, "utf-16-be", "A", "𠀀"),
+        (codecs.BOM_UTF32_LE, "utf-32-le", "A", "荷"),
+    ]:
+        data = signature + (prefix + character).encode(codec)
+        path.write_bytes(data)
+        cut = len(signature + prefix.encode(codec))
+        for limit in range(cut, len(data)):
+            assert read_text_preview(path, limit) == (prefix, True), (codec, limit)
+        assert read_text_preview(path, len(data)) == (prefix + character, False)
+
+    csv_file = tmp_path / "尾部.csv"
+    csv_file.write_bytes("测点\r001\r".encode() + b"\xff\r")
+    assert read_csv_preview(csv_file, 1) == (["测点"], [["001"]])
 
 
 def test_internal_index_details_belong_to_the_selected_batch(tmp_path):

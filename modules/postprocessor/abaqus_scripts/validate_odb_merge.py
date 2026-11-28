@@ -12,6 +12,10 @@ import sys
 import numpy as np
 
 
+class ExtraInitialHistoryZero(ValueError):
+    """restartjoin prepended a zero to an otherwise exact resumed real series."""
+
+
 def _text(digest, value):
     digest.update(json.dumps(value, sort_keys=True, ensure_ascii=True).encode("ascii"))
     digest.update(b"\n")
@@ -166,6 +170,17 @@ def _verify_history_series(old, new, joined, label):
             return
         if new is not None and np.array_equal(new, joined):
             return
+        if (
+            label.endswith(" / data")
+            and new is not None
+            and len(new)
+            and joined is not None
+            and len(joined) == len(new) + 1
+            and new[0][0] > 0
+            and tuple(joined[0]) == (0.0, 0.0)
+            and np.array_equal(new, joined[1:])
+        ):
+            raise ExtraInitialHistoryZero(label)
         raise ValueError("History contains samples not present in the source: " + label)
     if new is None or not len(new):
         raise ValueError("History restart boundary is unavailable: " + label)
@@ -218,7 +233,7 @@ def _verify_continued_history(name, prior, resumed, joined):
             )
 
 
-def verify(original, restart, joined, include_history):
+def verify(original, restart, joined, include_history, check_locations=None):
     expected = expected_steps(original, restart)
     if list(joined.steps.keys()) != [name for name, _, _ in expected]:
         raise ValueError(
@@ -262,6 +277,9 @@ def verify(original, restart, joined, include_history):
             len(region.historyOutputs) for region in result.historyRegions.values()
         ):
             raise ValueError("History output unexpectedly retained: " + name)
+        if check_locations is not None:
+            source_db = original if origin == "original" else restart
+            check_locations(source, result, source_db.rootAssembly, joined.rootAssembly)
         report.append(
             {
                 "name": name,
@@ -280,12 +298,17 @@ def verify(original, restart, joined, include_history):
 def main():
     from odbAccess import openOdb
 
-    original_path, restart_path, joined_path, history, report_path = sys.argv[1:]
+    original_path, restart_path, joined_path, history, report_path = sys.argv[1:6]
+    restored = sys.argv[6:] == ["--restored"]
+    check_locations = None
+    if restored:
+        from restore_odb_history import check_locations
+
     opened = []
     try:
         for path in (original_path, restart_path, joined_path):
-            opened.append(openOdb(path=path, readOnly=True))
-        steps = verify(opened[0], opened[1], opened[2], history == "1")
+            opened.append(openOdb(path=path, readOnly=True, readInternalSets=restored))
+        steps = verify(opened[0], opened[1], opened[2], history == "1", check_locations)
     finally:
         close_error = None
         for odb in reversed(opened):
@@ -305,6 +328,9 @@ def main():
         "steps": steps,
         "checks": ["step-order", "frame-time", "field-values-and-locations", "history"],
     }
+    if restored:
+        payload["historyMethod"] = "source-samples"
+        payload["checks"].append("history-point-and-channel-metadata")
     with open(report_path, "w") as stream:
         json.dump(payload, stream, indent=2)
     print("ABASUB_ODB_VALIDATION_OK")
@@ -313,6 +339,12 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except ExtraInitialHistoryZero as error:
+        print(
+            "ABASUB_ODB_EXTRA_INITIAL_ZERO|" + json.dumps(str(error), ensure_ascii=True)
+        )
+        sys.stdout.flush()
+        raise
     except ValueError as error:
         print(
             "ABASUB_ODB_VALIDATION_FAILED|" + json.dumps(str(error), ensure_ascii=True)

@@ -400,14 +400,20 @@ class RemoteJobOperationManager(RemoteJobRecovery, OperationShutdownGuard):
                     raise ApiProblem(400, "REMOTE_JOB_OUTPUT_UNKNOWN", "所选文件未登记在该作业的输出记录中。")
             return dict(operation.server_identity)
 
-    def list_snapshots(self, *, active_only: bool = False) -> list[dict[str, Any]]:
-        with self._lock:
+    def list_snapshots(
+        self, *, active_only: bool = False, wait: bool = True
+    ) -> list[dict[str, Any]] | None:
+        if not self._lock.acquire(blocking=wait):
+            return None
+        try:
             self._check_history()
             return [
                 self._snapshot_locked(operation)
                 for operation in reversed(tuple(self._operations.values()))
                 if operation.tracking_state != "withdrawn" and (not active_only or operation.status not in TERMINAL_STATUSES)
             ]
+        finally:
+            self._lock.release()
 
     def control(self, operation_id: str, action: str) -> dict[str, Any]:
         if action not in REMOTE_JOB_CONTROLS:

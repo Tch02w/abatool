@@ -5,10 +5,25 @@ internal sealed class ResultBrowserLocation
 {
     public string DraftRoot { get; set; } = string.Empty;
     public string? LoadedRoot { get; private set; }
+    public ResultDirectLocation? DirectBookmark { get; set; }
     public bool HasPendingRoot => LoadedRoot is not null && !SamePath(DraftRoot, LoadedRoot);
 
-    public ResultRootRead BeginRead(string? explicitRoot = null) =>
-        new(explicitRoot ?? DraftRoot.Trim(), DraftRoot, explicitRoot is null);
+    public ResultRootRead BeginRead(string? explicitRoot = null, string? selectedScope = null)
+    {
+        var root = explicitRoot ?? DraftRoot.Trim();
+        RetainMatchingBookmark(root, selectedScope);
+        return new(root, DraftRoot, explicitRoot is null);
+    }
+
+    public void RetainMatchingBookmark(string root, string? scope)
+    {
+        if (DirectBookmark is { } bookmark && (scope is null
+            || !SamePath(root, bookmark.Root) || !SamePath(scope, bookmark.Scope)))
+            DirectBookmark = null;
+    }
+
+    public ResultDirectLocation? VisibleDirect(string? scope) =>
+        DirectBookmark?.Matches(LoadedRoot, scope) == true ? DirectBookmark : null;
 
     public void Apply(ResultRootRead request, string resolvedRoot)
     {

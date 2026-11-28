@@ -1,5 +1,13 @@
 # 功能定位索引
 
+F021 直接浏览位置与可见目录的关联由 `winui/AbaqusTools.WinUI/Services/ResultBrowserLocation.cs` 的 `DirectBookmark`、`VisibleDirect`、`RetainMatchingBookmark` 以及 `ResultBrowserPage.xaml.cs` 的首次加载和草稿捕获处理。回归位于 `tests/winui_results/ResultBrowserLocationChecks.cs`。[慢启动实窗验收](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#结果浏览慢启动期间保留直接浏览目录n08f021)
+
+F013 同一步续算多出起始零点时，`modules/submitter/odb_merge_execution.py` 在私有副本内重试，`modules/postprocessor/abaqus_scripts/restore_odb_history.py` 的 `restore`、`check_locations` 写入源历史并核对采样位置。`tests/postprocessor/test_merge_validation.py` 与 `tests/submitter/test_odb_merge_execution.py` 覆盖触发范围、拒绝发布与取消。[分析步与数据规则](ODB_MERGE.md#分析步与数据规则)
+
+F005/F010 自动刷新经 `JobOverviewPage.RefreshAsync`、`ControlPlaneHost.ListRemoteJobsAsync` 调用 `modules/control_plane/remote_jobs.py` 的 `list_snapshots`。忙碌回执、完整手动读取、取消和作业选择由 `tests/winui_host/test_queue_poll_api.py` 及[概览实窗记录](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#作业概览在远端记录写入期间更新本机日志f005f010)定位。
+
+F021 中文表格和日志由 `modules/postprocessor/result_catalog.py` 的 `read_csv_preview`、`read_text_preview` 解码，`modules/control_plane/results.py` 的 `preview_result` 提供给结果浏览页。编码、跨行单元格、无效文件和多字节截断回归见 `tests/control_plane/test_results_api.py`。[读取规则](POSTPROCESSING.md#中文-csv-和文本预览f021)
+
 F010 远端作业回执核对的入口在 `winui/AbaqusTools.WinUI/Pages/NewJobPage.RemoteSubmission.cs`。后台在 `modules/control_plane/remote_jobs.py` 中按照原作业参数、服务器身份和请求编号查询，回归为 `tests/control_plane/test_remote_submission_reconcile.py`。[远端作业说明](REMOTE_JOBS.md)
 
 F013 同一分析步中途续算的场帧和历史量核对见 `modules/postprocessor/abaqus_scripts/validate_odb_merge.py` 中的 `_retained_frame_count` 与 `_verify_continued_history`。操作者收到的校验错误由 `modules/submitter/odb_merge_execution.py` 传递。回归为 `tests/postprocessor/test_merge_validation.py` 和 `tests/submitter/test_odb_merge_execution.py`。[分析步与数据规则](ODB_MERGE.md#分析步与数据规则)

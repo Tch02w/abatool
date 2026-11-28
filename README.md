@@ -27,6 +27,8 @@ uv 会按仓库要求准备 Python 3.14 和项目 `.venv`。首次同步与还�
 
 按页面找操作请看[八页使用手册](docs/repowiki/user-guide.md)，开发和交接请看[RepoWiki](docs/repowiki/README.md)与[当前状态](docs/08-handoff/CURRENT_STATUS.md)。
 
+核对重启动提取结果时，可在「ODB 合并」勾选「历史输出」，合并后查看目标旁的 `*.merge-validation.json`。在「结果浏览」选中 CSV 或日志可直接查看中文内容，包括 Windows 工具保存的 GBK 及带编码标记的 UTF-16 文件。[历史采样的核对方式](docs/03-features/ODB_MERGE.md#分析步与数据规则) · [结果预览](docs/repowiki/user-guide.md#结果浏览)
+
 ## 工作台概览
 
 队列支持对齐的行列线与保留选区的刷新。后处理支持运行中追加对比组、编辑等待组、取消单组后继续，并能在重开前台时接回队列。各项的工程测试、桌面实测及待验范围见[当前状态](docs/08-handoff/CURRENT_STATUS.md)。

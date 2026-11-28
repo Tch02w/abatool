@@ -36,7 +36,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private string? _activeIndexBatchId;
     private readonly ResultBrowserLoadCoordinator _loads = new();
     private readonly ResultBrowserLocation _location = new();
-    private ResultDirectLocation? _direct;
+    private ResultDirectLocation? _direct => _location.VisibleDirect(_selectedScope?.Path);
     private bool _scopeBusy => _loads.IsRefreshingScopes;
     private bool _recordsBusy;
     private bool _recycleBusy;
@@ -71,9 +71,12 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         SectionComboBox.SelectedIndex = 0;
         UseCaseComboBox.ItemsSource = new[] { "全部用途" };
         UseCaseComboBox.SelectedIndex = 0;
-        App.Current.Session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
+        var session = App.Current.Session;
+        if (session.State.Pages.TryGetValue("result-browser", out var values))
+            _location.DirectBookmark = ResultDirectLocation.Restore(values);
+        session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
             async () => { InvalidatePreview(); await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); },
-            captureContext: values => _direct?.Capture(values));
+            captureContext: fields => _location.DirectBookmark?.Capture(fields));
         _location.DraftRoot = RootTextBox.Text;
         Loaded += OnPageLoaded;
         UpdateSortIndicators();
@@ -109,6 +112,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         if (_recoveryAttempted)
         {
+            if (_loads.CanAutoReadRoot && !_scopeBusy && !_indexBusy && ScopeTree.RootNodes.Count == 0
+                && _location.DirectBookmark is { } bookmark)
+                await RefreshScopesAsync(bookmark.Scope, bookmark.Root);
             return;
         }
 
@@ -124,9 +130,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         var recoveredIndex = await RecoverActiveIndexOperationAsync();
         if (!recoveredIndex && _loads.CanAutoReadRoot && !_scopeBusy && IsLoaded && ScopeTree.RootNodes.Count == 0)
         {
-            var saved = App.Current.Session.State.Pages.TryGetValue("result-browser", out var values)
-                ? ResultDirectLocation.Restore(values) : null;
-            if (saved is not null) await RefreshScopesAsync(saved.Scope, saved.Root, saved);
+            if (_location.DirectBookmark is { } saved) await RefreshScopesAsync(saved.Scope, saved.Root);
             else if (Directory.Exists(RootTextBox.Text)) await RefreshScopesAsync();
         }
     }
@@ -174,6 +178,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             }
 
             recoveredIndex = true;
+            _location.DirectBookmark = null;
             _loads.BeginIndex();
             _loads.CompleteInitialIndexCheck();
             indexRequest = _loads.IndexRevision;
@@ -289,13 +294,11 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         RootContextHint.Visibility = _location.HasPendingRoot ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null,
-        ResultDirectLocation? restoreDirect = null, bool notify = false)
+    private async Task RefreshScopesAsync(string? selectPath = null, string? explicitRoot = null, bool notify = false)
     {
         _location.DraftRoot = RootTextBox.Text;
-        var locationRead = _location.BeginRead(explicitRoot);
+        var locationRead = _location.BeginRead(explicitRoot, selectPath);
         var root = locationRead.Root;
-        var previousDirect = restoreDirect ?? _direct;
         IndexInfoBar.IsOpen = false;
         ScopeStatusText.Text = "正在读取目录结构…";
         ReportPageStatus("正在读取结果目录结构…");
@@ -330,11 +333,10 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
                     || _treeNodes.TryGetValue(response.Root, out targetNode))
                 {
                     _selectedScope = targetNode.Content as ResultScopeNode;
-                    if (previousDirect?.Matches(response.Root, _selectedScope?.Path) == true)
-                        _direct = previousDirect;
                     ScopeTree.SelectedNode = targetNode;
                     ExpandAncestors(targetNode);
                 }
+                _location.RetainMatchingBookmark(response.Root, _selectedScope?.Path);
                 ReportPageStatus($"结果目录已读取 · {response.Count} 个范围");
             },
             RefreshSelectedScopeAsync,
@@ -363,7 +365,6 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void ClearScopesAndResults()
     {
-        _direct = null;
         _location.ClearLoadedRoot();
         UpdateRootContextHint();
         _selectedScope = null;
@@ -544,7 +545,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
         var scope = sender.SelectedNode?.Content as ResultScopeNode;
         if (ReferenceEquals(_selectedScope, scope)) return;
-        _direct = null;
+        _location.DirectBookmark = null;
         _selectedScope = scope;
         await RefreshSelectedScopeAsync();
     }
@@ -588,7 +589,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         if (_scopeBusy || _recordsBusy || _indexBusy || FileOperationBusy || !IndexInfoBar.IsOpen
             || _location.LoadedRoot is not { } root || _selectedScope is not { Kind: "batch" or "odb" } scope) return;
-        _direct = new(root, scope.Path, scope.Path);
+        _location.DirectBookmark = new(root, scope.Path, scope.Path);
         await RefreshSelectedScopeAsync();
     }
 
@@ -596,7 +597,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     {
         if (_recordsBusy || FileOperationBusy || !record.IsDirectory || !_records.Contains(record)
             || _direct?.Child(record.Path) is not { } child) return;
-        _direct = child;
+        _location.DirectBookmark = child;
         await RefreshSelectedScopeAsync();
     }
 
@@ -610,7 +611,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnDirectUpClicked(object sender, RoutedEventArgs e)
     {
         if (_direct?.Parent() is not { } parent) return;
-        _direct = parent;
+        _location.DirectBookmark = parent;
         await RefreshSelectedScopeAsync();
     }
 
@@ -619,7 +620,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private async void OnDirectExitClicked(object sender, RoutedEventArgs e)
     {
         if (_direct is not { } position) return;
-        _direct = null;
+        _location.DirectBookmark = null;
         await RefreshScopesAsync(position.Scope, position.Root);
     }
 

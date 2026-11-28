@@ -115,6 +115,7 @@ def api_request(
     method: str = "GET",
     payload: dict | None = None,
     token: str | None = TEST_TOKEN,
+    timeout: float = 5,
 ) -> tuple[int, dict[str, str], bytes]:
     data = None
     headers: dict[str, str] = {}
@@ -130,7 +131,7 @@ def api_request(
         method=method,
     )
     try:
-        with urlopen(request, timeout=5) as response:
+        with urlopen(request, timeout=timeout) as response:
             return response.status, dict(response.headers.items()), response.read()
     except HTTPError as error:
         return error.code, dict(error.headers.items()), error.read()

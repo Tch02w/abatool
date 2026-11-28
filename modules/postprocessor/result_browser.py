@@ -1741,29 +1741,26 @@ class ResultBrowserDialog(QDialog):
         ]
         try:
             if path.suffix.casefold() == ".csv":
-                with path.open("r", encoding="utf-8-sig", newline="") as stream:
-                    reader = csv.reader(stream)
-                    header = next(reader, [])
-                    first_row = next(reader, [])
+                header, rows = read_csv_preview(path, 1)
                 lines.append(f"字段数量：{len(header)}")
                 lines.append("字段：" + "、".join(header[:18]))
                 if len(header) > 18:
                     lines.append("（字段较多，仅显示前 18 个）")
-                if first_row:
-                    lines.append("首行数据：" + " | ".join(first_row[:8]))
-            elif path.suffix.casefold() in {".json", ".ndjson"}:
-                text = path.read_text(encoding="utf-8", errors="replace")[:4000]
-                try:
-                    text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
-                except json.JSONDecodeError:
-                    pass
+                if rows:
+                    lines.append("首行数据：" + " | ".join(rows[0][:8]))
+            elif path.suffix.casefold() in {".json", ".ndjson", ".log", ".txt", ".rpy"}:
+                # A displayed newline may be an eight-byte UTF-32 CRLF pair.
+                text, _ = _result_catalog.read_text_preview(path, 4 + 8 * 4000)
+                text = text.replace("\r\n", "\n").replace("\r", "\n")[:4000]
+                if path.suffix.casefold() in {".json", ".ndjson"}:
+                    try:
+                        text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+                    except json.JSONDecodeError:
+                        pass
                 lines.append("\n内容预览：\n" + text)
             elif path.suffix.casefold() == ".xlsx":
                 lines.append("建议点击“打开文件”，直接在 Excel 中使用。")
-            elif path.suffix.casefold() in {".log", ".txt", ".rpy"}:
-                text = path.read_text(encoding="utf-8", errors="replace")[:4000]
-                lines.append("\n内容预览：\n" + text)
-        except (OSError, UnicodeError, StopIteration) as error:
+        except (OSError, UnicodeError, csv.Error) as error:
             lines.append(f"预览失败：{error}")
         return "\n".join(lines)
 

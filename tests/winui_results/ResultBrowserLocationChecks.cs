@@ -77,6 +77,31 @@ internal static class ResultBrowserLocationChecks
             var state = new Dictionary<string, string>();
             nested.Capture(state);
             Check(ResultDirectLocation.Restore(state) == nested, "Direct scope and nested directory survive session restore");
+
+            var cold = new ResultBrowserLocation { DraftRoot = second, DirectBookmark = ResultDirectLocation.Restore(state) };
+            ResultDirectLocation? Checkpoint()
+            {
+                var fields = new Dictionary<string, string> { ["RootTextBox"] = cold.DraftRoot };
+                cold.DirectBookmark?.Capture(fields);
+                return ResultDirectLocation.Restore(fields);
+            }
+            Check(Checkpoint() == nested && cold.VisibleDirect(scope) is null,
+                "Waiting for the initial index check preserves the last direct folder without enabling file actions");
+            var restoring = cold.BeginRead(first, scope);
+            cold.ClearLoadedRoot();
+            Check(Checkpoint() == nested && cold.DraftRoot == second && cold.VisibleDirect(scope) is null,
+                "A checkpoint during scope discovery preserves both the bookmark and the unsubmitted root");
+            cold.Apply(restoring, first);
+            cold.RetainMatchingBookmark(first, scope);
+            Check(cold.VisibleDirect(scope) == nested && cold.VisibleDirect(first) is null && cold.DraftRoot == second,
+                "The saved directory is actionable only in the matching displayed scope");
+            var newerRead = cold.BeginRead(second, scope);
+            Check(Checkpoint() is null, "A user read of another root retires the saved direct location immediately");
+            cold.DirectBookmark = nested;
+            cold.RetainMatchingBookmark(first, first);
+            Check(Checkpoint() is null, "Falling back to the root when a model disappeared clears its bookmark");
+            cold.Apply(newerRead, second);
+            Check(cold.VisibleDirect(scope) is null, "A superseded location cannot become actionable in another root");
             state["DirectDirectory"] = second;
             Check(ResultDirectLocation.Restore(state) is null, "Restore rejects an unrelated directory");
             var candidate = new ResultExportFile(nestedFile, Path.GetRelativePath(scope, nestedFile));

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -25,6 +26,10 @@ from .odb_merge_core import (
 
 ProgressCallback = Callable[[int, str], None]
 LogCallback = Callable[[str], None]
+
+
+class _ExtraInitialHistoryZero(OdbMergeError):
+    """The native join added exactly one zero to a resumed real series."""
 
 
 def _identity(path: Path) -> tuple[int, int, int, int, int]:
@@ -83,14 +88,27 @@ def execute_odb_merge(
     def run(arguments: tuple[str, ...]) -> str:
         captured: list[str] = []
         validation_marker: str | None = None
+        disk_full = False
 
         def capture(message: str) -> None:
-            nonlocal validation_marker
+            nonlocal validation_marker, disk_full
             captured.append(message)
-            if arguments == plan.validation_arguments and message.startswith(
-                "ABASUB_ODB_VALIDATION_FAILED|"
+            disk_full = disk_full or any(
+                text in message.casefold()
+                for text in (
+                    "no space left on device",
+                    "there is not enough space on the disk",
+                    "磁盘空间不足",
+                )
+            )
+            if arguments[0] == "python" and message.startswith(
+                (
+                    "ABASUB_ODB_VALIDATION_FAILED|",
+                    "ABASUB_ODB_EXTRA_INITIAL_ZERO|",
+                    "ABASUB_ODB_RESTORE_FAILED|",
+                )
             ):
-                validation_marker = message.partition("|")[2]
+                validation_marker = message
             if log is not None:
                 log(message)
 
@@ -104,12 +122,19 @@ def execute_odb_merge(
         except ProcessCancelled:
             raise
         except RuntimeError:
-            if validation_marker is None:
+            if validation_marker is None and not disk_full:
                 raise
+        if disk_full:
+            raise OdbMergeError("目标磁盘或 Abaqus 临时目录空间不足，合并未发布。")
         if validation_marker is not None:
-            validation_reason = json.loads(validation_marker)
+            category, _, detail = validation_marker.partition("|")
+            validation_reason = json.loads(detail)
             if not isinstance(validation_reason, str):
                 raise OdbMergeError("ODB 合并内容校验返回了无效的错误说明。")
+            if category == "ABASUB_ODB_EXTRA_INITIAL_ZERO":
+                raise _ExtraInitialHistoryZero(validation_reason)
+            if category == "ABASUB_ODB_RESTORE_FAILED":
+                raise OdbMergeError(f"无法保留源历史，合并未发布：{validation_reason}")
             if validation_reason.startswith(
                 "History contains samples not present in the source: "
             ):
@@ -158,7 +183,52 @@ def execute_odb_merge(
             raise OdbMergeError("restartjoin 未生成有效的非空 ODB。")
 
         report(82, "正在逐分析步核对帧、场输出和历史数据…")
-        validation_output = run(plan.validation_arguments)
+        restored_history = False
+        try:
+            validation_output = run(plan.validation_arguments)
+        except _ExtraInitialHistoryZero as extra:
+            if not request.include_history:
+                raise
+            check_cancelled()
+            check_sources()
+            report(84, "检测到额外的起始零点，正在按源记录重建历史…")
+            check_cancelled()
+            if log:
+                log(f"历史通道多出起始零点：{extra}")
+            # Release the rejected utility output before copying another large ODB.
+            # Both names were reserved in this invocation's private staging folder.
+            for private_path in {plan.working_odb, plan.restartjoin_output_odb}:
+                if private_path.resolve().parent != plan.staging_dir.resolve():
+                    raise OdbMergeError("合并工作副本路径已改变。")
+                private_path.unlink()
+            if (
+                shutil.disk_usage(plan.staging_dir).free
+                < plan.staged_original_backup.stat().st_size
+            ):
+                raise OdbMergeError(
+                    "目标磁盘空间不足，无法创建历史重建所需的工作副本。"
+                )
+            copy_file(plan.staged_original_backup, plan.working_odb)
+            run(tuple(arg for arg in plan.restartjoin_arguments if arg != "history"))
+            check_cancelled()
+            worker = plan.staging_dir / "restore_odb_history.py"
+            shutil.copyfile(abaqus_script(worker.name), worker)
+            restore_output = run(
+                (
+                    "python",
+                    worker.name,
+                    plan.staged_original_backup.name,
+                    plan.staged_restart_backup.name,
+                    plan.restartjoin_output_odb.name,
+                )
+            )
+            if "ABASUB_ODB_HISTORY_RESTORED" not in restore_output.splitlines():
+                raise OdbMergeError("历史数据重建未完成，合并未发布。")
+            check_cancelled()
+            report(88, "正在重新打开结果，逐项核对场帧、历史位置及数据…")
+            check_cancelled()
+            validation_output = run((*plan.validation_arguments, "--restored"))
+            restored_history = True
         if "ABASUB_ODB_VALIDATION_OK" not in validation_output:
             raise OdbMergeError("Abaqus 未返回 ODB 只读验证成功标记。")
         try:
@@ -172,6 +242,10 @@ def execute_odb_merge(
                 validation.get("schemaVersion") != 1
                 or validation.get("status") != "verified"
                 or validation.get("includeHistory") is not plan.request.include_history
+                or (
+                    restored_history
+                    and validation.get("historyMethod") != "source-samples"
+                )
                 or not validation.get("steps")
                 or any(
                     Path(validation.get(key, "")).resolve() != value.resolve()
@@ -220,7 +294,7 @@ def execute_odb_merge(
             validation_report=published_validation,
             empty_frame_steps=empty_frame_steps,
         )
-    except BaseException:
+    except BaseException as error:
         # Backups are new files selected by the planner. If publication fails
         # before the result is committed, remove only files created in this run.
         if plan.request.output_odb not in published:
@@ -229,6 +303,10 @@ def execute_odb_merge(
                     path.unlink(missing_ok=True)
                 except OSError:
                     pass
+        if isinstance(error, OSError) and (
+            error.errno == errno.ENOSPC or getattr(error, "winerror", None) in (39, 112)
+        ):
+            raise OdbMergeError("目标磁盘空间不足，ODB 合并未发布。") from error
         raise
     finally:
         shutil.rmtree(plan.staging_dir, ignore_errors=True)

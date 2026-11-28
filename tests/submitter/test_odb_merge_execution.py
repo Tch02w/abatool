@@ -182,3 +182,97 @@ def test_bad_merge_cannot_replace_prior_result(tmp_path, monkeypatch, problem):
     assert list(tmp_path.glob("*_original.odb")) == []
     assert list(tmp_path.glob(".abasub-odb-merge-*")) == []
     assert list(tmp_path.glob("*.merge-validation.json")) == [prior_report]
+
+
+@pytest.mark.parametrize("copy_original", [True, False])
+@pytest.mark.parametrize("fail_at", [None, "restore", "final_check", "disk", "cancel"])
+def test_extra_zero_fallback_checks_reopened_result_before_publication(
+    tmp_path, monkeypatch, copy_original, fail_at
+):
+    original, restart, output = [
+        tmp_path / s for s in ("base.odb", "restart.odb", "full_joined.odb")
+    ]
+    original.write_bytes(b"base")
+    restart.write_bytes(b"child")
+    output.write_bytes(b"previous")
+    calls = []
+    controller = ProcessController()
+    if fail_at == "disk":
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(
+            "modules.submitter.odb_merge_execution.shutil.disk_usage",
+            lambda path: SimpleNamespace(free=0),
+        )
+
+    def run(args, cwd, log, controller):
+        if args[1] == "restartjoin":
+            work = cwd / next(
+                arg.split("=", 1)[1] for arg in args if arg.startswith("originalodb=")
+            )
+            assert work.read_bytes() == b"base"
+            assert ("copyoriginal" in args) == copy_original
+            if copy_original:
+                work = cwd / ("Restart_" + work.name)
+            data = b"extra zero" if "history" in args else b"fields"
+            calls.append(data)
+            work.write_bytes(data)
+        elif args[2] == "restore_odb_history.py":
+            calls.append("restore")
+            assert (cwd / args[5]).read_bytes() == b"fields"
+            if fail_at == "restore":
+                log('ABASUB_ODB_RESTORE_FAILED|"unsupported load case"')
+                return
+            (cwd / args[5]).write_bytes(b"restored")
+            log("ABASUB_ODB_HISTORY_RESTORED")
+        elif args[-1] == "--restored":
+            calls.append("final check")
+            assert (cwd / args[5]).read_bytes() == b"restored"
+            if fail_at == "final_check":
+                log('ABASUB_ODB_VALIDATION_FAILED|"saved location differs"')
+                return
+            write_validation_receipt(args, cwd)
+            path = cwd / args[7]
+            payload = json.loads(path.read_text())
+            payload["historyMethod"] = "source-samples"
+            path.write_text(json.dumps(payload))
+            log("ABASUB_ODB_VALIDATION_OK")
+        else:
+            calls.append("extra zero")
+            log('ABASUB_ODB_EXTRA_INITIAL_ZERO|"U / region / RF / data"')
+
+    monkeypatch.setattr("modules.submitter.odb_merge_execution.run_process", run)
+    request = OdbMergeRequest(
+        original,
+        restart,
+        output,
+        copy_original=copy_original,
+        conflict_policy=MergeConflictPolicy.OVERWRITE,
+    )
+    if fail_at:
+
+        def progress(percent, phase):
+            if fail_at == "cancel" and percent == 84:
+                controller.cancel()
+
+        with pytest.raises(
+            ProcessCancelled if fail_at == "cancel" else OdbMergeError
+        ) as error:
+            execute_odb_merge(request, progress=progress, controller=controller)
+        if fail_at == "disk":
+            assert "磁盘空间不足" in str(error.value)
+        assert output.read_bytes() == b"previous"
+        assert not list(tmp_path.glob("*.merge-validation.json"))
+    else:
+        execute_odb_merge(request)
+        assert output.read_bytes() == b"restored"
+        assert calls == [
+            b"extra zero",
+            "extra zero",
+            b"fields",
+            "restore",
+            "final check",
+        ]
+    assert original.read_bytes() == b"base"
+    assert restart.read_bytes() == b"child"
+    assert not list(tmp_path.glob(".abasub-odb-merge-*"))

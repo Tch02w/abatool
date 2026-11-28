@@ -18,7 +18,11 @@
 
 分析步之间重启动时，保留原始前序分析步，再接入后续步骤。若从被中断分析步的开头重算，完整重算步替换旧步。Abaqus/Standard 还可以从指定增量继续。在实际 GJB-16 的时间域分析中，同名同编号步骤的续算文件从中段开始，合并结果保留了续算首帧之前的原始帧，共同时刻采用续算帧。验证器按实际步编号、域、累计时间、帧时间及增量号确定这一边界，逐帧检查来源。旧文件中已放弃的后续步骤不会进入结果。[Abaqus 2025 合并说明](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXCRefMap/simaexc-c-restartjoinproc.htm) · [Abaqus/Standard 重启动点](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-restart.htm)
 
-启用「历史输出」时，保留步骤的历史数据必须逐项与来源一致。中途续算的历史通道可能比场帧记录得更密，分别按各通道第一条续算记录的时间核对其父段和续算段。若 Abaqus 的合并工具为没有父数据的通道添加了源文件中不存在的样本，工作台拒绝发布并显示步名、区域和通道名。需要历史时可分段查看源 ODB；只需完整场结果时可取消勾选历史输出，再重新预览和执行。关闭历史输出后逐步检查结果中没有历史输出。
+启用「历史输出」时，中途续算的每条历史通道以自己第一条续算记录的时间为界，保留此前父段的样本，再接入续算段。关闭历史输出后，工作台逐步核对结果中已省略历史输出。
+
+Abaqus 有时会给没有父段样本的通道额外写入一个起始零点。若真实序列从正时间开始且其余样本完全一致，工作台自动从两份源备份重建该次合并的历史。它先释放本次未通过验证的工作副本，重新合并场结果，再将各步的源样本写入相应历史位置。程序集节点集按原内部属性、实例、节点编号和坐标匹配。重开 ODB 后逐项核对场帧、历史区域、通道描述和全部采样值，成功回执中记为 `historyMethod=source-samples`。[Abaqus 内部集合读取选项](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-odbopenodbcommandpyc.htm) · [历史区域与位置](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-historyregionpyc.htm)
+
+此重建路径支持时间域实标量、整模型与已存在的无歧义程序集节点集。遇到复数历史、载荷工况、其他位置、源集合不符或两段关系无法确定时，操作失败并保留已有目标。常规 Abaqus 合并可通过原校验的模型仍用常规路径。输出盘空间不足时可更换目录后重新执行。
 
 输出非空和可打开只是前置条件。发布前，Abaqus 自带 Python 只读打开两份备份和合并结果，逐项核对：
 
@@ -54,6 +58,7 @@
 - 计划：`modules/submitter/odb_merge_core.py` / `build_merge_plan`。
 - 隔离执行及发布：`modules/submitter/odb_merge_execution.py` / `execute_odb_merge`。
 - Abaqus 校验：`modules/postprocessor/abaqus_scripts/validate_odb_merge.py` / `verify`、`main`。
+- 起始零点的源历史重建与位置校验见 `modules/postprocessor/abaqus_scripts/restore_odb_history.py` 的 `restore` 和 `check_locations`。
 - 控制面：`modules/control_plane/odb_merge_operations.py` / `OdbMergeOperationManager`。并发重复请求核对同一请求标识的参数，关闭后不再准入新操作。
 - 持久记录：`modules/control_plane/odb_merge_journal.py` / `MergeJournal`；仅保存操作数据，不打开或修改 ODB。
 - 回归：`tests/postprocessor/test_merge_validation.py`、`tests/submitter/test_odb_merge_execution.py`、`tests/submitter/test_odb_merge.py`、`tests/control_plane/test_odb_merge_operations_api.py`。

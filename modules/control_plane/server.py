@@ -291,17 +291,19 @@ class ControlPlaneRequestHandler(BaseHTTPRequestHandler):
                 return
             if target.path == "/api/v1/remote-jobs":
                 active_only = self._parse_active_only(target.query, "远端作业列表")
-                self._send_json(
-                    HTTPStatus.OK,
-                    {
-                        "schemaVersion": SCHEMA_VERSION,
-                        "operations": self.context.remote_job_manager.list_snapshots(
-                            active_only=active_only
-                        ),
-                        "eventCursor": self.context.event_store.cursor,
-                    },
-                    trace_id,
+                wait = self.headers.get("Prefer", "").strip().lower() != "wait=0"
+                operations = self.context.remote_job_manager.list_snapshots(
+                    active_only=active_only, wait=wait
                 )
+                if operations is None:
+                    result = {"schemaVersion": SCHEMA_VERSION, "refreshPending": True}
+                else:
+                    result = {
+                        "schemaVersion": SCHEMA_VERSION,
+                        "operations": operations,
+                        "eventCursor": self.context.event_store.cursor,
+                    }
+                self._send_json(HTTPStatus.OK, result, trace_id)
                 return
             remote_job_id = self._remote_job_id_from_get_path(target.path)
             if remote_job_id is not None and not target.query:

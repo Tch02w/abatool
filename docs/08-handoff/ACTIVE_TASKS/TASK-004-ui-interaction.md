@@ -8,6 +8,8 @@ WinUI 作业概览从没有远端缓存开始，在记录锁仍被持有时，13
 
 ## 队列工具栏的浅底增减按钮
 
+在 `2c06b77` 免安装版的正式队列窗口再次核对了用户选定的组合。左减右加沿用方案 2，两端各有方案 3 的浅底圆角按钮，中间可直接输入。96 DPI 实窗截图与下方实图逐像素一致，数值水平居中。该版截图和测量回执位于 `GPTWork/native-queue-toolbar-2c06b77-20261128/case1/`。
+
 正式版 `328ad47`、`cbe221e` 和 `c876875` 均在各自的实际队列窗口截取了 516 × 48 原像素图。三份 PNG 的 SHA-256 均为 `9b370b4de1482e1ea9b2b649ba0e09b0c62eee16449adcdfe1d0d81655776ca1`。96 DPI 下，左右两端热区各为 40 × 38 像素，浅底像素均为 `#EEEEEE`，中央输入区为 `#FEFEFE`。数字 3 的字形中心到输入区中心的水平偏差为 0 像素。当前成品截图与逐像素测量保存在 `GPTWork/native-queue-toolbar-328ad47-20261128/case1/queue-toolbar.png` 及同目录 `verification.json`。实测时使用独立空队列，验收进程均已退出。[工具栏实图](../../repowiki/images/queue-parallel-limit.png)
 
 ## 运行中队列的菜单与页面命令

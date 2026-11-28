@@ -1,6 +1,14 @@
 # Windows 安装、升级与卸载（F026）
 
-当前 Windows x64 安装程序为 `GPTWork/installer-history-preview-20261128/source/GPTWork/installer-win-x64-6cf67a992614/AbaqusTools-0.1.0-win-x64-setup.exe`。应用提交为 `328ad47`，版本 0.1.0，大小 126641061 字节，SHA-256 为 `9d7af4703cc76e6549a2f809a8a2e3fbccce7471f4ad07c11c68f47a3bd5cc9d`，签名状态为 NotSigned。[免安装包与来源](RELEASE.md)
+当前 Windows x64 安装程序为 `GPTWork/installer-index-recovery-20261128/source/GPTWork/installer-win-x64-db199b3d97d0/AbaqusTools-0.1.0-win-x64-setup.exe`。应用和安装程序均从干净提交 `2c06b77` 构建，版本 0.1.0，大小 126663986 字节，SHA-256 为 `ef2ead96c44034acf716710b4875175b9355ed8ea315e99298e525a61e22ad1d`，尚未签名。[免安装包与来源](RELEASE.md)
+
+本机使用独立测试标识从 `328ad47` 升级，八项安装、升级和卸载检查通过。后台运行时安装程序会阻止升级和卸载，关闭后可继续。升级前 1 份、卸载前 12 份测试数据的摘要逐一吻合。中文向导在带空格的 G 盘目录完成安装，返回上一步时保留原路径。已核对 1700 个应用负载文件及随包清单、67 份文档和 924 个本地链接。卸载后，测试注册项、快捷方式和版本文件均已移除。三份安装日志均无异常，测试进程正常退出。
+
+回执为 `GPTWork/installer-index-recovery-20261128/verified.json`。正式标识安装和独立无 Python、无 .NET SDK 的 Windows 环境仍待验证。
+
+## 历史版本 328ad47
+
+该版 Windows x64 安装程序为 `GPTWork/installer-history-preview-20261128/source/GPTWork/installer-win-x64-6cf67a992614/AbaqusTools-0.1.0-win-x64-setup.exe`。应用提交为 `328ad47`，版本 0.1.0，大小 126641061 字节，SHA-256 为 `9d7af4703cc76e6549a2f809a8a2e3fbccce7471f4ad07c11c68f47a3bd5cc9d`，签名状态为 NotSigned。
 
 本机用独立测试标识从 `cbe221e` 升级。八项安装与卸载检查通过，包括运行中阻止升级或卸载、退出后升级，以及升级前 1 份、卸载前 12 份测试数据逐文件核对。中文向导可选带空格的 G 盘路径，点“上一步”后保留选择。已安装的 1699 个应用文件、67 份文档和 886 个本地链接通过核对。正式安装标识及单独一台没有 Python 和 .NET SDK 的 Windows 机器仍待验。
 

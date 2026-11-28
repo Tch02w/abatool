@@ -1,10 +1,12 @@
 # 任务索引
 
+当前 `2c06b77` 免安装程序与 1700 个文件的清单见[Windows 发布构建](../05-development/RELEASE.md)，从 `328ad47` 升级及八项安装生命周期见[开发机安装实测](../05-development/INSTALLATION.md)。成品结果图的双启动及历史索引兼容记录见[TASK-001](ACTIVE_TASKS/TASK-001-postprocessing.md)，GJB-16 两条中断记录在成品重开的结果见[TASK-002](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)。
+
 F013 大文件最终发布步骤的两次中断和重开见[合并回执与实际目标](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出)。F021 单目录建索引时的取消、选区、预览及磁盘耗时见[刷新已有索引](ACTIVE_TASKS/TASK-001-postprocessing.md#刷新索引时保留文件列表与预览f021)。
 
 F021 旧索引互读、同目录跨进程争用与写入中断见[索引兼容性](ACTIVE_TASKS/TASK-001-postprocessing.md#迁移前结果索引的互读与写入恢复)。F022 组内顺序与 F023 结果图的会话结束、恢复和正式保存见[编辑器实测](ACTIVE_TASKS/TASK-001-postprocessing.md#组内顺序与结果图的会话结束恢复)。
 
-当前正式队列页的浅底减加键尺寸和数字居中见[工具栏实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。当前成品的八页草稿绑定、整套回归和四项超时后的逐项复测见[迁移任务记录](ACTIVE_TASKS/TASK-002-migration.md#328ad47-成品与回归)。
+当前正式队列页的浅底减加键尺寸和数字居中见[工具栏实测](ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)。`2c06b77` 的 1300 项回归、9 个子检查及 PySide 原生启动结果见[本版成品回归](ACTIVE_TASKS/TASK-002-migration.md#2c06b77-成品回归)。上一版的八页草稿绑定及超时后复测另有[历史记录](ACTIVE_TASKS/TASK-002-migration.md#328ad47-成品与回归)。
 
 成品 `328ad47` 的 1699 项文件核对和恢复上次浏览位置的记录见[Windows 发布构建](../05-development/RELEASE.md)。从 `cbe221e` 升级、八项安装生命周期及外层测试配置不受影响的复测见[安装与卸载](../05-development/INSTALLATION.md)。最后一次带历史的 GJB-16 工程合并及在 N06 窗口重开记录见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--gjb-16-三级结果链保留接触历史)。
 

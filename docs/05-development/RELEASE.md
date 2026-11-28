@@ -1,6 +1,14 @@
 # Windows 发布构建（F026）
 
-当前 Windows x64 免安装入口为 `GPTWork/release-win-x64-085ee6dcbe13/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `328ad47577fd3a3d8068634ea1ce4089bd640ff2`。1699 个文件均已核对，清单 SHA-256 为 `ae92fbeace3a9e4e0d513a9708d89c533c4b11fa07f93514d89aae518850077b`。校验包含编译后的界面、20 个 Abaqus 脚本及正式客户端的队列读写。新版包含接触历史重建、作业概览在远端写入时的刷新和中文结果预览。回执为 `GPTWork/release-queue-portable-328ad47-20261128-152719/verification.json`。
+当前 Windows x64 免安装程序为 `GPTWork/release-win-x64-8a9e9268b45a/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `2c06b77249047d8c2b4d201cba1ad4d1e721a154`。1700 个文件、20 个 Abaqus 脚本、7 项冻结后台自检及正式客户端读取队列与退出均已核对。清单 SHA-256 为 `9f680c7167a2e2953df2d412255799a0f842b0ebbf15213992872860fabbfa39`，回执为 `GPTWork/release-queue-portable-2c06b77-20261128-164455/verification.json`。
+
+包内后台分别重开 GJB-16 最终目标替换前后两份真实中断记录，只有确认目标和两份备份属于本次验证时才补齐公开回执。迁移前 PySide 生成的索引能被该后台读取，重建后的新索引也能在迁移前的结果窗口读回。结果图已用同一成品两次启动，核对节点与最后编辑的三个字段均可恢复。[中断恢复](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md#2026-11-28--合并回执已经出现时后台退出) · [旧索引兼容](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#迁移前结果索引的互读与写入恢复) · [安装包](INSTALLATION.md)
+
+该成品的队列工具栏使用左减、居中数值、右加的排列。已从正式窗口截取浅色主题下的按钮并核对两端浅底、点击区域和数字位置。[实窗截图](../repowiki/images/queue-parallel-limit.png) · [测量记录](../08-handoff/ACTIVE_TASKS/TASK-004-ui-interaction.md#队列工具栏的浅底增减按钮)
+
+### 历史版本 328ad47
+
+该版 Windows x64 免安装入口为 `GPTWork/release-win-x64-085ee6dcbe13/AbaqusTools/AbaqusTools.WinUI.exe`，来自干净提交 `328ad47577fd3a3d8068634ea1ce4089bd640ff2`。1699 个文件均已核对，清单 SHA-256 为 `ae92fbeace3a9e4e0d513a9708d89c533c4b11fa07f93514d89aae518850077b`。校验包含编译后的界面、20 个 Abaqus 脚本及正式客户端的队列读写。本版包含接触历史重建、作业概览在远端写入时的刷新和中文结果预览。回执为 `GPTWork/release-queue-portable-328ad47-20261128-152719/verification.json`。
 
 成品窗口使用自身后台核对了八个结果文件，涵盖 GJB 工程状态汇总原件、不同中文编码的另存副本、带前导零和内嵌换行的小表、两种日志及编码错误。延迟启动成品后台时，窗口也能恢复上次的直接浏览子目录，并保留输入栏中尚未读取的路径。相应回执位于 `GPTWork/result-preview-text-20261128/frozen-4fb319de/receipt.json` 及 `GPTWork/native-direct-bookmark-328ad47-20261128/frozen-4d2bf476/verified.json`。[工程与页面实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md) · [安装与升级](INSTALLATION.md)
 

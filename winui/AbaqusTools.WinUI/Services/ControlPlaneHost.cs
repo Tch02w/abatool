@@ -1861,7 +1861,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
         string root,
         string path,
         int? maxRows = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? worksheet = null)
     {
         if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(path))
         {
@@ -1882,10 +1883,11 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
                 Root = root.Trim(),
                 Path = path.Trim(),
                 MaxRows = maxRows is int count ? Math.Clamp(count, 1, 100) : null,
+                Worksheet = worksheet,
             },
             "结果预览",
             effectiveSource.Token);
-        ValidateResultPreviewResponse(response, path);
+        ValidateResultPreviewResponse(response, path, worksheet);
         return response;
     }
 
@@ -2617,7 +2619,8 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
 
     private static void ValidateResultPreviewResponse(
         ResultPreviewResponse response,
-        string expectedPath)
+        string expectedPath,
+        string? requestedWorksheet)
     {
         if (response.SchemaVersion != 1
             || string.IsNullOrWhiteSpace(response.Path)
@@ -2625,7 +2628,13 @@ public sealed partial class ControlPlaneHost : IAsyncDisposable
             || response.SizeBytes < 0
             || response.Kind is not ("table" or "text" or "image" or "unsupported")
             || response.Headers is null
-            || response.Rows is null)
+            || response.Rows is null
+            || response.Worksheets is null
+            || response.Worksheets.Any(string.IsNullOrEmpty)
+            || response.Worksheets.Distinct(StringComparer.Ordinal).Count() != response.Worksheets.Count
+            || (response.SelectedWorksheet is null ? response.Worksheets.Count != 0
+                : response.Kind != "table" || !response.Worksheets.Contains(response.SelectedWorksheet, StringComparer.Ordinal))
+            || (requestedWorksheet is not null && requestedWorksheet != response.SelectedWorksheet))
         {
             throw new ControlPlaneException("控制面返回了不符合 v1 协议的结果预览。");
         }

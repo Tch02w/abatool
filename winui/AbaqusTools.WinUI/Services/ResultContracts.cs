@@ -286,6 +286,10 @@ internal sealed class ResultPreviewRequest
     [JsonPropertyName("maxRows")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? MaxRows { get; init; }
+
+    [JsonPropertyName("worksheet")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Worksheet { get; init; }
 }
 
 public sealed class ResultPreviewResponse
@@ -310,6 +314,12 @@ public sealed class ResultPreviewResponse
 
     [JsonPropertyName("rows")]
     public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; } = [];
+
+    [JsonPropertyName("worksheets")]
+    public IReadOnlyList<string> Worksheets { get; init; } = [];
+
+    [JsonPropertyName("selectedWorksheet")]
+    public string? SelectedWorksheet { get; init; }
 
     [JsonPropertyName("text")]
     public string Text { get; init; } = string.Empty;

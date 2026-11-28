@@ -18,6 +18,8 @@ public sealed partial class ResultPreviewTable : UserControl
         _table = new(preview.Headers, preview.Rows);
         _truncated = preview.Truncated;
         Draw(resetRows: true);
+        if (_table.ColumnCount == 0 && preview.SelectedWorksheet is not null)
+            Summary.Text = "工作表为空。";
     }
 
     public void Clear()

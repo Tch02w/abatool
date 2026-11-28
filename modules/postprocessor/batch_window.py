@@ -58,6 +58,7 @@ from .result_assets import (
     copy_numeric_payload,
     numeric_asset_dir,
     numeric_asset_is_valid,
+    restore_previous_numeric_payload,
     write_group_member_manifest,
     write_numeric_asset_manifest,
 )
@@ -1296,6 +1297,11 @@ class MainWindow(_base.MainWindow):
                         "从持久缓存恢复 ODB 公共数据；"
                         f"配置={numeric_hash[:12]}",
                     )
+                elif restore_previous_numeric_payload(
+                    shared_data_dir, content_fingerprint=fingerprint,
+                    numeric_config_hash=numeric_hash, abaqus_version=abaqus_version,
+                ):
+                    tagged(path, "从已校验的历史公共数据生成新版汇总工作簿")
                 else:
                     extract_payload = copy.deepcopy(payload)
                     extract_payload["output_dir"] = str(shared_data_dir)

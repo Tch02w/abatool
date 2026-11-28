@@ -20,7 +20,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
     private bool _backgroundRefreshBusy;
     private bool _resourceRowsInitialized;
     private readonly ResourceExplorerAdapter _explorerAdapter;
-    private TaskCompletionSource _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<bool> _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ObservableCollection<ResourceNodeRow> ResourceNodes { get; } = [];
 
@@ -73,14 +73,22 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         {
             ApplySnapshot(local);
         }
-        try { await LoadRemoteSnapshotAsync(); }
-        finally { ready.TrySetResult(); }
-        if (!IsLoaded || App.Current.Session.IsClosing) return;
-        _remoteRefreshTimer.Start();
-        await RecoverTransfersAsync();
+        try
+        {
+            await LoadRemoteSnapshotAsync();
+            if (!ReferenceEquals(ready, _menuReady) || !IsLoaded || App.Current.Session.IsClosing) return;
+            _remoteRefreshTimer.Start();
+            await RecoverTransfersAsync(ready);
+        }
+        finally
+        {
+            ready.TrySetResult(ReferenceEquals(ready, _menuReady) && IsLoaded && !_busy && !_transferRecoveryPending);
+        }
     }
 
-    public Task WaitForMenuReadyAsync() => _menuReady.Task.WaitAsync(TimeSpan.FromSeconds(30));
+    public Task<bool> WaitForMenuReadyAsync() => _menuReady.Task.IsCompleted
+        ? Task.FromResult(IsLoaded && !_busy && !_transferRecoveryPending)
+        : _menuReady.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
     public bool SelectConnectedServer(string profile)
     {
@@ -99,6 +107,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         // Stop observing this page; the backend transfer itself keeps running.
         _transferRecoveryPending = true;
         _transferObservationSource.Cancel();
+        _menuReady.TrySetResult(false);
         _menuReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
@@ -466,7 +475,7 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
         return terminal;
     }
 
-    private async Task RecoverTransfersAsync()
+    private async Task RecoverTransfersAsync(TaskCompletionSource<bool>? menuReady = null)
     {
         if (_busy || !IsLoaded || App.Current.Session.IsClosing) return;
         var observationToken = _transferObservationSource.Token;
@@ -490,6 +499,8 @@ public sealed partial class ComputeResourcesPage : Page, IWorkbenchExplorerPage
                     ClearTransferObservationWarning();
                     break;
                 }
+                // A menu action must not wait behind an active transfer and run after it ends.
+                if (!operation.IsTerminal) menuReady?.TrySetResult(false);
                 await ObserveTransferAsync(operation, observationToken);
             }
         }

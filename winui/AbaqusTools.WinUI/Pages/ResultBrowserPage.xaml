@@ -297,7 +297,20 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock x:Name="PreviewTitleText" FontSize="16" FontWeight="SemiBold" Text="预览" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PreviewTitleText" FontSize="16" FontWeight="SemiBold" Text="预览"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <StackPanel x:Name="WorksheetPanel" Grid.Column="1" Orientation="Horizontal"
+                                        Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
+                                <TextBlock x:Name="WorksheetLabel" VerticalAlignment="Center" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                                <ComboBox x:Name="WorksheetPicker" MaxWidth="220" AutomationProperties.Name="工作表"
+                                          SelectionChanged="OnWorksheetChanged" />
+                            </StackPanel>
+                        </Grid>
                         <Grid Grid.Row="1" Margin="0,10,0,0">
                             <TextBox
                                 x:Name="PreviewTextBox"

@@ -17,6 +17,7 @@ from modules.postprocessor.result_assets import (
     numeric_asset_dir,
     numeric_asset_is_valid,
     resolve_group_member_asset,
+    restore_previous_numeric_payload,
     write_group_member_manifest,
     write_numeric_asset_manifest,
 )
@@ -87,6 +88,27 @@ def write_valid_numeric_payload(root: Path) -> None:
     )
     (root / "metadata.json").write_text("{}", encoding="utf-8")
     (root / "summary.xlsx").write_bytes(b"xlsx")
+
+
+def test_new_workbook_can_reuse_old_numbers_without_changing_previous_outputs(tmp_path: Path):
+    identity = dict(content_fingerprint="a" * 64, numeric_config_hash="b" * 64, abaqus_version="2025")
+    target = numeric_asset_dir(tmp_path, tmp_path / "A.odb", "a" * 64, "b" * 64)
+    legacy = target.with_name("aaaaaaaaaaaa-bbbbbbbbbbbb")
+    write_valid_numeric_payload(legacy)
+    manifest = write_numeric_asset_manifest(legacy, odb_path=tmp_path / "A.odb", **identity)
+    clear_windows_hidden(manifest)
+    metadata = json.loads(manifest.read_bytes())
+    metadata.pop("workbook_version")
+    metadata["asset_id"] = legacy.name
+    manifest.write_text(json.dumps(metadata), encoding="utf-8")
+    assert not numeric_asset_is_valid(legacy, **identity)
+    assert not restore_previous_numeric_payload(target, **(identity | {"abaqus_version": "wrong"}))
+    assert not target.exists()
+    assert restore_previous_numeric_payload(target, **identity)
+    assert (target / "data/timeline_alignment.csv").read_bytes() == (legacy / "data/timeline_alignment.csv").read_bytes()
+    (target / "summary.xlsx").write_bytes(b"updated")
+    assert (legacy / "summary.xlsx").read_bytes() == b"xlsx"
+    assert not (target / ASSET_MANIFEST_NAME).exists()
 
 
 def test_group_member_resolves_shared_numeric_asset(tmp_path: Path) -> None:

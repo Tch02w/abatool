@@ -6,15 +6,18 @@ import math
 import re
 import shutil
 from collections import defaultdict
-from decimal import Decimal, ROUND_HALF_UP
+from collections.abc import Iterable
+from decimal import ROUND_HALF_UP, Decimal
+from itertools import pairwise
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import BinaryIO
 
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
 import numpy as np
 import xlsxwriter
-from PIL import Image
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+from PIL import GifImagePlugin, Image, ImageChops
 
 from .file_attributes import hide_internal_result_json_files
 
@@ -109,6 +112,65 @@ def _gif_total_ticks(count: int, fps: int, duration_seconds: float | None) -> in
     return ticks
 
 
+def _same_gif_frame(previous: Image.Image, current: Image.Image) -> bool:
+    if (
+        previous.getpalette() == current.getpalette()
+        and previous.info.get("transparency") == current.info.get("transparency")
+    ):
+        return ImageChops.difference(previous, current).getbbox() is None
+    with previous.convert("RGBA") as left, current.convert("RGBA") as right:
+        return ImageChops.difference(left, right).getbbox(alpha_only=False) is None
+
+
+def _write_gif_run(stream: BinaryIO, frame: Image.Image, delay_ms: int) -> None:
+    first = stream.tell() == 0
+    transparency = frame.info.get("transparency")
+    if first:
+        # PNG transparency can give the in-memory palette four channels. The
+        # GIF colour table stores RGB triples and its transparency index separately.
+        frame.info.pop("transparency", None)
+        frame.putpalette(frame.getpalette("RGB"))
+        header, _ = GifImagePlugin.getheader(frame, info={"loop": 0, "optimize": False})
+        stream.writelines(header)
+    stream.writelines(GifImagePlugin.getdata(
+        frame, duration=delay_ms, disposal=2, include_color_table=not first,
+        transparency=transparency,
+    ))
+
+
+def _write_gif(stream: BinaryIO, paths: list[Path], delays: Iterable[int]) -> None:
+    pending = None
+    pending_ms = 0
+    try:
+        for path, delay in zip(paths, delays, strict=True):
+            with Image.open(path) as source, source.convert("P", palette=Image.Palette.ADAPTIVE) as frame:
+                if pending is not None:
+                    if pending.size != frame.size:
+                        raise ValueError(f"GIF 源帧尺寸不一致：{path.name} 为 {frame.size}，预期 {pending.size}")
+                    # A GIF delay fits in 16 bits, even for an uninterrupted still image.
+                    if pending_ms + delay <= 655350 and _same_gif_frame(pending, frame):
+                        pending_ms += delay
+                        continue
+                    _write_gif_run(stream, pending, pending_ms)
+                    pending.close()
+                pending = frame.copy()
+                pending_ms = delay
+        if pending is not None:
+            _write_gif_run(stream, pending, pending_ms)
+        stream.write(b";")
+    finally:
+        if pending is not None:
+            pending.close()
+
+
+def _animation_frame_order(path: Path) -> tuple[int, int, str]:
+    # Abaqus uses a minimum of four digits for its sequence index.
+    sequence = path.stem.partition("_")[0]
+    if sequence.isascii() and sequence.isdigit():
+        return 0, int(sequence), path.name
+    return 1, 0, path.name
+
+
 def build_gifs(output_dir: Path, fps: int = 5, *, duration_seconds: float | None = None) -> dict[str, int]:
     frame_root = output_dir / "frames"
     animation_dir = output_dir / "animations"
@@ -117,7 +179,7 @@ def build_gifs(output_dir: Path, fps: int = 5, *, duration_seconds: float | None
     if not frame_root.exists():
         return counts
     for folder in sorted(path for path in frame_root.iterdir() if path.is_dir()):
-        paths = sorted(folder.glob("*.png"))
+        paths = sorted(folder.glob("*.png"), key=_animation_frame_order)
         count = len(paths)
         if not count:
             continue
@@ -127,23 +189,17 @@ def build_gifs(output_dir: Path, fps: int = 5, *, duration_seconds: float | None
             raise ValueError(f"{folder.name}：{error}") from error
         # Round cumulative frame boundaries so errors never accumulate over a loop.
         if duration_seconds is None:
-            boundaries = [(200 * i + fps) // (2 * fps) for i in range(count + 1)]
+            boundaries = ((200 * i + fps) // (2 * fps) for i in range(count + 1))
         else:
-            boundaries = [(i * ticks + count // 2) // count for i in range(count + 1)]
-        delays = [10 * (end - start) for start, end in zip(boundaries, boundaries[1:])]
-        images = []
-        with NamedTemporaryFile(dir=animation_dir, suffix=".gif", delete=False) as temporary:
-            temporary_path = Path(temporary.name)
+            boundaries = ((i * ticks + count // 2) // count for i in range(count + 1))
+        delays = (10 * (end - start) for start, end in pairwise(boundaries))
+        temporary = NamedTemporaryFile(dir=animation_dir, suffix=".gif.part", delete=False)
+        temporary_path = Path(temporary.name)
         try:
-            for path in paths:
-                with Image.open(path) as source:
-                    images.append(source.convert("P", palette=Image.Palette.ADAPTIVE, colors=256))
-            images[0].save(temporary_path, save_all=True, append_images=images[1:],
-                           duration=delays, loop=0, disposal=2, optimize=False)
+            with temporary as stream:
+                _write_gif(stream, paths, delays)
             temporary_path.replace(animation_dir / f"{folder.name}.gif")
         finally:
-            for image in images:
-                image.close()
             temporary_path.unlink(missing_ok=True)
         counts[folder.name] = count
     return counts
@@ -720,7 +776,15 @@ def plot_load_resistance(output_dir: Path) -> Path | None:
     return target
 
 
-def _selected_axial_rebar_method(output_dir: Path) -> str:
+def _read_result_metadata(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def _selected_axial_rebar_method(output_dir: Path, rebar_metadata: dict | None = None) -> str:
+    if rebar_metadata is None:
+        rebar_metadata = _read_result_metadata(output_dir / "rebar/rebar_metadata.json")
+    if rebar_metadata.get("reinforcement_mode") == "none":
+        return "not_applicable_unreinforced"
     axial_path = output_dir / "freebody" / "pile_total_axial_force_time_aligned.csv"
     if axial_path.exists():
         rows = read_csv(axial_path)
@@ -730,12 +794,9 @@ def _selected_axial_rebar_method(output_dir: Path) -> str:
             if method:
                 return method
 
-    rebar_metadata_path = output_dir / "rebar" / "rebar_metadata.json"
-    if rebar_metadata_path.exists():
-        rebar_metadata = json.loads(rebar_metadata_path.read_text(encoding="utf-8"))
-        method = str(rebar_metadata.get("method", "")).strip().casefold()
-        if method in ("element_cut", "legacy_interpolation", "not_applicable_unreinforced"):
-            return method
+    method = str(rebar_metadata.get("method", "")).strip().casefold()
+    if method in ("element_cut", "legacy_interpolation", "not_applicable_unreinforced"):
+        return method
     return ""
 
 
@@ -757,10 +818,7 @@ def _pile_axial_method_summary(method: str) -> str:
             "interpolated T3D2 force (active legacy comparison mode); element-cut "
             "section force retained for comparison; compression positive"
         )
-    return (
-        "RebarMethod unavailable: concrete/pipe FreeBody + reported T3D2 rebar "
-        "force; compression positive"
-    )
+    return "RebarMethod unavailable; see recorded axial-force columns for this result"
 
 
 def build_xlsx(output_dir: Path) -> Path:
@@ -770,13 +828,27 @@ def build_xlsx(output_dir: Path) -> Path:
     cell = workbook.add_format({"border": 1}); number = workbook.add_format({"border": 1, "num_format": "0.000000"})
     summary = workbook.add_worksheet("Summary"); summary.hide_gridlines(2); summary.merge_range("A1:F1", "Abaqus ODB postprocessing summary", title)
     summary.write_row("A3", ["Item", "Value"], header)
-    metadata_path = output_dir/"metadata.json"; metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
-    rebar_method = _selected_axial_rebar_method(output_dir)
+    metadata = _read_result_metadata(output_dir / "metadata.json")
+    rebar_metadata = _read_result_metadata(output_dir / "rebar/rebar_metadata.json")
+    rebar_method = _selected_axial_rebar_method(output_dir, rebar_metadata)
+    mode = rebar_metadata.get("reinforcement_mode") or metadata.get("reinforcement_mode")
+    if mode == "none" or rebar_method == "not_applicable_unreinforced":
+        rebar_method = "not_applicable_unreinforced"
+        rebar_description = "Unreinforced model; longitudinal reinforcement is not included"
+        bending_description = "FreeBody Mx and My from the configured section; no longitudinal rebar moment is added"
+    elif mode == "required" or rebar_method:
+        material = rebar_metadata.get("longitudinal_material") or metadata.get("longitudinal_material")
+        material_label = f"material filter: {material}" if material else "material filter not recorded"
+        rebar_description = f"Longitudinal T3D2 ({material_label}); per-element S11 × reference area"
+        bending_description = "Section Mx and My include interpolated rebar moments: Σ(yN) and Σ(−xN)"
+    else:
+        rebar_description = "Longitudinal reinforcement configuration not recorded"
+        bending_description = "See the available Mx and My columns in the section results"
     entries = [("ODB", metadata.get("odb_path", "")), ("Timeline", "Selected SequenceIndex + StepName + FrameIndex + TotalTime"),
         ("Load sharing", "Pile-top reaction, individual root keys, root-key total/average, shaft friction, and unresolved balance; kN"),
-        ("Rebar", "HRB400 + near-Z T3D2; per-element S11 × area"),
+        ("Rebar", rebar_description),
         ("Pile axial", _pile_axial_method_summary(rebar_method)),
-        ("Pile bending", "Global-1 lateral loading uses total My; rebar My = Σ(-xN)"),
+        ("Pile bending", bending_description),
         ("Rendering", "This workbook is group-independent; contour and GIF legends are stored with each comparison-group render")]
     for index, values in enumerate(entries, 3): summary.write_row(index, 0, values, cell)
     summary.set_column("A:A", 24); summary.set_column("B:B", 90)

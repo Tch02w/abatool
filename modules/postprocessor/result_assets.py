@@ -25,6 +25,7 @@ GROUP_MEMBER_MANIFEST_NAME = "_group_member_manifest.json"
 INCOMPLETE_OUTPUT_MARKER = "_postprocess_incomplete.json"
 NUMERIC_DIRECTORIES = ("data", "History_Output", "rebar", "freebody", "plots")
 NUMERIC_FILES = ("metadata.json", "summary.xlsx")
+WORKBOOK_VERSION = 2
 
 
 def is_incomplete_output(path: Path) -> bool:
@@ -38,7 +39,7 @@ def safe_result_name(value: str) -> str:
 
 
 def numeric_asset_id(content_fingerprint: str, numeric_config_hash: str) -> str:
-    return f"{content_fingerprint[:12]}-{numeric_config_hash[:12]}"
+    return f"{content_fingerprint[:12]}-{numeric_config_hash[:12]}-w{WORKBOOK_VERSION}"
 
 
 def numeric_asset_dir(
@@ -101,6 +102,7 @@ def write_numeric_asset_manifest(
             "layout_version": RESULT_LAYOUT_VERSION,
             "numeric_pipeline_version": NUMERIC_PIPELINE_VERSION,
             "kind": "odb_shared_numeric_data",
+            "workbook_version": WORKBOOK_VERSION,
             "asset_id": numeric_asset_id(
                 content_fingerprint, numeric_config_hash
             ),
@@ -128,6 +130,7 @@ def numeric_asset_is_valid(
     content_fingerprint: str,
     numeric_config_hash: str,
     abaqus_version: str,
+    workbook_version: int = WORKBOOK_VERSION,
 ) -> bool:
     root = Path(asset_dir)
     manifest_path = root / ASSET_MANIFEST_NAME
@@ -146,11 +149,26 @@ def numeric_asset_is_valid(
     return (
         layout_version == RESULT_LAYOUT_VERSION
         and numeric_pipeline_version == NUMERIC_PIPELINE_VERSION
+        and manifest.get("workbook_version", 1) == workbook_version
         and manifest.get("kind") == "odb_shared_numeric_data"
         and manifest.get("content_fingerprint") == content_fingerprint
         and manifest.get("numeric_config_hash") == numeric_config_hash
         and str(manifest.get("abaqus_version", "")) == str(abaqus_version)
     )
+
+
+def restore_previous_numeric_payload(
+    target: Path, *, content_fingerprint: str, numeric_config_hash: str, abaqus_version: str
+) -> bool:
+    """Seed a new workbook edition from a validated, unmodified earlier publication."""
+    original = target.with_name(f"{content_fingerprint[:12]}-{numeric_config_hash[:12]}")
+    if target == original or not numeric_asset_is_valid(
+        original, content_fingerprint=content_fingerprint, numeric_config_hash=numeric_config_hash,
+        abaqus_version=abaqus_version, workbook_version=1,
+    ):
+        return False
+    copy_numeric_payload(original, target)
+    return True
 
 
 def write_group_member_manifest(

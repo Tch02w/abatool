@@ -632,11 +632,13 @@ static async Task CheckResultsApi(string descriptorPath, string root, string bat
     var csv = await host.GetResultPreviewAsync(root, csvPath);
     var limited = await host.GetResultPreviewAsync(root, csvPath, 2);
     var xlsx = await host.GetResultPreviewAsync(root, xlsxPath);
+    var worksheet = xlsx.Worksheets.Skip(1).FirstOrDefault() is { } secondSheet
+        ? await host.GetResultPreviewAsync(root, xlsxPath, worksheet: secondSheet) : null;
     if (new[] { csv, limited, xlsx }.Any(p => p.Kind != "table")) throw new Exception("Table preview missing");
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         firstPage = first.Records.Count, secondPage = second.Records.Count, total = first.FilteredCount,
-        filtered = filtered.FilteredCount, csv, limited, xlsx,
+        filtered = filtered.FilteredCount, csv, limited, xlsx, worksheet,
     }));
 }
 

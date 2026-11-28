@@ -12,6 +12,12 @@
 
 单独提交的刷新优先于等待中的批量成员。每个索引以独立文件锁保护并原子发布。发布后到达的取消请求保留成功结果。后台进程重启后，重新提交范围会跳过已经发布的索引，原进程中的批次编号随进程结束失效。
 
+### Excel 工作表预览（F021）
+
+`POST /api/v1/result-previews` 接受已读取结果目录 `root`、所选文件 `path` 和原有的可选行数上限 `maxRows`。XLSX 可附带 `worksheet` 精确选择工作表。省略时读取工作簿顺序中的第一张可见数据表。表格响应保留 `headers`、`rows`、`truncated`，并为 XLSX 附带可见数据表名称数组 `worksheets` 和当前名称 `selectedWorksheet`。旧式仅含单张表 XML 的文件仍可按默认方式读取，返回空名称数组和 `null`。CSV、文本和图像的原有响应字段不变。
+
+隐藏表、深度隐藏表和图表页不在可选范围。空工作表返回空的表头与行。名称不可用时返回 422 `RESULT_WORKSHEET_UNAVAILABLE`。工作簿没有可见数据表、数据关系损坏或无法读取时返回 422 `RESULT_PREVIEW_FAILED`。非 XLSX 文件指定工作表或传入无效名称类型时返回 400 `INVALID_RESULT_WORKSHEET`。选择表使用工作簿内部关系，文件路径仍按原有结果根目录限制校验。
+
 ### 结果记录排序（F021）
 
 当 `scope` 等于已验证的 `timeDirectory` 且 `includeInternal=true` 时，结果中增加一条可按普通规则筛选、排序、分页的索引诊断记录（`internal=true`、`section=info`、`recommended=false`）。其只读展示使用同一响应中的 `indexMetadata`。`totalCount` 和 `sectionCounts` 包含符合显示规则的诊断项，元数据的 `record_count` 是库内普通记录数。直接浏览和模型子目录均不生成该项。

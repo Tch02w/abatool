@@ -12,8 +12,9 @@ from PySide6.QtWidgets import QApplication
 from modules.postprocessor import batch_window as batch_module
 from modules.postprocessor.app import MainWindow
 from modules.postprocessor.cache import NUMERIC_PAYLOAD_REQUIRED_CSV_COLUMNS
+from modules.postprocessor.config import save_json
 from modules.postprocessor.models import OdbScan
-from modules.postprocessor.result_assets import resolve_group_member_asset
+from modules.postprocessor.result_assets import ASSET_MANIFEST_NAME, resolve_group_member_asset
 from modules.postprocessor.runner_parallel import MultiProcessController
 
 
@@ -268,4 +269,22 @@ def test_sequential_groups_reuse_prescan_and_numeric_cache(
     assert any("命中预扫描缓存" in message for message in logs)
     assert any("从持久缓存恢复 ODB 公共数据" in message for message in logs)
     assert any("复用 ODB 公共数据" in message for message in logs)
+
+    # A project with only its old publication can regenerate the workbook offline.
+    old_asset = first_asset.with_name(first_asset.name.rsplit("-w", 1)[0])
+    first_asset.rename(old_asset)
+    manifest_path = old_asset / ASSET_MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_bytes())
+    del manifest["workbook_version"]
+    manifest["asset_id"] = old_asset.name
+    save_json(manifest_path, manifest)
+    (old_asset / "summary.xlsx").write_bytes(b"legacy workbook fixture")
+    numeric_entries[0].rename(tmp_path / "unused-cache")
+    outputs = window._execute_group_task(
+        task("e", "组E", "20260723_120004_000001"), 1, MultiProcessController(), logs.append
+    )
+    assert resolve_group_member_asset(Path(outputs[0])) == first_asset
+    assert (old_asset / "summary.xlsx").read_bytes() == b"legacy workbook fixture"
+    assert (first_asset / "summary.xlsx").read_bytes() == b"xlsx"
+    assert calls == {"prescan": 1, "extract": 2, "render": 5}
     window.close()

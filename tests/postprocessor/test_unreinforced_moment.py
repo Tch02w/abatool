@@ -40,7 +40,8 @@ def test_missing_rebar_is_not_implicitly_unreinforced(tmp_path):
 
 def test_unreinforced_workbook_summary_uses_explicit_method(tmp_path):
     from modules.postprocessor.postprocess_core import (
-        _selected_axial_rebar_method, _pile_axial_method_summary,
+        _pile_axial_method_summary,
+        _selected_axial_rebar_method,
     )
     (tmp_path / "rebar").mkdir()
     (tmp_path / "rebar/rebar_metadata.json").write_text(json.dumps({
@@ -54,3 +55,30 @@ def test_unreinforced_workbook_summary_uses_explicit_method(tmp_path):
         "SequenceIndex": 0, "Status": "LAST", "RebarMethod": method,
     }])
     assert _selected_axial_rebar_method(tmp_path) == method
+
+
+@pytest.mark.parametrize(("metadata", "rebar_metadata", "phrase"), [
+    ({"reinforcement_mode": "none", "longitudinal_material": "HRB400"}, {}, "Unreinforced model"),
+    ({}, {"reinforcement_mode": "none", "longitudinal_material": "HRB400"}, "Unreinforced model"),
+    ({"reinforcement_mode": "required"}, {"longitudinal_material": "CUSTOM-BAR"}, "material filter: CUSTOM-BAR"),
+    ({"reinforcement_mode": "required"}, {}, "material filter not recorded"),
+    ({}, {}, "configuration not recorded"),
+])
+def test_workbook_summary_describes_the_extracted_reinforcement(tmp_path, metadata, rebar_metadata, phrase):
+    from openpyxl import load_workbook
+
+    from modules.postprocessor.postprocess_core import build_xlsx
+
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (tmp_path / "rebar").mkdir()
+    (tmp_path / "rebar/rebar_metadata.json").write_text(json.dumps(rebar_metadata), encoding="utf-8")
+    book = load_workbook(build_xlsx(tmp_path), read_only=True, data_only=True)
+    try:
+        entries = {row[0]: row[1] for row in book["Summary"].values if row[0]}
+    finally:
+        book.close()
+    assert phrase in entries["Rebar"]
+    assert "HRB400" not in entries["Rebar"]
+    if phrase == "Unreinforced model":
+        assert "no T3D2 reinforcement" in entries["Pile axial"]
+        assert "no longitudinal rebar moment" in entries["Pile bending"]

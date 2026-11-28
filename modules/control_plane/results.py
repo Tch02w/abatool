@@ -29,14 +29,16 @@ from modules.postprocessor.result_assets import (
 )
 from modules.postprocessor.result_catalog import (
     SECTION_TABS,
+    NoVisibleWorksheet,
     ResultRecord,
+    WorksheetUnavailable,
     classify_result,
     collect_result_records,
     collect_shared_asset_records,
     index_diagnostic_record,
     preview_row_limit,
     read_csv_preview,
-    read_xlsx_preview,
+    read_workbook_preview,
     result_section,
 )
 from modules.postprocessor.result_index import (
@@ -686,7 +688,7 @@ def list_result_records(payload: Mapping[str, Any]) -> dict[str, Any]:
 def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return a bounded preview descriptor without loading Qt or executing files."""
 
-    _reject_unknown_fields(payload, {"schemaVersion", "root", "path", "maxRows"})
+    _reject_unknown_fields(payload, {"schemaVersion", "root", "path", "maxRows", "worksheet"})
     root = _resolve_directory(_required_path(payload, "root"), code_prefix="RESULT_ROOT")
     raw_path = _required_path(payload, "path")
     try:
@@ -711,6 +713,9 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ApiProblem(400, "INVALID_MAX_ROWS", "maxRows 必须是 1–100 的整数")
 
     suffix = path.suffix.casefold()
+    worksheet = payload.get("worksheet")
+    if "worksheet" in payload and (suffix != ".xlsx" or not isinstance(worksheet, str) or not worksheet):
+        raise ApiProblem(400, "INVALID_RESULT_WORKSHEET", "worksheet 必须是 XLSX 工作簿内的非空工作表名称")
     base = {
         "schemaVersion": SCHEMA_VERSION,
         "path": str(path),
@@ -719,8 +724,12 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
     try:
         if suffix in {".csv", ".xlsx"}:
-            reader = read_csv_preview if suffix == ".csv" else read_xlsx_preview
-            headers, rows = reader(path, max_rows + 1)
+            if suffix == ".xlsx":
+                book = read_workbook_preview(path, max_rows + 1, worksheet)
+                headers, rows = book.headers, book.rows
+                base.update(worksheets=book.worksheets, selectedWorksheet=book.selected)
+            else:
+                headers, rows = read_csv_preview(path, max_rows + 1)
             return base | {
                 "kind": "table", "headers": headers, "rows": rows[:max_rows],
                 "truncated": len(rows) > max_rows,
@@ -737,6 +746,10 @@ def preview_result(payload: Mapping[str, Any]) -> dict[str, Any]:
             "kind": "unsupported",
             "message": "该文件类型不支持内嵌预览，可使用打开或定位操作。",
         }
+    except WorksheetUnavailable as exc:
+        raise ApiProblem(422, "RESULT_WORKSHEET_UNAVAILABLE", str(exc)) from exc
+    except NoVisibleWorksheet as exc:
+        raise ApiProblem(422, "RESULT_PREVIEW_FAILED", str(exc), details={"path": str(path)}) from exc
     except (OSError, ValueError, IndexError, KeyError, BadZipFile, ParseError, csv.Error) as exc:
         raise ApiProblem(
             422,

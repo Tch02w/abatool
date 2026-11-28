@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from modules.postprocessor.postprocess import finalize_render_output
 from modules.postprocessor.postprocess_core import (
     build_gifs,
     build_transparent_backgrounds,
 )
-from modules.postprocessor.postprocess import finalize_render_output
 
 
 def test_build_gif_contains_every_rendered_frame(tmp_path: Path) -> None:
@@ -70,6 +70,66 @@ def test_duplicate_frames_preserve_time_and_infeasible_target_preserves_last_gif
     with pytest.raises(ValueError, match="MISES.*3 个源帧.*0.03"):
         build_gifs(tmp_path, duration_seconds=0.02)
     assert target.read_bytes() == before
+
+
+def test_indexed_png_colour_tables_and_transparency_survive_streaming(tmp_path):
+    frames = tmp_path / "frames" / "stress"
+    frames.mkdir(parents=True)
+    for number, color in enumerate(((200, 40, 10), (10, 80, 240))):
+        with Image.new("P", (12, 6), 1) as frame:
+            frame.putpalette([0, 0, 0, *color, 255, 255, 255])
+            frame.putpixel((0, 0), 0)
+            frame.putpixel((1, 0), 2)
+            frame.save(frames / f"{number}.png", transparency=0)
+    build_gifs(tmp_path, fps=25)
+    with Image.open(tmp_path / "animations/stress.gif") as gif:
+        assert gif.n_frames == 2 and gif.info["loop"] == 0
+        for i, expected in enumerate(((200, 40, 10), (10, 80, 240))):
+            gif.seek(i)
+            with gif.convert("RGBA") as rgba:
+                assert rgba.getpixel((0, 0))[3] == 0
+                assert rgba.getpixel((1, 0)) == (255, 255, 255, 255)
+                assert rgba.getpixel((2, 0)) == (*expected, 255)
+
+
+def test_identical_frames_can_exceed_one_gif_delay_without_losing_time(tmp_path):
+    frames = tmp_path / "frames/constant"
+    frames.mkdir(parents=True)
+    for i in range(3):
+        Image.new("RGB", (8, 8), "red").save(frames / f"{i}.png")
+    build_gifs(tmp_path, duration_seconds=900)
+    with Image.open(tmp_path / "animations/constant.gif") as gif:
+        times = []
+        for i in range(gif.n_frames):
+            gif.seek(i)
+            assert gif.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
+            times.append(gif.info["duration"])
+        assert max(times) <= 655350 and sum(times) == 900000
+
+
+def test_mismatched_source_dimensions_leave_the_previous_gif_intact(tmp_path):
+    frames = tmp_path / "frames/U"
+    frames.mkdir(parents=True)
+    Image.new("RGB", (16, 8), "red").save(frames / "0.png")
+    build_gifs(tmp_path)
+    saved = tmp_path / "animations/U.gif"
+    original = saved.read_bytes()
+    Image.new("RGB", (8, 16), "blue").save(frames / "1.png")
+    with pytest.raises(ValueError, match="1.png"):
+        build_gifs(tmp_path)
+    assert saved.read_bytes() == original and list(saved.parent.iterdir()) == [saved]
+
+
+def test_render_order_survives_the_worker_sequence_reaching_five_digits(tmp_path):
+    frames = tmp_path / "frames/U"
+    frames.mkdir(parents=True)
+    for index, shade in ((10000, 90), (999, 15), (9999, 45)):
+        Image.new("RGB", (8, 8), (shade, 0, 0)).save(frames / f"{index:04d}_load_F0001.png")
+    build_gifs(tmp_path, fps=25)
+    with Image.open(tmp_path / "animations/U.gif") as gif:
+        for i, shade in enumerate((15, 45, 90)):
+            gif.seek(i)
+            assert gif.convert("RGB").getpixel((0, 0))[0] == shade
 
 
 def test_transparent_copy_does_not_modify_original_png(tmp_path: Path) -> None:

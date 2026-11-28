@@ -93,8 +93,14 @@ public sealed partial class MainWindow
         {
             NavigateToRoute("compute-resources");
             if (ContentFrame.Content is not ComputeResourcesPage page) return;
-            await page.WaitForMenuReadyAsync();
-            if (!ReferenceEquals(ContentFrame.Content, page) || !commands.CanUseSelectedRemote(profile))
+            var ready = await page.WaitForMenuReadyAsync();
+            if (!ReferenceEquals(ContentFrame.Content, page)) return;
+            if (!ready)
+            {
+                ShowFeedback("服务器操作尚未就绪", "请等待当前操作或传输状态核对完成后重试。", InfoBarSeverity.Warning);
+                return;
+            }
+            if (!commands.CanUseSelectedRemote(profile))
             {
                 ShowFeedback("连接状态已变化", "请核对服务器连接后重试。", InfoBarSeverity.Warning);
                 return;

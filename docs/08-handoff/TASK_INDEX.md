@@ -1,5 +1,9 @@
 # 任务索引
 
+F021 的多工作表预览见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。运行中队列的菜单与页面对照见[界面交互](ACTIVE_TASKS/TASK-004-ui-interaction.md#运行中队列的菜单与页面命令)。三目标合并在关闭前台、重开和后台中断后的实际恢复见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md#多分支合并的前台关闭与后台恢复)。
+
+逐帧核对两组工程 GIF 的颜色、时间与进程内存，以及有筋、无纵筋工作簿的说明和单元格对照见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md#工程-gif-逐帧编码及工作簿配筋说明)。
+
 本轮队列终态恢复与 GJB-16 三级重启动链见[迁移任务](ACTIVE_TASKS/TASK-002-migration.md)。内部索引只读诊断、万级记录分页与 Windows 发布冲突见[结果浏览任务](ACTIVE_TASKS/TASK-001-postprocessing.md#已建索引的分页内存与只读诊断)。后处理工程菜单与普通标签的返回行为见[原生交互任务](ACTIVE_TASKS/TASK-004-ui-interaction.md)。
 
 F020/F022 在云图像素与毫米之间切换、已有目录尺寸恢复及 GIF 草稿的验收见[后处理任务](ACTIVE_TASKS/TASK-001-postprocessing.md)。

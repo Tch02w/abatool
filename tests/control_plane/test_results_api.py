@@ -69,6 +69,58 @@ def test_internal_index_details_belong_to_the_selected_batch(tmp_path):
     assert database.read_bytes() == before
 
 
+def test_xlsx_preview_selects_a_visible_worksheet_and_keeps_other_formats_compatible(tmp_path):
+    from zipfile import ZipFile
+
+    from openpyxl import Workbook
+
+    root = tmp_path / "结果"
+    root.mkdir()
+    path = root / "多表.xlsx"
+    book = Workbook()
+    hidden = book.active
+    hidden.title = "内部"
+    hidden.sheet_state = "hidden"
+    first = book.create_sheet("目录")
+    first.append(["摘要"])
+    detail = book.create_sheet("荷载 RF3")
+    for value in range(4):
+        detail.append([value, -value])
+    book.create_sheet("空表")
+    book.save(path)
+    book.close()
+    csv = root / "一列.csv"
+    csv.write_text("A\n1\n", encoding="utf-8")
+    no_sheets = root / "无可见表.xlsx"
+    with ZipFile(no_sheets, "w") as archive:
+        archive.writestr("xl/workbook.xml", '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                         '<sheets><sheet name="内部" state="veryHidden"/></sheets></workbook>')
+        archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>')
+    with running_control_plane(tmp_path / "profile") as runtime:
+        def get(f=path, **options):
+            response = _post(runtime, "/api/v1/result-previews", {"root": str(root), "path": str(f), **options})
+            return response[0], json_response(response)
+
+        status, overview = get()
+        assert status == 200 and overview["selectedWorksheet"] == "目录"
+        assert overview["worksheets"] == ["目录", "荷载 RF3", "空表"] and overview["rows"] == [["摘要"]]
+        status, selected = get(worksheet="荷载 RF3", maxRows=2)
+        assert status == 200 and selected["selectedWorksheet"] == "荷载 RF3"
+        assert selected["rows"] == [["0", "0"], ["1", "-1"]] and selected["truncated"]
+        status, empty = get(worksheet="空表")
+        assert status == 200 and empty["rows"] == empty["headers"] == [] and not empty["truncated"]
+        for missing in ("内部", "已移除"):
+            status, error = get(worksheet=missing)
+            assert status == 422 and error["error"]["code"] == "RESULT_WORKSHEET_UNAVAILABLE"
+        for invalid in (None, 4, ""):
+            status, error = get(worksheet=invalid)
+            assert status == 400 and error["error"]["code"] == "INVALID_RESULT_WORKSHEET"
+        assert get(csv, worksheet="目录")[0] == 400
+        assert "worksheets" not in get(csv)[1]
+        status, error = get(no_sheets)
+        assert status == 422 and "没有可预览的可见数据工作表" in error["error"]["message"]
+
+
 def test_result_scopes_records_filters_and_previews_are_qt_free(tmp_path: Path) -> None:
     root = tmp_path / "AbaqusODBPostProcessor_Results"
     batch, odb, _data = _make_result_tree(root)

@@ -647,6 +647,18 @@ def test_compute_resource_background_refresh_keeps_toolbar_interactive() -> None
     assert "UpdateButtons();" not in background_refresh
 
 
+def test_cross_page_remote_menu_checks_transfer_discovery_before_dispatch() -> None:
+    page = (WINUI_ROOT / "Pages" / "ComputeResourcesPage.xaml.cs").read_text(encoding="utf-8")
+    shell = (WINUI_ROOT / "MainWindow.Commands.cs").read_text(encoding="utf-8").split("private async Task RunRemoteMenuAsync", 1)[1]
+    loading = page.split("private async void OnPageLoaded", 1)[1].split("public bool SelectConnectedServer", 1)[0]
+    recovery = page.split("private async Task RecoverTransfersAsync", 1)[1].split("private void ShowTransferObservationWarning", 1)[0]
+    assert loading.index("await RecoverTransfersAsync(ready)") < loading.index("ready.TrySetResult(")
+    assert recovery.index("if (!operation.IsTerminal) menuReady?.TrySetResult(false)") < recovery.index("await ObserveTransferAsync(")
+    assert shell.index("await page.WaitForMenuReadyAsync()") < shell.index("if (!ready)") < shell.index("page.SelectConnectedServer(profile)")
+    assert shell.index("var expected = commands.ConnectedProfile!") < shell.index("NavigateToRoute(")
+    assert "page.DisconnectAsync(expected)" in shell and "page.RefreshConnectedServerAsync(expected)" in shell
+
+
 def test_transfer_observation_preserves_identity_and_never_resubmits_on_refresh() -> None:
     page = (WINUI_ROOT / "Pages" / "ComputeResourcesPage.xaml.cs").read_text(encoding="utf-8")
     unload = page.split("private void OnPageUnloaded", 1)[1].split("private async void OnRemoteRefreshTimerTick", 1)[0]

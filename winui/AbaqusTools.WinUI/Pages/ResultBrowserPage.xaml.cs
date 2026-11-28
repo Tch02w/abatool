@@ -49,6 +49,9 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     private bool _updatingFilters;
     private bool _recoveryAttempted;
     private long _previewRequest;
+    private ResultPreviewResponse? _displayedWorkbook;
+    private bool _updatingWorksheets;
+    private bool _worksheetPending;
     private IReadOnlyList<ResultScopeNode> _scopeNodes = [];
     private readonly ResultExplorerAdapter _explorerAdapter;
 
@@ -69,7 +72,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         UseCaseComboBox.ItemsSource = new[] { "全部用途" };
         UseCaseComboBox.SelectedIndex = 0;
         App.Current.Session.Register(this, "result-browser", ["RootTextBox", "ShowInternalCheckBox"],
-            async () => { ++_previewRequest; await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); },
+            async () => { InvalidatePreview(); await App.Current.PendingResultFileOperation.WaitAsync(TimeSpan.FromSeconds(30)); },
             captureContext: values => _direct?.Capture(values));
         _location.DraftRoot = RootTextBox.Text;
         Loaded += OnPageLoaded;
@@ -90,6 +93,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         _loads.LeavePage();
+        if (_worksheetPending) InvalidatePreview();
         if (_recordsBusy && _displayedPage is { } page)
         {
             _loads.InvalidateRecords();
@@ -1068,10 +1072,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         PreviewTextBox.Text = "正在读取预览…";
         try
         {
-            _direct?.ValidateFile(record.Path);
-            var preview = await App.Current.ControlPlane.GetResultPreviewAsync(
-                _appliedQuery?.Root ?? _location.RequireLoadedRoot(),
-                record.Path);
+            var preview = await ReadFilePreviewAsync(record);
             if (request != _previewRequest)
             {
                 return;
@@ -1081,6 +1082,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
             {
                 case "table":
                     PreviewTable.Show(preview);
+                    SetWorksheetPicker(preview);
                     PreviewTextBox.Visibility = Visibility.Collapsed;
                     PreviewTable.Visibility = Visibility.Visible;
                     break;
@@ -1113,6 +1115,71 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
         }
     }
 
+    private Task<ResultPreviewResponse> ReadFilePreviewAsync(ResultRecordItem record, string? worksheet = null)
+    {
+        _direct?.ValidateFile(record.Path);
+        return App.Current.ControlPlane.GetResultPreviewAsync(
+            _appliedQuery?.Root ?? _location.RequireLoadedRoot(), record.Path, worksheet: worksheet);
+    }
+
+    private void SetWorksheetPicker(ResultPreviewResponse? preview)
+    {
+        _worksheetPending = false;
+        _displayedWorkbook = preview?.SelectedWorksheet is null ? null : preview;
+        _updatingWorksheets = true;
+        try
+        {
+            WorksheetPanel.Visibility = _displayedWorkbook is null ? Visibility.Collapsed : Visibility.Visible;
+            bool multiple = _displayedWorkbook?.Worksheets.Count > 1;
+            WorksheetLabel.Text = multiple ? "工作表" : _displayedWorkbook?.SelectedWorksheet;
+            WorksheetPicker.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+            WorksheetPicker.ItemsSource = multiple ? _displayedWorkbook!.Worksheets : null;
+            WorksheetPicker.SelectedItem = multiple ? _displayedWorkbook!.SelectedWorksheet : null;
+        }
+        finally { _updatingWorksheets = false; }
+    }
+
+    private void RestoreDisplayedWorksheet()
+    {
+        SetWorksheetPicker(_displayedWorkbook);
+        PreviewTable.Visibility = Visibility.Visible;
+        PreviewTextBox.Visibility = Visibility.Collapsed;
+    }
+
+    private void InvalidatePreview()
+    {
+        ++_previewRequest;
+        if (_worksheetPending) RestoreDisplayedWorksheet();
+    }
+
+    private async void OnWorksheetChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingWorksheets || WorksheetPicker.SelectedItem is not string worksheet
+            || _displayedWorkbook is not { } displayed || SelectedRecords().FirstOrDefault() is not { } record
+            || !string.Equals(displayed.Path, record.Path, StringComparison.OrdinalIgnoreCase)) return;
+        if (!_worksheetPending && worksheet == displayed.SelectedWorksheet) return;
+        var request = ++_previewRequest;
+        if (worksheet == displayed.SelectedWorksheet) { RestoreDisplayedWorksheet(); return; }
+        _worksheetPending = true;
+        PreviewTable.Visibility = Visibility.Collapsed;
+        PreviewTextBox.Visibility = Visibility.Visible;
+        PreviewTextBox.Text = $"正在读取工作表“{worksheet}”…";
+        try
+        {
+            var preview = await ReadFilePreviewAsync(record, worksheet);
+            if (request != _previewRequest) return;
+            PreviewTable.Show(preview);
+            _displayedWorkbook = preview;
+            RestoreDisplayedWorksheet();
+        }
+        catch (Exception error)
+        {
+            if (request != _previewRequest) return;
+            RestoreDisplayedWorksheet();
+            ShowWarning(error is ControlPlaneException problem ? problem.ToDisplayMessage() : error.Message, "无法切换工作表");
+        }
+    }
+
     private async Task ShowImagePreviewAsync(string path, long request)
     {
         var file = await StorageFile.GetFileFromPathAsync(path);
@@ -1131,6 +1198,7 @@ public sealed partial class ResultBrowserPage : Page, IWorkbenchExplorerPage
 
     private void HideTablePreview()
     {
+        SetWorksheetPicker(null);
         PreviewTable.Visibility = Visibility.Collapsed;
         PreviewTable.Clear();
     }

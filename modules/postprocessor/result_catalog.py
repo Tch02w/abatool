@@ -407,45 +407,77 @@ def _read_preview_shared_strings(
     raise ValueError(f"预览单元格引用的共享文本不存在：{missing}")
 
 
-def read_xlsx_preview(
-    path: Path, max_rows: int = 50
-) -> tuple[list[str], list[list[str]]]:
-    """Read a small first-sheet preview using only the Python standard library."""
+class WorksheetUnavailable(ValueError):
+    """A requested worksheet is no longer a visible data sheet."""
 
-    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+
+class NoVisibleWorksheet(ValueError):
+    """A workbook catalog contains no visible data worksheets."""
+
+
+@dataclass
+class WorkbookPreview:
+    worksheets: list[str]
+    selected: str | None
+    headers: list[str]
+    rows: list[list[str]]
+
+
+def _visible_worksheets(archive: zipfile.ZipFile, main_ns: str) -> dict[str, str]:
     rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
     package_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
-    with zipfile.ZipFile(path) as archive:
-        sheet_path = "xl/worksheets/sheet1.xml"
-        if (
-            "xl/workbook.xml" in archive.namelist()
-            and "xl/_rels/workbook.xml.rels" in archive.namelist()
-        ):
-            workbook = ElementTree.fromstring(archive.read("xl/workbook.xml"))
-            first_sheet = workbook.find(f".//{{{main_ns}}}sheet")
-            relationships = ElementTree.fromstring(
-                archive.read("xl/_rels/workbook.xml.rels")
-            )
-            if first_sheet is not None:
-                relationship_id = first_sheet.attrib.get(f"{{{rel_ns}}}id", "")
-                for relationship in relationships.findall(
-                    f"{{{package_rel_ns}}}Relationship"
-                ):
-                    if relationship.attrib.get("Id") != relationship_id:
-                        continue
-                    target = relationship.attrib.get("Target", "")
-                    sheet_path = (
-                        target.lstrip("/")
-                        if target.startswith("/")
-                        else posixpath.normpath(posixpath.join("xl", target))
-                    )
-                    break
+    catalog = "xl/workbook.xml"
+    links = "xl/_rels/workbook.xml.rels"
+    if catalog not in archive.namelist() and links not in archive.namelist():
+        # Older single-part exports have sheet1.xml without a named sheet catalog.
+        archive.getinfo("xl/worksheets/sheet1.xml")
+        return {}
+    workbook = ElementTree.fromstring(archive.read(catalog))
+    relationships = ElementTree.fromstring(archive.read(links))
+    by_id = {r.get("Id"): r for r in relationships.findall(f"{{{package_rel_ns}}}Relationship")}
+    visible = {}
+    for sheet in workbook.findall(f"{{{main_ns}}}sheets/{{{main_ns}}}sheet"):
+        if sheet.get("state", "visible") != "visible":
+            continue
+        link = by_id.get(sheet.get(f"{{{rel_ns}}}id"))
+        if link is None:
+            raise ValueError("工作表缺少对应的工作簿关系。")
+        if link.get("Type", f"{rel_ns}/worksheet") != f"{rel_ns}/worksheet":
+            continue
+        target = link.get("Target", "")
+        if not target or link.get("TargetMode", "Internal") != "Internal" or "\\" in target:
+            raise ValueError("工作表关系未指向工作簿内的有效部件。")
+        part = posixpath.normpath(target[1:] if target.startswith("/") else posixpath.join("xl", target))
+        if part.startswith(("../", "/")) or part in (".", ".."):
+            raise ValueError("工作表关系超出工作簿范围。")
+        name = sheet.get("name")
+        if not name or name in visible:
+            raise ValueError("工作表名称缺失或重复。")
+        visible[name] = part
+    if not visible:
+        raise NoVisibleWorksheet("该工作簿没有可预览的可见数据工作表。")
+    return visible
 
+
+def read_workbook_preview(path: Path, max_rows: int = 50, worksheet: str | None = None) -> WorkbookPreview:
+    """Read one visible worksheet and only the shared strings used by its preview."""
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(path) as archive:
+        visible = _visible_worksheets(archive, main_ns)
+        if worksheet is not None and worksheet not in visible:
+            raise WorksheetUnavailable("所选工作表不存在或已隐藏，请重新选择此文件以刷新工作表列表。")
+        selected = worksheet if worksheet is not None else next(iter(visible), None)
+        sheet_path = visible[selected] if selected is not None else "xl/worksheets/sheet1.xml"
         preview_cells: list[dict[int, str | int]] = []
         required_strings: set[int] = set()
         maximum_column = 0
         with archive.open(sheet_path) as stream:
-            for _, node in ElementTree.iterparse(stream, events=("end",)):
+            events = ElementTree.iterparse(stream, events=("start", "end"))
+            if next(events)[1].tag != f"{{{main_ns}}}worksheet":
+                raise ValueError("所选工作表的内容不是数据工作表。")
+            for event, node in events:
+                if event != "end":
+                    continue
                 if node.tag == f"{{{main_ns}}}dimension":
                     maximum_column = _excel_column_index(node.get("ref", "A1").split(":")[-1])
                 if node.tag != f"{{{main_ns}}}row":
@@ -479,13 +511,19 @@ def read_xlsx_preview(
             for column, value in values.items():
                 if isinstance(value, int):
                     values[column] = shared_strings[value]
-    column_count = maximum_column + 1
+    column_count = maximum_column + 1 if preview_cells else 0
     headers = [_excel_column_name(index) for index in range(column_count)]
     preview_rows = [
         [values.get(index, "") for index in range(column_count)]
         for values in preview_cells
     ]
-    return headers, preview_rows
+    return WorkbookPreview(list(visible), selected, headers, preview_rows)
+
+
+def read_xlsx_preview(path: Path, max_rows: int = 50) -> tuple[list[str], list[list[str]]]:
+    """Return the first worksheet table to the legacy PySide result browser."""
+    preview = read_workbook_preview(path, max_rows)
+    return preview.headers, preview.rows
 
 
 __all__ = [
@@ -493,7 +531,9 @@ __all__ = [
     "RECOMMENDED_NAMES",
     "SECTION_TABS",
     "VARIABLE_LABELS",
+    "NoVisibleWorksheet",
     "ResultRecord",
+    "WorksheetUnavailable",
     "classify_result",
     "collect_result_records",
     "collect_shared_asset_records",
@@ -501,6 +541,7 @@ __all__ = [
     "index_diagnostic_record",
     "preview_row_limit",
     "read_csv_preview",
+    "read_workbook_preview",
     "read_xlsx_preview",
     "record_matches_section",
     "result_section",

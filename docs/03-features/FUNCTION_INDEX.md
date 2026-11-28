@@ -1,5 +1,11 @@
 # 功能定位索引
 
+F017 工作簿修订和已发布数值复用见 `modules/postprocessor/result_assets.py` 的 `numeric_asset_id`、`numeric_asset_is_valid`、`restore_previous_numeric_payload`，调用方为 `modules/postprocessor/postprocess_execution.py` 和旧版 `modules/postprocessor/batch_window.py`。旧版数据的来源、版本及原件保留检查见 `tests/postprocessor/test_result_assets.py`。
+
+F021 多工作表读取由 `modules/postprocessor/result_catalog.py` 的 `read_workbook_preview` 和 `modules/control_plane/results.py` 的 `preview_result` 提供。WinUI 的工作表选择位于 `winui/AbaqusTools.WinUI/Pages/ResultBrowserPage.xaml.cs`。覆盖可见表、宽表、空表和旧格式的回归见 `tests/postprocessor/test_result_xlsx_preview.py`、`tests/control_plane/test_results_api.py`、`tests/winui_host/test_results_api.py`。
+
+F017/F020 工作簿配筋说明与逐帧 GIF 编码均在 `modules/postprocessor/postprocess_core.py`，入口为 `build_xlsx`、`build_gifs`。颜色、时长、顺序、异常及配筋记录见 `tests/postprocessor/test_animation.py`、`tests/postprocessor/test_unreinforced_moment.py`。[两份工程及峰值内存](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#工程-gif-逐帧编码及工作簿配筋说明)
+
 F021 时间目录索引诊断和分页使用 `modules/control_plane/results.py` 的 `list_result_records`、`modules/postprocessor/result_catalog.py` 的 `index_diagnostic_record`，以及 `modules/postprocessor/result_index.py` 的 `read_result_index`。WinUI 在 `ResultBrowserPage.xaml.cs` 的 `UpdateSelectionPreviewAsync` 显示当前响应的元数据。排序、选择范围与 Windows 读写并发分别见 `tests/control_plane/test_result_record_sort.py`、`tests/control_plane/test_results_api.py` 和 `tests/postprocessor/test_result_index.py`。[只读预览和分页实测](../08-handoff/ACTIVE_TASKS/TASK-001-postprocessing.md#已建索引的分页内存与只读诊断)
 
 F004/F005 失败依赖的终态等待原因由 `modules/control_plane/local_queue_runtime.py`、`modules/submitter/scheduler_adapter.py` 和 `modules/submitter/scheduling.py` 在调度与恢复时规范。F011 的 `modules/control_plane/restart_chains.py` 同时计算节点的阶段和最近的阻塞来源。回归见 `tests/control_plane/test_local_scheduling.py`、`tests/submitter/test_scheduling.py` 和 `tests/control_plane/test_restart_chains_api.py`。[队列和重启动验收](../08-handoff/ACTIVE_TASKS/TASK-002-migration.md)
